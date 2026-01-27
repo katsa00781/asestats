@@ -783,7 +783,6 @@ export default function Home() {
               <GameQuickImport 
                 onImportComplete={handleGameImport}
                 selectedSeasonId={selectedSeasonId}
-                selectedTeamId={selectedTeamId}
               />
               <JsonImport 
                 onImportComplete={loadData} 

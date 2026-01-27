@@ -1,9 +1,10 @@
 'use client';
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Calendar, CheckCircle, AlertCircle, Eye } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
@@ -19,6 +20,13 @@ type ParsedGameInfo = {
   errors: string[];
 };
 
+type TeamOption = {
+  id: string;
+  name: string;
+  short_name?: string;
+  is_primary?: boolean;
+};
+
 type GameQuickImportProps = {
   onImportComplete: (gameData?: {
     date: string;
@@ -29,15 +37,113 @@ type GameQuickImportProps = {
     round: number | null;
   }) => void;
   selectedSeasonId: string | null;
-  selectedTeamId: string | null;
 };
 
-export function GameQuickImport({ onImportComplete, selectedSeasonId, selectedTeamId }: GameQuickImportProps) {
+export function GameQuickImport({ onImportComplete, selectedSeasonId }: GameQuickImportProps) {
   const [inputText, setInputText] = useState('');
   const [parsedData, setParsedData] = useState<ParsedGameInfo | null>(null);
   const [showPreview, setShowPreview] = useState(false);
   const [importing, setImporting] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [teams, setTeams] = useState<TeamOption[]>([]);
+  const [teamsLoading, setTeamsLoading] = useState(true);
+  const [homeTeamId, setHomeTeamId] = useState('');
+  const [awayTeamId, setAwayTeamId] = useState('');
+  const importLockRef = useRef(false);
+
+  const normalizeName = (value: string) =>
+    value
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/\p{Diacritic}/gu, '')
+      .replace(/[^a-z0-9\s-]/g, '')
+      .trim();
+
+  const buildAbbreviation = (value: string) =>
+    value
+      .split(/[\s-]+/)
+      .filter(Boolean)
+      .map(token => (token.length <= 2 ? token : token[0]))
+      .join('');
+
+  const findTeamIdForName = (teamName: string): string => {
+    const normalizedTarget = normalizeName(teamName);
+    if (!normalizedTarget) return '';
+    const targetAbbr = buildAbbreviation(normalizedTarget);
+
+    const exact = teams.find(team => normalizeName(team.name) === normalizedTarget);
+    if (exact) return exact.id;
+
+    const shortMatch = teams.find(team => team.short_name && normalizeName(team.short_name) === normalizedTarget);
+    if (shortMatch) return shortMatch.id;
+
+    const abbreviationMatch = teams.find(team => {
+      const normalizedShort = team.short_name ? normalizeName(team.short_name) : '';
+      const teamAbbr = buildAbbreviation(normalizeName(team.name));
+      return (
+        (targetAbbr && normalizedShort && targetAbbr === normalizedShort) ||
+        (targetAbbr && teamAbbr && targetAbbr === teamAbbr)
+      );
+    });
+    if (abbreviationMatch) return abbreviationMatch.id;
+
+    const partial = teams.find(team => {
+      const normalizedTeam = normalizeName(team.name);
+      const normalizedShort = team.short_name ? normalizeName(team.short_name) : '';
+      return (
+        normalizedTeam.includes(normalizedTarget) ||
+        normalizedTarget.includes(normalizedTeam) ||
+        (normalizedShort && normalizedTarget.includes(normalizedShort)) ||
+        (normalizedShort && normalizedShort.includes(normalizedTarget))
+      );
+    });
+    if (partial) return partial.id;
+
+    return '';
+  };
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchTeams = async () => {
+      setTeamsLoading(true);
+      try {
+        const { data, error } = await supabase
+          .from('teams')
+          .select('id, name, short_name, is_primary')
+          .order('is_primary', { ascending: false })
+          .order('name');
+
+        if (!isMounted) return;
+        if (error) {
+          console.error('Csapatok lekérdezési hiba:', error);
+          setTeams([]);
+          return;
+        }
+
+        setTeams(data || []);
+      } finally {
+        if (isMounted) {
+          setTeamsLoading(false);
+        }
+      }
+    };
+
+    fetchTeams();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!parsedData?.isValid || teams.length === 0) {
+      return;
+    }
+
+    setHomeTeamId(prev => prev || findTeamIdForName(parsedData.homeTeam));
+    setAwayTeamId(prev => prev || findTeamIdForName(parsedData.awayTeam));
+  }, [parsedData, teams]);
 
   // Parse the input text
   const parseGameInfo = (text: string): ParsedGameInfo => {
@@ -122,57 +228,107 @@ export function GameQuickImport({ onImportComplete, selectedSeasonId, selectedTe
     setParsedData(parsed);
     setShowPreview(true);
     setMessage(null);
+
+    if (parsed.isValid) {
+      setHomeTeamId(findTeamIdForName(parsed.homeTeam));
+      setAwayTeamId(findTeamIdForName(parsed.awayTeam));
+    } else {
+      setHomeTeamId('');
+      setAwayTeamId('');
+    }
   };
 
   const handleImport = async () => {
     if (!parsedData || !parsedData.isValid) return;
-    
-    if (!selectedSeasonId || !selectedTeamId) {
+
+    if (!selectedSeasonId) {
       setMessage({ 
         type: 'error', 
-        text: 'Kérlek válassz szezont és csapatot a meccs importálásához!' 
+        text: 'Kérlek válassz szezont a meccs importálásához!' 
       });
       return;
     }
 
+    if (!homeTeamId || !awayTeamId) {
+      setMessage({
+        type: 'error',
+        text: 'Nem sikerült mindkét csapatot a rendszerhez kötni. Ellenőrizd a csapatválasztót!'
+      });
+      return;
+    }
+
+    if (homeTeamId === awayTeamId) {
+      setMessage({
+        type: 'error',
+        text: 'A hazai és a vendég csapat nem lehet ugyanaz.'
+      });
+      return;
+    }
+
+    if (importLockRef.current) {
+      return;
+    }
+
+    importLockRef.current = true;
     setImporting(true);
     setMessage(null);
 
     try {
-      // Lekérjük a csapat nevét, hogy eldöntsük, melyik a mi csapatunk
-      const { data: teamData } = await supabase
-        .from('teams')
-        .select('name')
-        .eq('id', selectedTeamId)
-        .single();
-      
-      const ourTeamName = teamData?.name || '';
-      
-      // Eldöntjük, hogy a hazai vagy a vendég csapat vagyunk-e
-      const ourTeamIsHome = parsedData.homeTeam.includes(ourTeamName) || 
-                           ourTeamName.includes(parsedData.homeTeam);
-      
-      const gameData = {
-        date: parsedData.date,
-        opponent: ourTeamIsHome ? parsedData.awayTeam : parsedData.homeTeam,
-        home_away: ourTeamIsHome ? 'home' : 'away',
-        our_score: ourTeamIsHome ? parsedData.homeScore : parsedData.awayScore,
-        opp_score: ourTeamIsHome ? parsedData.awayScore : parsedData.homeScore,
-        result: (ourTeamIsHome ? parsedData.homeScore : parsedData.awayScore) > 
-                (ourTeamIsHome ? parsedData.awayScore : parsedData.homeScore) ? 'win' : 'loss',
-        round: parsedData.round,
-        season_id: selectedSeasonId,
-        our_team_id: selectedTeamId,
-      };
+      const teamOperations = [
+        { teamId: homeTeamId, isHome: true },
+        { teamId: awayTeamId, isHome: false }
+      ];
 
-      const { error } = await supabase.from('games').insert([gameData]);
+      for (const teamOp of teamOperations) {
+        const ourTeamIsHome = teamOp.isHome;
+        const opponentName = ourTeamIsHome ? parsedData.awayTeam : parsedData.homeTeam;
+        const ourScore = ourTeamIsHome ? parsedData.homeScore : parsedData.awayScore;
+        const oppScore = ourTeamIsHome ? parsedData.awayScore : parsedData.homeScore;
+        const result = ourScore > oppScore ? 'win' : 'loss';
 
-      if (error) throw error;
+        const { data: duplicateGame, error: duplicateError } = await supabase
+          .from('games')
+          .select('id')
+          .eq('season_id', selectedSeasonId)
+          .eq('our_team_id', teamOp.teamId)
+          .eq('date', parsedData.date)
+          .eq('opponent', opponentName)
+          .maybeSingle();
 
-      setMessage({ type: 'success', text: 'Meccs sikeresen importálva!' });
+        if (duplicateError) throw duplicateError;
+
+        const gameData = {
+          date: parsedData.date,
+          opponent: opponentName,
+          home_away: ourTeamIsHome ? 'home' : 'away',
+          our_score: ourScore,
+          opp_score: oppScore,
+          result,
+          round: parsedData.round,
+          season_id: selectedSeasonId,
+          our_team_id: teamOp.teamId,
+        };
+
+        if (duplicateGame) {
+          const { error: updateError } = await supabase
+            .from('games')
+            .update(gameData)
+            .eq('id', duplicateGame.id);
+
+          if (updateError) throw updateError;
+        } else {
+          const { error } = await supabase.from('games').insert([gameData]);
+          if (error) throw error;
+        }
+      }
+
+      setMessage({ type: 'success', text: 'A meccs mindkét csapathoz rögzítve/aktualizálva lett!' });
+
       setInputText('');
       setParsedData(null);
       setShowPreview(false);
+      setHomeTeamId('');
+      setAwayTeamId('');
       
       // Átadjuk a létrehozott meccs adatait
       onImportComplete({
@@ -190,19 +346,20 @@ export function GameQuickImport({ onImportComplete, selectedSeasonId, selectedTe
         text: 'Hiba az importálás során: ' + (error as Error).message 
       });
     } finally {
+      importLockRef.current = false;
       setImporting(false);
     }
   };
 
   return (
     <div className="space-y-6">
-      {(!selectedSeasonId || !selectedTeamId) && (
+      {!selectedSeasonId && (
         <Card className="bg-orange-900/20 border-orange-500/30">
           <CardContent className="p-4">
             <div className="flex items-center gap-2 text-orange-400">
               <AlertCircle size={20} />
               <span className="text-sm">
-                Válassz szezont és csapatot fent a gyors meccs importáláshoz!
+                Válassz szezont fent a gyors meccs importálásához!
               </span>
             </div>
           </CardContent>
@@ -313,6 +470,56 @@ Endo Plus Service-Honvéd`}
                     <div className="flex-1 text-right">
                       <Badge variant="secondary" className="mb-2">Vendég</Badge>
                       <div className="text-slate-200 font-medium">{parsedData.awayTeam}</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-4 bg-slate-800/40 rounded-lg space-y-4">
+                  <div className="text-xs text-slate-500 uppercase tracking-wide">Csapat-hozzárendelés</div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <div className="text-sm text-slate-400">Hazai csapat a rendszerben</div>
+                      {teamsLoading ? (
+                        <div className="h-10 rounded-md bg-slate-800 animate-pulse" />
+                      ) : (
+                        <Select value={homeTeamId} onValueChange={setHomeTeamId}>
+                          <SelectTrigger className="bg-slate-800 border-slate-700 text-slate-200">
+                            <SelectValue placeholder="Válassz hazai csapatot..." />
+                          </SelectTrigger>
+                          <SelectContent className="bg-slate-800 border-slate-700 text-slate-200">
+                            {teams.map(team => (
+                              <SelectItem key={team.id} value={team.id}>
+                                {team.name}{team.is_primary ? ' ⭐' : ''}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
+                      <p className="text-xs text-slate-500">
+                        Automatikusan próbáljuk felismerni a megadott hazai csapatot, de itt felülírhatod.
+                      </p>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="text-sm text-slate-400">Vendég csapat a rendszerben</div>
+                      {teamsLoading ? (
+                        <div className="h-10 rounded-md bg-slate-800 animate-pulse" />
+                      ) : (
+                        <Select value={awayTeamId} onValueChange={setAwayTeamId}>
+                          <SelectTrigger className="bg-slate-800 border-slate-700 text-slate-200">
+                            <SelectValue placeholder="Válassz vendég csapatot..." />
+                          </SelectTrigger>
+                          <SelectContent className="bg-slate-800 border-slate-700 text-slate-200">
+                            {teams.map(team => (
+                              <SelectItem key={team.id} value={team.id}>
+                                {team.name}{team.is_primary ? ' ⭐' : ''}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
+                      <p className="text-xs text-slate-500">
+                        Fontos, hogy a vendég csapat is a megfelelő sorba kerüljön a Supabase-ben.
+                      </p>
                     </div>
                   </div>
                 </div>
