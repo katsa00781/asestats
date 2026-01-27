@@ -1,0 +1,292 @@
+[
+  {
+    "id": "game-1",
+    "date": "2024-11-10",
+    "opponent": "Ellenfél Csapat",
+    "homeAway": "home",
+    "ourScore": 81,
+    "oppScore": 200,
+    "result": "loss",
+    "players": [
+      {
+        "number": 11,
+        "name": "Benke Szilárd",
+        "position": "G",
+        "minutes": 39,
+        "points": 18,
+        "shooting": {
+          "close": { "made": 1, "attempted": 2 },
+          "mid": { "made": 0, "attempted": 1 },
+          "three": { "made": 3, "attempted": 7 },
+          "freeThrow": { "made": 7, "attempted": 7 }
+        },
+        "rebounds": {
+          "defensive": 1,
+          "offensive": 0,
+          "total": 1
+        },
+        "assists": 1,
+        "steals": 4,
+        "blocks": 1,
+        "turnovers": 3,
+        "fouls": 5,
+        "plusMinus": 4,
+        "valuation": 21,
+        "advanced": {
+          "offensiveRating": 110.3,
+          "defensiveRating": 96.2,
+          "trueShootingPercentage": 69.2,
+          "effectiveFieldGoalPercentage": 55
+        }
+      },
+      {
+        "number": 3,
+        "name": "Hicks Tony Hollis",
+        "position": "F",
+        "minutes": 37,
+        "points": 22,
+        "shooting": {
+          "close": { "made": 5, "attempted": 6 },
+          "mid": { "made": 0, "attempted": 1 },
+          "three": { "made": 1, "attempted": 4 },
+          "freeThrow": { "made": 9, "attempted": 10 }
+        },
+        "rebounds": {
+          "defensive": 5,
+          "offensive": 0,
+          "total": 5
+        },
+        "assists": 0,
+        "steals": 2,
+        "blocks": 0,
+        "turnovers": 6,
+        "fouls": 8,
+        "plusMinus": 6,
+        "valuation": 29,
+        "advanced": {
+          "offensiveRating": 120.5,
+          "defensiveRating": 91.3,
+          "trueShootingPercentage": 73.3,
+          "effectiveFieldGoalPercentage": 59.1
+        }
+      },
+      {
+        "number": 10,
+        "name": "Révész Ádám",
+        "position": "G",
+        "minutes": 35,
+        "points": 14,
+        "shooting": {
+          "close": { "made": 3, "attempted": 4 },
+          "mid": { "made": 0, "attempted": 0 },
+          "three": { "made": 2, "attempted": 3 },
+          "freeThrow": { "made": 2, "attempted": 6 }
+        },
+        "rebounds": {
+          "defensive": 7,
+          "offensive": 3,
+          "total": 10
+        },
+        "assists": 0,
+        "steals": 3,
+        "blocks": 0,
+        "turnovers": 0,
+        "fouls": 7,
+        "plusMinus": 3,
+        "valuation": 28,
+        "advanced": {
+          "offensiveRating": 154,
+          "defensiveRating": 87.5,
+          "trueShootingPercentage": 70,
+          "effectiveFieldGoalPercentage": 85.7
+        }
+      },
+      {
+        "number": 4,
+        "name": "Edosomwan Kinsley Nehizena",
+        "position": "C",
+        "minutes": 27,
+        "points": 9,
+        "shooting": {
+          "close": { "made": 3, "attempted": 3 },
+          "mid": { "made": 0, "attempted": 0 },
+          "three": { "made": 0, "attempted": 0 },
+          "freeThrow": { "made": 3, "attempted": 4 }
+        },
+        "rebounds": {
+          "defensive": 6,
+          "offensive": 1,
+          "total": 7
+        },
+        "assists": 1,
+        "steals": 4,
+        "blocks": 0,
+        "turnovers": 2,
+        "fouls": 3,
+        "plusMinus": 0,
+        "valuation": 17,
+        "advanced": {
+          "offensiveRating": 128.3,
+          "defensiveRating": 78.2,
+          "trueShootingPercentage": 112.5,
+          "effectiveFieldGoalPercentage": 100
+        }
+      },
+      {
+        "number": 2,
+        "name": "Bluiett Trevon Nykee",
+        "position": "G",
+        "minutes": 19,
+        "points": 0,
+        "shooting": {
+          "close": { "made": 0, "attempted": 0 },
+          "mid": { "made": 0, "attempted": 2 },
+          "three": { "made": 0, "attempted": 1 },
+          "freeThrow": { "made": 0, "attempted": 0 }
+        },
+        "rebounds": {
+          "defensive": 3,
+          "offensive": 0,
+          "total": 3
+        },
+        "assists": 0,
+        "steals": 0,
+        "blocks": 0,
+        "turnovers": 1,
+        "fouls": 2,
+        "plusMinus": 0,
+        "valuation": 1,
+        "advanced": {
+          "offensiveRating": 0,
+          "defensiveRating": 83.8,
+          "trueShootingPercentage": 0,
+          "effectiveFieldGoalPercentage": 0
+        }
+      },
+      {
+        "number": 0,
+        "name": "Edwin Deon Javern",
+        "position": "F",
+        "minutes": 28,
+        "points": 17,
+        "shooting": {
+          "close": { "made": 6, "attempted": 7 },
+          "mid": { "made": 1, "attempted": 2 },
+          "three": { "made": 1, "attempted": 4 },
+          "freeThrow": { "made": 0, "attempted": 0 }
+        },
+        "rebounds": {
+          "defensive": 5,
+          "offensive": 0,
+          "total": 5
+        },
+        "assists": 1,
+        "steals": 2,
+        "blocks": 1,
+        "turnovers": 2,
+        "fouls": 0,
+        "plusMinus": 1,
+        "valuation": 18,
+        "advanced": {
+          "offensiveRating": 110,
+          "defensiveRating": 99.3,
+          "trueShootingPercentage": 65.4,
+          "effectiveFieldGoalPercentage": 65.4
+        }
+      },
+      {
+        "number": 22,
+        "name": "Krivacevic Markó",
+        "position": "F",
+        "minutes": 11,
+        "points": 1,
+        "shooting": {
+          "close": { "made": 0, "attempted": 3 },
+          "mid": { "made": 0, "attempted": 0 },
+          "three": { "made": 0, "attempted": 0 },
+          "freeThrow": { "made": 1, "attempted": 2 }
+        },
+        "rebounds": {
+          "defensive": 2,
+          "offensive": 1,
+          "total": 3
+        },
+        "assists": 1,
+        "steals": 2,
+        "blocks": 0,
+        "turnovers": 1,
+        "fouls": 2,
+        "plusMinus": 0,
+        "valuation": 2,
+        "advanced": {
+          "offensiveRating": 33.7,
+          "defensiveRating": 106.5,
+          "trueShootingPercentage": 12.5,
+          "effectiveFieldGoalPercentage": 0
+        }
+      },
+      {
+        "number": 13,
+        "name": "Géringer Gergő",
+        "position": "G",
+        "minutes": 3,
+        "points": 0,
+        "shooting": {
+          "close": { "made": 0, "attempted": 0 },
+          "mid": { "made": 0, "attempted": 0 },
+          "three": { "made": 0, "attempted": 0 },
+          "freeThrow": { "made": 0, "attempted": 0 }
+        },
+        "rebounds": {
+          "defensive": 0,
+          "offensive": 0,
+          "total": 0
+        },
+        "assists": 0,
+        "steals": 4,
+        "blocks": 0,
+        "turnovers": 0,
+        "fouls": 0,
+        "plusMinus": 0,
+        "valuation": 0,
+        "advanced": {
+          "offensiveRating": 0,
+          "defensiveRating": 135,
+          "trueShootingPercentage": 0,
+          "effectiveFieldGoalPercentage": 0
+        }
+      },
+      {
+        "number": 12,
+        "name": "Halmai Dániel",
+        "position": "G",
+        "minutes": 1,
+        "points": 0,
+        "shooting": {
+          "close": { "made": 0, "attempted": 0 },
+          "mid": { "made": 0, "attempted": 0 },
+          "three": { "made": 0, "attempted": 0 },
+          "freeThrow": { "made": 0, "attempted": 0 }
+        },
+        "rebounds": {
+          "defensive": 0,
+          "offensive": 0,
+          "total": 0
+        },
+        "assists": 0,
+        "steals": 0,
+        "blocks": 0,
+        "turnovers": 1,
+        "fouls": 0,
+        "plusMinus": 0,
+        "valuation": -1,
+        "advanced": {
+          "offensiveRating": 0,
+          "defensiveRating": 200,
+          "trueShootingPercentage": 0,
+          "effectiveFieldGoalPercentage": 0
+        }
+      }
+    ]
+  }
+]
