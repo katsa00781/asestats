@@ -212,6 +212,15 @@ type SupabasePlayerGameStat = {
   };
 };
 
+type SupabasePlayerSeasonGameStat = {
+  player_id: string;
+  offensive_rating: number | null;
+  defensive_rating: number | null;
+  true_shooting_percentage: number | null;
+  effective_field_goal_percentage: number | null;
+  games?: { season_id: string | null } | { season_id: string | null }[] | null;
+};
+
 export default function Home() {
   const [players, setPlayers] = useState<PlayerStats[]>([]);
   const [allPlayersForComparison, setAllPlayersForComparison] = useState<PlayerStats[]>([]);
@@ -277,31 +286,43 @@ export default function Home() {
         
         // Minden játékos minden szezonból és csapatból
         if (allPlayersResult.data && allGameStatsResult.data) {
+          const playerGameStats = allGameStatsResult.data as SupabasePlayerSeasonGameStat[];
+
           const allPlayersConverted: PlayerStats[] = allPlayersResult.data.map((ps: SupabasePlayerStat) => {
             // Szűrjük le a játékos meccseit ebben a szezonban
-            const playerSeasonGames = allGameStatsResult.data.filter((gs: any) => 
-              gs.player_id === ps.player_id && gs.games?.season_id === ps.season_id
-            );
+            const playerSeasonGames = playerGameStats.filter((gs) => {
+              if (gs.player_id !== ps.player_id || !gs.games) {
+                return false;
+              }
+
+              const linkedGames = Array.isArray(gs.games)
+                ? gs.games
+                : gs.games
+                  ? [gs.games]
+                  : [];
+
+              return linkedGames.some((game) => game?.season_id === ps.season_id);
+            });
 
             // Számítsuk ki az átlagokat a meccsenkénti értékekből
-            const gamesWithOffRtg = playerSeasonGames.filter((g: any) => g.offensive_rating != null);
+            const gamesWithOffRtg = playerSeasonGames.filter((g) => g.offensive_rating != null);
             const avgOffRtg = gamesWithOffRtg.length > 0
-              ? gamesWithOffRtg.reduce((sum: number, g: any) => sum + (g.offensive_rating || 0), 0) / gamesWithOffRtg.length
+              ? gamesWithOffRtg.reduce((sum, g) => sum + (g.offensive_rating ?? 0), 0) / gamesWithOffRtg.length
               : 0;
 
-            const gamesWithDefRtg = playerSeasonGames.filter((g: any) => g.defensive_rating != null);
+            const gamesWithDefRtg = playerSeasonGames.filter((g) => g.defensive_rating != null);
             const avgDefRtg = gamesWithDefRtg.length > 0
-              ? gamesWithDefRtg.reduce((sum: number, g: any) => sum + (g.defensive_rating || 0), 0) / gamesWithDefRtg.length
+              ? gamesWithDefRtg.reduce((sum, g) => sum + (g.defensive_rating ?? 0), 0) / gamesWithDefRtg.length
               : 0;
 
-            const gamesWithTS = playerSeasonGames.filter((g: any) => g.true_shooting_percentage != null);
+            const gamesWithTS = playerSeasonGames.filter((g) => g.true_shooting_percentage != null);
             const avgTS = gamesWithTS.length > 0
-              ? gamesWithTS.reduce((sum: number, g: any) => sum + (g.true_shooting_percentage || 0), 0) / gamesWithTS.length
+              ? gamesWithTS.reduce((sum, g) => sum + (g.true_shooting_percentage ?? 0), 0) / gamesWithTS.length
               : 0;
 
-            const gamesWithEFG = playerSeasonGames.filter((g: any) => g.effective_field_goal_percentage != null);
+            const gamesWithEFG = playerSeasonGames.filter((g) => g.effective_field_goal_percentage != null);
             const avgEFG = gamesWithEFG.length > 0
-              ? gamesWithEFG.reduce((sum: number, g: any) => sum + (g.effective_field_goal_percentage || 0), 0) / gamesWithEFG.length
+              ? gamesWithEFG.reduce((sum, g) => sum + (g.effective_field_goal_percentage ?? 0), 0) / gamesWithEFG.length
               : 0;
 
             return {

@@ -63,10 +63,32 @@ type TeamGameRow = {
 	id: string;
 	date: string;
 	opponent: string;
-	round?: string | null;
+	round?: number | null;
+	season_id: string;
+	our_team_id: string;
 	our_score: number;
 	opp_score: number;
 	result: 'win' | 'loss';
+};
+
+type PlayerGameAggregateRow = {
+	game_id: string;
+	close_made: number | null;
+	close_attempted: number | null;
+	mid_made: number | null;
+	mid_attempted: number | null;
+	three_made: number | null;
+	three_attempted: number | null;
+	free_throw_made: number | null;
+	free_throw_attempted: number | null;
+	offensive_rebounds: number | null;
+	defensive_rebounds: number | null;
+	total_rebounds: number | null;
+	assists: number | null;
+	turnovers: number | null;
+	steals: number | null;
+	blocks: number | null;
+	fouls_committed: number | null;
 };
 
 type ShootingProfile = {
@@ -235,7 +257,8 @@ const buildTrendDataset = (teamA?: TeamProfile, teamB?: TeamProfile): TrendDatum
 	for (let index = 0; index < total; index += 1) {
 		const aGame = teamA?.games[index];
 		const bGame = teamB?.games[index];
-		const label = aGame?.round || bGame?.round || `#${index + 1}`;
+		const rawRound = aGame?.round ?? bGame?.round;
+		const label = rawRound != null ? `${rawRound}` : `#${index + 1}`;
 		const entry: TrendDatum = { label };
 		if (teamA) entry[teamA.key] = aGame ? aGame.our_score - aGame.opp_score : null;
 		if (teamB) entry[teamB.key] = bGame ? bGame.our_score - bGame.opp_score : null;
@@ -318,8 +341,9 @@ export function TeamComparison({ allSeasons, allTeams, currentSeasonId, currentT
 				if (queryError) throw queryError;
 
 				const grouped = new Map<string, TeamSeasonSummary>();
+				const gameRows = (data || []) as TeamGameRow[];
 
-				(data || []).forEach((game: any) => {
+				gameRows.forEach((game) => {
 					const key = `${game.our_team_id}_${game.season_id}`;
 					if (!grouped.has(key)) {
 						const teamName = allTeams.find((team) => team.id === game.our_team_id)?.name || 'Ismeretlen csapat';
@@ -391,7 +415,7 @@ export function TeamComparison({ allSeasons, allTeams, currentSeasonId, currentT
 
 						const { data: games, error: gamesError } = await supabase
 							.from('games')
-							.select('id, date, round, opponent, our_score, opp_score, result')
+							.select('id, date, round, opponent, season_id, our_team_id, our_score, opp_score, result')
 							.eq('our_team_id', summary.teamId)
 							.eq('season_id', summary.seasonId)
 							.order('date', { ascending: true });
@@ -446,23 +470,24 @@ export function TeamComparison({ allSeasons, allTeams, currentSeasonId, currentT
 
 							if (statsError) throw statsError;
 
-							totals = (stats || []).reduce((acc, row: any) => {
-								const twoMade = (row.close_made || 0) + (row.mid_made || 0);
-								const twoAtt = (row.close_attempted || 0) + (row.mid_attempted || 0);
+							const playerGameStats = (stats || []) as PlayerGameAggregateRow[];
+							totals = playerGameStats.reduce((acc, row) => {
+								const twoMade = (row.close_made ?? 0) + (row.mid_made ?? 0);
+								const twoAtt = (row.close_attempted ?? 0) + (row.mid_attempted ?? 0);
 								acc.twoMade += twoMade;
 								acc.twoAtt += twoAtt;
-								acc.threeMade += row.three_made || 0;
-								acc.threeAtt += row.three_attempted || 0;
-								acc.ftMade += row.free_throw_made || 0;
-								acc.ftAtt += row.free_throw_attempted || 0;
-								acc.offReb += row.offensive_rebounds || 0;
-								acc.defReb += row.defensive_rebounds || 0;
-								acc.totReb += row.total_rebounds || 0;
-								acc.assists += row.assists || 0;
-								acc.turnovers += row.turnovers || 0;
-								acc.steals += row.steals || 0;
-								acc.blocks += row.blocks || 0;
-								acc.fouls += row.fouls_committed || 0;
+								acc.threeMade += row.three_made ?? 0;
+								acc.threeAtt += row.three_attempted ?? 0;
+								acc.ftMade += row.free_throw_made ?? 0;
+								acc.ftAtt += row.free_throw_attempted ?? 0;
+								acc.offReb += row.offensive_rebounds ?? 0;
+								acc.defReb += row.defensive_rebounds ?? 0;
+								acc.totReb += row.total_rebounds ?? 0;
+								acc.assists += row.assists ?? 0;
+								acc.turnovers += row.turnovers ?? 0;
+								acc.steals += row.steals ?? 0;
+								acc.blocks += row.blocks ?? 0;
+								acc.fouls += row.fouls_committed ?? 0;
 								return acc;
 							}, totals);
 						}

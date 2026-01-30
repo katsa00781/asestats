@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
@@ -110,16 +110,37 @@ type GameDetailsProps = {
   onBack: () => void;
 };
 
+type PlayerGameStatsRow = {
+  player_id: string;
+  minutes: number | null;
+  points: number | null;
+  close_made: number | null;
+  close_attempted: number | null;
+  mid_made: number | null;
+  mid_attempted: number | null;
+  three_made: number | null;
+  three_attempted: number | null;
+  free_throw_made: number | null;
+  free_throw_attempted: number | null;
+  offensive_rebounds: number | null;
+  defensive_rebounds: number | null;
+  total_rebounds: number | null;
+  assists: number | null;
+  steals: number | null;
+  blocks: number | null;
+  turnovers: number | null;
+  fouls_committed: number | null;
+  plus_minus: number | null;
+  valuation: number | null;
+  players: { name: string; number: number } | { name: string; number: number }[];
+};
+
 export function GameDetails({ gameId, onBack }: GameDetailsProps) {
   const [gameComparison, setGameComparison] = useState<GameComparison | null>(null);
   const [playerStats, setPlayerStats] = useState<PlayerGameStat[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    loadGameDetails();
-  }, [gameId]);
-
-  const loadGameDetails = async () => {
+  const loadGameDetails = useCallback(async () => {
     setLoading(true);
     try {
       // Meccs összehasonlító adatok
@@ -167,31 +188,37 @@ export function GameDetails({ gameId, onBack }: GameDetailsProps) {
 
       if (playersError) throw playersError;
 
-      const formattedPlayerStats: PlayerGameStat[] = playersData.map((stat: any) => ({
-        player_id: stat.player_id,
-        player_name: stat.players.name,
-        player_number: stat.players.number,
-        minutes: stat.minutes,
-        points: stat.points,
-        close_made: stat.close_made,
-        close_attempted: stat.close_attempted,
-        mid_made: stat.mid_made,
-        mid_attempted: stat.mid_attempted,
-        three_made: stat.three_made,
-        three_attempted: stat.three_attempted,
-        free_throw_made: stat.free_throw_made,
-        free_throw_attempted: stat.free_throw_attempted,
-        offensive_rebounds: stat.offensive_rebounds,
-        defensive_rebounds: stat.defensive_rebounds,
-        total_rebounds: stat.total_rebounds,
-        assists: stat.assists,
-        steals: stat.steals,
-        blocks: stat.blocks,
-        turnovers: stat.turnovers,
-        fouls_committed: stat.fouls_committed,
-        plus_minus: stat.plus_minus,
-        valuation: stat.valuation,
-      }));
+      const formattedPlayerStats: PlayerGameStat[] = (playersData || []).map(
+        (stat: PlayerGameStatsRow) => {
+          const playerInfo = Array.isArray(stat.players) ? stat.players[0] : stat.players;
+
+          return {
+            player_id: stat.player_id,
+            player_name: playerInfo?.name ?? 'Ismeretlen játékos',
+            player_number: playerInfo?.number ?? 0,
+            minutes: stat.minutes ?? 0,
+            points: stat.points ?? 0,
+            close_made: stat.close_made ?? 0,
+            close_attempted: stat.close_attempted ?? 0,
+            mid_made: stat.mid_made ?? 0,
+            mid_attempted: stat.mid_attempted ?? 0,
+            three_made: stat.three_made ?? 0,
+            three_attempted: stat.three_attempted ?? 0,
+            free_throw_made: stat.free_throw_made ?? 0,
+            free_throw_attempted: stat.free_throw_attempted ?? 0,
+            offensive_rebounds: stat.offensive_rebounds ?? 0,
+            defensive_rebounds: stat.defensive_rebounds ?? 0,
+            total_rebounds: stat.total_rebounds ?? 0,
+            assists: stat.assists ?? 0,
+            steals: stat.steals ?? 0,
+            blocks: stat.blocks ?? 0,
+            turnovers: stat.turnovers ?? 0,
+            fouls_committed: stat.fouls_committed ?? 0,
+            plus_minus: stat.plus_minus ?? 0,
+            valuation: stat.valuation ?? 0,
+          };
+        }
+      );
 
       setPlayerStats(formattedPlayerStats);
     } catch (error) {
@@ -200,7 +227,11 @@ export function GameDetails({ gameId, onBack }: GameDetailsProps) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [gameId]);
+
+  useEffect(() => {
+    loadGameDetails();
+  }, [loadGameDetails]);
 
   const renderDiffIndicator = (diff: number) => {
     if (diff > 0) {

@@ -334,7 +334,7 @@ export function PlayerComparison({
             </div>
           </div>
           <p className="text-sm text-slate-400">
-            💡 Tipp: Válaszd ki az "Összes csapat" opciót a szezonnal és pozícióval együtt, hogy különböző csapatok ugyanazon poszton játszó játékosait hasonlítsd össze!
+            💡 Tipp: Válaszd ki az &quot;Összes csapat&quot; opciót a szezonnal és pozícióval együtt, hogy különböző csapatok ugyanazon poszton játszó játékosait hasonlítsd össze!
           </p>
         </CardContent>
       </Card>

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Label } from './ui/label';
@@ -27,6 +27,17 @@ type Season = {
   start_date: string;
   end_date: string;
   is_current: boolean;
+};
+
+type ExistingGameSummary = {
+  id: string;
+  date: string;
+  round: number | null;
+  home_away: 'home' | 'away';
+  our_team_id: string;
+  our_score: number;
+  opp_score: number;
+  opponent: string;
 };
 
 type ParsedPlayerData = {
@@ -64,7 +75,7 @@ export function JsonImport({ onImportComplete, lastImportedGame }: JsonImportPro
   const [isLoading, setIsLoading] = useState(false);
   const [useExistingGame, setUseExistingGame] = useState(false);
   const [selectedGameId, setSelectedGameId] = useState('');
-  const [existingGames, setExistingGames] = useState<any[]>([]);
+  const [existingGames, setExistingGames] = useState<ExistingGameSummary[]>([]);
   const [gameDate, setGameDate] = useState('');
   const [homeTeamId, setHomeTeamId] = useState('');
   const [awayTeamId, setAwayTeamId] = useState('');
@@ -124,14 +135,8 @@ export function JsonImport({ onImportComplete, lastImportedGame }: JsonImportPro
     fetchData();
   }, []);
 
-  // Létező meccsek betöltése amikor a szezon változik
-  useEffect(() => {
-    if (selectedSeasonId && useExistingGame) {
-      loadExistingGames();
-    }
-  }, [selectedSeasonId, useExistingGame]);
-
-  const loadExistingGames = async () => {
+  const loadExistingGames = useCallback(async () => {
+    if (!selectedSeasonId) return;
     try {
       const { data, error } = await supabase
         .from('games')
@@ -140,11 +145,29 @@ export function JsonImport({ onImportComplete, lastImportedGame }: JsonImportPro
         .order('date', { ascending: false });
 
       if (error) throw error;
-      setExistingGames(data || []);
+      const formattedGames: ExistingGameSummary[] = (data || []).map((game: ExistingGameSummary) => ({
+        id: game.id,
+        date: game.date,
+        round: game.round ?? null,
+        home_away: game.home_away,
+        our_team_id: game.our_team_id,
+        our_score: game.our_score,
+        opp_score: game.opp_score,
+        opponent: game.opponent,
+      }));
+
+      setExistingGames(formattedGames);
     } catch (error) {
       console.error('Hiba a meccsek betöltésekor:', error);
     }
-  };
+  }, [selectedSeasonId]);
+
+  // Létező meccsek betöltése amikor a szezon változik
+  useEffect(() => {
+    if (selectedSeasonId && useExistingGame) {
+      loadExistingGames();
+    }
+  }, [selectedSeasonId, useExistingGame, loadExistingGames]);
 
   // Kiválasztott meccs betöltése
   // lastImportedGame automatikus betöltése új meccs létrehozásakor
@@ -1251,7 +1274,7 @@ export function JsonImport({ onImportComplete, lastImportedGame }: JsonImportPro
                     <div>❌ Összesített sor (automatikusan kihagyva)</div>
                   </div>
                   <p className="text-xs text-slate-500 mt-2">
-                    💡 Az összesített sor (94 200...) megjelenik az előnézetben "ÖSSZESÍTETT" névvel, de nem kerül az adatbázisba.
+                    💡 Az összesített sor (94 200...) megjelenik az előnézetben &quot;ÖSSZESÍTETT&quot; névvel, de nem kerül az adatbázisba.
                   </p>
                 </div>
 

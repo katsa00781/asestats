@@ -23,6 +23,17 @@ type Team = {
   name: string;
 };
 
+type PlayerRow = {
+  id: string;
+  name: string;
+  number: number;
+  position: string;
+  season_id: string;
+  team_id: string;
+  seasons?: { name?: string | null } | { name?: string | null }[] | null;
+  teams?: { name?: string | null } | { name?: string | null }[] | null;
+};
+
 type PlayersManagementProps = {
   onPlayersChanged?: () => void;
 };
@@ -76,16 +87,21 @@ export function PlayersManagement({ onPlayersChanged }: PlayersManagementProps) 
       if (error) throw error;
 
       // Formázzuk az adatokat
-      const formattedPlayers = (data || []).map((p: any) => ({
-        id: p.id,
-        name: p.name,
-        number: p.number,
-        position: p.position,
-        season_id: p.season_id,
-        team_id: p.team_id,
-        season_name: p.seasons?.name || '',
-        team_name: p.teams?.name || ''
-      }));
+      const formattedPlayers = (data || []).map((p: PlayerRow) => {
+        const seasonInfo = Array.isArray(p.seasons) ? p.seasons[0] : p.seasons;
+        const teamInfo = Array.isArray(p.teams) ? p.teams[0] : p.teams;
+
+        return {
+          id: p.id,
+          name: p.name,
+          number: p.number,
+          position: p.position,
+          season_id: p.season_id,
+          team_id: p.team_id,
+          season_name: seasonInfo?.name || '',
+          team_name: teamInfo?.name || ''
+        };
+      });
 
       // Szűrjük ki az érvénytelen játékosokat
       const validPlayers = formattedPlayers.filter((p: Player) => {
@@ -420,7 +436,7 @@ export function PlayersManagement({ onPlayersChanged }: PlayersManagementProps) 
       }
 
       // Nincs ütközés - egyszerű mentés
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('players')
         .update({ 
           name: editedName.trim(),
@@ -443,7 +459,7 @@ export function PlayersManagement({ onPlayersChanged }: PlayersManagementProps) 
       // NE hívjuk meg az onPlayersChanged()-et
     } catch (error) {
       console.error('Hiba a módosításkor:', error);
-      const errorMessage = (error as any)?.message || 'Ismeretlen hiba';
+      const errorMessage = error instanceof Error ? error.message : 'Ismeretlen hiba';
       toast.error('Hiba történt a módosításkor: ' + errorMessage);
     }
   };
