@@ -15,6 +15,23 @@ type UpdateItem = {
 
 const updates: UpdateItem[] = [
   {
+    date: '2026. január 30.',
+    version: '1.4.0',
+    category: 'feature',
+    icon: <BarChart3 className="w-5 h-5" />,
+    title: 'Hunbasket csapatösszehasonlítás',
+    description:
+      'Új csapatösszehasonlító modul kizárólag a hunbasket.hu hivatalos statisztikái alapján. Szezonok és csapatok szűrése, fejlett mutatók (eFG%, AST/TO, dobások), radar- és trendgrafikonok, valamint egymás elleni mérleg segít a felkészülésben.',
+  },
+  {
+    date: '2026. január 30.',
+    version: '1.3.3',
+    category: 'feature',
+    icon: <TrendingUp className="w-5 h-5" />,
+    title: 'Hunbasket forduló import + 0-0 védelem',
+    description: 'Új forduló szűrő a Hunbasket importhoz: környezeti változóval vagy az Import fülön futtatható, és csak a megadott fordulók töltődnek le. A 0-0 eredményű meccsek automatikusan kimaradnak, az alkalmazás pedig naplózza az új folyamatot az Import → "Forduló alapú Hunbasket import" panelen.',
+  },
+  {
     date: '2026. január 26.',
     version: '1.3.2',
     category: 'feature',

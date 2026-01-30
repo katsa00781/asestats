@@ -11,6 +11,7 @@
  * - HUNBASKET_SEASON_NAME (például: 2025/2026)
  * - HUNBASKET_SEASON_ID (ha megadod, nem keresünk név alapján)
  * - HUNBASKET_TEAM_FILTER (vesszővel elválasztott csapatlista részleges importhoz)
+ * - HUNBASKET_ROUND_FILTER (pl. "5" vagy "3-5,12" a fordulók szűréséhez)
  * - HUNBASKET_HEADLESS=false (ha látni akarod a böngészőt futás közben)
  */
 
@@ -38,6 +39,35 @@ const TEAM_FILTER = (process.env.HUNBASKET_TEAM_FILTER || '')
   .split(',')
   .map(team => team.trim())
   .filter(Boolean);
+const parseRoundFilterInput = (value: string) => {
+  const rounds = new Set<number>();
+  value
+    .split(',')
+    .map(part => part.trim())
+    .filter(Boolean)
+    .forEach(token => {
+      const rangeMatch = token.match(/^(\d+)\s*-\s*(\d+)$/);
+      if (rangeMatch) {
+        const start = parseInt(rangeMatch[1], 10);
+        const end = parseInt(rangeMatch[2], 10);
+        if (!Number.isNaN(start) && !Number.isNaN(end)) {
+          const [min, max] = start <= end ? [start, end] : [end, start];
+          for (let current = min; current <= max; current += 1) {
+            rounds.add(current);
+          }
+        }
+        return;
+      }
+
+      const parsed = parseInt(token, 10);
+      if (!Number.isNaN(parsed)) {
+        rounds.add(parsed);
+      }
+    });
+
+  return rounds;
+};
+const ROUND_FILTER = parseRoundFilterInput(process.env.HUNBASKET_ROUND_FILTER || '');
 const HEADLESS = process.env.HUNBASKET_HEADLESS === 'false' ? false : true;
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
@@ -77,6 +107,7 @@ type TeamGameImport = {
   ourScore: number;
   oppScore: number;
   result: 'win' | 'loss';
+  round: number | null;
   players: PlayerStats[];
 };
 
@@ -86,10 +117,12 @@ type GameLink = {
   homeTeam: string;
   awayTeam: string;
   score: string;
+  round: number | null;
 };
 
 type ScrapedGame = {
   date: string;
+  round: number | null;
   teams: TeamGameImport[];
 };
 
@@ -142,6 +175,12 @@ const parseMinutes = (value: string) => {
 };
 
 const TEAM_FILTER_NORMALIZED = TEAM_FILTER.map(normalizeName).filter(Boolean);
+
+const matchesRoundFilter = (round?: number | null) => {
+  if (ROUND_FILTER.size === 0) return true;
+  if (typeof round !== 'number' || Number.isNaN(round)) return false;
+  return ROUND_FILTER.has(round);
+};
 
 const matchesFilter = (teamName: string) => {
   if (TEAM_FILTER_NORMALIZED.length === 0) return true;
@@ -230,12 +269,15 @@ const getGameLinks = async (page: Page): Promise<GameLink[]> => {
   await page.waitForTimeout(3000);
 
   const games = await page.$$eval('table tbody tr', rows => {
-    const entries: { date: string; url: string; homeTeam: string; awayTeam: string; score: string }[] = [];
+    const entries: { date: string; url: string; homeTeam: string; awayTeam: string; score: string; round: number | null }[] = [];
 
     rows.forEach(row => {
       const cells = row.querySelectorAll('td');
       if (cells.length < 5) return;
 
+      const roundText = (cells[0]?.textContent || '').trim();
+      const roundMatch = roundText.match(/\d+/);
+      const round = roundMatch ? parseInt(roundMatch[0] || '0', 10) || null : null;
       const homeTeam = (cells[1]?.textContent || '').trim();
       const scoreText = (cells[2]?.textContent || '').trim();
       const awayTeam = (cells[3]?.textContent || '').trim();
@@ -256,14 +298,22 @@ const getGameLinks = async (page: Page): Promise<GameLink[]> => {
         homeTeam,
         awayTeam,
         score: scoreText,
+        round,
       });
     });
 
     return entries;
   });
 
-  const filtered = games.filter(game => matchesFilter(game.homeTeam) || matchesFilter(game.awayTeam));
-  console.log(`✅ ${filtered.length} feldolgozható meccs találva`);
+  const filtered = games.filter(game => {
+    if (!matchesRoundFilter(game.round)) return false;
+    const { homeScore, awayScore } = parseScore(game.score);
+    if (homeScore === 0 && awayScore === 0) return false;
+    return matchesFilter(game.homeTeam) || matchesFilter(game.awayTeam);
+  });
+
+  const roundFilterLabel = ROUND_FILTER.size > 0 ? ` (${ROUND_FILTER.size} forduló szűrve)` : '';
+  console.log(`✅ ${filtered.length} feldolgozható meccs találva${roundFilterLabel}`);
   return filtered;
 };
 
@@ -388,7 +438,12 @@ const scrapeGameDetails = async (page: Page, link: GameLink): Promise<ScrapedGam
 
     const { homeTeam, awayTeam } = await resolveTeamNames(page, link.homeTeam, link.awayTeam);
     const { homeScore, awayScore } = parseScore(link.score);
+    if (homeScore === 0 && awayScore === 0) {
+      console.warn('  ⚠️ 0-0 eredmény, import kihagyva');
+      return null;
+    }
     const [homePlayers, awayPlayers] = await scrapeAllPlayerTables(page);
+    const round = typeof link.round === 'number' ? link.round : null;
 
     console.log(`  ✅ ${homeTeam} vs ${awayTeam} (${homeScore}-${awayScore}) — ${homePlayers.length + awayPlayers.length} játékos`);
 
@@ -400,6 +455,7 @@ const scrapeGameDetails = async (page: Page, link: GameLink): Promise<ScrapedGam
         ourScore: homeScore,
         oppScore: awayScore,
         result: homeScore > awayScore ? 'win' : 'loss',
+        round,
         players: homePlayers,
       },
       {
@@ -409,11 +465,12 @@ const scrapeGameDetails = async (page: Page, link: GameLink): Promise<ScrapedGam
         ourScore: awayScore,
         oppScore: homeScore,
         result: awayScore > homeScore ? 'win' : 'loss',
+        round,
         players: awayPlayers,
       },
     ];
 
-    return { date, teams };
+    return { date, round, teams };
   } catch (error) {
     console.error('  ❌ Hiba a meccs részleteinek feldolgozásakor:', error);
     return null;
@@ -529,7 +586,7 @@ const importGame = async (date: string, seasonId: string, teamGame: TeamGameImpo
 
   const { data: existingGame, error: existingError } = await supabase
     .from('games')
-    .select('id, home_away, our_score, opp_score, result, opponent')
+    .select('id, home_away, our_score, opp_score, result, opponent, round')
     .eq('date', date)
     .eq('season_id', seasonId)
     .eq('our_team_id', team.id)
@@ -546,7 +603,8 @@ const importGame = async (date: string, seasonId: string, teamGame: TeamGameImpo
       existingGame.our_score !== teamGame.ourScore ||
       existingGame.opp_score !== teamGame.oppScore ||
       existingGame.result !== teamGame.result ||
-      existingGame.opponent !== opponent.name;
+      existingGame.opponent !== opponent.name ||
+      existingGame.round !== teamGame.round;
 
     if (needsUpdate) {
       const { error: updateError } = await supabase
@@ -557,6 +615,7 @@ const importGame = async (date: string, seasonId: string, teamGame: TeamGameImpo
           opp_score: teamGame.oppScore,
           result: teamGame.result,
           opponent: opponent.name,
+          round: teamGame.round,
         })
         .eq('id', existingGame.id);
 
@@ -584,7 +643,7 @@ const importGame = async (date: string, seasonId: string, teamGame: TeamGameImpo
       our_score: teamGame.ourScore,
       opp_score: teamGame.oppScore,
       result: teamGame.result,
-      round: null,
+      round: teamGame.round,
     })
     .select('id')
     .single();
@@ -617,7 +676,8 @@ const main = async () => {
     console.log(`📊 ${games.length} meccs feldolgozása...`);
 
     for (const [index, game] of games.entries()) {
-      console.log(`\n[${index + 1}/${games.length}] ${cleanTeamName(game.homeTeam)} vs ${cleanTeamName(game.awayTeam)} (${game.score})`);
+      const roundLabel = typeof game.round === 'number' ? `${game.round}. forduló | ` : '';
+      console.log(`\n[${index + 1}/${games.length}] ${roundLabel}${cleanTeamName(game.homeTeam)} vs ${cleanTeamName(game.awayTeam)} (${game.score})`);
       const scraped = await scrapeGameDetails(page, game);
       if (!scraped) continue;
 

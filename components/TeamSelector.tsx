@@ -21,6 +21,11 @@ type TeamSelectorProps = {
   onTeamChange: (teamId: string) => void;
 };
 
+const shouldSkipTeam = (name?: string | null) => {
+  if (!name) return false;
+  return name.trim().toLowerCase() === 'ase';
+};
+
 export function TeamSelector({ selectedTeamId, onTeamChange }: TeamSelectorProps) {
   const [teams, setTeams] = useState<Team[]>([]);
   const [loading, setLoading] = useState(true);
@@ -87,10 +92,16 @@ export function TeamSelector({ selectedTeamId, onTeamChange }: TeamSelectorProps
       }
 
       console.log('TeamSelector: Betöltött csapatok:', teamsToLoad);
-      setTeams(teamsToLoad);
+      const filteredTeams = teamsToLoad.filter(team => !shouldSkipTeam(team.name));
 
-      if (!selectedTeamId && teamsToLoad.length > 0) {
-        const primary = teamsToLoad.find((t: Team) => t.is_primary) || teamsToLoad[0];
+      if (filteredTeams.length !== teamsToLoad.length) {
+        console.log('TeamSelector: \"ASE\" név kihagyva (Az Atomerőmű SE duplikációja).');
+      }
+
+      setTeams(filteredTeams);
+
+      if (!selectedTeamId && filteredTeams.length > 0) {
+        const primary = filteredTeams.find((t: Team) => t.is_primary) || filteredTeams[0];
         console.log('TeamSelector: Alapértelmezett csapat beállítva:', primary);
         onTeamChange(primary.id);
       }
