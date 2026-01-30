@@ -3,7 +3,7 @@ import { spawn } from 'child_process';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
-export const maxDuration = 600;
+export const maxDuration = 300;
 
 type ImportRequestPayload = {
   roundFilter?: string;
