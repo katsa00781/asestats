@@ -221,6 +221,8 @@ type SupabasePlayerSeasonGameStat = {
   games?: { season_id: string | null } | { season_id: string | null }[] | null;
 };
 
+const TAB_TRIGGER_CLASS = 'text-xs sm:text-sm flex-shrink-0 md:flex-1 min-w-[7rem] px-3 py-2 whitespace-nowrap';
+
 export default function Home() {
   const [players, setPlayers] = useState<PlayerStats[]>([]);
   const [allPlayersForComparison, setAllPlayersForComparison] = useState<PlayerStats[]>([]);
@@ -641,10 +643,10 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-slate-950 dark">
-            <header className="bg-slate-900 text-white py-4 sm:py-6 shadow-lg">
+      <header className="bg-slate-900 text-white py-4 sm:py-6 shadow-lg">
         <div className="container mx-auto px-4">
-          <div className="flex items-center justify-between">
-            <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold flex items-center gap-2 sm:gap-3">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <h1 className="text-center md:text-left text-2xl sm:text-3xl md:text-4xl font-bold flex items-center gap-2 sm:gap-3">
               <Trophy className="h-6 w-6 sm:h-8 sm:w-8 md:h-10 md:w-10" />
               ASE Statisztika Kezelő
             </h1>
@@ -652,7 +654,7 @@ export default function Home() {
               variant="outline" 
               size="sm" 
               onClick={() => signOut()}
-              className="flex items-center gap-2"
+              className="flex items-center justify-center gap-2 w-full md:w-auto"
             >
               <LogOut className="h-4 w-4" />
               Kijelentkezés
@@ -663,16 +665,16 @@ export default function Home() {
 
       <main className="container mx-auto px-2 sm:px-4 py-4 sm:py-8">
         {/* Szezon és csapat választó */}
-        <div className="mb-6 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-          <div className="flex flex-col sm:flex-row gap-4 flex-1">
-            <div>
+        <div className="mb-6 space-y-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="w-full">
               <label className="text-sm text-slate-400 mb-2 block">Szezon</label>
               <SeasonSelector 
                 selectedSeasonId={selectedSeasonId}
                 onSeasonChange={setSelectedSeasonId}
               />
             </div>
-            <div>
+            <div className="w-full">
               <label className="text-sm text-slate-400 mb-2 block">Csapat</label>
               <TeamSelector 
                 selectedTeamId={selectedTeamId}
@@ -683,20 +685,24 @@ export default function Home() {
         </div>
 
         <Tabs defaultValue="overview" className="space-y-4 sm:space-y-6">
-          <TabsList className="w-full flex-wrap h-auto gap-1 p-1">
-            <TabsTrigger value="overview" className="text-xs sm:text-sm flex-1 min-w-20">Áttekintés</TabsTrigger>
-            <TabsTrigger value="players" className="text-xs sm:text-sm flex-1 min-w-20">Játékosok</TabsTrigger>
-            <TabsTrigger value="comparison" className="text-xs sm:text-sm flex-1 min-w-20">Összehasonlítás</TabsTrigger>
-            <TabsTrigger value="standings" className="text-xs sm:text-sm flex-1 min-w-20">Tabella</TabsTrigger>
-            <TabsTrigger value="games" className="text-xs sm:text-sm flex-1 min-w-20">Meccsek</TabsTrigger>
-            <TabsTrigger value="gamelog" className="text-xs sm:text-sm flex-1 min-w-20">Meccs Log</TabsTrigger>
-            <TabsTrigger value="updates" className="text-xs sm:text-sm flex-1 min-w-20">Frissítések</TabsTrigger>
-            <TabsTrigger value="manage" className="text-xs sm:text-sm flex-1 min-w-20">Kezelés</TabsTrigger>
-            <TabsTrigger value="playersimport" className="text-xs sm:text-sm flex-1 min-w-20">Játékos Import</TabsTrigger>
-            <TabsTrigger value="delete" className="text-xs sm:text-sm flex-1 min-w-20 text-red-400">Törlés</TabsTrigger>
-            <TabsTrigger value="input" className="text-xs sm:text-sm flex-1 min-w-20 hidden sm:flex">Adatbevitel</TabsTrigger>
-            <TabsTrigger value="import" className="text-xs sm:text-sm flex-1 min-w-20">Import</TabsTrigger>
-          </TabsList>
+          <div className="-mx-2 sm:mx-0">
+            <div className="overflow-x-auto pb-2">
+              <TabsList className="min-w-max md:min-w-0 md:w-full flex-nowrap md:flex-wrap h-auto gap-2 p-1 justify-start">
+                <TabsTrigger value="overview" className={TAB_TRIGGER_CLASS}>Áttekintés</TabsTrigger>
+                <TabsTrigger value="players" className={TAB_TRIGGER_CLASS}>Játékosok</TabsTrigger>
+                <TabsTrigger value="comparison" className={TAB_TRIGGER_CLASS}>Összehasonlítás</TabsTrigger>
+                <TabsTrigger value="standings" className={TAB_TRIGGER_CLASS}>Tabella</TabsTrigger>
+                <TabsTrigger value="games" className={TAB_TRIGGER_CLASS}>Meccsek</TabsTrigger>
+                <TabsTrigger value="gamelog" className={TAB_TRIGGER_CLASS}>Meccs Log</TabsTrigger>
+                <TabsTrigger value="updates" className={TAB_TRIGGER_CLASS}>Frissítések</TabsTrigger>
+                <TabsTrigger value="manage" className={TAB_TRIGGER_CLASS}>Kezelés</TabsTrigger>
+                <TabsTrigger value="playersimport" className={TAB_TRIGGER_CLASS}>Játékos Import</TabsTrigger>
+                <TabsTrigger value="delete" className={`${TAB_TRIGGER_CLASS} text-red-400`}>Törlés</TabsTrigger>
+                <TabsTrigger value="input" className={`${TAB_TRIGGER_CLASS} hidden sm:flex`}>Adatbevitel</TabsTrigger>
+                <TabsTrigger value="import" className={TAB_TRIGGER_CLASS}>Import</TabsTrigger>
+              </TabsList>
+            </div>
+          </div>
 
           <TabsContent value="overview">
             {showTeamComparison ? (

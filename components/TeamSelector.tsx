@@ -117,15 +117,22 @@ export function TeamSelector({ selectedTeamId, onTeamChange }: TeamSelectorProps
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  if (loading || teams.length === 0) {
-    return null;
+  if (loading) {
+    return <div className="w-full md:w-64 h-10 bg-slate-800 animate-pulse rounded-md" />;
+  }
+
+  if (teams.length === 0) {
+    return (
+      <div className="w-full md:w-64 rounded-md border border-dashed border-slate-700 px-3 py-2 text-xs text-slate-400">
+        Nincs elérhető csapat.
+      </div>
+    );
   }
 
   return (
-    <div className="flex items-center gap-2">
-      <span className="text-slate-400 text-sm">Csapat:</span>
-      <Select value={selectedTeamId || ''} onValueChange={onTeamChange}>
-        <SelectTrigger className="w-[180px] bg-slate-800 border-slate-700 text-slate-300">
+    <div className="w-full md:w-64">
+      <Select value={selectedTeamId || undefined} onValueChange={onTeamChange}>
+        <SelectTrigger className="w-full bg-slate-800 border-slate-700 text-slate-300">
           <SelectValue placeholder="Válassz csapatot" />
         </SelectTrigger>
         <SelectContent className="bg-slate-800 border-slate-700">
