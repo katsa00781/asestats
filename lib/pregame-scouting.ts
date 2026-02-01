@@ -70,6 +70,12 @@ export type ScoutingReport = {
   opponentTeamName: string;
   league: string;
   season: string;
+  winProbability: {
+    ownPct: number;
+    opponentPct: number;
+    predictedWinner: 'own' | 'opponent' | 'even';
+    confidence: 'Low' | 'Medium' | 'High';
+  };
   positionComparison: PositionComparison[];
   profile: {
     tempo: string;
@@ -487,6 +493,62 @@ const buildSummary = (
   return `Az ellenfél ${tempo}, ${offense} támadást játszik, védekezésben ${defense} jellegű. ${threatText} ${vulnText}`;
 };
 
+const computeTeamRating = (team: NormalizedTeamStats, benchmarks: LeagueTeamBenchmarks) => {
+  const metrics = [
+    { stat: 'efg', weight: 1.4, invert: false },
+    { stat: 'turnover_rate', weight: 1.2, invert: true },
+    { stat: 'assist_rate', weight: 1.0, invert: false },
+    { stat: 'ft_rate', weight: 0.6, invert: false },
+    { stat: 'three_pct', weight: 0.8, invert: false },
+    { stat: 'val_per_game', weight: 1.4, invert: false },
+    { stat: 'stl_per_game', weight: 0.5, invert: false },
+    { stat: 'blk_per_game', weight: 0.4, invert: false },
+    { stat: 'fouls_per_game', weight: 0.4, invert: true },
+  ];
+
+  const totalWeight = metrics.reduce((sum, metric) => sum + metric.weight, 0) || 1;
+  const weightedScore = metrics.reduce((sum, metric) => {
+    const percentile = getPercentileScore(benchmarks, team, metric.stat);
+    const score = metric.invert ? 100 - percentile : percentile;
+    return sum + score * metric.weight;
+  }, 0);
+
+  return weightedScore / totalWeight;
+};
+
+const computeWinProbability = (
+  ownTeam: NormalizedTeamStats,
+  opponentTeam: NormalizedTeamStats,
+  benchmarks: LeagueTeamBenchmarks
+) => {
+  const ownRating = computeTeamRating(ownTeam, benchmarks);
+  const opponentRating = computeTeamRating(opponentTeam, benchmarks);
+  const diff = ownRating - opponentRating;
+  const probability = 1 / (1 + Math.exp(-diff / 15));
+  const ownPct = clamp(probability, 0.05, 0.95) * 100;
+  const opponentPct = 100 - ownPct;
+  const absDiff = Math.abs(diff);
+
+  const confidence: 'Low' | 'Medium' | 'High' = absDiff >= 12
+    ? 'High'
+    : absDiff >= 6
+      ? 'Medium'
+      : 'Low';
+
+  const predictedWinner: 'own' | 'opponent' | 'even' = absDiff < 2
+    ? 'even'
+    : diff > 0
+      ? 'own'
+      : 'opponent';
+
+  return {
+    ownPct: round(ownPct, 1),
+    opponentPct: round(opponentPct, 1),
+    predictedWinner,
+    confidence,
+  };
+};
+
 export const analyzePreGameScouting = (
   opponentTeam: TeamSeasonStat,
   opponentPlayers: PlayerSeasonStat[],
@@ -536,12 +598,14 @@ export const analyzePreGameScouting = (
   const vulnerabilities = buildVulnerabilities(normalizedOpponent, leagueBenchmarks);
   const focusPoints = buildFocusPoints(normalizedOpponent, normalizedOwn, leagueBenchmarks);
   const positionComparison = buildPositionComparison(ownPlayers, opponentPlayers);
+  const winProbability = computeWinProbability(normalizedOwn, normalizedOpponent, leagueBenchmarks);
 
   return {
     opponentTeamId: opponentTeam.teamId,
     opponentTeamName: opponentTeam.teamName,
     league: opponentTeam.league,
     season: opponentTeam.season,
+    winProbability,
     positionComparison,
     profile: {
       tempo: normalizedOpponent.pace >= 70 ? 'Magas' : normalizedOpponent.pace <= 60 ? 'Alacsony' : 'Közepes',

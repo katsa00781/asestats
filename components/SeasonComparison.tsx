@@ -1259,6 +1259,41 @@ export function SeasonComparison({
 
           {pregameReport && (
             <div className="space-y-4">
+              <div className="p-3 bg-slate-800/50 rounded-lg">
+                <div className="text-sm text-slate-300 font-medium mb-2">
+                  Várható győztes (statisztikai becslés)
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-emerald-300">
+                    {(pregameOwnTeam?.teamName ?? 'Saját csapat')}: {pregameReport.winProbability.ownPct.toFixed(1)}%
+                  </span>
+                  <span className="text-slate-400">vs</span>
+                  <span className="text-orange-300">
+                    {pregameReport.opponentTeamName}: {pregameReport.winProbability.opponentPct.toFixed(1)}%
+                  </span>
+                </div>
+                <div className="mt-2 h-2 w-full bg-slate-700 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-emerald-500"
+                    style={{ width: `${pregameReport.winProbability.ownPct}%` }}
+                  />
+                </div>
+                <div className="text-xs text-slate-400 mt-2">
+                  Várható győztes:{' '}
+                  {pregameReport.winProbability.predictedWinner === 'even'
+                    ? 'Kiegyenlített'
+                    : pregameReport.winProbability.predictedWinner === 'own'
+                      ? (pregameOwnTeam?.teamName ?? 'Saját csapat')
+                      : pregameReport.opponentTeamName}
+                  {' • '}Bizonyosság:{' '}
+                  {pregameReport.winProbability.confidence === 'High'
+                    ? 'Magas'
+                    : pregameReport.winProbability.confidence === 'Medium'
+                      ? 'Közepes'
+                      : 'Alacsony'}
+                </div>
+              </div>
+
               <div className="text-sm text-slate-200 leading-relaxed">{pregameReport.summary}</div>
 
               <div className="p-3 bg-slate-800/50 rounded-lg">
