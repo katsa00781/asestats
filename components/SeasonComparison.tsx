@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import type { PlayerStats, TeamGame } from '@/app/page';
 import {
   analyzePlayerSeason,
@@ -162,6 +163,11 @@ const getConfidenceTone = (value: PlayerAnalysis['confidence']) => {
   return 'text-slate-400';
 };
 
+const round = (value: number, digits = 1) => {
+  const factor = Math.pow(10, digits);
+  return Math.round(value * factor) / factor;
+};
+
 const formatPostgameValue = (value: number, unit: 'pct' | 'count') => {
   if (!Number.isFinite(value)) return '-';
   if (unit === 'pct') return `${value.toFixed(1)}%`;
@@ -318,6 +324,46 @@ export function SeasonComparison({
   const [selectedOpponentTeamId, setSelectedOpponentTeamId] = useState<string>('');
   const [selectedGameId, setSelectedGameId] = useState<string>('');
   const league = 'HUNBASKET';
+  const [focusedIncomingField, setFocusedIncomingField] = useState<string | null>(null);
+  const [incomingPlayer, setIncomingPlayer] = useState({
+    name: '',
+    position: 'PG' as Position,
+    games: 10,
+    minutesPerGame: 20,
+    pointsPerGame: 10,
+    twoAttemptedPerGame: 7,
+    twoPct: 45,
+    threeAttemptedPerGame: 3,
+    threePct: 33.3,
+    ftAttemptedPerGame: 3,
+    ftPct: 66.7,
+    orebPerGame: 1,
+    drebPerGame: 3,
+    assistsPerGame: 2,
+    stealsPerGame: 1,
+    blocksPerGame: 0.5,
+    turnoversPerGame: 2,
+    foulsCommittedPerGame: 2,
+    foulsReceivedPerGame: 2,
+    valuationPerGame: 8,
+  });
+
+  const displayIncomingValue = (key: string, value: number) => {
+    if (focusedIncomingField === key && value === 0) return '';
+    return value;
+  };
+
+  const handleIncomingNumberChange = (
+    key: keyof typeof incomingPlayer,
+    value: string
+  ) => {
+    if (value === '') {
+      setIncomingPlayer(prev => ({ ...prev, [key]: 0 }));
+      return;
+    }
+    const parsed = Number(value);
+    setIncomingPlayer(prev => ({ ...prev, [key]: Number.isFinite(parsed) ? parsed : 0 }));
+  };
 
   const resolvedSeasonId = selectedSeasonId ?? currentSeasonId ?? null;
   const resolvedTeamId = selectedTeamId || currentTeamId || 'all';
@@ -354,6 +400,73 @@ export function SeasonComparison({
     if (!isEligibleSample(normalized)) return null;
     return analyzePlayerSeason(raw, benchmarks);
   }, [selectedPlayer, resolvedSeasonId, benchmarks]);
+
+  const incomingRaw = useMemo<RawPlayerSeasonStat | null>(() => {
+    if (!resolvedSeasonId || !benchmarks) return null;
+    const games = Math.max(0, incomingPlayer.games || 0);
+    if (games <= 0) return null;
+
+    const total = (value: number) => round((value || 0) * games, 1);
+    const pctMade = (attempts: number, pct: number) => round((attempts || 0) * ((pct || 0) / 100), 2);
+
+    const twoAttempts = incomingPlayer.twoAttemptedPerGame;
+    const twoMade = pctMade(twoAttempts, incomingPlayer.twoPct);
+    const threeMade = pctMade(incomingPlayer.threeAttemptedPerGame, incomingPlayer.threePct);
+    const ftMade = pctMade(incomingPlayer.ftAttemptedPerGame, incomingPlayer.ftPct);
+
+    return {
+      playerId: 'incoming-player',
+      name: incomingPlayer.name.trim() || 'Érkező játékos',
+      league,
+      season: resolvedSeasonId,
+      position: incomingPlayer.position,
+      games,
+      minutes: total(incomingPlayer.minutesPerGame),
+      points: total(incomingPlayer.pointsPerGame),
+      close: {
+        made: 0,
+        attempted: 0,
+      },
+      mid: {
+        made: total(twoMade),
+        attempted: total(twoAttempts),
+      },
+      three: {
+        made: total(threeMade),
+        attempted: total(incomingPlayer.threeAttemptedPerGame),
+      },
+      ft: {
+        made: total(ftMade),
+        attempted: total(incomingPlayer.ftAttemptedPerGame),
+      },
+      rebounds: {
+        offensive: total(incomingPlayer.orebPerGame),
+        defensive: total(incomingPlayer.drebPerGame),
+        total: total(incomingPlayer.orebPerGame + incomingPlayer.drebPerGame),
+      },
+      assists: total(incomingPlayer.assistsPerGame),
+      steals: total(incomingPlayer.stealsPerGame),
+      blocks: total(incomingPlayer.blocksPerGame),
+      turnovers: total(incomingPlayer.turnoversPerGame),
+      fouls: {
+        committed: total(incomingPlayer.foulsCommittedPerGame),
+        received: total(incomingPlayer.foulsReceivedPerGame),
+      },
+      valuation: total(incomingPlayer.valuationPerGame),
+    };
+  }, [benchmarks, incomingPlayer, league, resolvedSeasonId]);
+
+  const incomingEligibility = useMemo(() => {
+    if (!incomingRaw) return false;
+    const normalized = normalizePlayerStats(incomingRaw);
+    return isEligibleSample(normalized);
+  }, [incomingRaw]);
+
+  const incomingAnalysis = useMemo<PlayerAnalysis | null>(() => {
+    if (!incomingRaw || !benchmarks) return null;
+    if (!incomingEligibility) return null;
+    return analyzePlayerSeason(incomingRaw, benchmarks);
+  }, [benchmarks, incomingEligibility, incomingRaw]);
 
   const rolesByPlayerId = useMemo(() => {
     const rolesMap = new Map<string, string[]>();
@@ -974,6 +1087,387 @@ export function SeasonComparison({
           </div>
         </div>
       )}
+
+      <Card className="bg-slate-900 border-slate-800">
+        <CardHeader>
+          <CardTitle className="text-slate-50">Érkező játékos előzetes elemzése</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {!benchmarks && (
+            <div className="text-sm text-slate-300">Válassz szezont az előzetes elemzéshez.</div>
+          )}
+
+          {benchmarks && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div>
+                  <label className="text-xs text-slate-400 mb-1 block">Név</label>
+                  <Input
+                    value={incomingPlayer.name}
+                    onChange={(e) => setIncomingPlayer(prev => ({ ...prev, name: e.target.value }))}
+                    placeholder="Játékos neve"
+                    className="bg-slate-800 border-slate-700"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-slate-400 mb-1 block">Poszt</label>
+                  <Select
+                    value={incomingPlayer.position}
+                    onValueChange={(value) => setIncomingPlayer(prev => ({ ...prev, position: value as Position }))}
+                  >
+                    <SelectTrigger className="bg-slate-800 border-slate-700 w-full">
+                      <SelectValue placeholder="Válassz posztot" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-slate-800 border-slate-700">
+                      <SelectItem value="PG">Irányító</SelectItem>
+                      <SelectItem value="SG">Dobóhátvéd</SelectItem>
+                      <SelectItem value="SF">Bedobó</SelectItem>
+                      <SelectItem value="PF">Erőcsatár</SelectItem>
+                      <SelectItem value="C">Center</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="text-xs text-slate-400 mb-1 block">Meccsek</label>
+                  <Input
+                    type="number"
+                    min={0}
+                    step={1}
+                    value={displayIncomingValue('games', incomingPlayer.games)}
+                    onFocus={() => setFocusedIncomingField('games')}
+                    onBlur={() => setFocusedIncomingField(null)}
+                    onChange={(e) => handleIncomingNumberChange('games', e.target.value)}
+                    className="bg-slate-800 border-slate-700"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-slate-400 mb-1 block">Perc/meccs</label>
+                  <Input
+                    type="number"
+                    min={0}
+                    step={0.1}
+                    value={displayIncomingValue('minutesPerGame', incomingPlayer.minutesPerGame)}
+                    onFocus={() => setFocusedIncomingField('minutesPerGame')}
+                    onBlur={() => setFocusedIncomingField(null)}
+                    onChange={(e) => handleIncomingNumberChange('minutesPerGame', e.target.value)}
+                    className="bg-slate-800 border-slate-700"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div>
+                  <label className="text-xs text-slate-400 mb-1 block">Pont/meccs</label>
+                  <Input
+                    type="number"
+                    min={0}
+                    step={0.1}
+                    value={displayIncomingValue('pointsPerGame', incomingPlayer.pointsPerGame)}
+                    onFocus={() => setFocusedIncomingField('pointsPerGame')}
+                    onBlur={() => setFocusedIncomingField(null)}
+                    onChange={(e) => handleIncomingNumberChange('pointsPerGame', e.target.value)}
+                    className="bg-slate-800 border-slate-700"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-slate-400 mb-1 block">Assziszt/meccs</label>
+                  <Input
+                    type="number"
+                    min={0}
+                    step={0.1}
+                    value={displayIncomingValue('assistsPerGame', incomingPlayer.assistsPerGame)}
+                    onFocus={() => setFocusedIncomingField('assistsPerGame')}
+                    onBlur={() => setFocusedIncomingField(null)}
+                    onChange={(e) => handleIncomingNumberChange('assistsPerGame', e.target.value)}
+                    className="bg-slate-800 border-slate-700"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-slate-400 mb-1 block">Lepatt./meccs (T)</label>
+                  <Input
+                    type="number"
+                    min={0}
+                    step={0.1}
+                    value={displayIncomingValue('rebTotal', incomingPlayer.orebPerGame + incomingPlayer.drebPerGame)}
+                    onFocus={() => setFocusedIncomingField('rebTotal')}
+                    onBlur={() => setFocusedIncomingField(null)}
+                    onChange={(e) => {
+                      const total = Number(e.target.value) || 0;
+                      const ratio = incomingPlayer.orebPerGame + incomingPlayer.drebPerGame > 0
+                        ? incomingPlayer.orebPerGame / (incomingPlayer.orebPerGame + incomingPlayer.drebPerGame)
+                        : 0.3;
+                      const oreb = total * ratio;
+                      const dreb = total - oreb;
+                      setIncomingPlayer(prev => ({ ...prev, orebPerGame: round(oreb, 1), drebPerGame: round(dreb, 1) }));
+                    }}
+                    className="bg-slate-800 border-slate-700"
+                  />
+                  <div className="text-[10px] text-slate-500">OREB/DREB arány automatikusan megtartva.</div>
+                </div>
+                <div>
+                  <label className="text-xs text-slate-400 mb-1 block">VAL/meccs</label>
+                  <Input
+                    type="number"
+                    min={0}
+                    step={0.1}
+                    value={displayIncomingValue('valuationPerGame', incomingPlayer.valuationPerGame)}
+                    onFocus={() => setFocusedIncomingField('valuationPerGame')}
+                    onBlur={() => setFocusedIncomingField(null)}
+                    onChange={(e) => handleIncomingNumberChange('valuationPerGame', e.target.value)}
+                    className="bg-slate-800 border-slate-700"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div>
+                  <label className="text-xs text-slate-400 mb-1 block">2FGP (%), 2FGA/meccs</label>
+                  <div className="flex gap-2">
+                    <Input
+                      type="number"
+                      min={0}
+                      step={0.1}
+                      value={displayIncomingValue('twoPct', incomingPlayer.twoPct)}
+                      onFocus={() => setFocusedIncomingField('twoPct')}
+                      onBlur={() => setFocusedIncomingField(null)}
+                      onChange={(e) => handleIncomingNumberChange('twoPct', e.target.value)}
+                      className="bg-slate-800 border-slate-700"
+                    />
+                    <Input
+                      type="number"
+                      min={0}
+                      step={0.1}
+                      value={displayIncomingValue('twoAttemptedPerGame', incomingPlayer.twoAttemptedPerGame)}
+                      onFocus={() => setFocusedIncomingField('twoAttemptedPerGame')}
+                      onBlur={() => setFocusedIncomingField(null)}
+                      onChange={(e) => handleIncomingNumberChange('twoAttemptedPerGame', e.target.value)}
+                      className="bg-slate-800 border-slate-700"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs text-slate-400 mb-1 block">3FGP (%), 3FGA/meccs</label>
+                  <div className="flex gap-2">
+                    <Input
+                      type="number"
+                      min={0}
+                      step={0.1}
+                      value={displayIncomingValue('threePct', incomingPlayer.threePct)}
+                      onFocus={() => setFocusedIncomingField('threePct')}
+                      onBlur={() => setFocusedIncomingField(null)}
+                      onChange={(e) => handleIncomingNumberChange('threePct', e.target.value)}
+                      className="bg-slate-800 border-slate-700"
+                    />
+                    <Input
+                      type="number"
+                      min={0}
+                      step={0.1}
+                      value={displayIncomingValue('threeAttemptedPerGame', incomingPlayer.threeAttemptedPerGame)}
+                      onFocus={() => setFocusedIncomingField('threeAttemptedPerGame')}
+                      onBlur={() => setFocusedIncomingField(null)}
+                      onChange={(e) => handleIncomingNumberChange('threeAttemptedPerGame', e.target.value)}
+                      className="bg-slate-800 border-slate-700"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs text-slate-400 mb-1 block">FT% és FTA/meccs</label>
+                  <div className="flex gap-2">
+                    <Input
+                      type="number"
+                      min={0}
+                      step={0.1}
+                      value={displayIncomingValue('ftPct', incomingPlayer.ftPct)}
+                      onFocus={() => setFocusedIncomingField('ftPct')}
+                      onBlur={() => setFocusedIncomingField(null)}
+                      onChange={(e) => handleIncomingNumberChange('ftPct', e.target.value)}
+                      className="bg-slate-800 border-slate-700"
+                    />
+                    <Input
+                      type="number"
+                      min={0}
+                      step={0.1}
+                      value={displayIncomingValue('ftAttemptedPerGame', incomingPlayer.ftAttemptedPerGame)}
+                      onFocus={() => setFocusedIncomingField('ftAttemptedPerGame')}
+                      onBlur={() => setFocusedIncomingField(null)}
+                      onChange={(e) => handleIncomingNumberChange('ftAttemptedPerGame', e.target.value)}
+                      className="bg-slate-800 border-slate-700"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div>
+                  <label className="text-xs text-slate-400 mb-1 block">Labdaeladás/meccs</label>
+                  <Input
+                    type="number"
+                    min={0}
+                    step={0.1}
+                    value={displayIncomingValue('turnoversPerGame', incomingPlayer.turnoversPerGame)}
+                    onFocus={() => setFocusedIncomingField('turnoversPerGame')}
+                    onBlur={() => setFocusedIncomingField(null)}
+                    onChange={(e) => handleIncomingNumberChange('turnoversPerGame', e.target.value)}
+                    className="bg-slate-800 border-slate-700"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-slate-400 mb-1 block">Lopás/meccs</label>
+                  <Input
+                    type="number"
+                    min={0}
+                    step={0.1}
+                    value={displayIncomingValue('stealsPerGame', incomingPlayer.stealsPerGame)}
+                    onFocus={() => setFocusedIncomingField('stealsPerGame')}
+                    onBlur={() => setFocusedIncomingField(null)}
+                    onChange={(e) => handleIncomingNumberChange('stealsPerGame', e.target.value)}
+                    className="bg-slate-800 border-slate-700"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-slate-400 mb-1 block">Blokk/meccs</label>
+                  <Input
+                    type="number"
+                    min={0}
+                    step={0.1}
+                    value={displayIncomingValue('blocksPerGame', incomingPlayer.blocksPerGame)}
+                    onFocus={() => setFocusedIncomingField('blocksPerGame')}
+                    onBlur={() => setFocusedIncomingField(null)}
+                    onChange={(e) => handleIncomingNumberChange('blocksPerGame', e.target.value)}
+                    className="bg-slate-800 border-slate-700"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-slate-400 mb-1 block">Faultok (elköv/kap)</label>
+                  <div className="flex gap-2">
+                    <Input
+                      type="number"
+                      min={0}
+                      step={0.1}
+                      value={displayIncomingValue('foulsCommittedPerGame', incomingPlayer.foulsCommittedPerGame)}
+                      onFocus={() => setFocusedIncomingField('foulsCommittedPerGame')}
+                      onBlur={() => setFocusedIncomingField(null)}
+                      onChange={(e) => handleIncomingNumberChange('foulsCommittedPerGame', e.target.value)}
+                      className="bg-slate-800 border-slate-700"
+                    />
+                    <Input
+                      type="number"
+                      min={0}
+                      step={0.1}
+                      value={displayIncomingValue('foulsReceivedPerGame', incomingPlayer.foulsReceivedPerGame)}
+                      onFocus={() => setFocusedIncomingField('foulsReceivedPerGame')}
+                      onBlur={() => setFocusedIncomingField(null)}
+                      onChange={(e) => handleIncomingNumberChange('foulsReceivedPerGame', e.target.value)}
+                      className="bg-slate-800 border-slate-700"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {!incomingEligibility && (
+                <div className="text-xs text-slate-400">
+                  Az elemzéshez legalább 10 meccs és 15 perc/meccs szükséges.
+                </div>
+              )}
+
+              {incomingAnalysis && (
+                <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+                  <div className="xl:col-span-2 space-y-4">
+                    <Card className="bg-slate-900 border-slate-800">
+                      <CardHeader>
+                        <CardTitle className="text-slate-50">
+                          {incomingRaw?.name ?? 'Érkező játékos'} • {getPositionLabel(incomingAnalysis.position)}
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        <div className="flex flex-wrap items-center gap-2">
+                          {incomingAnalysis.roles.map(role => (
+                            <Badge key={role} className="bg-orange-600/20 text-orange-300 border border-orange-600/40">
+                              {role}
+                            </Badge>
+                          ))}
+                          {incomingAnalysis.roles.length === 0 && (
+                            <Badge variant="secondary" className="bg-slate-800 text-slate-200">
+                              Nincs egyértelmű szerepkör
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="text-sm text-slate-200 leading-relaxed">{incomingAnalysis.summary}</div>
+                        <div className="flex flex-wrap items-center gap-3 text-xs">
+                          <span className={`font-semibold ${getConfidenceTone(incomingAnalysis.confidence)}`}>
+                            Bizonyosság: {incomingAnalysis.confidence}
+                          </span>
+                          <span className="text-slate-400">Role confidence: {(incomingAnalysis.roleConfidence * 100).toFixed(0)}%</span>
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    <Card className="bg-slate-900 border-slate-800">
+                      <CardHeader>
+                        <CardTitle className="text-slate-50">Skill score-ok</CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-3">
+                        {Object.entries(incomingAnalysis.skillScores).map(([key, value]) => (
+                          <div key={key} className="flex items-center justify-between text-sm">
+                            <span className="text-slate-300">{SKILL_LABELS_HU[key] ?? key}</span>
+                            <div className="flex items-center gap-3">
+                              <div className="h-2 w-32 bg-slate-800 rounded-full overflow-hidden">
+                                <div className="h-full bg-emerald-500/80" style={{ width: `${value}%` }} />
+                              </div>
+                              <span className="text-slate-200 font-semibold w-10 text-right">{value}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  <div className="space-y-4">
+                    <Card className="bg-slate-900 border-slate-800">
+                      <CardHeader>
+                        <CardTitle className="text-slate-50">Erősségek</CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-2 text-sm text-slate-200">
+                        {incomingAnalysis.strengths.length > 0 ? (
+                          incomingAnalysis.strengths.map(item => <div key={item}>• {item}</div>)
+                        ) : (
+                          <div className="text-slate-400">Nincs kiemelt erősség.</div>
+                        )}
+                      </CardContent>
+                    </Card>
+
+                    <Card className="bg-slate-900 border-slate-800">
+                      <CardHeader>
+                        <CardTitle className="text-slate-50">Limitációk</CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-2 text-sm text-slate-200">
+                        {incomingAnalysis.limitations.length > 0 ? (
+                          incomingAnalysis.limitations.map(item => <div key={item}>• {item}</div>)
+                        ) : (
+                          <div className="text-slate-400">Nincs kiemelt limitáció.</div>
+                        )}
+                      </CardContent>
+                    </Card>
+
+                    <Card className="bg-slate-900 border-slate-800">
+                      <CardHeader>
+                        <CardTitle className="text-slate-50">Javítandó pontok</CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-2 text-sm text-slate-200">
+                        {incomingAnalysis.improvements.length > 0 ? (
+                          incomingAnalysis.improvements.map(item => <div key={item}>• {item}</div>)
+                        ) : (
+                          <div className="text-slate-400">Nincs kiemelt javítandó pont.</div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <Card className="bg-slate-900 border-slate-800">
         <CardHeader>
