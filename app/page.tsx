@@ -120,6 +120,7 @@ export type TeamGame = {
   oppScore: number;
   result: 'win' | 'loss';
   players: GamePlayer[];
+  opponentGameId?: string;
 };
 
 export type GameAggregate = {
@@ -178,6 +179,7 @@ type SupabaseGame = {
   our_score: number;
   opp_score: number;
   result: 'win' | 'loss';
+  our_team_id?: string;
 };
 
 type SupabasePlayerGameStat = {
@@ -245,6 +247,7 @@ export default function Home() {
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
   const [allSeasons, setAllSeasons] = useState<{id: string; name: string}[]>([]);
   const [allTeams, setAllTeams] = useState<{id: string; name: string}[]>([]);
+    const [playerGameStats, setPlayerGameStats] = useState<SupabasePlayerGameStat[]>([]);
   const [lastImportedGame, setLastImportedGame] = useState<{
     date: string;
     homeTeamName: string;
@@ -408,16 +411,51 @@ export default function Home() {
 
         // 3. Játékos teljesítmények betöltése (gameHistory-hoz) - csak a kiválasztott szezon játékaiból
         const gameIds = gamesData?.map(g => g.id) || [];
+        const teamName = allTeams.find(team => team.id === selectedTeamId)?.name;
+        const opponentIds = (gamesData || [])
+          .map(g => allTeams.find(team => team.name === g.opponent)?.id)
+          .filter((id): id is string => Boolean(id));
+        const gameDates = (gamesData || []).map(g => g.date);
+        let opponentGamesData: SupabaseGame[] = [];
+
+        if (teamName && opponentIds.length > 0 && gameDates.length > 0) {
+          const { data: opponentGames, error: opponentError } = await supabase
+            .from('games')
+            .select('id, date, opponent, our_team_id, home_away, our_score, opp_score, result')
+            .eq('season_id', selectedSeasonId)
+            .eq('opponent', teamName)
+            .in('our_team_id', opponentIds)
+            .in('date', gameDates);
+
+          if (opponentError) {
+            console.warn('⚠️ Ellenfél meccsek lekérdezési hiba:', opponentError.message);
+          } else {
+            opponentGamesData = opponentGames || [];
+          }
+        }
+
+        const opponentGameMap = new Map<string, string>();
+        if (teamName) {
+          opponentGamesData.forEach(og => {
+            const key = `${og.date}::${og.our_team_id}`;
+            opponentGameMap.set(key, og.id);
+          });
+        }
         
-        const { data: playerGameStats, error: gameStatsError } = await supabase
+        const opponentGameIds = opponentGamesData.map(g => g.id);
+        const allGameIds = Array.from(new Set([...gameIds, ...opponentGameIds]));
+
+        const { data: playerGameStatsData, error: gameStatsError } = await supabase
           .from('player_game_stats')
           .select(`
             *,
-            games:game_id (date, opponent, season_id)
+            games:game_id (date, opponent, season_id),
+            players:player_id (team_id)
           `)
-          .in('game_id', gameIds.length > 0 ? gameIds : ['00000000-0000-0000-0000-000000000000']); // Ha nincs meccs, üres eredmény
+          .in('game_id', allGameIds.length > 0 ? allGameIds : ['00000000-0000-0000-0000-000000000000']); // Ha nincs meccs, üres eredmény
 
         if (gameStatsError) throw gameStatsError;
+        setPlayerGameStats((playerGameStatsData as SupabasePlayerGameStat[]) || []);
 
         // 3b. Meccsenkénti csapat összesítés (TeamStatistics-hoz) - csak a kiválasztott szezon meccseiből
         const { data: gameAggregates, error: aggregateError } = await supabase
@@ -432,7 +470,7 @@ export default function Home() {
           .filter((ps: SupabasePlayerStat) => ps.games_played > 0) // Csak akiknek van meccsük
           .map((ps: SupabasePlayerStat) => {
           // Gyűjtsük össze a játékos meccs teljesítményeit
-          const gameHistory: GamePerformance[] = (playerGameStats || [])
+          const gameHistory: GamePerformance[] = (playerGameStatsData || [])
             .filter((gs: SupabasePlayerGameStat) => gs.player_id === ps.player_id)
             .map((gs: SupabasePlayerGameStat) => ({
               date: gs.games?.date || '',
@@ -532,7 +570,12 @@ export default function Home() {
         });
 
         // 5. Konvertáljuk a TeamGame formátumra
-        const gamesConverted: TeamGame[] = (gamesData || []).map((g: SupabaseGame) => ({
+        const gamesConverted: TeamGame[] = (gamesData || []).map((g: SupabaseGame) => {
+          const opponentTeamId = allTeams.find(team => team.name === g.opponent)?.id;
+          const opponentGameId = opponentTeamId
+            ? opponentGameMap.get(`${g.date}::${opponentTeamId}`)
+            : undefined;
+          return {
           id: g.id,
           date: g.date,
           opponent: g.opponent,
@@ -541,7 +584,9 @@ export default function Home() {
           oppScore: g.opp_score,
           result: g.result,
           players: [], // Ezt nem használjuk a TeamStatistics-ban
-        }));
+          opponentGameId,
+          };
+        });
 
         // 6. Számítsuk ki a meccsenkénti átlagokat
         // Csoportosítjuk game_id szerint
@@ -617,7 +662,7 @@ export default function Home() {
       } catch (error) {
         console.error('Hiba az adatok betöltésekor:', error);
       }
-    }, [selectedSeasonId, selectedTeamId]);
+    }, [allTeams, selectedSeasonId, selectedTeamId]);
 
   useEffect(() => {
     if (selectedSeasonId) {
@@ -690,7 +735,7 @@ export default function Home() {
               <TabsList className="min-w-max md:min-w-0 md:w-full flex-nowrap md:flex-wrap h-auto gap-2 p-1 justify-start">
                 <TabsTrigger value="overview" className={TAB_TRIGGER_CLASS}>Áttekintés</TabsTrigger>
                 <TabsTrigger value="players" className={TAB_TRIGGER_CLASS}>Játékosok</TabsTrigger>
-                <TabsTrigger value="comparison" className={TAB_TRIGGER_CLASS}>Összehasonlítás</TabsTrigger>
+                <TabsTrigger value="comparison" className={TAB_TRIGGER_CLASS}>Elemzések</TabsTrigger>
                 <TabsTrigger value="standings" className={TAB_TRIGGER_CLASS}>Tabella</TabsTrigger>
                 <TabsTrigger value="games" className={TAB_TRIGGER_CLASS}>Meccsek</TabsTrigger>
                 <TabsTrigger value="gamelog" className={TAB_TRIGGER_CLASS}>Meccs Log</TabsTrigger>
@@ -759,7 +804,16 @@ export default function Home() {
           </TabsContent>
 
           <TabsContent value="comparison">
-            <SeasonComparison />
+            <SeasonComparison
+              allPlayers={allPlayersForComparison}
+              allSeasons={allSeasons}
+              allTeams={allTeams}
+              currentSeasonId={selectedSeasonId}
+              currentTeamId={selectedTeamId}
+              currentTeamPlayers={players}
+              games={games}
+              playerGameStats={playerGameStats}
+            />
           </TabsContent>
 
           <TabsContent value="standings">

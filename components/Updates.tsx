@@ -15,6 +15,24 @@ type UpdateItem = {
 
 const updates: UpdateItem[] = [
   {
+    date: '2026. február 1.',
+    version: '1.5.0',
+    category: 'feature',
+    icon: <BarChart3 className="w-5 h-5" />,
+    title: 'Elemzés modul: játékos, csapat, pregame, postgame',
+    description:
+      'Új Elemzés oldal determinisztikus scoutinggal: játékos- és csapatelemzés (percentilis alapú stílus, erősségek/korlátok), pregame fókuszpontok és postgame riport ellenfél-statokkal. Roster- és magasság-alapú insightok, HU címkékkel és glosszáriummal.',
+  },
+  {
+    date: '2026. február 1.',
+    version: '1.5.0',
+    category: 'improvement',
+    icon: <TrendingUp className="w-5 h-5" />,
+    title: 'Finomhangolt statisztikai logika',
+    description:
+      'Frissített percentilis skálázás (P10–P90), új two_rate és 3P% mutatók, pontosabb stílusdetektálás és támadó/védekező fókuszok. Ellenfél-meccs összerendelés és adathiány jelzések javítva.',
+  },
+  {
     date: '2026. január 30.',
     version: '1.4.0',
     category: 'feature',
