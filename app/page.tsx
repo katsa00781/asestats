@@ -5,7 +5,6 @@ import { Trophy, LogOut } from 'lucide-react';
 import PlayerDetails from '@/components/PlayerDetails';
 import { PlayersList } from '@/components/PlayersList';
 import { TeamStatistics } from '@/components/TeamStatistics';
-import { GameInput } from '@/components/GameInput';
 import { JsonImport } from '@/components/JsonImport';
 import { GamesList } from '@/components/GamesList';
 import { PlayersManagement } from '@/components/PlayersManagement';
@@ -743,7 +742,6 @@ export default function Home() {
                 <TabsTrigger value="manage" className={TAB_TRIGGER_CLASS}>Kezelés</TabsTrigger>
                 <TabsTrigger value="playersimport" className={TAB_TRIGGER_CLASS}>Játékos Import</TabsTrigger>
                 <TabsTrigger value="delete" className={`${TAB_TRIGGER_CLASS} text-red-400`}>Törlés</TabsTrigger>
-                <TabsTrigger value="input" className={`${TAB_TRIGGER_CLASS} hidden sm:flex`}>Adatbevitel</TabsTrigger>
                 <TabsTrigger value="import" className={TAB_TRIGGER_CLASS}>Import</TabsTrigger>
               </TabsList>
             </div>
@@ -849,15 +847,13 @@ export default function Home() {
               selectedTeamId={selectedTeamId}
               selectedSeasonName={allSeasons.find(s => s.id === selectedSeasonId)?.name}
               selectedTeamName={allTeams.find(t => t.id === selectedTeamId)?.name}
+              allSeasons={allSeasons}
+              allTeams={allTeams}
             />
           </TabsContent>
 
           <TabsContent value="delete">
             <GameManagement onDeleteComplete={loadData} />
-          </TabsContent>
-
-          <TabsContent value="input">
-            <GameInput players={players} onGameAdded={loadData} />
           </TabsContent>
 
           <TabsContent value="import">

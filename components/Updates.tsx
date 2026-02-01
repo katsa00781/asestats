@@ -16,6 +16,60 @@ type UpdateItem = {
 const updates: UpdateItem[] = [
   {
     date: '2026. február 1.',
+    version: '1.6.0',
+    category: 'feature',
+    icon: <BarChart3 className="w-5 h-5" />,
+    title: 'Post-game riport számokkal és grafikonokkal',
+    description:
+      'A post-game elemzés most már konkrét értékeket és vizualizációkat is mutat (kulcs mutatók, dobásprofil, eFG%, pace), a szöveges értékelések pedig számokkal egészülnek ki.',
+  },
+  {
+    date: '2026. február 1.',
+    version: '1.6.0',
+    category: 'feature',
+    icon: <Users className="w-5 h-5" />,
+    title: 'Játékos elemzés: javítandó pontok',
+    description:
+      'A játékos elemzésnél megjelennek a javítandó pontok is (pl. jó 3P% alacsony volumen mellett). A javaslatok pozíció-specifikusak és értékekkel alátámasztottak.',
+  },
+  {
+    date: '2026. február 1.',
+    version: '1.6.0',
+    category: 'feature',
+    icon: <BarChart3 className="w-5 h-5" />,
+    title: 'Pre-game poszt-összehasonlítás',
+    description:
+      'A pre-game scouting kibővült posztonkénti összehasonlítással (VAL/36), vizualizációval és előny/kiegyenlített jelzéssel.',
+  },
+  {
+    date: '2026. február 1.',
+    version: '1.6.0',
+    category: 'improvement',
+    icon: <TrendingUp className="w-5 h-5" />,
+    title: 'Játékos import cél-szezon választó',
+    description:
+      'A játékos importnál mentés előtt külön megadható a cél szezon és csapat, így elkerülhetők a téves mentések.',
+  },
+  {
+    date: '2026. február 1.',
+    version: '1.6.0',
+    category: 'improvement',
+    icon: <TrendingUp className="w-5 h-5" />,
+    title: 'Pozíciók egységesítése és összehasonlítás javítása',
+    description:
+      'A posztok normalizálva lettek (1=Irányító, 5=Center), így az összehasonlítás szűrője megbízhatóbb. Vegyes jelölések (G/F/C, PG/SG/SF/PF) is kezelve.',
+  },
+  {
+    date: '2026. február 1.',
+    version: '1.6.0',
+    category: 'improvement',
+    icon: <TrendingUp className="w-5 h-5" />,
+    title: 'Reszponzív select mezők',
+    description:
+      'Az Elemzések oldalon a hosszú nevek már nem lógnak ki a selectből, a mezők teljes szélességűek és vágják a túl hosszú szöveget.',
+  },
+  {
+    date: '2026. február 1.',
     version: '1.5.0',
     category: 'feature',
     icon: <BarChart3 className="w-5 h-5" />,
@@ -151,15 +205,41 @@ export function Updates() {
         <h2 className="text-2xl font-bold text-slate-50">Frissítések és újdonságok</h2>
       </div>
 
+      <Card className="bg-slate-900 border-slate-800">
+        <CardHeader>
+          <CardTitle className="text-slate-50 flex items-center gap-2">
+            <Trophy className="text-emerald-400" size={20} />
+            ASE Stats – Funkciók összefoglaló
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="text-slate-300 text-sm space-y-3">
+          <div>
+            <span className="text-slate-100 font-medium">Elemzések:</span> játékos-, csapat-, pregame- és postgame riportok, erősségek/korlátok, fókuszpontok, poszt-összehasonlítás és részletes insightok.
+          </div>
+          <div>
+            <span className="text-slate-100 font-medium">Vizualizációk:</span> radarok, trendek, oszlopdiagramok (dobásprofil, hatékonyság, kulcsmutatók), összehasonlítások.
+          </div>
+          <div>
+            <span className="text-slate-100 font-medium">Importok:</span> Hunbasket forduló alapú import, gyors meccs import, JSON import, játékos- és tabella-import.
+          </div>
+          <div>
+            <span className="text-slate-100 font-medium">Menedszment:</span> játékos- és meccskezelés, törlések, szezon- és csapatválasztás.
+          </div>
+          <div>
+            <span className="text-slate-100 font-medium">Összehasonlítások:</span> játékosok és csapatok több szezonon át, pozíció szerinti szűrők, head-to-head és trendek.
+          </div>
+        </CardContent>
+      </Card>
+
       <Card className="bg-gradient-to-br from-emerald-900/20 to-blue-900/20 border-emerald-500/30">
         <CardHeader>
           <CardTitle className="text-slate-50 flex items-center gap-2">
             <TrendingUp className="text-emerald-400" size={20} />
-            Mi újság az ASE Stats-ban?
+            Frissítések részletesen
           </CardTitle>
         </CardHeader>
         <CardContent className="text-slate-300 text-sm">
-          Kövesd nyomon az alkalmazás fejlesztését! Itt találod a legfrissebb funkciókat, 
+          Kövesd nyomon az alkalmazás fejlesztését! Itt találod a legfrissebb funkciókat,
           fejlesztéseket és javításokat, amelyek jobbá teszik a statisztikai elemzést.
         </CardContent>
       </Card>

@@ -1,11 +1,12 @@
 'use client';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Users, Eye, CheckCircle, AlertCircle, Trash2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 type ParsedPlayer = {
   number: number;
@@ -22,6 +23,8 @@ type PlayersImportProps = {
   selectedTeamId: string | null;
   selectedSeasonName?: string;
   selectedTeamName?: string;
+  allSeasons: { id: string; name: string }[];
+  allTeams: { id: string; name: string }[];
 };
 
 export function PlayersImport({ 
@@ -29,7 +32,9 @@ export function PlayersImport({
   selectedSeasonId, 
   selectedTeamId,
   selectedSeasonName,
-  selectedTeamName 
+  selectedTeamName,
+  allSeasons,
+  allTeams,
 }: PlayersImportProps) {
   const [inputText, setInputText] = useState('');
   const [parsedPlayers, setParsedPlayers] = useState<ParsedPlayer[]>([]);
@@ -37,10 +42,47 @@ export function PlayersImport({
   const [importing, setImporting] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [targetSeasonId, setTargetSeasonId] = useState<string | null>(selectedSeasonId);
+  const [targetTeamId, setTargetTeamId] = useState<string | null>(selectedTeamId);
+
+  useEffect(() => {
+    setTargetSeasonId(selectedSeasonId ?? null);
+  }, [selectedSeasonId]);
+
+  useEffect(() => {
+    setTargetTeamId(selectedTeamId ?? null);
+  }, [selectedTeamId]);
+
+  const resolvedSeasonName = targetSeasonId
+    ? allSeasons.find(season => season.id === targetSeasonId)?.name
+    : selectedSeasonName;
+  const resolvedTeamName = targetTeamId
+    ? allTeams.find(team => team.id === targetTeamId)?.name
+    : selectedTeamName;
 
   const parsePlayersData = (text: string): ParsedPlayer[] => {
     const players: ParsedPlayer[] = [];
     const lines = text.trim().split('\n').map(l => l.trim()).filter(l => l);
+
+    const normalizePositionInput = (rawPosition: string) => {
+      const normalized = rawPosition?.toUpperCase().replace(/\s+/g, '') || '';
+      const digits = normalized.match(/[1-5]/g) || [];
+      if (digits.length > 0) {
+        const unique = Array.from(new Set(digits));
+        if (unique.length === 1) return unique[0];
+        return `${unique[0]}-${unique[1]}`;
+      }
+
+      if (normalized.includes('PG')) return '1';
+      if (normalized.includes('SG')) return '2';
+      if (normalized.includes('SF')) return '3';
+      if (normalized.includes('PF')) return '4';
+      if (normalized === 'G' || normalized.includes('G/')) return '1-2';
+      if (normalized === 'F' || normalized.includes('F/')) return '3-4';
+      if (normalized.includes('C')) return '5';
+
+      return rawPosition.trim();
+    };
 
     for (const line of lines) {
       // Kihagyja a fejléc sort
@@ -80,8 +122,8 @@ export function PlayersImport({
         const birthYear = parseInt(parts[2]);
         if (isNaN(birthYear) || birthYear < 1900 || birthYear > 2020) continue;
 
-        // Parse pozíció - MEGTARTJUK az eredeti formátumot (1, 2, 3, 4, 5, 1-2, 3-4 stb.)
-        const position = parts[3].trim();
+        // Parse pozíció - egységesítjük 1-5 számozásra (1=PG, 5=C)
+        const position = normalizePositionInput(parts[3].trim());
         if (!position) continue;
 
         // Parse magasság (pl. "193 cm" -> 193)
@@ -118,7 +160,7 @@ export function PlayersImport({
   };
 
   const handleImport = async () => {
-    if (!selectedSeasonId || !selectedTeamId) {
+    if (!targetSeasonId || !targetTeamId) {
       setMessage({
         type: 'error',
         text: 'Kérlek válassz szezont és csapatot!'
@@ -149,10 +191,10 @@ export function PlayersImport({
           .select('id, team_id')
           .eq('number', player.number)
           .eq('name', player.name)
-          .eq('season_id', selectedSeasonId);
+          .eq('season_id', targetSeasonId);
 
-        const existingInCurrentTeam = allMatchingPlayers?.find(p => p.team_id === selectedTeamId);
-        const existingInOtherTeams = allMatchingPlayers?.filter(p => p.team_id !== selectedTeamId) || [];
+        const existingInCurrentTeam = allMatchingPlayers?.find(p => p.team_id === targetTeamId);
+        const existingInOtherTeams = allMatchingPlayers?.filter(p => p.team_id !== targetTeamId) || [];
 
         // Ha van más csapatban - áthelyezzük ide (NEM töröljük, hogy megmaradjanak a statisztikák!)
         if (existingInOtherTeams.length > 0) {
@@ -162,7 +204,7 @@ export function PlayersImport({
           const { error: moveError } = await supabase
             .from('players')
             .update({
-              team_id: selectedTeamId,
+              team_id: targetTeamId,
               position: player.position,
               birth_year: player.birthYear,
               height: player.height,
@@ -214,8 +256,8 @@ export function PlayersImport({
               birth_year: player.birthYear,
               height: player.height,
               weight: player.weight,
-              season_id: selectedSeasonId,
-              team_id: selectedTeamId,
+              season_id: targetSeasonId,
+              team_id: targetTeamId,
             });
 
           if (error) throw error;
@@ -248,7 +290,7 @@ export function PlayersImport({
   };
 
   const handleDelete = async () => {
-    if (!selectedSeasonId || !selectedTeamId) {
+    if (!targetSeasonId || !targetTeamId) {
       setMessage({
         type: 'error',
         text: 'Kérlek válassz szezont és csapatot!'
@@ -276,8 +318,8 @@ export function PlayersImport({
           .from('players')
           .select('id')
           .eq('number', player.number)
-          .eq('season_id', selectedSeasonId)
-          .eq('team_id', selectedTeamId)
+          .eq('season_id', targetSeasonId)
+          .eq('team_id', targetTeamId)
           .single();
 
         if (existingPlayer) {
@@ -333,13 +375,13 @@ export function PlayersImport({
 
   return (
     <div className="space-y-6">
-      {(!selectedSeasonId || !selectedTeamId) && (
+      {(!targetSeasonId || !targetTeamId) && (
         <Card className="bg-orange-900/20 border-orange-500/30">
           <CardContent className="p-4">
             <div className="flex items-center gap-2 text-orange-400">
               <AlertCircle size={20} />
               <span className="text-sm">
-                Válassz szezont és csapatot fent a játékosok importálásához!
+                Válassz szezont és csapatot a mentéshez!
               </span>
             </div>
           </CardContent>
@@ -354,6 +396,39 @@ export function PlayersImport({
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="text-sm text-slate-300 block mb-2">Szezon (mentés célja)</label>
+              <Select value={targetSeasonId ?? ''} onValueChange={(value) => setTargetSeasonId(value || null)}>
+                <SelectTrigger className="bg-slate-800 border-slate-700 w-full">
+                  <SelectValue placeholder="Válassz szezont..." className="truncate" />
+                </SelectTrigger>
+                <SelectContent className="bg-slate-800 border-slate-700">
+                  {allSeasons.map(season => (
+                    <SelectItem key={season.id} value={season.id}>
+                      {season.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-sm text-slate-300 block mb-2">Csapat (mentés célja)</label>
+              <Select value={targetTeamId ?? ''} onValueChange={(value) => setTargetTeamId(value || null)}>
+                <SelectTrigger className="bg-slate-800 border-slate-700 w-full">
+                  <SelectValue placeholder="Válassz csapatot..." className="truncate" />
+                </SelectTrigger>
+                <SelectContent className="bg-slate-800 border-slate-700">
+                  {allTeams.map(team => (
+                    <SelectItem key={team.id} value={team.id}>
+                      {team.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
           <div className="space-y-2">
             <label className="text-sm text-slate-300">
               Illeszd be a játékosok táblázatát
@@ -420,13 +495,13 @@ export function PlayersImport({
               <CardTitle className="text-slate-50 text-lg">
                 Előnézet - {parsedPlayers.length} játékos
               </CardTitle>
-              {selectedSeasonName && selectedTeamName && (
+              {resolvedSeasonName && resolvedTeamName && (
                 <div className="flex items-center gap-2 text-sm">
                   <Badge variant="outline" className="bg-blue-900/30 border-blue-500/50 text-blue-300">
-                    {selectedSeasonName}
+                    {resolvedSeasonName}
                   </Badge>
                   <Badge variant="outline" className="bg-emerald-900/30 border-emerald-500/50 text-emerald-300">
-                    {selectedTeamName}
+                    {resolvedTeamName}
                   </Badge>
                 </div>
               )}

@@ -69,6 +69,7 @@ export type ScoutingReport = {
   opponentTeamName: string;
   league: string;
   season: string;
+  positionComparison: PositionComparison[];
   profile: {
     tempo: string;
     offense: string[];
@@ -84,6 +85,15 @@ export type ScoutingReport = {
   };
   focusPoints: string[];
   summary: string;
+};
+
+export type PositionComparison = {
+  position: Position;
+  ownValPer36: number;
+  oppValPer36: number;
+  ownPointsPer36: number;
+  oppPointsPer36: number;
+  deltaValPer36: number;
 };
 
 const round = (value: number, digits = 2) => {
@@ -296,6 +306,43 @@ const computeUsageConcentration = (players: PlayerSeasonStat[]) => {
   return round(top2 / total, 3);
 };
 
+const buildPositionComparison = (ownPlayers: PlayerSeasonStat[], opponentPlayers: PlayerSeasonStat[]) => {
+  const positions: Position[] = ['PG', 'SG', 'SF', 'PF', 'C'];
+
+  const aggregate = (players: PlayerSeasonStat[], position: Position) => {
+    return players
+      .filter(player => player.position === position)
+      .reduce(
+        (acc, player) => {
+          acc.minutes += player.minutes || 0;
+          acc.val += player.val || 0;
+          acc.points += player.points || 0;
+          return acc;
+        },
+        { minutes: 0, val: 0, points: 0 }
+      );
+  };
+
+  return positions.map(position => {
+    const own = aggregate(ownPlayers, position);
+    const opp = aggregate(opponentPlayers, position);
+
+    const ownValPer36 = own.minutes > 0 ? (own.val / own.minutes) * 36 : 0;
+    const oppValPer36 = opp.minutes > 0 ? (opp.val / opp.minutes) * 36 : 0;
+    const ownPointsPer36 = own.minutes > 0 ? (own.points / own.minutes) * 36 : 0;
+    const oppPointsPer36 = opp.minutes > 0 ? (opp.points / opp.minutes) * 36 : 0;
+
+    return {
+      position,
+      ownValPer36: round(ownValPer36, 1),
+      oppValPer36: round(oppValPer36, 1),
+      ownPointsPer36: round(ownPointsPer36, 1),
+      oppPointsPer36: round(oppPointsPer36, 1),
+      deltaValPer36: round(ownValPer36 - oppValPer36, 1),
+    };
+  });
+};
+
 const identifyKeyPlayers = (players: PlayerSeasonStat[], teamUsageShare: number) => {
   const usageValues = players.map(computePlayerUsage).filter(v => Number.isFinite(v));
   const mean = usageValues.reduce((sum, v) => sum + v, 0) / (usageValues.length || 1);
@@ -470,12 +517,14 @@ export const analyzePreGameScouting = (
   const threats = buildThreats(normalizedOpponent, leagueBenchmarks, usageShare);
   const vulnerabilities = buildVulnerabilities(normalizedOpponent, leagueBenchmarks);
   const focusPoints = buildFocusPoints(normalizedOpponent, normalizedOwn, leagueBenchmarks);
+  const positionComparison = buildPositionComparison(ownPlayers, opponentPlayers);
 
   return {
     opponentTeamId: opponentTeam.teamId,
     opponentTeamName: opponentTeam.teamName,
     league: opponentTeam.league,
     season: opponentTeam.season,
+    positionComparison,
     profile: {
       tempo: normalizedOpponent.pace >= 70 ? 'Magas' : normalizedOpponent.pace <= 60 ? 'Alacsony' : 'Közepes',
       offense: profile.offense,

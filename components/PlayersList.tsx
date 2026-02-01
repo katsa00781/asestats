@@ -27,6 +27,31 @@ export function PlayersList({ players, onSelectPlayer, onCompare }: PlayersListP
       '4': '4 (Erőcsatár)',
       '5': '5 (Center)'
     };
+
+    const normalizePositionTokens = (rawPosition: string): string[] => {
+      const normalized = rawPosition?.toUpperCase().replace(/\s+/g, '') || '';
+      const digits = normalized.match(/[1-5]/g) || [];
+      if (digits.length > 0) return Array.from(new Set(digits));
+
+      const tokens: string[] = [];
+      if (normalized.includes('PG')) tokens.push('1');
+      if (normalized.includes('SG')) tokens.push('2');
+      if (normalized.includes('SF')) tokens.push('3');
+      if (normalized.includes('PF')) tokens.push('4');
+      if (normalized === 'G' || normalized.includes('G/')) tokens.push('1', '2');
+      if (normalized === 'F' || normalized.includes('F/')) tokens.push('3', '4');
+      if (normalized.includes('C')) tokens.push('5');
+
+      return Array.from(new Set(tokens));
+    };
+
+    const tokens = normalizePositionTokens(position);
+    if (tokens.length === 1 && positionLabels[tokens[0]]) {
+      return positionLabels[tokens[0]];
+    }
+    if (tokens.length >= 2 && positionLabels[tokens[0]] && positionLabels[tokens[1]]) {
+      return `${positionLabels[tokens[0]].split(' ')[0]}-${positionLabels[tokens[1]].split(' ')[0]}`;
+    }
     
     // Ha egyszerű szám (pl. "1", "2")
     if (position.length === 1 && positionLabels[position]) {

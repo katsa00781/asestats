@@ -779,8 +779,8 @@ export function SeasonComparison({
                   setSelectedOpponentTeamId('');
                 }}
               >
-                <SelectTrigger className="bg-slate-800 border-slate-700">
-                  <SelectValue placeholder="Válassz szezont..." />
+                <SelectTrigger className="bg-slate-800 border-slate-700 w-full">
+                  <SelectValue placeholder="Válassz szezont..." className="truncate" />
                 </SelectTrigger>
                 <SelectContent className="bg-slate-800 border-slate-700">
                   {allSeasons.map(season => (
@@ -807,8 +807,8 @@ export function SeasonComparison({
                   }
                 }}
               >
-                <SelectTrigger className="bg-slate-800 border-slate-700">
-                  <SelectValue placeholder="Válassz csapatot..." />
+                <SelectTrigger className="bg-slate-800 border-slate-700 w-full">
+                  <SelectValue placeholder="Válassz csapatot..." className="truncate" />
                 </SelectTrigger>
                 <SelectContent className="bg-slate-800 border-slate-700">
                   <SelectItem value="all">Összes csapat</SelectItem>
@@ -828,8 +828,8 @@ export function SeasonComparison({
                 value={selectedPlayerId}
                 onValueChange={setSelectedPlayerId}
               >
-                <SelectTrigger className="bg-slate-800 border-slate-700">
-                  <SelectValue placeholder="Válassz játékost..." />
+                <SelectTrigger className="bg-slate-800 border-slate-700 w-full">
+                  <SelectValue placeholder="Válassz játékost..." className="truncate" />
                 </SelectTrigger>
                 <SelectContent className="bg-slate-800 border-slate-700">
                   {filteredPlayers.map(player => (
@@ -1095,8 +1095,8 @@ export function SeasonComparison({
             <div>
               <label className="text-sm text-slate-400 mb-2 block">Ellenfél</label>
               <Select value={selectedOpponentTeamId} onValueChange={setSelectedOpponentTeamId}>
-                <SelectTrigger className="bg-slate-800 border-slate-700">
-                  <SelectValue placeholder="Válassz ellenfelet..." />
+                <SelectTrigger className="bg-slate-800 border-slate-700 w-full">
+                  <SelectValue placeholder="Válassz ellenfelet..." className="truncate" />
                 </SelectTrigger>
                 <SelectContent className="bg-slate-800 border-slate-700">
                   {allTeams
@@ -1122,6 +1122,67 @@ export function SeasonComparison({
           {pregameReport && (
             <div className="space-y-4">
               <div className="text-sm text-slate-200 leading-relaxed">{pregameReport.summary}</div>
+
+              <div className="p-3 bg-slate-800/50 rounded-lg">
+                <div className="text-sm text-slate-300 font-medium mb-2">Poszt-összehasonlítás (VAL/36)</div>
+                {(() => {
+                  const positionLabels: Record<string, string> = {
+                    PG: 'Irányító',
+                    SG: 'Dobó',
+                    SF: 'Bedobó',
+                    PF: 'Erőcsatár',
+                    C: 'Center',
+                  };
+                  const positionComparisonChart = pregameReport.positionComparison.map(item => ({
+                    ...item,
+                    label: positionLabels[item.position] ?? item.position,
+                  }));
+                  return (
+                    <>
+                      <ResponsiveContainer width="100%" height={240}>
+                        <BarChart data={positionComparisonChart} margin={{ left: 8, right: 8 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                          <XAxis dataKey="label" stroke="#94a3b8" tick={{ fontSize: 10 }} />
+                          <YAxis stroke="#94a3b8" tick={{ fontSize: 10 }} />
+                          <Tooltip
+                            contentStyle={{
+                              backgroundColor: '#0f172a',
+                              border: '1px solid #475569',
+                              borderRadius: '8px',
+                              color: '#f1f5f9',
+                            }}
+                            labelStyle={{ color: '#f1f5f9', fontWeight: 'bold' }}
+                            itemStyle={{ color: '#e2e8f0' }}
+                          />
+                          <Legend wrapperStyle={{ color: '#94a3b8' }} />
+                          <Bar dataKey="ownValPer36" name="Saját csapat" fill="#10b981" radius={[6, 6, 0, 0]} />
+                          <Bar dataKey="oppValPer36" name="Ellenfél" fill="#f97316" radius={[6, 6, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+
+                      <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+                        {positionComparisonChart.map(item => {
+                          let tone = 'text-slate-400';
+                          let label = 'Kiegyenlített';
+                          if (item.deltaValPer36 >= 2) {
+                            tone = 'text-emerald-400';
+                            label = `Saját előny (+${item.deltaValPer36.toFixed(1)} VAL/36)`;
+                          } else if (item.deltaValPer36 <= -2) {
+                            tone = 'text-rose-400';
+                            label = `Ellenfél előny (${item.deltaValPer36.toFixed(1)} VAL/36)`;
+                          }
+                          return (
+                            <div key={item.position} className="flex items-center justify-between bg-slate-900/40 rounded-md px-3 py-2">
+                              <span className="text-slate-200">{item.label}</span>
+                              <span className={tone}>{label}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </>
+                  );
+                })()}
+              </div>
 
               <div className="flex flex-wrap gap-2">
                 {pregameReport.profile.offense.map(item => (
@@ -1186,8 +1247,8 @@ export function SeasonComparison({
             <div>
               <label className="text-sm text-slate-400 mb-2 block">Mérkőzés</label>
               <Select value={selectedGameId} onValueChange={setSelectedGameId}>
-                <SelectTrigger className="bg-slate-800 border-slate-700">
-                  <SelectValue placeholder="Válassz meccset..." />
+                <SelectTrigger className="bg-slate-800 border-slate-700 w-full">
+                  <SelectValue placeholder="Válassz meccset..." className="truncate" />
                 </SelectTrigger>
                 <SelectContent className="bg-slate-800 border-slate-700">
                   {games.map(game => (
