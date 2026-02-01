@@ -209,6 +209,7 @@ export function PlayersImport({
               birth_year: player.birthYear,
               height: player.height,
               weight: player.weight,
+              is_active: true,
             })
             .eq('id', playerToMove.id);
 
@@ -240,6 +241,7 @@ export function PlayersImport({
               birth_year: player.birthYear,
               height: player.height,
               weight: player.weight,
+              is_active: true,
             })
             .eq('id', existingInCurrentTeam.id);
 
@@ -258,6 +260,7 @@ export function PlayersImport({
               weight: player.weight,
               season_id: targetSeasonId,
               team_id: targetTeamId,
+              is_active: true,
             });
 
           if (error) throw error;

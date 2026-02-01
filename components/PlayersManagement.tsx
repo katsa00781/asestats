@@ -16,9 +16,15 @@ type Player = {
   season_name?: string;
   team_id: string;
   team_name?: string;
+  is_active?: boolean;
 };
 
 type Team = {
+  id: string;
+  name: string;
+};
+
+type Season = {
   id: string;
   name: string;
 };
@@ -30,6 +36,7 @@ type PlayerRow = {
   position: string;
   season_id: string;
   team_id: string;
+  is_active?: boolean;
   seasons?: { name?: string | null } | { name?: string | null }[] | null;
   teams?: { name?: string | null } | { name?: string | null }[] | null;
 };
@@ -41,6 +48,7 @@ type PlayersManagementProps = {
 export function PlayersManagement({ onPlayersChanged }: PlayersManagementProps) {
   const [players, setPlayers] = useState<Player[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
+  const [seasons, setSeasons] = useState<Season[]>([]);
   const [loading, setLoading] = useState(false);
   const [deletingPlayerId, setDeletingPlayerId] = useState<string | null>(null);
   const [editingPlayerId, setEditingPlayerId] = useState<string | null>(null);
@@ -49,6 +57,7 @@ export function PlayersManagement({ onPlayersChanged }: PlayersManagementProps) 
   const [editedTeamId, setEditedTeamId] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTeamFilter, setSelectedTeamFilter] = useState<string>('all');
+  const [selectedSeasonFilter, setSelectedSeasonFilter] = useState<string>('all');
 
   const loadTeams = async () => {
     try {
@@ -64,6 +73,20 @@ export function PlayersManagement({ onPlayersChanged }: PlayersManagementProps) 
     }
   };
 
+  const loadSeasons = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('seasons')
+        .select('id, name')
+        .order('name', { ascending: false });
+
+      if (error) throw error;
+      setSeasons(data || []);
+    } catch (error) {
+      console.error('Hiba a szezonok betöltésekor:', error);
+    }
+  };
+
   const loadPlayers = async () => {
     setLoading(true);
     try {
@@ -76,6 +99,7 @@ export function PlayersManagement({ onPlayersChanged }: PlayersManagementProps) 
           position,
           season_id,
           team_id,
+          is_active,
           birth_year,
           height,
           weight,
@@ -98,6 +122,7 @@ export function PlayersManagement({ onPlayersChanged }: PlayersManagementProps) 
           position: p.position,
           season_id: p.season_id,
           team_id: p.team_id,
+          is_active: p.is_active ?? true,
           season_name: seasonInfo?.name || '',
           team_name: teamInfo?.name || ''
         };
@@ -121,6 +146,7 @@ export function PlayersManagement({ onPlayersChanged }: PlayersManagementProps) 
 
   useEffect(() => {
     loadTeams();
+    loadSeasons();
     loadPlayers();
   }, []);
 
@@ -401,7 +427,8 @@ export function PlayersManagement({ onPlayersChanged }: PlayersManagementProps) 
             .update({ 
               name: editedName.trim(),
               number: editedNumber,
-              team_id: editedTeamId
+                  team_id: editedTeamId,
+                  is_active: true,
             })
             .eq('id', playerId);
 
@@ -441,7 +468,8 @@ export function PlayersManagement({ onPlayersChanged }: PlayersManagementProps) 
         .update({ 
           name: editedName.trim(),
           number: editedNumber,
-          team_id: editedTeamId
+          team_id: editedTeamId,
+          is_active: true,
         })
         .eq('id', playerId)
         .select();
@@ -471,9 +499,26 @@ export function PlayersManagement({ onPlayersChanged }: PlayersManagementProps) 
       player.number.toString().includes(searchQuery);
     
     const matchesTeam = selectedTeamFilter === 'all' || player.team_id === selectedTeamFilter;
+    const matchesSeason = selectedSeasonFilter === 'all' || player.season_id === selectedSeasonFilter;
     
-    return matchesSearch && matchesTeam;
+    return matchesSearch && matchesTeam && matchesSeason;
   });
+
+  const togglePlayerActive = async (playerId: string, nextActive: boolean) => {
+    try {
+      const { error } = await supabase
+        .from('players')
+        .update({ is_active: nextActive })
+        .eq('id', playerId);
+
+      if (error) throw error;
+      toast.success(nextActive ? 'Játékos aktiválva.' : 'Játékos inaktiválva.');
+      await loadPlayers();
+    } catch (error) {
+      console.error('Hiba a státusz frissítésekor:', error);
+      toast.error('Nem sikerült frissíteni a játékos státuszát.');
+    }
+  };
 
   const cleanupInvalidPlayers = async () => {
     const confirmed = window.confirm(
@@ -581,7 +626,7 @@ export function PlayersManagement({ onPlayersChanged }: PlayersManagementProps) 
       </div>
 
       {/* Keresés és szűrés */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
           <Input
@@ -591,6 +636,16 @@ export function PlayersManagement({ onPlayersChanged }: PlayersManagementProps) 
             className="pl-10 bg-slate-800 border-slate-700 text-slate-100"
           />
         </div>
+        <select
+          value={selectedSeasonFilter}
+          onChange={(e) => setSelectedSeasonFilter(e.target.value)}
+          className="h-10 px-3 bg-slate-800 border border-slate-700 text-slate-300 rounded-md"
+        >
+          <option value="all">Összes szezon</option>
+          {seasons.map(season => (
+            <option key={season.id} value={season.id}>{season.name}</option>
+          ))}
+        </select>
         <select
           value={selectedTeamFilter}
           onChange={(e) => setSelectedTeamFilter(e.target.value)}
@@ -693,6 +748,12 @@ export function PlayersManagement({ onPlayersChanged }: PlayersManagementProps) 
                               <Badge variant="outline" className="border-slate-700 text-slate-300">
                                 {positionLabels[player.position] || player.position}
                               </Badge>
+                              <Badge
+                                variant="outline"
+                                className={player.is_active ? 'border-emerald-700 text-emerald-300' : 'border-slate-700 text-slate-400'}
+                              >
+                                {player.is_active ? 'Aktív' : 'Inaktív'}
+                              </Badge>
                               <span>•</span>
                               <span>{player.team_name}</span>
                               <span>•</span>
@@ -736,6 +797,15 @@ export function PlayersManagement({ onPlayersChanged }: PlayersManagementProps) 
                             >
                               <Edit2 className="mr-2" size={16} />
                               Szerkesztés
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => togglePlayerActive(player.id, !player.is_active)}
+                              disabled={isDeleting}
+                              className={player.is_active ? 'border-amber-700 text-amber-300 hover:bg-amber-900/20' : 'border-emerald-700 text-emerald-300 hover:bg-emerald-900/20'}
+                            >
+                              {player.is_active ? 'Inaktiválás' : 'Aktiválás'}
                             </Button>
                             <Button
                               variant="destructive"
