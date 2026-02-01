@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
@@ -159,6 +160,19 @@ const getConfidenceTone = (value: PlayerAnalysis['confidence']) => {
   if (value === 'High') return 'text-emerald-400';
   if (value === 'Medium') return 'text-amber-400';
   return 'text-slate-400';
+};
+
+const formatPostgameValue = (value: number, unit: 'pct' | 'count') => {
+  if (!Number.isFinite(value)) return '-';
+  if (unit === 'pct') return `${value.toFixed(1)}%`;
+  return value.toFixed(1);
+};
+
+const formatPostgameDelta = (value: number, unit: 'pct' | 'count') => {
+  if (!Number.isFinite(value)) return '-';
+  const sign = value > 0 ? '+' : '';
+  if (unit === 'pct') return `${sign}${value.toFixed(1)} pp`;
+  return `${sign}${value.toFixed(1)}`;
 };
 
 const SKILL_LABELS_HU: Record<string, string> = {
@@ -929,6 +943,19 @@ export function SeasonComparison({
 
             <Card className="bg-slate-900 border-slate-800">
               <CardHeader>
+                <CardTitle className="text-slate-50">Javítandó pontok</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2 text-sm text-slate-200">
+                {analysis.improvements.length > 0 ? (
+                  analysis.improvements.map(item => <div key={item}>• {item}</div>)
+                ) : (
+                  <div className="text-slate-400">Nincs kiemelt javítandó pont.</div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card className="bg-slate-900 border-slate-800">
+              <CardHeader>
                 <CardTitle className="text-slate-50">Hasonló profilok</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3 text-sm">
@@ -1192,6 +1219,103 @@ export function SeasonComparison({
                   {postgameReport.dataNotes.join(' ')}
                 </div>
               )}
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="p-3 bg-slate-800/50 rounded-lg">
+                  <div className="text-xs text-slate-400">Pontok</div>
+                  <div className="text-slate-50 text-lg font-medium">
+                    {postgameReport.metrics.pointsFor} - {postgameReport.metrics.pointsAgainst}
+                  </div>
+                  <div className={`text-xs ${postgameReport.metrics.margin >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                    Margin: {postgameReport.metrics.margin > 0 ? '+' : ''}{postgameReport.metrics.margin.toFixed(1)}
+                  </div>
+                </div>
+                <div className="p-3 bg-slate-800/50 rounded-lg">
+                  <div className="text-xs text-slate-400">Tempó (pace)</div>
+                  <div className="text-slate-50 text-lg font-medium">{postgameReport.metrics.pace.toFixed(1)}</div>
+                  <div className="text-xs text-slate-500">Meccs-possessions becslés</div>
+                </div>
+                <div className="p-3 bg-slate-800/50 rounded-lg">
+                  <div className="text-xs text-slate-400">eFG%</div>
+                  <div className="text-slate-50 text-lg font-medium">{postgameReport.metrics.efg.toFixed(1)}%</div>
+                  <div className="text-xs text-slate-500">Hatékonyság</div>
+                </div>
+              </div>
+
+              <div>
+                <div className="text-sm text-slate-300 font-medium mb-2">Kulcs mutatók (meccs vs. szezon)</div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {postgameReport.metrics.keyStats.map(item => (
+                    <div key={item.key} className="p-3 bg-slate-800/50 rounded-lg flex items-center justify-between">
+                      <div>
+                        <div className="text-xs text-slate-400">{item.label}</div>
+                        <div className="text-slate-50 text-lg font-medium">
+                          {formatPostgameValue(item.game, item.unit)}
+                        </div>
+                        <div className="text-xs text-slate-500">
+                          Szezon: {formatPostgameValue(item.season, item.unit)}
+                          {Number.isFinite(item.leagueMedian) ? ` • Liga medián: ${formatPostgameValue(item.leagueMedian ?? 0, item.unit)}` : ''}
+                        </div>
+                      </div>
+                      <div className={`text-sm font-medium ${item.delta >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                        {formatPostgameDelta(item.delta, item.unit)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <div className="p-3 bg-slate-800/50 rounded-lg">
+                  <div className="text-sm text-slate-300 font-medium mb-2">Hatékonyság összevetés</div>
+                  <ResponsiveContainer width="100%" height={240}>
+                    <BarChart data={postgameReport.charts.efficiency} margin={{ left: 8, right: 8 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                      <XAxis dataKey="label" stroke="#94a3b8" tick={{ fontSize: 10 }} />
+                      <YAxis stroke="#94a3b8" tick={{ fontSize: 10 }} />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: '#0f172a',
+                          border: '1px solid #475569',
+                          borderRadius: '8px',
+                          color: '#f1f5f9',
+                        }}
+                        labelStyle={{ color: '#f1f5f9', fontWeight: 'bold' }}
+                        itemStyle={{ color: '#e2e8f0' }}
+                      />
+                      <Legend wrapperStyle={{ color: '#94a3b8' }} />
+                      <Bar dataKey="game" name="Meccs" fill="#38bdf8" radius={[6, 6, 0, 0]} />
+                      <Bar dataKey="season" name="Szezon" fill="#10b981" radius={[6, 6, 0, 0]} />
+                      {postgameReport.charts.efficiency.some(item => Number.isFinite(item.league)) && (
+                        <Bar dataKey="league" name="Liga medián" fill="#a855f7" radius={[6, 6, 0, 0]} />
+                      )}
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="p-3 bg-slate-800/50 rounded-lg">
+                  <div className="text-sm text-slate-300 font-medium mb-2">Dobásprofil</div>
+                  <ResponsiveContainer width="100%" height={240}>
+                    <BarChart data={postgameReport.charts.shotProfile} margin={{ left: 8, right: 8 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                      <XAxis dataKey="label" stroke="#94a3b8" tick={{ fontSize: 10 }} />
+                      <YAxis stroke="#94a3b8" tick={{ fontSize: 10 }} />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: '#0f172a',
+                          border: '1px solid #475569',
+                          borderRadius: '8px',
+                          color: '#f1f5f9',
+                        }}
+                        labelStyle={{ color: '#f1f5f9', fontWeight: 'bold' }}
+                        itemStyle={{ color: '#e2e8f0' }}
+                      />
+                      <Legend wrapperStyle={{ color: '#94a3b8' }} />
+                      <Bar dataKey="game" name="Meccs" fill="#f97316" radius={[6, 6, 0, 0]} />
+                      <Bar dataKey="season" name="Szezon" fill="#22c55e" radius={[6, 6, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>

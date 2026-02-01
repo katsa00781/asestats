@@ -82,6 +82,7 @@ export type PlayerAnalysis = {
   skillScores: SkillScores;
   strengths: string[];
   limitations: string[];
+  improvements: string[];
   summary: string;
   confidence: 'High' | 'Medium' | 'Low';
   roleConfidence: number;
@@ -527,6 +528,65 @@ const buildLimitations = (skills: SkillScores) => {
     .map(([key]) => SKILL_LABELS[key as keyof SkillScores]);
 };
 
+const buildImprovementPoints = (player: NormalizedStats, benchmarks: LeagueBenchmarks) => {
+  const improvements: string[] = [];
+
+  const threshold = (stat: string, pct: keyof BenchmarkPercentiles) =>
+    getBenchmarkThreshold(benchmarks, player, stat, pct);
+
+  const threePct = player.threePct;
+  const threePA = player.threePAPer36;
+  const ftPct = player.ftPct;
+  const fta = player.ftaPer36;
+  const efg = player.efg;
+  const usage = player.usageProxyPer36;
+  const ast = player.astPer36;
+  const tov = player.tovPer36;
+  const astTo = player.astTo;
+  const reb = player.rebPer36;
+  const defReb = player.defRebPer36;
+  const stl = player.stlPer36;
+  const blk = player.blkPer36;
+
+  if (threePct >= threshold('threeP_pct', 'P75') && threePA <= threshold('threePA_per36', 'P40')) {
+    improvements.push(`3P hatékonyság jó (${round(threePct, 1)}%), de alacsony volumen (${round(threePA, 1)} 3PA/36).`);
+  }
+
+  if (ftPct >= threshold('ft_pct', 'P75') && fta <= threshold('fta_per36', 'P40')) {
+    improvements.push(`Büntető hatékonyság jó (${round(ftPct, 1)}%), de kevés kiharcolt büntető (${round(fta, 1)} FTA/36).`);
+  }
+
+  if (efg <= threshold('efg', 'P40') && usage >= threshold('usage_proxy', 'P60')) {
+    improvements.push(`Magas usage (${round(usage, 1)}/36) mellett alacsony eFG (${round(efg, 1)}%) → dobásminőség javítása.`);
+  }
+
+  if (usage <= threshold('usage_proxy', 'P40') && efg >= threshold('efg', 'P60')) {
+    improvements.push(`Alacsony usage (${round(usage, 1)}/36) mellett jó eFG (${round(efg, 1)}%) → több támadó szerep vállalható.`);
+  }
+
+  if (tov >= threshold('tov_per36', 'P60') && astTo <= threshold('ast_to', 'P40')) {
+    improvements.push(`Labdaeladás csökkentése (TO/36: ${round(tov, 1)}, AST/TO: ${round(astTo, 2)}).`);
+  }
+
+  if ((player.position === 'PG' || player.position === 'SG') && ast <= threshold('ast_per36', 'P40') && usage >= threshold('usage_proxy', 'P50')) {
+    improvements.push(`Játéképítés fejlesztése (AST/36: ${round(ast, 1)}) a labdával töltött időhöz képest.`);
+  }
+
+  if ((player.position === 'PF' || player.position === 'C') && reb <= threshold('reb_per36', 'P40')) {
+    improvements.push(`Lepattanózás erősítése (REB/36: ${round(reb, 1)}).`);
+  }
+
+  if ((player.position === 'SG' || player.position === 'SF') && stl <= threshold('stl_per36', 'P40') && defReb <= threshold('def_reb_per36', 'P40')) {
+    improvements.push(`Periméter védekezés/possession-érték növelése (STL/36: ${round(stl, 1)}, DREB/36: ${round(defReb, 1)}).`);
+  }
+
+  if ((player.position === 'PF' || player.position === 'C') && blk <= threshold('blk_per36', 'P40')) {
+    improvements.push(`Rim protection javítása (BLK/36: ${round(blk, 1)}).`);
+  }
+
+  return improvements.slice(0, 3);
+};
+
 const buildSummary = (
   player: NormalizedStats,
   roles: RoleResult[],
@@ -577,6 +637,7 @@ export const analyzePlayerSeason = (
   const skills = computeSkillScores(normalized, benchmarks);
   const strengths = buildStrengths(skills);
   const limitations = buildLimitations(skills);
+  const improvements = buildImprovementPoints(normalized, benchmarks);
 
   return {
     position: raw.position,
@@ -584,6 +645,7 @@ export const analyzePlayerSeason = (
     skillScores: skills,
     strengths,
     limitations,
+    improvements,
     summary: buildSummary(normalized, roles, skills, benchmarks),
     confidence: roleConfidenceLabel(roleConfidence),
     roleConfidence: round(roleConfidence, 2),
