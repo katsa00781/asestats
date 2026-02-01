@@ -29,6 +29,7 @@ export type PlayerSeasonStat = {
   name: string;
   position: Position;
   heightCm?: number;
+  games: number;
   minutes: number;
   points: number;
   fga2: number;
@@ -314,12 +315,13 @@ const buildPositionComparison = (ownPlayers: PlayerSeasonStat[], opponentPlayers
       .filter(player => player.position === position)
       .reduce(
         (acc, player) => {
+          acc.games += player.games || 0;
           acc.minutes += player.minutes || 0;
           acc.val += player.val || 0;
           acc.points += player.points || 0;
           return acc;
         },
-        { minutes: 0, val: 0, points: 0 }
+        { games: 0, minutes: 0, val: 0, points: 0 }
       );
   };
 
@@ -327,10 +329,26 @@ const buildPositionComparison = (ownPlayers: PlayerSeasonStat[], opponentPlayers
     const own = aggregate(ownPlayers, position);
     const opp = aggregate(opponentPlayers, position);
 
-    const ownValPer36 = own.minutes > 0 ? (own.val / own.minutes) * 36 : 0;
-    const oppValPer36 = opp.minutes > 0 ? (opp.val / opp.minutes) * 36 : 0;
-    const ownPointsPer36 = own.minutes > 0 ? (own.points / own.minutes) * 36 : 0;
-    const oppPointsPer36 = opp.minutes > 0 ? (opp.points / opp.minutes) * 36 : 0;
+    const ownValPer36 = own.minutes > 0
+      ? (own.val / own.minutes) * 36
+      : own.games > 0
+        ? own.val / own.games
+        : 0;
+    const oppValPer36 = opp.minutes > 0
+      ? (opp.val / opp.minutes) * 36
+      : opp.games > 0
+        ? opp.val / opp.games
+        : 0;
+    const ownPointsPer36 = own.minutes > 0
+      ? (own.points / own.minutes) * 36
+      : own.games > 0
+        ? own.points / own.games
+        : 0;
+    const oppPointsPer36 = opp.minutes > 0
+      ? (opp.points / opp.minutes) * 36
+      : opp.games > 0
+        ? opp.points / opp.games
+        : 0;
 
     return {
       position,
