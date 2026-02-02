@@ -125,6 +125,20 @@ export type TeamAnalysis = {
     totalMinutes: number;
   };
   rosterInsights: string[];
+  riskPriorities: string[];
+  leagueProfile: {
+    entries: Array<{
+      key: string;
+      label: string;
+      percentile: number;
+      value: number;
+      tier: string;
+    }>;
+    clusterLabel: string;
+    clusterCount: number | null;
+    teamCount: number | null;
+    opponentStatsComplete: boolean;
+  };
   summary: string;
 };
 
@@ -818,7 +832,8 @@ const buildSummary = (
   rosterInsights: string[],
   benchmarks: LeagueTeamBenchmarks
 ) => {
-  const tempo = team.pace >= 70 ? 'magas tempójú' : team.pace <= 60 ? 'alacsony tempójú' : 'közepes tempójú';
+  const paceScore = getPercentileScore(benchmarks, team, 'pace');
+  const tempo = paceScore >= 65 ? 'magas tempójú' : paceScore <= 35 ? 'alacsony tempójú' : 'közepes tempójú';
   const offense = style.offense[0] ?? 'kiegyensúlyozott támadás';
   const defense = style.defense[0] ?? 'kiegyensúlyozott védekezés';
 
@@ -841,7 +856,6 @@ const buildSummary = (
 
   const leagueMeta = getLeagueMeta(benchmarks, team);
   const percentileNotes: string[] = [];
-  const paceScore = getPercentileScore(benchmarks, team, 'pace');
   percentileNotes.push(`A csapat tempója ${percentileLabel(paceScore).toLowerCase()} (${round(paceScore, 0)}. percentilis).`);
 
   const twoRateScore = getPercentileScore(benchmarks, team, 'two_rate');
@@ -890,6 +904,106 @@ const buildSummary = (
   return `A csapat ${tempo}, ${offense} fókuszú támadást játszik. Védekezésben ${defense} karakterű. ${rosterSentence}${rosterInsightSentence} ${percentileNotes.join(' ')} ${clusterNote}${defenseNote}`;
 };
 
+const buildLeagueProfile = (
+  team: NormalizedTeamStats,
+  roster: ReturnType<typeof buildRosterSummary>,
+  benchmarks: LeagueTeamBenchmarks
+) => {
+  const leagueMeta = getLeagueMeta(benchmarks, team);
+  const paceScore = getPercentileScore(benchmarks, team, 'pace');
+  const twoRateScore = getPercentileScore(benchmarks, team, 'two_rate');
+  const threeRateScore = getPercentileScore(benchmarks, team, 'three_rate');
+  const threePctScore = getPercentileScore(benchmarks, team, 'three_pct');
+  const ftRateScore = getPercentileScore(benchmarks, team, 'ft_rate');
+  const assistScore = getPercentileScore(benchmarks, team, 'assist_rate');
+  const usageScore = leagueMeta
+    ? percentileFromThresholds(roster.top2UsageShare, leagueMeta.usageP10, leagueMeta.usageP90)
+    : 50;
+  const frontcourtPresence = (roster.positionMinutesShare.PF + roster.positionMinutesShare.C) / 100;
+  const frontcourtScore = leagueMeta
+    ? percentileFromThresholds(frontcourtPresence, leagueMeta.frontcourtPresenceP10, leagueMeta.frontcourtPresenceP90)
+    : 50;
+  const displayPercentile = (score: number) => clamp(score, 5, 95);
+
+  const pressureScore = team.hasOpponentTo
+    ? getPercentileScore(benchmarks, team, 'opp_to_rate')
+    : getPercentileScore(benchmarks, team, 'stl_per_game');
+
+  const clusterLabel = getClusterLabel({
+    paceScore,
+    twoRateScore,
+    threeRateScore,
+    assistScore,
+    usageScore,
+    pressureScore,
+  });
+
+  return {
+    entries: [
+      {
+        key: 'pace',
+        label: 'Tempó',
+        percentile: round(displayPercentile(paceScore), 0),
+        value: team.pace,
+        tier: percentileLabel(paceScore),
+      },
+      {
+        key: 'two_rate',
+        label: '2P arány',
+        percentile: round(displayPercentile(twoRateScore), 0),
+        value: team.twoRate,
+        tier: percentileLabel(twoRateScore),
+      },
+      {
+        key: 'three_rate',
+        label: '3P arány',
+        percentile: round(displayPercentile(threeRateScore), 0),
+        value: team.threeRate,
+        tier: percentileLabel(threeRateScore),
+      },
+      {
+        key: 'three_pct',
+        label: '3P%',
+        percentile: round(displayPercentile(threePctScore), 0),
+        value: team.threePct,
+        tier: percentileLabel(threePctScore),
+      },
+      {
+        key: 'ft_rate',
+        label: 'FT rate',
+        percentile: round(displayPercentile(ftRateScore), 0),
+        value: team.ftRate,
+        tier: percentileLabel(ftRateScore),
+      },
+      {
+        key: 'assist_rate',
+        label: 'Assist rate',
+        percentile: round(displayPercentile(assistScore), 0),
+        value: team.assistRate,
+        tier: percentileLabel(assistScore),
+      },
+      {
+        key: 'usage_concentration',
+        label: 'Usage koncentráció',
+        percentile: round(displayPercentile(usageScore), 0),
+        value: roster.top2UsageShare,
+        tier: percentileLabel(usageScore),
+      },
+      {
+        key: 'frontcourt_presence',
+        label: 'REB per poszt',
+        percentile: round(displayPercentile(frontcourtScore), 0),
+        value: frontcourtPresence,
+        tier: percentileLabel(frontcourtScore),
+      },
+    ],
+    clusterLabel,
+    clusterCount: leagueMeta?.clusterCounts?.[clusterLabel] ?? null,
+    teamCount: leagueMeta?.teamCount ?? null,
+    opponentStatsComplete: team.hasOpponentShooting && team.hasOpponentTo,
+  };
+};
+
 export const analyzeTeamSeason = (
   raw: TeamSeasonStat,
   benchmarks: LeagueTeamBenchmarks
@@ -900,6 +1014,7 @@ export const analyzeTeamSeason = (
   const strengths = buildStrengths(normalized, benchmarks);
   const limitations = buildLimitations(normalized, benchmarks);
   const leagueMeta = getLeagueMeta(benchmarks, normalized);
+  const leagueProfile = buildLeagueProfile(normalized, rosterSummary, benchmarks);
   const clusterLabel = getClusterLabel({
     paceScore: getPercentileScore(benchmarks, normalized, 'pace'),
     twoRateScore: getPercentileScore(benchmarks, normalized, 'two_rate'),
@@ -917,9 +1032,10 @@ export const analyzeTeamSeason = (
     const clusterTag = `Liga-klaszter: ${clusterLabel}`;
     if (!style.offense.includes(clusterTag)) style.offense.push(clusterTag);
   }
+  const riskPriorities = buildRiskPriorities(rosterSummary, limitations);
   const rosterInsights = [
     ...buildRosterInsights(normalized, benchmarks, rosterSummary),
-    ...buildRiskPriorities(rosterSummary, limitations),
+    ...riskPriorities,
   ];
 
   return {
@@ -932,6 +1048,8 @@ export const analyzeTeamSeason = (
     limitations,
     rosterSummary,
     rosterInsights,
+    riskPriorities: riskPriorities.slice(1),
+    leagueProfile,
     summary: buildSummary(normalized, style, rosterSummary, rosterInsights, benchmarks),
   };
 };

@@ -288,11 +288,12 @@ export default function Home() {
   useEffect(() => {
     const loadFilters = async () => {
       try {
-        const [seasonsResult, teamsResult, allPlayersResult, allGameStatsResult] = await Promise.all([
+        const [seasonsResult, teamsResult, allPlayersResult, allGameStatsResult, playerStatusResult] = await Promise.all([
           supabase.from('seasons').select('id, name').order('start_date', { ascending: false }),
           supabase.from('teams').select('id, name').order('is_primary', { ascending: false }).order('name'),
           supabase.from('player_season_stats_by_season').select('*'),
-          supabase.from('player_game_stats').select('player_id, offensive_rating, defensive_rating, true_shooting_percentage, effective_field_goal_percentage, games!inner(season_id)')
+          supabase.from('player_game_stats').select('player_id, offensive_rating, defensive_rating, true_shooting_percentage, effective_field_goal_percentage, games!inner(season_id)'),
+          supabase.from('players').select('id, name, number, position, season_id, team_id, is_active, birth_year, height, weight')
         ]);
 
         if (seasonsResult.data) setAllSeasons(seasonsResult.data);
@@ -301,6 +302,9 @@ export default function Home() {
         // Minden játékos minden szezonból és csapatból
         if (allPlayersResult.data && allGameStatsResult.data) {
           const playerGameStats = allGameStatsResult.data as SupabasePlayerSeasonGameStat[];
+          const playerActiveMap = new Map(
+            (playerStatusResult.data ?? []).map(row => [row.id, row.is_active])
+          );
 
           const allPlayersConverted: PlayerStats[] = allPlayersResult.data.map((ps: SupabasePlayerStat) => {
             // Szűrjük le a játékos meccseit ebben a szezonban
@@ -344,7 +348,7 @@ export default function Home() {
               name: ps.name,
               number: ps.number,
               position: ps.position,
-              isActive: ps.is_active ?? true,
+              isActive: playerActiveMap.get(ps.player_id) ?? ps.is_active ?? true,
               seasonId: ps.season_id,
               seasonName: ps.season_name,
               teamId: ps.team_id,
@@ -380,7 +384,62 @@ export default function Home() {
               gameHistory: []
             };
           });
-          setAllPlayersForComparison(allPlayersConverted);
+          const seasonsById = new Map((seasonsResult.data ?? []).map(season => [String(season.id), season.name]));
+          const teamsById = new Map((teamsResult.data ?? []).map(team => [String(team.id), team.name]));
+          const existingIds = new Set(allPlayersConverted.map(player => player.id));
+          const basePlayers = (playerStatusResult.data ?? []) as Array<{
+            id: string;
+            name: string;
+            number: number | null;
+            position: string | null;
+            season_id: string | null;
+            team_id: string | null;
+            is_active: boolean | null;
+            birth_year: number | null;
+            height: number | null;
+            weight: number | null;
+          }>;
+
+          const playersWithoutGames: PlayerStats[] = basePlayers
+            .filter(player => player.season_id && !existingIds.has(player.id))
+            .map(player => ({
+              id: player.id,
+              name: player.name,
+              number: player.number ?? 0,
+              position: player.position ?? '',
+              isActive: player.is_active ?? true,
+              seasonId: player.season_id ?? undefined,
+              seasonName: seasonsById.get(String(player.season_id)) ?? '',
+              teamId: player.team_id ?? undefined,
+              teamName: teamsById.get(String(player.team_id)) ?? '',
+              birthYear: player.birth_year ?? undefined,
+              height: player.height ?? undefined,
+              weight: player.weight ?? undefined,
+              gamesPlayed: 0,
+              points: 0,
+              minutes: 0,
+              shooting: {
+                close: { made: 0, attempted: 0 },
+                mid: { made: 0, attempted: 0 },
+                three: { made: 0, attempted: 0 },
+                freeThrow: { made: 0, attempted: 0 },
+              },
+              rebounds: { offensive: 0, defensive: 0, total: 0 },
+              assists: 0,
+              steals: 0,
+              turnovers: 0,
+              foulsCommitted: 0,
+              foulsDrawn: 0,
+              blocks: 0,
+              valuation: 0,
+              offensiveRating: 0,
+              defensiveRating: 0,
+              trueShootingPct: 0,
+              effectiveShootingPct: 0,
+              gameHistory: [],
+            }));
+
+          setAllPlayersForComparison([...allPlayersConverted, ...playersWithoutGames]);
         }
       } catch (error) {
         console.error('Hiba a szűrők betöltésekor:', error);
@@ -479,6 +538,20 @@ export default function Home() {
           return String(ps.season_id ?? '') === String(selectedSeasonId);
         });
 
+        const playerStatusMap = new Map<string, boolean>();
+        const playerIds = filteredPlayerStats.map((ps: SupabasePlayerStat) => ps.player_id);
+        if (playerIds.length > 0) {
+          const { data: playerStatusData, error: playerStatusError } = await supabase
+            .from('players')
+            .select('id, is_active')
+            .in('id', playerIds);
+          if (playerStatusError) {
+            console.warn('⚠️ Player status lekérdezési hiba:', playerStatusError.message);
+          } else {
+            (playerStatusData || []).forEach(row => playerStatusMap.set(row.id, row.is_active));
+          }
+        }
+
         // 4. Konvertáljuk a PlayerStats formátumra - CSAK azokat akiknek van meccsük
         const playersConverted: PlayerStats[] = filteredPlayerStats
           .filter((ps: SupabasePlayerStat) => ps.games_played > 0) // Csak akiknek van meccsük
@@ -547,7 +620,7 @@ export default function Home() {
             name: ps.name,
             number: ps.number,
             position: ps.position,
-            isActive: ps.is_active ?? true,
+            isActive: playerStatusMap.get(ps.player_id) ?? ps.is_active ?? true,
             seasonId: ps.season_id,
             seasonName: ps.season_name,
             teamId: ps.team_id,

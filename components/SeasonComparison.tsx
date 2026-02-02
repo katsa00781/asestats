@@ -3,7 +3,7 @@
 import { TerminologyGlossary } from './TerminologyGlossary';
 
 import { useMemo, useState } from 'react';
-import { Bar, BarChart, CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
@@ -510,7 +510,7 @@ export function SeasonComparison({
   const rolesByPlayerId = useMemo(() => {
     const map = new Map<string, string[]>();
     if (!benchmarks || !resolvedSeasonId) return map;
-    activeSeasonPlayers.forEach(player => {
+    seasonPlayers.forEach(player => {
       const raw = toRawStat(player, league, resolvedSeasonId);
       const normalized = normalizePlayerStats(raw);
       if (!isEligibleSample(normalized) && normalized.games < MIN_PREGAME_GAMES) {
@@ -521,7 +521,7 @@ export function SeasonComparison({
       map.set(player.id, playerAnalysis.roles);
     });
     return map;
-  }, [activeSeasonPlayers, benchmarks, league, resolvedSeasonId]);
+  }, [benchmarks, league, resolvedSeasonId, seasonPlayers]);
 
   const displayIncomingValue = (field: IncomingField, value: number) => {
     if (focusedIncomingField !== field && (!Number.isFinite(value) || value === 0)) return '';
@@ -586,8 +586,8 @@ export function SeasonComparison({
 
   const teamSeasonStats = useMemo(() => {
     if (!resolvedSeasonId) return [];
-    return buildTeamSeasonStats(activeSeasonPlayers, league, resolvedSeasonId, allTeams, rolesByPlayerId);
-  }, [activeSeasonPlayers, allTeams, league, rolesByPlayerId, resolvedSeasonId]);
+    return buildTeamSeasonStats(seasonPlayers, league, resolvedSeasonId, allTeams, rolesByPlayerId);
+  }, [allTeams, league, resolvedSeasonId, rolesByPlayerId, seasonPlayers]);
 
   const teamBenchmarks = useMemo(() => {
     if (teamSeasonStats.length === 0) return null;
@@ -596,8 +596,17 @@ export function SeasonComparison({
 
   const selectedTeamStats = useMemo(() => {
     if (!resolvedTeamId || resolvedTeamId === 'all') return null;
-    return teamSeasonStats.find(team => team.teamId === resolvedTeamId) || null;
-  }, [resolvedTeamId, teamSeasonStats]);
+    const byId = teamSeasonStats.find(team => team.teamId === resolvedTeamId) || null;
+    const isEmpty = (team: TeamSeasonStat | null) => {
+      if (!team) return true;
+      return (team.fga2 + team.fga3 + team.fta + team.tov) === 0;
+    };
+    if (byId && !isEmpty(byId)) return byId;
+    const selectedTeamName = allTeams.find(team => team.id === resolvedTeamId)?.name;
+    if (!selectedTeamName) return byId;
+    const byName = teamSeasonStats.find(team => team.teamName === selectedTeamName) || null;
+    return byName ?? byId;
+  }, [allTeams, resolvedTeamId, teamSeasonStats]);
 
   const teamAnalysis = useMemo<TeamAnalysis | null>(() => {
     if (!selectedTeamStats || !teamBenchmarks) return null;
@@ -702,6 +711,24 @@ export function SeasonComparison({
     };
   }, [consistencyInsights, teamAnalysis]);
 
+  const getPercentileColor = (value: number) => {
+    if (value >= 80) return '#22c55e';
+    if (value >= 60) return '#38bdf8';
+    if (value >= 40) return '#a3e635';
+    if (value >= 20) return '#f97316';
+    return '#ef4444';
+  };
+
+  const formatLeagueValue = (key: string, value: number) => {
+    if (!Number.isFinite(value)) return 'N/A';
+    if (key === 'pace') return value.toFixed(2);
+    if (key === 'three_pct') return `${value.toFixed(1)}%`;
+    if (['two_rate', 'three_rate', 'ft_rate', 'assist_rate', 'usage_concentration', 'frontcourt_presence'].includes(key)) {
+      return `${(value * 100).toFixed(1)}%`;
+    }
+    return value.toFixed(2);
+  };
+
   const rolePlayersByRole = useMemo(() => {
     const map = new Map<string, string[]>();
     seasonPlayers
@@ -715,6 +742,7 @@ export function SeasonComparison({
       });
     return map;
   }, [resolvedTeamId, rolesByPlayerId, seasonPlayers]);
+
 
   const pregameBenchmarks = useMemo(() => {
     if (teamSeasonStats.length === 0) return null;
@@ -1679,6 +1707,72 @@ export function SeasonComparison({
                 </div>
               </div>
 
+              <div className="space-y-2">
+                <div className="text-sm text-slate-300 font-medium">Liga összevetés (percentilis)</div>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  <div className="h-72 rounded-lg border border-slate-800 bg-slate-950/40 p-3">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart
+                        data={displayTeamAnalysis.leagueProfile.entries}
+                        layout="vertical"
+                        margin={{ left: 12, right: 12 }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
+                        <XAxis type="number" domain={[0, 100]} stroke="#94a3b8" tick={{ fontSize: 11 }} />
+                        <YAxis dataKey="label" type="category" width={110} stroke="#94a3b8" tick={{ fontSize: 11 }} />
+                        <Tooltip
+                          content={({ active, payload }) => {
+                            if (!active || !payload || payload.length === 0) return null;
+                            const data = payload[0]?.payload as {
+                              key: string;
+                              label: string;
+                              percentile: number;
+                              value: number;
+                              tier: string;
+                            };
+                            if (!data) return null;
+                            return (
+                              <div className="rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-xs text-slate-100">
+                                <div className="text-sm font-semibold text-slate-100">{data.label}</div>
+                                <div className="text-slate-300">Percentilis: {data.percentile}</div>
+                                <div className="text-slate-300">Nyers érték: {formatLeagueValue(data.key, data.value)}</div>
+                                <div className="text-slate-400">{data.tier}</div>
+                              </div>
+                            );
+                          }}
+                        />
+                        <Bar dataKey="percentile" radius={[4, 4, 4, 4]}>
+                          {displayTeamAnalysis.leagueProfile.entries.map(entry => (
+                            <Cell key={entry.key} fill={getPercentileColor(entry.percentile)} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <div className="space-y-2 text-sm">
+                    {displayTeamAnalysis.leagueProfile.entries.map(entry => (
+                      <div key={entry.key} className="flex items-center justify-between text-slate-200">
+                        <span>{entry.label}</span>
+                        <span className="text-slate-400">
+                          {entry.tier} • {entry.percentile}. percentilis
+                        </span>
+                      </div>
+                    ))}
+                    <div className="text-xs text-slate-400">
+                      Liga-klaszter: {displayTeamAnalysis.leagueProfile.clusterLabel}
+                      {displayTeamAnalysis.leagueProfile.clusterCount && displayTeamAnalysis.leagueProfile.teamCount
+                        ? ` (${displayTeamAnalysis.leagueProfile.clusterCount}/${displayTeamAnalysis.leagueProfile.teamCount} csapat)`
+                        : ''}
+                    </div>
+                    {!displayTeamAnalysis.leagueProfile.opponentStatsComplete && (
+                      <div className="text-xs text-amber-300">
+                        Opponent statisztikák hiányosak, védekezési profil korlátozott.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <div className="text-sm text-slate-300 font-medium">Posztmegoszlás</div>
@@ -1739,6 +1833,16 @@ export function SeasonComparison({
                   ))}
                 </div>
               )}
+
+              {displayTeamAnalysis.riskPriorities.length > 0 && (
+                <div className="space-y-2">
+                  <div className="text-sm text-slate-300 font-medium">Kockázatok</div>
+                  {displayTeamAnalysis.riskPriorities.map(item => (
+                    <div key={item} className="text-sm text-slate-200">• {item}</div>
+                  ))}
+                </div>
+              )}
+
             </div>
           )}
         </CardContent>
