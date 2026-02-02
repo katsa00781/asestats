@@ -1,5 +1,7 @@
 'use client';
 
+import { TerminologyGlossary } from './TerminologyGlossary';
+
 import { useMemo, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -1111,6 +1113,7 @@ export function SeasonComparison({
           </div>
         </CardContent>
       </Card>
+      <TerminologyGlossary />
 
       {selectedPlayer && !analysis && (
         <Card className="bg-slate-900 border-slate-800">
