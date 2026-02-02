@@ -15,6 +15,15 @@ type UpdateItem = {
 
 const updates: UpdateItem[] = [
   {
+    date: '2026. február 2.',
+    version: '1.6.1',
+    category: 'improvement',
+    icon: <BarChart3 className="w-5 h-5" />,
+    title: 'Elemzések leírása',
+    description:
+      'A csapat-, játékos-, pregame- és postgame-elemzések rövid leírásokkal és értelmezési támpontokkal bővültek, hogy gyorsabban átlásd a fókuszpontokat.',
+  },
+  {
     date: '2026. február 1.',
     version: '1.6.0',
     category: 'feature',

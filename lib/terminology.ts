@@ -102,12 +102,24 @@ export const terminologySections: TerminologySection[] = [
         definition: 'A támadások első számú labdahozója.',
       },
       {
+        term: 'Secondary Creator',
+        definition: 'Másodlagos kezdeményező, aki nem elsődleges irányítóként is képes előnyt teremteni.',
+      },
+      {
         term: 'Secondary Playmaker',
         definition: 'Nem elsődleges irányító, de rendszeresen hoz döntéseket periméteren.',
       },
       {
         term: 'Floor Spacer',
         definition: 'A pálya széthúzásáért felelős játékos, magas 3P% vagy gravity.',
+      },
+      {
+        term: 'Glue Guy',
+        definition: 'Kapcsoló szerepű játékos, aki a csapatjátékot, rotációt és extra erőfeszítést stabilizálja.',
+      },
+      {
+        term: 'Slasher',
+        definition: 'Betörésekkel és gyűrűtámadással pontot szerző játékos, aki nyomást helyez a festékre.',
       },
       {
         term: '3&D Wing',
@@ -118,8 +130,28 @@ export const terminologySections: TerminologySection[] = [
         definition: 'Elsődlegesen védekezési szerepkörű guard, labdanyomás és closeout fókusz.',
       },
       {
+        term: 'Stretch 4',
+        definition: 'Négyes poszton játszó, perimétert nyitó magas, aki triplával széthúzza a védelmet.',
+      },
+      {
+        term: 'Physical 4',
+        definition: 'Fizikális erőcsatár, aki test a test elleni játékban, lepattanózásban és kontaktban erős.',
+      },
+      {
         term: 'Rim Protector',
         definition: 'A gyűrű körüli védekezésért felelős játékos, blokkokkal és festékvédelemmel.',
+      },
+      {
+        term: 'Roll Man',
+        definition: 'Pick and roll játékban a gyűrű felé guruló befejező, aki vertikális fenyegetés.',
+      },
+      {
+        term: 'Stretch 5',
+        definition: 'Ötös poszton játszó, perimétert nyitó center, aki triplával húzza ki a védőt.',
+      },
+      {
+        term: 'Energy Big',
+        definition: 'Magas poszton energikus, lepattanózó és hustle-alapú szerepkör, rövid intenzív percekkel.',
       },
     ],
   },

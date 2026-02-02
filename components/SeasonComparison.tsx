@@ -78,6 +78,7 @@ type GamePlayerStatRow = {
   valuation: number;
   games?: { date?: string; opponent?: string; season_id?: string | null } | null;
   players?: { team_id?: string | null } | null;
+  fouls_committed?: number;
 };
 
 const mapPosition = (pos: string): Position => {
@@ -439,8 +440,10 @@ export function SeasonComparison({
   const [selectedGameId, setSelectedGameId] = useState('');
   const [incomingPlayer, setIncomingPlayer] = useState<IncomingPlayerInput>(DEFAULT_INCOMING_PLAYER);
   const [focusedIncomingField, setFocusedIncomingField] = useState<IncomingField | null>(null);
+  const [useRecentFormPregame, setUseRecentFormPregame] = useState(false);
 
   const MIN_PREGAME_GAMES = 4;
+  const MIN_RECENT_GAMES_TEAM = 3;
 
   const resolvedSeasonId = selectedSeasonId || currentSeasonId || allSeasons[0]?.id || '';
   const resolvedTeamId = selectedTeamId || currentTeamId || 'all';
@@ -464,10 +467,15 @@ export function SeasonComparison({
     return [...base].sort((a, b) => a.name.localeCompare(b.name, 'hu'));
   }, [resolvedTeamId, seasonPlayers]);
 
+  const activeSeasonPlayers = useMemo(() => {
+    return seasonPlayers.filter(player => player.isActive !== false);
+  }, [seasonPlayers]);
+
   const selectedPlayer = useMemo(() => {
     if (!selectedPlayerId) return null;
     return seasonPlayers.find(player => player.id === selectedPlayerId) || null;
   }, [seasonPlayers, selectedPlayerId]);
+
 
   const lastFiveGames = useMemo(() => {
     if (!selectedPlayer) return [];
@@ -502,10 +510,10 @@ export function SeasonComparison({
   const rolesByPlayerId = useMemo(() => {
     const map = new Map<string, string[]>();
     if (!benchmarks || !resolvedSeasonId) return map;
-    seasonPlayers.forEach(player => {
+    activeSeasonPlayers.forEach(player => {
       const raw = toRawStat(player, league, resolvedSeasonId);
       const normalized = normalizePlayerStats(raw);
-      if (!isEligibleSample(normalized)) {
+      if (!isEligibleSample(normalized) && normalized.games < MIN_PREGAME_GAMES) {
         map.set(player.id, []);
         return;
       }
@@ -513,7 +521,7 @@ export function SeasonComparison({
       map.set(player.id, playerAnalysis.roles);
     });
     return map;
-  }, [benchmarks, league, seasonPlayers, resolvedSeasonId]);
+  }, [activeSeasonPlayers, benchmarks, league, resolvedSeasonId]);
 
   const displayIncomingValue = (field: IncomingField, value: number) => {
     if (focusedIncomingField !== field && (!Number.isFinite(value) || value === 0)) return '';
@@ -578,8 +586,8 @@ export function SeasonComparison({
 
   const teamSeasonStats = useMemo(() => {
     if (!resolvedSeasonId) return [];
-    return buildTeamSeasonStats(seasonPlayers, league, resolvedSeasonId, allTeams, rolesByPlayerId);
-  }, [allTeams, league, rolesByPlayerId, seasonPlayers, resolvedSeasonId]);
+    return buildTeamSeasonStats(activeSeasonPlayers, league, resolvedSeasonId, allTeams, rolesByPlayerId);
+  }, [activeSeasonPlayers, allTeams, league, rolesByPlayerId, resolvedSeasonId]);
 
   const teamBenchmarks = useMemo(() => {
     if (teamSeasonStats.length === 0) return null;
@@ -603,6 +611,50 @@ export function SeasonComparison({
     });
     return map;
   }, [seasonPlayers]);
+
+  const seasonPlayerMap = useMemo(() => {
+    const map = new Map<string, PlayerStats>();
+    seasonPlayers.forEach(player => map.set(player.id, player));
+    return map;
+  }, [seasonPlayers]);
+
+  const recentGameIdsByTeam = useMemo(() => {
+    const map = new Map<string, Map<string, number>>();
+    playerGameStats.forEach(row => {
+      if (resolvedSeasonId && String(row.games?.season_id ?? '') !== String(resolvedSeasonId)) return;
+      const teamId = row.players?.team_id ?? playerTeamMap.get(row.player_id);
+      if (!teamId) return;
+      const date = row.games?.date ? new Date(row.games.date).getTime() : 0;
+      if (!map.has(teamId)) map.set(teamId, new Map());
+      const teamGames = map.get(teamId)!;
+      const existing = teamGames.get(row.game_id);
+      if (!existing || date > existing) teamGames.set(row.game_id, date);
+    });
+
+    const result = new Map<string, string[]>();
+    map.forEach((teamGames, teamId) => {
+      const sorted = Array.from(teamGames.entries())
+        .sort((a, b) => b[1] - a[1])
+        .map(([gameId]) => gameId);
+      result.set(teamId, sorted.slice(0, 5));
+    });
+
+    return result;
+  }, [playerGameStats, playerTeamMap, resolvedSeasonId]);
+
+  const gameTeamPoints = useMemo(() => {
+    const map = new Map<string, Map<string, number>>();
+    playerGameStats.forEach(row => {
+      if (resolvedSeasonId && String(row.games?.season_id ?? '') !== String(resolvedSeasonId)) return;
+      const teamId = row.players?.team_id ?? playerTeamMap.get(row.player_id);
+      if (!teamId) return;
+      if (!map.has(row.game_id)) map.set(row.game_id, new Map());
+      const byTeam = map.get(row.game_id)!;
+      const current = byTeam.get(teamId) ?? 0;
+      byTeam.set(teamId, current + (row.points || 0));
+    });
+    return map;
+  }, [playerGameStats, playerTeamMap, resolvedSeasonId]);
 
   const currentTeamPlayerIds = useMemo(() => {
     const set = new Set<string>();
@@ -650,6 +702,20 @@ export function SeasonComparison({
     };
   }, [consistencyInsights, teamAnalysis]);
 
+  const rolePlayersByRole = useMemo(() => {
+    const map = new Map<string, string[]>();
+    seasonPlayers
+      .filter(player => player.teamId === resolvedTeamId)
+      .forEach(player => {
+        const roles = rolesByPlayerId.get(player.id) ?? [];
+        roles.forEach(role => {
+          if (!map.has(role)) map.set(role, []);
+          map.get(role)!.push(player.name);
+        });
+      });
+    return map;
+  }, [resolvedTeamId, rolesByPlayerId, seasonPlayers]);
+
   const pregameBenchmarks = useMemo(() => {
     if (teamSeasonStats.length === 0) return null;
     const pregameTeams: PregameTeamSeasonStat[] = teamSeasonStats.map(team => ({
@@ -678,7 +744,121 @@ export function SeasonComparison({
     return buildPregameBenchmarks(pregameTeams);
   }, [teamSeasonStats]);
 
+  const buildRecentTeamStat = useMemo(() => {
+    return (teamId: string): PregameTeamSeasonStat | null => {
+      if (!teamId || teamId === 'all') return null;
+      const meta = teamSeasonStats.find(team => team.teamId === teamId);
+      if (!meta) return null;
+      const recentGameIds = recentGameIdsByTeam.get(teamId) ?? [];
+      if (recentGameIds.length < MIN_RECENT_GAMES_TEAM) return null;
+      const recentGameSet = new Set(recentGameIds);
+
+      const totals = {
+        pointsFor: 0,
+        fga2: 0,
+        fgm2: 0,
+        fga3: 0,
+        fgm3: 0,
+        fta: 0,
+        ftm: 0,
+        oreb: 0,
+        dreb: 0,
+        ast: 0,
+        tov: 0,
+        stl: 0,
+        blk: 0,
+        fouls: 0,
+        val: 0,
+      };
+
+      playerGameStats.forEach(row => {
+        if (!recentGameSet.has(row.game_id)) return;
+        const rowTeamId = row.players?.team_id ?? playerTeamMap.get(row.player_id);
+        if (rowTeamId !== teamId) return;
+
+        totals.pointsFor += row.points || 0;
+        totals.fga2 += (row.close_attempted || 0) + (row.mid_attempted || 0);
+        totals.fgm2 += (row.close_made || 0) + (row.mid_made || 0);
+        totals.fga3 += row.three_attempted || 0;
+        totals.fgm3 += row.three_made || 0;
+        totals.fta += row.free_throw_attempted || 0;
+        totals.ftm += row.free_throw_made || 0;
+        totals.oreb += row.offensive_rebounds || 0;
+        totals.dreb += row.defensive_rebounds || 0;
+        totals.ast += row.assists || 0;
+        totals.tov += row.turnovers || 0;
+        totals.stl += row.steals || 0;
+        totals.blk += row.blocks || 0;
+        totals.fouls += row.fouls_committed || 0;
+        totals.val += row.valuation || 0;
+      });
+
+      let pointsAgainst = 0;
+      let countedGames = 0;
+      recentGameIds.forEach(gameId => {
+        const byTeam = gameTeamPoints.get(gameId);
+        if (!byTeam) return;
+        const ownPoints = byTeam.get(teamId);
+        if (ownPoints === undefined) return;
+        const totalPoints = Array.from(byTeam.values()).reduce((sum, value) => sum + value, 0);
+        pointsAgainst += totalPoints - ownPoints;
+        countedGames += 1;
+      });
+
+      const gamesCount = countedGames > 0 ? countedGames : recentGameIds.length;
+
+      return {
+        teamId: meta.teamId,
+        teamName: meta.teamName,
+        league: meta.league,
+        season: meta.season,
+        games: gamesCount,
+        pointsFor: totals.pointsFor,
+        pointsAgainst,
+        fga2: totals.fga2,
+        fgm2: totals.fgm2,
+        fga3: totals.fga3,
+        fgm3: totals.fgm3,
+        fta: totals.fta,
+        ftm: totals.ftm,
+        oreb: totals.oreb,
+        dreb: totals.dreb,
+        ast: totals.ast,
+        tov: totals.tov,
+        stl: totals.stl,
+        blk: totals.blk,
+        fouls: totals.fouls,
+        val: totals.val,
+      };
+    };
+  }, [MIN_RECENT_GAMES_TEAM, gameTeamPoints, playerGameStats, playerTeamMap, recentGameIdsByTeam, teamSeasonStats]);
+
   const pregameOwnTeam = useMemo<PregameTeamSeasonStat | null>(() => {
+    if (useRecentFormPregame) {
+      return buildRecentTeamStat(resolvedTeamId) ?? (selectedTeamStats ? {
+        teamId: selectedTeamStats.teamId,
+        teamName: selectedTeamStats.teamName,
+        league: selectedTeamStats.league,
+        season: selectedTeamStats.season,
+        games: selectedTeamStats.games,
+        pointsFor: selectedTeamStats.pointsFor,
+        pointsAgainst: selectedTeamStats.pointsAgainst,
+        fga2: selectedTeamStats.fga2,
+        fgm2: selectedTeamStats.fgm2,
+        fga3: selectedTeamStats.fga3,
+        fgm3: selectedTeamStats.fgm3,
+        fta: selectedTeamStats.fta,
+        ftm: selectedTeamStats.ftm,
+        oreb: selectedTeamStats.oreb,
+        dreb: selectedTeamStats.dreb,
+        ast: selectedTeamStats.ast,
+        tov: selectedTeamStats.tov,
+        stl: selectedTeamStats.stl,
+        blk: selectedTeamStats.blk,
+        fouls: selectedTeamStats.fouls,
+        val: selectedTeamStats.val,
+      } : null);
+    }
     if (!selectedTeamStats) return null;
     return {
       teamId: selectedTeamStats.teamId,
@@ -703,10 +883,15 @@ export function SeasonComparison({
       fouls: selectedTeamStats.fouls,
       val: selectedTeamStats.val,
     };
-  }, [selectedTeamStats]);
+  }, [buildRecentTeamStat, resolvedTeamId, selectedTeamStats, useRecentFormPregame]);
 
   const pregameOpponentTeam = useMemo<PregameTeamSeasonStat | null>(() => {
     if (!selectedOpponentTeamId || selectedOpponentTeamId === resolvedTeamId) return null;
+    if (useRecentFormPregame) {
+      return buildRecentTeamStat(selectedOpponentTeamId)
+        ?? teamSeasonStats.find(team => team.teamId === selectedOpponentTeamId)
+        ?? null;
+    }
     const opponent = teamSeasonStats.find(team => team.teamId === selectedOpponentTeamId);
     if (!opponent) return null;
     return {
@@ -732,75 +917,211 @@ export function SeasonComparison({
       fouls: opponent.fouls,
       val: opponent.val,
     };
-  }, [resolvedTeamId, selectedOpponentTeamId, teamSeasonStats]);
+  }, [buildRecentTeamStat, resolvedTeamId, selectedOpponentTeamId, teamSeasonStats, useRecentFormPregame]);
 
   const pregameOpponentPlayers = useMemo<PlayerSeasonStat[]>(() => {
     if (!selectedOpponentTeamId) return [];
-    return seasonPlayers
-      .filter(player => player.teamId === selectedOpponentTeamId)
-      .filter(player => player.isActive !== false)
-      .filter(player => (player.gamesPlayed || 0) >= MIN_PREGAME_GAMES)
+
+    const buildFromSeason = () =>
+      activeSeasonPlayers
+        .filter(player => player.teamId === selectedOpponentTeamId)
+        .filter(player => (player.gamesPlayed || 0) >= MIN_PREGAME_GAMES)
+        .map(player => ({
+          playerId: player.id,
+          name: player.name,
+          position: mapPosition(player.position),
+          heightCm: player.height || undefined,
+          games: player.gamesPlayed || 0,
+          minutes: player.minutes || 0,
+          points: player.points || 0,
+          fga2: (player.shooting?.close?.attempted || 0) + (player.shooting?.mid?.attempted || 0),
+          fgm2: (player.shooting?.close?.made || 0) + (player.shooting?.mid?.made || 0),
+          fga3: player.shooting?.three?.attempted || 0,
+          fgm3: player.shooting?.three?.made || 0,
+          fta: player.shooting?.freeThrow?.attempted || 0,
+          ftm: player.shooting?.freeThrow?.made || 0,
+          oreb: player.rebounds?.offensive || 0,
+          dreb: player.rebounds?.defensive || 0,
+          ast: player.assists || 0,
+          tov: player.turnovers || 0,
+          stl: player.steals || 0,
+          blk: player.blocks || 0,
+          val: (() => {
+            const totalValuation = (player.valuation || 0) * (player.gamesPlayed || 0);
+            return totalValuation > 0 ? totalValuation : computeTotalValuation(player);
+          })(),
+          roles: rolesByPlayerId.get(player.id) ?? [],
+        }));
+
+    if (!useRecentFormPregame) return buildFromSeason();
+
+    const recentGameIds = recentGameIdsByTeam.get(selectedOpponentTeamId) ?? [];
+    if (recentGameIds.length < MIN_RECENT_GAMES_TEAM) return buildFromSeason();
+    const recentGameSet = new Set(recentGameIds);
+    const statsMap = new Map<string, PlayerSeasonStat>();
+    const gamesMap = new Map<string, Set<string>>();
+
+    playerGameStats.forEach(row => {
+      if (!recentGameSet.has(row.game_id)) return;
+      const teamId = row.players?.team_id ?? playerTeamMap.get(row.player_id);
+      if (teamId !== selectedOpponentTeamId) return;
+      if (seasonPlayerMap.get(row.player_id)?.isActive === false) return;
+
+      const base = statsMap.get(row.player_id) ?? {
+        playerId: row.player_id,
+        name: seasonPlayerMap.get(row.player_id)?.name ?? row.player_id,
+        position: mapPosition(seasonPlayerMap.get(row.player_id)?.position ?? 'C'),
+        heightCm: seasonPlayerMap.get(row.player_id)?.height || undefined,
+        games: 0,
+        minutes: 0,
+        points: 0,
+        fga2: 0,
+        fgm2: 0,
+        fga3: 0,
+        fgm3: 0,
+        fta: 0,
+        ftm: 0,
+        oreb: 0,
+        dreb: 0,
+        ast: 0,
+        tov: 0,
+        stl: 0,
+        blk: 0,
+        val: 0,
+        roles: rolesByPlayerId.get(row.player_id) ?? [],
+      };
+
+      base.minutes += row.minutes || 0;
+      base.points += row.points || 0;
+      base.fga2 += (row.close_attempted || 0) + (row.mid_attempted || 0);
+      base.fgm2 += (row.close_made || 0) + (row.mid_made || 0);
+      base.fga3 += row.three_attempted || 0;
+      base.fgm3 += row.three_made || 0;
+      base.fta += row.free_throw_attempted || 0;
+      base.ftm += row.free_throw_made || 0;
+      base.oreb += row.offensive_rebounds || 0;
+      base.dreb += row.defensive_rebounds || 0;
+      base.ast += row.assists || 0;
+      base.tov += row.turnovers || 0;
+      base.stl += row.steals || 0;
+      base.blk += row.blocks || 0;
+      base.val += row.valuation || 0;
+      statsMap.set(row.player_id, base);
+
+      if (!gamesMap.has(row.player_id)) gamesMap.set(row.player_id, new Set());
+      gamesMap.get(row.player_id)!.add(row.game_id);
+    });
+
+    return Array.from(statsMap.values())
       .map(player => ({
-        playerId: player.id,
-        name: player.name,
-        position: mapPosition(player.position),
-        heightCm: player.height || undefined,
-        games: player.gamesPlayed || 0,
-        minutes: player.minutes || 0,
-        points: player.points || 0,
-        fga2: (player.shooting?.close?.attempted || 0) + (player.shooting?.mid?.attempted || 0),
-        fgm2: (player.shooting?.close?.made || 0) + (player.shooting?.mid?.made || 0),
-        fga3: player.shooting?.three?.attempted || 0,
-        fgm3: player.shooting?.three?.made || 0,
-        fta: player.shooting?.freeThrow?.attempted || 0,
-        ftm: player.shooting?.freeThrow?.made || 0,
-        oreb: player.rebounds?.offensive || 0,
-        dreb: player.rebounds?.defensive || 0,
-        ast: player.assists || 0,
-        tov: player.turnovers || 0,
-        stl: player.steals || 0,
-        blk: player.blocks || 0,
-        val: (() => {
-          const totalValuation = (player.valuation || 0) * (player.gamesPlayed || 0);
-          return totalValuation > 0 ? totalValuation : computeTotalValuation(player);
-        })(),
-        roles: rolesByPlayerId.get(player.id) ?? [],
-      }));
-  }, [rolesByPlayerId, seasonPlayers, selectedOpponentTeamId]);
+        ...player,
+        games: gamesMap.get(player.playerId)?.size ?? 0,
+      }))
+      .filter(player => (player.games || 0) >= MIN_PREGAME_GAMES)
+      .filter(player => seasonPlayerMap.get(player.playerId)?.isActive !== false);
+  }, [MIN_PREGAME_GAMES, MIN_RECENT_GAMES_TEAM, activeSeasonPlayers, playerGameStats, playerTeamMap, recentGameIdsByTeam, rolesByPlayerId, seasonPlayerMap, selectedOpponentTeamId, useRecentFormPregame]);
 
   const pregameOwnPlayers = useMemo<PlayerSeasonStat[]>(() => {
     if (!resolvedTeamId || resolvedTeamId === 'all') return [];
-    return seasonPlayers
-      .filter(player => player.teamId === resolvedTeamId)
-      .filter(player => player.isActive !== false)
-      .filter(player => (player.gamesPlayed || 0) >= MIN_PREGAME_GAMES)
+
+    const buildFromSeason = () =>
+      activeSeasonPlayers
+        .filter(player => player.teamId === resolvedTeamId)
+        .filter(player => (player.gamesPlayed || 0) >= MIN_PREGAME_GAMES)
+        .map(player => ({
+          playerId: player.id,
+          name: player.name,
+          position: mapPosition(player.position),
+          heightCm: player.height || undefined,
+          games: player.gamesPlayed || 0,
+          minutes: player.minutes || 0,
+          points: player.points || 0,
+          fga2: (player.shooting?.close?.attempted || 0) + (player.shooting?.mid?.attempted || 0),
+          fgm2: (player.shooting?.close?.made || 0) + (player.shooting?.mid?.made || 0),
+          fga3: player.shooting?.three?.attempted || 0,
+          fgm3: player.shooting?.three?.made || 0,
+          fta: player.shooting?.freeThrow?.attempted || 0,
+          ftm: player.shooting?.freeThrow?.made || 0,
+          oreb: player.rebounds?.offensive || 0,
+          dreb: player.rebounds?.defensive || 0,
+          ast: player.assists || 0,
+          tov: player.turnovers || 0,
+          stl: player.steals || 0,
+          blk: player.blocks || 0,
+          val: (() => {
+            const totalValuation = (player.valuation || 0) * (player.gamesPlayed || 0);
+            return totalValuation > 0 ? totalValuation : computeTotalValuation(player);
+          })(),
+          roles: rolesByPlayerId.get(player.id) ?? [],
+        }));
+
+    if (!useRecentFormPregame) return buildFromSeason();
+
+    const recentGameIds = recentGameIdsByTeam.get(resolvedTeamId) ?? [];
+    if (recentGameIds.length < MIN_RECENT_GAMES_TEAM) return buildFromSeason();
+    const recentGameSet = new Set(recentGameIds);
+    const statsMap = new Map<string, PlayerSeasonStat>();
+    const gamesMap = new Map<string, Set<string>>();
+
+    playerGameStats.forEach(row => {
+      if (!recentGameSet.has(row.game_id)) return;
+      const teamId = row.players?.team_id ?? playerTeamMap.get(row.player_id);
+      if (teamId !== resolvedTeamId) return;
+      if (seasonPlayerMap.get(row.player_id)?.isActive === false) return;
+
+      const base = statsMap.get(row.player_id) ?? {
+        playerId: row.player_id,
+        name: seasonPlayerMap.get(row.player_id)?.name ?? row.player_id,
+        position: mapPosition(seasonPlayerMap.get(row.player_id)?.position ?? 'C'),
+        heightCm: seasonPlayerMap.get(row.player_id)?.height || undefined,
+        games: 0,
+        minutes: 0,
+        points: 0,
+        fga2: 0,
+        fgm2: 0,
+        fga3: 0,
+        fgm3: 0,
+        fta: 0,
+        ftm: 0,
+        oreb: 0,
+        dreb: 0,
+        ast: 0,
+        tov: 0,
+        stl: 0,
+        blk: 0,
+        val: 0,
+        roles: rolesByPlayerId.get(row.player_id) ?? [],
+      };
+
+      base.minutes += row.minutes || 0;
+      base.points += row.points || 0;
+      base.fga2 += (row.close_attempted || 0) + (row.mid_attempted || 0);
+      base.fgm2 += (row.close_made || 0) + (row.mid_made || 0);
+      base.fga3 += row.three_attempted || 0;
+      base.fgm3 += row.three_made || 0;
+      base.fta += row.free_throw_attempted || 0;
+      base.ftm += row.free_throw_made || 0;
+      base.oreb += row.offensive_rebounds || 0;
+      base.dreb += row.defensive_rebounds || 0;
+      base.ast += row.assists || 0;
+      base.tov += row.turnovers || 0;
+      base.stl += row.steals || 0;
+      base.blk += row.blocks || 0;
+      base.val += row.valuation || 0;
+      statsMap.set(row.player_id, base);
+
+      if (!gamesMap.has(row.player_id)) gamesMap.set(row.player_id, new Set());
+      gamesMap.get(row.player_id)!.add(row.game_id);
+    });
+
+    return Array.from(statsMap.values())
       .map(player => ({
-        playerId: player.id,
-        name: player.name,
-        position: mapPosition(player.position),
-        heightCm: player.height || undefined,
-        games: player.gamesPlayed || 0,
-        minutes: player.minutes || 0,
-        points: player.points || 0,
-        fga2: (player.shooting?.close?.attempted || 0) + (player.shooting?.mid?.attempted || 0),
-        fgm2: (player.shooting?.close?.made || 0) + (player.shooting?.mid?.made || 0),
-        fga3: player.shooting?.three?.attempted || 0,
-        fgm3: player.shooting?.three?.made || 0,
-        fta: player.shooting?.freeThrow?.attempted || 0,
-        ftm: player.shooting?.freeThrow?.made || 0,
-        oreb: player.rebounds?.offensive || 0,
-        dreb: player.rebounds?.defensive || 0,
-        ast: player.assists || 0,
-        tov: player.turnovers || 0,
-        stl: player.steals || 0,
-        blk: player.blocks || 0,
-        val: (() => {
-          const totalValuation = (player.valuation || 0) * (player.gamesPlayed || 0);
-          return totalValuation > 0 ? totalValuation : computeTotalValuation(player);
-        })(),
-        roles: rolesByPlayerId.get(player.id) ?? [],
-      }));
-  }, [resolvedTeamId, rolesByPlayerId, seasonPlayers]);
+        ...player,
+        games: gamesMap.get(player.playerId)?.size ?? 0,
+      }))
+      .filter(player => (player.games || 0) >= MIN_PREGAME_GAMES)
+      .filter(player => seasonPlayerMap.get(player.playerId)?.isActive !== false);
+  }, [MIN_PREGAME_GAMES, MIN_RECENT_GAMES_TEAM, activeSeasonPlayers, playerGameStats, playerTeamMap, recentGameIdsByTeam, resolvedTeamId, rolesByPlayerId, seasonPlayerMap, useRecentFormPregame]);
 
   const pregameReport = useMemo(() => {
     if (!pregameBenchmarks || !pregameOwnTeam || !pregameOpponentTeam) return null;
@@ -1378,11 +1699,19 @@ export function SeasonComparison({
                   {Object.keys(displayTeamAnalysis.rosterSummary.roleCounts).length > 0 ? (
                     Object.entries(displayTeamAnalysis.rosterSummary.roleCounts).map(([role, count]) => (
                       <div key={role} className="text-sm text-slate-200">
-                        {count >= 3
-                          ? `${role}: redundáns (${count}) – rotációs előny, de szerepütközés lehetséges`
-                          : count === 0
-                            ? `${role}: hiány – taktikai opció nem elérhető`
-                            : `${role}: ${count}`}
+                        <div>
+                          {count >= 3
+                            ? `${role}: redundáns (${count}) – rotációs előny, de szerepütközés lehetséges`
+                            : count === 0
+                              ? `${role}: hiány – taktikai opció nem elérhető`
+                              : `${role}: ${count}`}
+                        </div>
+                        {count > 0 && (rolePlayersByRole.get(role)?.length ?? 0) > 0 && (
+                          <div className="text-xs text-slate-400">
+                            {rolePlayersByRole.get(role)!.slice(0, 4).join(', ')}
+                            {rolePlayersByRole.get(role)!.length > 4 ? '…' : ''}
+                          </div>
+                        )}
                       </div>
                     ))
                   ) : (
@@ -1437,6 +1766,19 @@ export function SeasonComparison({
                     ))}
                 </SelectContent>
               </Select>
+            </div>
+            <div className="flex items-end">
+              <Button
+                type="button"
+                size="sm"
+                variant={useRecentFormPregame ? 'default' : 'outline'}
+                onClick={() => setUseRecentFormPregame(value => !value)}
+                className={useRecentFormPregame
+                  ? 'bg-emerald-600 hover:bg-emerald-500 text-white'
+                  : 'border-slate-700 text-slate-300 hover:bg-slate-800'}
+              >
+                Utolsó 5 meccs formája
+              </Button>
             </div>
           </div>
 
