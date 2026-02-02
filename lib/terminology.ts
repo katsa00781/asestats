@@ -153,6 +153,26 @@ export const terminologySections: TerminologySection[] = [
         term: 'Energy Big',
         definition: 'Magas poszton energikus, lepattanózó és hustle-alapú szerepkör, rövid intenzív percekkel.',
       },
+      {
+        term: 'PG (Irányító)',
+        definition: 'A támadás elsődleges szervezője, labdafelhozatal és játéképítés fókusz.',
+      },
+      {
+        term: 'SG (Dobóhátvéd)',
+        definition: 'Periméter-scoring fókuszú hátvéd, aki képes labdával és labda nélkül is pontot szerezni.',
+      },
+      {
+        term: 'SF (Kiscsatár / Bedobó)',
+        definition: 'Wing poszt, kiegyensúlyozott támadó- és védekező feladatokkal, több szerepkör összehangolása.',
+      },
+      {
+        term: 'PF (Erőcsatár)',
+        definition: 'Fizikális belső poszt, lepattanózás és festékjáték fókusz, modern szerepben spacinget is adhat.',
+      },
+      {
+        term: 'C (Center)',
+        definition: 'A gyűrű körüli játék felelőse: rim protection, befejezések és lepattanózás.',
+      },
     ],
   },
   {

@@ -1778,8 +1778,25 @@ export function SeasonComparison({
                   <div className="text-sm text-slate-300 font-medium">Posztmegoszlás</div>
                   {(Object.entries(displayTeamAnalysis.rosterSummary.positionMinutesShare) as [string, number][])
                     .map(([pos, share]) => (
+                      {
+                        pos,
+                        share,
+                        label: pos === 'PG'
+                          ? 'Irányító'
+                          : pos === 'SG'
+                            ? 'Dobó'
+                            : pos === 'SF'
+                              ? 'Bedobó'
+                              : pos === 'PF'
+                                ? 'Erőcsatár'
+                                : pos === 'C'
+                                  ? 'Center'
+                                  : pos,
+                      }
+                    ))
+                    .map(({ pos, share, label }) => (
                       <div key={pos} className="text-sm text-slate-200">
-                        {pos}: {share.toFixed(1)}%
+                        {label}: {share.toFixed(1)}%
                       </div>
                     ))}
                   {displayTeamAnalysis.rosterSummary.avgHeightOverall && (
