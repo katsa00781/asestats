@@ -32,8 +32,8 @@ if (!SUPABASE_URL || (!SUPABASE_ANON_KEY && !SUPABASE_SERVICE_ROLE_KEY)) {
 
 const SUPABASE_KEY = SUPABASE_SERVICE_ROLE_KEY || SUPABASE_ANON_KEY;
 
-const HUNBASKET_SEASON_SLUG = process.env.HUNBASKET_SEASON_SLUG || 'x2526';
-const HUNBASKET_SEASON_NAME = process.env.HUNBASKET_SEASON_NAME || '2025/2026';
+const HUNBASKET_SEASON_SLUG = process.env.HUNBASKET_SEASON_SLUG || 'x2425';
+const HUNBASKET_SEASON_NAME = process.env.HUNBASKET_SEASON_NAME || '2024/2025';
 const HUNBASKET_SEASON_ID = process.env.HUNBASKET_SEASON_ID;
 const TEAM_FILTER = (process.env.HUNBASKET_TEAM_FILTER || '')
   .split(',')
@@ -245,7 +245,24 @@ const ensureTeam = async (name: string): Promise<TeamRecord> => {
 
 const resolveSeasonId = async (): Promise<string> => {
   if (HUNBASKET_SEASON_ID) {
-    return HUNBASKET_SEASON_ID;
+    const { data, error } = await supabase
+      .from('seasons')
+      .select('id, name')
+      .eq('id', HUNBASKET_SEASON_ID)
+      .single();
+
+    if (error || !data) {
+      throw new Error(`Nem található szezon a megadott HUNBASKET_SEASON_ID alapján: ${HUNBASKET_SEASON_ID}`);
+    }
+
+    if (HUNBASKET_SEASON_NAME && data.name !== HUNBASKET_SEASON_NAME) {
+      throw new Error(
+        `HUNBASKET_SEASON_ID (${data.name}) nem egyezik a HUNBASKET_SEASON_NAME értékkel (${HUNBASKET_SEASON_NAME}). ` +
+        'Frissítsd vagy töröld a HUNBASKET_SEASON_ID változót.'
+      );
+    }
+
+    return data.id;
   }
 
   const { data, error } = await supabase

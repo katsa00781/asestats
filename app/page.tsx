@@ -40,6 +40,7 @@ export type PlayerStats = {
   name: string;
   number: number;
   position: string;
+  isActive?: boolean;
   seasonId?: string;
   seasonName?: string;
   teamId?: string;
@@ -144,6 +145,7 @@ type SupabasePlayerStat = {
   position: string;
   season_id: string;
   season_name: string;
+  is_active?: boolean;
   birth_year?: number;
   height?: number;
   weight?: number;
@@ -342,6 +344,7 @@ export default function Home() {
               name: ps.name,
               number: ps.number,
               position: ps.position,
+              isActive: ps.is_active ?? true,
               seasonId: ps.season_id,
               seasonName: ps.season_name,
               teamId: ps.team_id,
@@ -544,6 +547,7 @@ export default function Home() {
             name: ps.name,
             number: ps.number,
             position: ps.position,
+            isActive: ps.is_active ?? true,
             seasonId: ps.season_id,
             seasonName: ps.season_name,
             teamId: ps.team_id,

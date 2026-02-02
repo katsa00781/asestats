@@ -440,6 +440,8 @@ export function SeasonComparison({
   const [incomingPlayer, setIncomingPlayer] = useState<IncomingPlayerInput>(DEFAULT_INCOMING_PLAYER);
   const [focusedIncomingField, setFocusedIncomingField] = useState<IncomingField | null>(null);
 
+  const MIN_PREGAME_GAMES = 4;
+
   const resolvedSeasonId = selectedSeasonId || currentSeasonId || allSeasons[0]?.id || '';
   const resolvedTeamId = selectedTeamId || currentTeamId || 'all';
 
@@ -736,6 +738,8 @@ export function SeasonComparison({
     if (!selectedOpponentTeamId) return [];
     return seasonPlayers
       .filter(player => player.teamId === selectedOpponentTeamId)
+      .filter(player => player.isActive !== false)
+      .filter(player => (player.gamesPlayed || 0) >= MIN_PREGAME_GAMES)
       .map(player => ({
         playerId: player.id,
         name: player.name,
@@ -768,6 +772,8 @@ export function SeasonComparison({
     if (!resolvedTeamId || resolvedTeamId === 'all') return [];
     return seasonPlayers
       .filter(player => player.teamId === resolvedTeamId)
+      .filter(player => player.isActive !== false)
+      .filter(player => (player.gamesPlayed || 0) >= MIN_PREGAME_GAMES)
       .map(player => ({
         playerId: player.id,
         name: player.name,
