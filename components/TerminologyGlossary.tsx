@@ -21,37 +21,43 @@ export function TerminologyGlossary() {
   return (
     <Card className="bg-slate-900 border-slate-800">
       <CardHeader>
-        <CardTitle className="text-slate-50">Kosárlabda elemzési terminológiai szótár</CardTitle>
-        <p className="text-xs text-slate-400">
-          Egységes fogalmi keret a csapat- és játékoselemzések értelmezéséhez.
-        </p>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {terminologySections.map(section => (
-          <details key={section.id} className="rounded-lg border border-slate-800 bg-slate-950/40">
-            <summary className="cursor-pointer select-none px-4 py-3 text-sm font-semibold text-slate-200 flex items-center justify-between">
-              <span>{section.title}</span>
-              <span className="text-xs text-slate-400">{section.entries.length} fogalom</span>
-            </summary>
-            <div className="px-4 pb-4 space-y-3">
-              {section.entries.map(entry => (
-                <details key={entry.term} className="rounded-md border border-slate-800 bg-slate-900/60">
-                  <summary className="cursor-pointer select-none px-3 py-2 text-sm font-semibold text-orange-300">
-                    {entry.term}
+        <details className="group">
+          <summary className="cursor-pointer select-none">
+            <CardTitle className="text-slate-50">Kosárlabda elemzési terminológiai szótár</CardTitle>
+            <p className="text-xs text-slate-400 mt-1">
+              Egységes fogalmi keret a csapat- és játékoselemzések értelmezéséhez.
+            </p>
+          </summary>
+          <div className="mt-4">
+            <CardContent className="space-y-4">
+              {terminologySections.map(section => (
+                <details key={section.id} className="rounded-lg border border-slate-800 bg-slate-950/40">
+                  <summary className="cursor-pointer select-none px-4 py-3 text-sm font-semibold text-slate-200 flex items-center justify-between">
+                    <span>{section.title}</span>
+                    <span className="text-xs text-slate-400">{section.entries.length} fogalom</span>
                   </summary>
-                  <div className="px-3 pb-3 space-y-2">
-                    <div className="text-xs text-slate-300">{entry.definition}</div>
-                    {renderList(entry.coverage, 'Statisztikai lefedés')}
-                    {renderList(entry.conditions, 'Alkalmazási feltétel')}
-                    {renderList(entry.metrics, 'Mutatók / Proxy mutatók')}
-                    {renderList(entry.notes, 'Megjegyzés')}
+                  <div className="px-4 pb-4 space-y-3">
+                    {section.entries.map(entry => (
+                      <details key={entry.term} className="rounded-md border border-slate-800 bg-slate-900/60">
+                        <summary className="cursor-pointer select-none px-3 py-2 text-sm font-semibold text-orange-300">
+                          {entry.term}
+                        </summary>
+                        <div className="px-3 pb-3 space-y-2">
+                          <div className="text-xs text-slate-300">{entry.definition}</div>
+                          {renderList(entry.coverage, 'Statisztikai lefedés')}
+                          {renderList(entry.conditions, 'Alkalmazási feltétel')}
+                          {renderList(entry.metrics, 'Mutatók / Proxy mutatók')}
+                          {renderList(entry.notes, 'Megjegyzés')}
+                        </div>
+                      </details>
+                    ))}
                   </div>
                 </details>
               ))}
-            </div>
-          </details>
-        ))}
-      </CardContent>
+            </CardContent>
+          </div>
+        </details>
+      </CardHeader>
     </Card>
   );
 }
