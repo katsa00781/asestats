@@ -217,7 +217,7 @@ export const terminologySections: TerminologySection[] = [
         term: 'Szótár célja',
         definition:
           'Egységes nyelvezetet biztosít az app teljes kimenetében, csökkenti a szubjektív megfogalmazást, és lehetővé teszi a későbbi automatizált report-generálást.',
-        notes: ['Verziózás és liga-specifikus finomítás javasolt.'],
+        notes: ['NBI/A-hoz optimalizált nyelvezet és küszöbök (tempó, volumenelemzés, szerepkörök).', 'Verziózás javasolt a későbbi változások követéséhez.'],
       },
     ],
   },
