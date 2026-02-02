@@ -127,6 +127,16 @@ export type PostGameReport = {
   summary: string;
 };
 
+export type PostGameInterpretation = {
+  gameContext: string;
+  decisiveFactors: string;
+  playerImpact: string;
+  strengths: string;
+  problems: string;
+  nextFocus: string;
+  summary: string;
+};
+
 export type PostGameMetric = {
   key: string;
   label: string;
@@ -556,6 +566,126 @@ const buildSummary = (
 
   const noteText = dataNotes.length > 0 ? `Megjegyzés: ${dataNotes.join(' ')}.` : '';
   return `${teamName} ${result === 'win' ? 'megnyerte' : 'elveszítette'} a mérkőzést ${opponentName} ellen. Tempó: ${tempoText}, a csapat ${offenseText}, és ${defenseText}. ${decisiveText ? `Döntő faktorok: ${decisiveText}.` : ''} ${impactText} ${focusText} ${noteText}`.trim();
+};
+
+const interpretGameContext = (context: PostGameReport['context']) => {
+  const tempoText = context.paceDelta === 'Higher'
+    ? 'A csapat a szezonátlagnál gyorsabb tempót diktált'
+    : context.paceDelta === 'Lower'
+      ? 'A mérkőzés tempója a szezonátlagnál lassabb volt'
+      : 'A tempó a szezonátlag körül mozgott';
+
+  const offenseText = context.offenseEfficiencyDelta === 'Higher'
+    ? 'támadásban a szezonátlagnál hatékonyabb megoldásokat talált'
+    : context.offenseEfficiencyDelta === 'Lower'
+      ? 'támadásban a szezonátlaghoz képest visszaesett a hatékonyság'
+      : 'támadásban a szezonátlagos hatékonyság érvényesült';
+
+  const defenseText = context.defenseEfficiencyDelta === 'Higher'
+    ? 'védekezésben a szezonátlagnál stabilabb teljesítményt hozott'
+    : context.defenseEfficiencyDelta === 'Lower'
+      ? 'védekezésben a szezonátlaghoz képest gyengébb kontrollt mutatott'
+      : 'védekezésben átlagos szintet tartott';
+
+  return `${tempoText}, miközben ${offenseText}. ${defenseText}.`;
+};
+
+const interpretDecisiveFactors = (decisive: PostGameReport['decisiveFactors']) => {
+  const offense = decisive.offense.slice(0, 2);
+  const defense = decisive.defense.slice(0, 2);
+  const offenseCount = decisive.offense.length;
+  const defenseCount = decisive.defense.length;
+
+  const dominance = offenseCount > defenseCount
+    ? 'A támadás döntött.'
+    : defenseCount > offenseCount
+      ? 'A védekezés döntött.'
+      : 'Komplex mérkőzéskép alakult ki.';
+
+  const highlights = [
+    offense.length > 0 ? `Támadás: ${offense.join('; ')}.` : '',
+    defense.length > 0 ? `Védekezés: ${defense.join('; ')}.` : '',
+  ].filter(Boolean).join(' ');
+
+  return `${dominance} ${highlights}`.trim();
+};
+
+const interpretPlayerImpact = (impact: PostGameReport['playerImpact']) => {
+  const positiveText = impact.positive.length > 0
+    ? `Pozitív hatás: ${impact.positive.join(', ')} (alacsonyabb usage mellett értékes VAL hozzájárulás).`
+    : 'Pozitív hatás: nincs egyértelmű kiemelés.';
+  const negativeText = impact.negative.length > 0
+    ? `Negatív hatás: ${impact.negative.join(', ')} (magas usage mellett alacsony VAL).`
+    : 'Negatív hatás: nincs egyértelmű kiemelés.';
+  const overText = impact.overperformers.length > 0
+    ? `Meccs-szintű kiugrás: ${impact.overperformers.join(', ')}.`
+    : '';
+  const underText = impact.underperformers.length > 0
+    ? `Meccs-szintű visszaesés: ${impact.underperformers.join(', ')}.`
+    : '';
+
+  return [positiveText, negativeText, overText, underText].filter(Boolean).join(' ');
+};
+
+const interpretStrengths = (strengths: string[]) => {
+  const filtered = strengths.filter(item => item.includes('szezonátlag felett') || item.includes('liga felett'));
+  if (filtered.length === 0) return 'Erősségek: nem volt stabil, szezon vagy liga feletti mutató.';
+  return `Erősségek: ${filtered.join('; ')}.`;
+};
+
+const interpretProblems = (problems: string[]) => {
+  if (problems.length === 0) return 'Problémák: nem volt kiemelt strukturális limitáció.';
+  const mapped = problems.map(item => {
+    if (item.includes('labdaeladás') || item.includes('TO')) return 'döntéshozatali és labdabiztonsági limitáció';
+    if (item.includes('dobáshatékonyság')) return 'shot quality és befejezési hatékonyság ingadozás';
+    if (item.includes('3P')) return 'spacing és periméter-hatékonysági limitáció';
+    if (item.includes('Festék')) return 'festékből érkező befejezések minősége';
+    if (item.includes('assziszt')) return 'labdajáratás folyamatossága';
+    return 'strukturális végrehajtási limitáció';
+  });
+  const unique = Array.from(new Set(mapped)).slice(0, 2);
+  return `Problémák: ${unique.join('; ')}.`;
+};
+
+const interpretNextFocus = (nextFocus: string[]) => {
+  if (nextFocus.length === 0) return 'Következő fókusz: nincs kiemelt azonnali beavatkozás.';
+  const items = nextFocus.slice(0, 2).map(item => item.replace(/ /g, '').trim());
+  return `Következő fókusz: ${items.join(' • ')}.`;
+};
+
+const interpretExecutiveSummary = (
+  report: PostGameReport,
+  decisiveText: string,
+  nextFocusText: string
+) => {
+  const tempoText = report.context.paceDelta === 'Higher'
+    ? 'gyorsabb tempó'
+    : report.context.paceDelta === 'Lower'
+      ? 'lassabb tempó'
+      : 'szezonátlagos tempó';
+  const decisiveCore = decisiveText.split('.').shift()?.trim() || 'Komplex mérkőzéskép';
+  const focusCore = nextFocusText.replace('Következő fókusz: ', '').replace(/ /g, '');
+  return `${report.teamName} ${report.result === 'win' ? 'megnyerte' : 'elveszítette'} a mérkőzést ${report.opponentName} ellen ${tempoText} mellett. ${decisiveCore}. ${focusCore}`.trim();
+};
+
+export const interpretPostGameReport = (report: PostGameReport): PostGameInterpretation => {
+  const gameContext = interpretGameContext(report.context);
+  const decisiveFactors = interpretDecisiveFactors(report.decisiveFactors);
+  const playerImpact = interpretPlayerImpact(report.playerImpact);
+  const strengths = interpretStrengths(report.strengths);
+  const problems = interpretProblems(report.problems);
+  const nextFocus = interpretNextFocus(report.nextFocus);
+  const summary = interpretExecutiveSummary(report, decisiveFactors, nextFocus);
+
+  return {
+    gameContext,
+    decisiveFactors,
+    playerImpact,
+    strengths,
+    problems,
+    nextFocus,
+    summary,
+  };
 };
 
 const buildPostgameMetrics = (

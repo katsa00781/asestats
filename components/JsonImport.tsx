@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 
 type JsonImportProps = {
   onImportComplete?: () => void;
+  selectedSeasonId?: string | null;
   lastImportedGame?: {
     date: string;
     homeTeamName: string;
@@ -71,7 +72,7 @@ type ParsedPlayerData = {
   plusMinus: number;
 };
 
-export function JsonImport({ onImportComplete, lastImportedGame }: JsonImportProps) {
+export function JsonImport({ onImportComplete, lastImportedGame, selectedSeasonId: preferredSeasonId }: JsonImportProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [useExistingGame, setUseExistingGame] = useState(false);
   const [selectedGameId, setSelectedGameId] = useState('');
@@ -94,6 +95,12 @@ export function JsonImport({ onImportComplete, lastImportedGame }: JsonImportPro
   const [showPreview, setShowPreview] = useState(false);
   const [previewData, setPreviewData] = useState<ParsedPlayerData[]>([]);
 
+  useEffect(() => {
+    if (preferredSeasonId && preferredSeasonId !== selectedSeasonId) {
+      setSelectedSeasonId(preferredSeasonId);
+    }
+  }, [preferredSeasonId, selectedSeasonId]);
+
   // Szezonok és csapatok betöltése
   useEffect(() => {
     async function fetchData() {
@@ -108,8 +115,13 @@ export function JsonImport({ onImportComplete, lastImportedGame }: JsonImportPro
 
         if (seasonsData && seasonsData.length > 0) {
           setSeasons(seasonsData);
+          const preferredSeason = preferredSeasonId
+            ? seasonsData.find((s: Season) => s.id === preferredSeasonId)
+            : undefined;
           const currentSeason = seasonsData.find((s: Season) => s.is_current);
-          if (currentSeason) {
+          if (preferredSeason) {
+            setSelectedSeasonId(preferredSeason.id);
+          } else if (currentSeason) {
             setSelectedSeasonId(currentSeason.id);
           } else {
             setSelectedSeasonId(seasonsData[0].id);
@@ -1215,7 +1227,7 @@ export function JsonImport({ onImportComplete, lastImportedGame }: JsonImportPro
                       return (
                         <tr key={idx} className={`border-b border-slate-800 ${isTotal ? 'bg-slate-700/50 font-semibold' : 'hover:bg-slate-800/50'}`}>
                           <td className="p-2 text-slate-300 sticky left-0 bg-slate-900">{isTotal ? '-' : player.number}</td>
-                          <td className="p-2 text-slate-100 sticky left-8 bg-slate-900 min-w-[120px]">{isTotal ? 'ÖSSZESÍTETT' : player.name}</td>
+                          <td className="p-2 text-slate-100 sticky left-8 bg-slate-900 min-w-30">{isTotal ? 'ÖSSZESÍTETT' : player.name}</td>
                           <td className="text-right p-2 text-slate-100 font-semibold bg-slate-800">{player.points}</td>
                           <td className="text-right p-2 text-slate-300 bg-slate-800">{player.minutes}</td>
                           <td className="text-right p-2 text-slate-400 border-l border-slate-800">{player.closeMade}/{player.closeAttempted}</td>

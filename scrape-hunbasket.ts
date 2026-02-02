@@ -482,31 +482,18 @@ const ensurePlayerRecord = async (player: PlayerStats, teamId: string, seasonId:
 
   const { data: existingPlayers, error } = await supabase
     .from('players')
-    .select('id, team_id')
+    .select('id')
     .eq('name', playerName)
-    .eq('season_id', seasonId);
+    .eq('season_id', seasonId)
+    .eq('team_id', teamId);
 
   if (error) {
     throw new Error(`Játékos lekérdezési hiba (${playerName}): ${error.message}`);
   }
 
-  const exact = existingPlayers?.find(p => p.team_id === teamId);
+  const exact = existingPlayers?.[0];
   if (exact) {
     return exact.id;
-  }
-
-  const firstMatch = existingPlayers?.[0];
-  if (firstMatch) {
-    const { error: moveError } = await supabase
-      .from('players')
-      .update({ team_id: teamId, number: player.number })
-      .eq('id', firstMatch.id);
-
-    if (moveError) {
-      throw new Error(`Játékos mozgatási hiba (${playerName}): ${moveError.message}`);
-    }
-
-    return firstMatch.id;
   }
 
   const { data: inserted, error: insertError } = await supabase

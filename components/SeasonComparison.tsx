@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { Bar, BarChart, CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
@@ -14,6 +14,7 @@ import {
   computeSimilarity,
   isEligibleSample,
   normalizePlayerStats,
+  buildCoachSummary,
   type LeagueBenchmarks,
   type PlayerAnalysis,
   type Position,
@@ -130,7 +131,59 @@ const SKILL_LABELS_HU: Record<string, string> = {
   efficiency: 'Hatékonyság',
 };
 
+const RECENT_GAMES_WINDOW = 5;
+
+const roundValue = (value: number, digits = 1) => {
+  const factor = Math.pow(10, digits);
+  return Math.round(value * factor) / factor;
+};
+
+const stdDev = (values: number[]) => {
+  if (values.length < 2) return 0;
+  const mean = values.reduce((sum, value) => sum + value, 0) / values.length;
+  const variance = values.reduce((sum, value) => sum + Math.pow(value - mean, 2), 0) / values.length;
+  return Math.sqrt(variance);
+};
+
+const buildTeamGameMetrics = (rows: GamePlayerStatRow[]) => {
+  const totals = rows.reduce(
+    (acc, row) => {
+      acc.fga2 += (row.close_attempted || 0) + (row.mid_attempted || 0);
+      acc.fgm2 += (row.close_made || 0) + (row.mid_made || 0);
+      acc.fga3 += row.three_attempted || 0;
+      acc.fgm3 += row.three_made || 0;
+      acc.fta += row.free_throw_attempted || 0;
+      acc.tov += row.turnovers || 0;
+      return acc;
+    },
+    { fga2: 0, fgm2: 0, fga3: 0, fgm3: 0, fta: 0, tov: 0 }
+  );
+
+  const fga = totals.fga2 + totals.fga3;
+  const pace = fga + 0.44 * totals.fta + totals.tov;
+  const threePct = totals.fga3 > 0 ? (totals.fgm3 / totals.fga3) * 100 : 0;
+  const turnoverRate = pace > 0 ? totals.tov / pace : 0;
+
+  return {
+    pace,
+    threePct,
+    turnoverRate,
+  };
+};
+
 const getPositionLabel = (position: Position) => POSITION_LABELS[position] ?? position;
+
+const buildSimilarityReason = (base: PlayerAnalysis, other: PlayerAnalysis) => {
+  const sharedRoles = base.roles.filter(role => other.roles.includes(role)).slice(0, 1);
+  const sharedSkills = (Object.keys(base.skillScores) as Array<keyof PlayerAnalysis['skillScores']>)
+    .filter(key => base.skillScores[key] >= 70 && other.skillScores[key] >= 70)
+    .slice(0, 2)
+    .map(key => SKILL_LABELS_HU[key] ?? key);
+
+  const parts = [...sharedRoles, ...sharedSkills].filter(Boolean);
+  if (parts.length === 0) return 'profil-azonosság';
+  return parts.join(', ');
+};
 
 const getConfidenceTone = (confidence: PlayerAnalysis['confidence']) => {
   switch (confidence) {
@@ -395,7 +448,9 @@ export function SeasonComparison({
 
   const seasonPlayers = useMemo(() => {
     if (!resolvedSeasonId) return [];
-    return allPlayers.filter(player => String(player.seasonId ?? '') === String(resolvedSeasonId));
+    return allPlayers.filter(player => {
+      return String(player.seasonId ?? '') === String(resolvedSeasonId);
+    });
   }, [allPlayers, resolvedSeasonId]);
 
   const filteredPlayers = useMemo(() => {
@@ -409,6 +464,22 @@ export function SeasonComparison({
     if (!selectedPlayerId) return null;
     return seasonPlayers.find(player => player.id === selectedPlayerId) || null;
   }, [seasonPlayers, selectedPlayerId]);
+
+  const lastFiveGames = useMemo(() => {
+    if (!selectedPlayer) return [];
+    return playerGameStats
+      .filter(row => row.player_id === selectedPlayer.id)
+      .filter(row => {
+        if (!resolvedSeasonId) return true;
+        return String(row.games?.season_id ?? '') === String(resolvedSeasonId);
+      })
+      .sort((a, b) => {
+        const aDate = a.games?.date ? new Date(a.games.date).getTime() : 0;
+        const bDate = b.games?.date ? new Date(b.games.date).getTime() : 0;
+        return bDate - aDate;
+      })
+      .slice(0, 5);
+  }, [playerGameStats, resolvedSeasonId, selectedPlayer]);
 
   const benchmarks = useMemo<LeagueBenchmarks | null>(() => {
     if (!resolvedSeasonId || seasonPlayers.length === 0) return null;
@@ -534,6 +605,46 @@ export function SeasonComparison({
     currentTeamPlayers.forEach(player => set.add(player.id));
     return set;
   }, [currentTeamPlayers]);
+
+  const recentGameMetrics = useMemo(() => {
+    if (!resolvedTeamId) return [];
+    const recentGames = games.slice(0, RECENT_GAMES_WINDOW);
+    return recentGames
+      .map(game => {
+        const rows = playerGameStats.filter(row => (
+          row.game_id === game.id
+          && (row.players?.team_id === resolvedTeamId
+            || currentTeamPlayerIds.has(row.player_id)
+            || playerTeamMap.get(row.player_id) === resolvedTeamId)
+        ));
+        if (rows.length === 0) return null;
+        return buildTeamGameMetrics(rows);
+      })
+      .filter((item): item is ReturnType<typeof buildTeamGameMetrics> => Boolean(item));
+  }, [currentTeamPlayerIds, games, playerGameStats, playerTeamMap, resolvedTeamId]);
+
+  const consistencyInsights = useMemo(() => {
+    if (recentGameMetrics.length < 3) return [];
+    const paceStd = stdDev(recentGameMetrics.map(item => item.pace));
+    const threePctStd = stdDev(recentGameMetrics.map(item => item.threePct));
+    const turnoverStd = stdDev(recentGameMetrics.map(item => item.turnoverRate));
+
+    const isHigh = paceStd >= 4 || threePctStd >= 6 || turnoverStd >= 0.04;
+    if (!isHigh) return [];
+
+    return [
+      `Inkonzisztens teljesítmény (utolsó ${recentGameMetrics.length} meccs szórás: Pace ${roundValue(paceStd, 1)}, 3P% ${roundValue(threePctStd, 1)}, TO ${roundValue(turnoverStd * 100, 1)}%).`,
+    ];
+  }, [recentGameMetrics]);
+
+  const displayTeamAnalysis = useMemo<TeamAnalysis | null>(() => {
+    if (!teamAnalysis) return null;
+    if (consistencyInsights.length === 0) return teamAnalysis;
+    return {
+      ...teamAnalysis,
+      rosterInsights: [...teamAnalysis.rosterInsights, ...consistencyInsights],
+    };
+  }, [consistencyInsights, teamAnalysis]);
 
   const pregameBenchmarks = useMemo(() => {
     if (teamSeasonStats.length === 0) return null;
@@ -879,10 +990,24 @@ export function SeasonComparison({
         name: item.raw.name,
         season: item.raw.season,
         similarity: computeSimilarity(analysis, item.analysis),
+        reason: buildSimilarityReason(analysis, item.analysis),
       }))
       .sort((a, b) => b.similarity - a.similarity)
       .slice(0, 3);
   }, [analysis, benchmarks, league, seasonPlayers, selectedPlayer, resolvedSeasonId]);
+
+  const lastFiveChartData = useMemo(() => {
+    return lastFiveGames
+      .slice(0, 5)
+      .map(game => ({
+        label: game.games?.date
+          ? new Date(game.games.date).toLocaleDateString('hu-HU', { month: 'short', day: 'numeric' })
+          : 'N/A',
+        val: game.valuation,
+        minutes: game.minutes,
+      }))
+      .reverse();
+  }, [lastFiveGames]);
 
   const eligibleCount = useMemo(() => {
     if (!resolvedSeasonId) return 0;
@@ -1019,6 +1144,7 @@ export function SeasonComparison({
                 </div>
 
                 <div className="text-sm text-slate-200 leading-relaxed">{analysis.summary}</div>
+                <div className="text-sm text-slate-300">{buildCoachSummary(analysis)}</div>
 
                 <div className="flex flex-wrap items-center gap-3 text-xs">
                   <span className={`font-semibold ${getConfidenceTone(analysis.confidence)}`}>
@@ -1050,45 +1176,97 @@ export function SeasonComparison({
                 ))}
               </CardContent>
             </Card>
+
+            <Card className="bg-slate-900 border-slate-800">
+              <CardHeader>
+                <CardTitle className="text-slate-50">Last 5 Trend (VAL / perc)</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {lastFiveChartData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={220}>
+                    <LineChart data={lastFiveChartData} margin={{ left: 8, right: 16 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
+                      <XAxis dataKey="label" stroke="#94a3b8" />
+                      <YAxis stroke="#94a3b8" />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: '#1e293b',
+                          border: '1px solid #334155',
+                          borderRadius: '8px',
+                          color: '#f1f5f9',
+                        }}
+                      />
+                      <Line type="monotone" dataKey="val" stroke="#22c55e" strokeWidth={2} dot={{ r: 3 }} name="VAL" />
+                      <Line type="monotone" dataKey="minutes" stroke="#38bdf8" strokeWidth={2} dot={{ r: 3 }} name="Perc" />
+                    </LineChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="text-sm text-slate-400">Nincs elérhető meccs adat.</div>
+                )}
+              </CardContent>
+            </Card>
           </div>
 
           <div className="space-y-6">
             <Card className="bg-slate-900 border-slate-800">
               <CardHeader>
-                <CardTitle className="text-slate-50">Erősségek</CardTitle>
+                <CardTitle className="text-slate-50">Last 5 Games Performance</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-2 text-sm text-slate-200">
-                {analysis.strengths.length > 0 ? (
-                  analysis.strengths.map(item => <div key={item}>• {item}</div>)
+              <CardContent className="space-y-3 text-sm">
+                {lastFiveGames.length > 0 ? (
+                  lastFiveGames.map(game => (
+                    <div key={game.id} className="rounded-lg border border-slate-800 bg-slate-900/40 p-3">
+                      <div className="flex items-center justify-between text-slate-200">
+                        <span>{game.games?.opponent ?? 'Ismeretlen ellenfél'}</span>
+                        <span className="text-xs text-slate-400">
+                          {game.games?.date ? new Date(game.games.date).toLocaleDateString('hu-HU') : 'Ismeretlen dátum'}
+                        </span>
+                      </div>
+                      <div className="mt-2 grid grid-cols-3 gap-2 text-xs text-slate-300">
+                        <div>PTS: {game.points}</div>
+                        <div>MIN: {game.minutes}</div>
+                        <div>VAL: {game.valuation}</div>
+                        <div>REB: {game.total_rebounds}</div>
+                        <div>AST: {game.assists}</div>
+                        <div>TO: {game.turnovers}</div>
+                      </div>
+                    </div>
+                  ))
                 ) : (
-                  <div className="text-slate-400">Nincs kiemelt erősség.</div>
+                  <div className="text-slate-400">Nincs elérhető meccs adat az utolsó 5 mérkőzéshez.</div>
                 )}
               </CardContent>
             </Card>
 
             <Card className="bg-slate-900 border-slate-800">
               <CardHeader>
-                <CardTitle className="text-slate-50">Limitációk</CardTitle>
+                <CardTitle className="text-slate-50">Összegzett értékelés</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-2 text-sm text-slate-200">
-                {analysis.limitations.length > 0 ? (
-                  analysis.limitations.map(item => <div key={item}>• {item}</div>)
-                ) : (
-                  <div className="text-slate-400">Nincs kiemelt limitáció.</div>
-                )}
-              </CardContent>
-            </Card>
-
-            <Card className="bg-slate-900 border-slate-800">
-              <CardHeader>
-                <CardTitle className="text-slate-50">Javítandó pontok</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2 text-sm text-slate-200">
-                {analysis.improvements.length > 0 ? (
-                  analysis.improvements.map(item => <div key={item}>• {item}</div>)
-                ) : (
-                  <div className="text-slate-400">Nincs kiemelt javítandó pont.</div>
-                )}
+              <CardContent className="grid grid-cols-1 gap-4 text-sm sm:grid-cols-2 lg:grid-cols-3">
+                <div className="space-y-2 text-slate-200">
+                  <div className="text-slate-300 font-medium">Erősségek</div>
+                  {analysis.strengths.length > 0 ? (
+                    analysis.strengths.map(item => <div key={item}>• {item}</div>)
+                  ) : (
+                    <div className="text-slate-400">Nincs kiemelt erősség.</div>
+                  )}
+                </div>
+                <div className="space-y-2 text-slate-200">
+                  <div className="text-slate-300 font-medium">Limitációk</div>
+                  {analysis.limitations.length > 0 ? (
+                    analysis.limitations.map(item => <div key={item}>• {item}</div>)
+                  ) : (
+                    <div className="text-slate-400">Nincs kiemelt limitáció.</div>
+                  )}
+                </div>
+                <div className="space-y-2 text-slate-200">
+                  <div className="text-slate-300 font-medium">Javítandó pontok</div>
+                  {analysis.improvements.length > 0 ? (
+                    analysis.improvements.map(item => <div key={item}>• {item}</div>)
+                  ) : (
+                    <div className="text-slate-400">Nincs kiemelt javítandó pont.</div>
+                  )}
+                </div>
               </CardContent>
             </Card>
 
@@ -1101,7 +1279,7 @@ export function SeasonComparison({
                   similarityList.map(item => (
                     <div key={item.playerId} className="flex items-center justify-between text-slate-200">
                       <span>{item.name}</span>
-                      <span className="text-slate-400">{(item.similarity * 100).toFixed(0)}%</span>
+                      <span className="text-slate-400">{(item.similarity * 100).toFixed(0)}% – {item.reason}</span>
                     </div>
                   ))
                 ) : (
@@ -1124,28 +1302,28 @@ export function SeasonComparison({
             </div>
           )}
 
-          {resolvedTeamId !== 'all' && !teamAnalysis && (
+          {resolvedTeamId !== 'all' && !displayTeamAnalysis && (
             <div className="text-sm text-slate-300">
               Nincs elég adat a csapat elemzéséhez.
             </div>
           )}
 
-          {resolvedTeamId !== 'all' && teamAnalysis && (
+          {resolvedTeamId !== 'all' && displayTeamAnalysis && (
             <div className="space-y-4">
-              <div className="text-sm text-slate-200 leading-relaxed">{teamAnalysis.summary}</div>
+              <div className="text-sm text-slate-200 leading-relaxed">{displayTeamAnalysis.summary}</div>
 
               <div className="flex flex-wrap gap-2">
-                {teamAnalysis.style.offense.map(style => (
+                {displayTeamAnalysis.style.offense.map(style => (
                   <Badge key={style} className="bg-cyan-600/20 text-cyan-200 border border-cyan-600/40">
                     {style}
                   </Badge>
                 ))}
-                {teamAnalysis.style.defense.map(style => (
+                {displayTeamAnalysis.style.defense.map(style => (
                   <Badge key={style} className="bg-emerald-600/20 text-emerald-200 border border-emerald-600/40">
                     {style}
                   </Badge>
                 ))}
-                {teamAnalysis.style.offense.length === 0 && teamAnalysis.style.defense.length === 0 && (
+                {displayTeamAnalysis.style.offense.length === 0 && displayTeamAnalysis.style.defense.length === 0 && (
                   <Badge variant="secondary" className="bg-slate-800 text-slate-200">
                     Nincs egyértelmű stílusprofil
                   </Badge>
@@ -1155,16 +1333,16 @@ export function SeasonComparison({
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <div className="text-sm text-slate-300 font-medium">Erősségek</div>
-                  {teamAnalysis.strengths.length > 0 ? (
-                    teamAnalysis.strengths.map(item => <div key={item} className="text-sm text-slate-200">• {item}</div>)
+                  {displayTeamAnalysis.strengths.length > 0 ? (
+                    displayTeamAnalysis.strengths.map(item => <div key={item} className="text-sm text-slate-200">• {item}</div>)
                   ) : (
                     <div className="text-sm text-slate-400">Nincs kiemelt erősség.</div>
                   )}
                 </div>
                 <div className="space-y-2">
                   <div className="text-sm text-slate-300 font-medium">Limitációk</div>
-                  {teamAnalysis.limitations.length > 0 ? (
-                    teamAnalysis.limitations.map(item => <div key={item} className="text-sm text-slate-200">• {item}</div>)
+                  {displayTeamAnalysis.limitations.length > 0 ? (
+                    displayTeamAnalysis.limitations.map(item => <div key={item} className="text-sm text-slate-200">• {item}</div>)
                   ) : (
                     <div className="text-sm text-slate-400">Nincs kiemelt limitáció.</div>
                   )}
@@ -1174,24 +1352,28 @@ export function SeasonComparison({
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <div className="text-sm text-slate-300 font-medium">Posztmegoszlás</div>
-                  {(Object.entries(teamAnalysis.rosterSummary.positionMinutesShare) as [string, number][])
+                  {(Object.entries(displayTeamAnalysis.rosterSummary.positionMinutesShare) as [string, number][])
                     .map(([pos, share]) => (
                       <div key={pos} className="text-sm text-slate-200">
                         {pos}: {share.toFixed(1)}%
                       </div>
                     ))}
-                  {teamAnalysis.rosterSummary.avgHeightOverall && (
+                  {displayTeamAnalysis.rosterSummary.avgHeightOverall && (
                     <div className="text-xs text-slate-400">
-                      Átlagmagasság: {teamAnalysis.rosterSummary.avgHeightOverall.toFixed(1)} cm
+                      Átlagmagasság: {displayTeamAnalysis.rosterSummary.avgHeightOverall.toFixed(1)} cm
                     </div>
                   )}
                 </div>
                 <div className="space-y-2">
                   <div className="text-sm text-slate-300 font-medium">Role-megoszlás</div>
-                  {Object.keys(teamAnalysis.rosterSummary.roleCounts).length > 0 ? (
-                    Object.entries(teamAnalysis.rosterSummary.roleCounts).map(([role, count]) => (
+                  {Object.keys(displayTeamAnalysis.rosterSummary.roleCounts).length > 0 ? (
+                    Object.entries(displayTeamAnalysis.rosterSummary.roleCounts).map(([role, count]) => (
                       <div key={role} className="text-sm text-slate-200">
-                        {role}: {count}
+                        {count >= 3
+                          ? `${role}: redundáns (${count}) – rotációs előny, de szerepütközés lehetséges`
+                          : count === 0
+                            ? `${role}: hiány – taktikai opció nem elérhető`
+                            : `${role}: ${count}`}
                       </div>
                     ))
                   ) : (
@@ -1201,20 +1383,20 @@ export function SeasonComparison({
                 <div className="space-y-2">
                   <div className="text-sm text-slate-300 font-medium">Usage koncentráció</div>
                   <div className="text-sm text-slate-200">
-                    Top2 usage arány: {(teamAnalysis.rosterSummary.top2UsageShare * 100).toFixed(1)}%
+                    Top2 usage arány: {(displayTeamAnalysis.rosterSummary.top2UsageShare * 100).toFixed(1)}%
                   </div>
                   <div className="text-xs text-slate-400">
-                    {teamAnalysis.rosterSummary.flags.scorerDependency && '• Túlzott scorer-függőség'}
-                    {teamAnalysis.rosterSummary.flags.lowPlaymakingDepth && ' • Alacsony playmaking depth'}
-                    {teamAnalysis.rosterSummary.flags.weakReboundingPresence && ' • Lepattanó hiány posztonként'}
+                    {displayTeamAnalysis.rosterSummary.flags.scorerDependency && '• Túlzott scorer-függőség'}
+                    {displayTeamAnalysis.rosterSummary.flags.lowPlaymakingDepth && ' • Alacsony playmaking depth'}
+                    {displayTeamAnalysis.rosterSummary.flags.weakReboundingPresence && ' • Lepattanó hiány posztonként'}
                   </div>
                 </div>
               </div>
 
-              {teamAnalysis.rosterInsights.length > 0 && (
+              {displayTeamAnalysis.rosterInsights.length > 0 && (
                 <div className="space-y-2">
                   <div className="text-sm text-slate-300 font-medium">Roster értelmezés</div>
-                  {teamAnalysis.rosterInsights.map(item => (
+                  {displayTeamAnalysis.rosterInsights.map(item => (
                     <div key={item} className="text-sm text-slate-200">• {item}</div>
                   ))}
                 </div>

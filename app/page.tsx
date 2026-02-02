@@ -18,6 +18,7 @@ import { LoginForm } from '@/components/LoginForm';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth-context';
+import { useMemo } from 'react';
 import { SeasonSelector } from '@/components/SeasonSelector';
 import { SeasonComparison } from '@/components/SeasonComparison';
 import { TeamSelector } from '@/components/TeamSelector';
@@ -25,6 +26,7 @@ import { Updates } from '@/components/Updates';
 import { GameQuickImport } from '@/components/GameQuickImport';
 import { PlayersImport } from '@/components/PlayersImport';
 import { RoundImport } from '@/components/RoundImport';
+import type { PlayerTrend } from '@/lib/player-analysis';
 
 export type ShootingStats = {
   close: { made: number; attempted: number };
@@ -63,6 +65,7 @@ export type PlayerStats = {
   trueShootingPct: number;
   effectiveShootingPct: number;
   gameHistory: GamePerformance[];
+  trend?: PlayerTrend;
 };
 
 export type GamePerformance = {
@@ -256,8 +259,13 @@ export default function Home() {
     round: number | null;
   } | null>(null);
 
+  const playersBySeason = useMemo(() => {
+    if (!selectedSeasonId) return players;
+    return players.filter(player => String(player.seasonId ?? '') === String(selectedSeasonId));
+  }, [players, selectedSeasonId]);
+
   const selectedPlayer = selectedPlayerId 
-    ? players.find(p => p.id === selectedPlayerId) || null 
+    ? playersBySeason.find((player: PlayerStats) => player.id === selectedPlayerId) || null 
     : null;
 
   const handleGameImport = (gameData?: {
@@ -464,8 +472,12 @@ export default function Home() {
 
         if (aggregateError) throw aggregateError;
 
+        const filteredPlayerStats = (playerStatsData || []).filter((ps: SupabasePlayerStat) => {
+          return String(ps.season_id ?? '') === String(selectedSeasonId);
+        });
+
         // 4. Konvertáljuk a PlayerStats formátumra - CSAK azokat akiknek van meccsük
-        const playersConverted: PlayerStats[] = (playerStatsData || [])
+        const playersConverted: PlayerStats[] = filteredPlayerStats
           .filter((ps: SupabasePlayerStat) => ps.games_played > 0) // Csak akiknek van meccsük
           .map((ps: SupabasePlayerStat) => {
           // Gyűjtsük össze a játékos meccs teljesítményeit
@@ -664,10 +676,10 @@ export default function Home() {
     }, [allTeams, selectedSeasonId, selectedTeamId]);
 
   useEffect(() => {
-    if (selectedSeasonId) {
+    if (selectedSeasonId && selectedTeamId) {
       loadData();
     }
-  }, [selectedSeasonId, loadData]);
+  }, [selectedSeasonId, selectedTeamId, loadData]);
 
   const { user, loading, signOut } = useAuth();
 
@@ -768,7 +780,7 @@ export default function Home() {
                   </Button>
                 </div>
                 <TeamStatistics 
-                  players={players} 
+                  players={playersBySeason} 
                   games={games} 
                   gameStats={gameStats} 
                   teamName={allTeams.find(t => t.id === selectedTeamId)?.name}
@@ -794,7 +806,7 @@ export default function Home() {
               />
             ) : (
               <PlayersList 
-                players={players}
+                players={playersBySeason}
                 onSelectPlayer={setSelectedPlayerId}
                 onCompare={() => setShowComparison(true)}
               />
@@ -808,7 +820,7 @@ export default function Home() {
               allTeams={allTeams}
               currentSeasonId={selectedSeasonId}
               currentTeamId={selectedTeamId}
-              currentTeamPlayers={players}
+              currentTeamPlayers={playersBySeason}
               games={games}
               playerGameStats={playerGameStats}
             />
@@ -829,7 +841,7 @@ export default function Home() {
           </TabsContent>
 
           <TabsContent value="gamelog">
-            <GameLog players={players} />
+            <GameLog players={playersBySeason} />
           </TabsContent>
 
           <TabsContent value="updates">
@@ -870,6 +882,7 @@ export default function Home() {
               <JsonImport 
                 onImportComplete={loadData} 
                 lastImportedGame={lastImportedGame}
+                selectedSeasonId={selectedSeasonId}
               />
             </div>
           </TabsContent>

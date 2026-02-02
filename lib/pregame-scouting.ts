@@ -279,6 +279,22 @@ const scoreAbove = (benchmarks: LeagueTeamBenchmarks, team: NormalizedTeamStats,
 const scoreBelow = (benchmarks: LeagueTeamBenchmarks, team: NormalizedTeamStats, stat: string, score: number) =>
   getPercentileScore(benchmarks, team, stat) <= score;
 
+const getDominantAxis = (team: NormalizedTeamStats, benchmarks: LeagueTeamBenchmarks) => {
+  const paceScore = getPercentileScore(benchmarks, team, 'pace');
+  const twoRateScore = getPercentileScore(benchmarks, team, 'two_rate');
+  const threeRateScore = getPercentileScore(benchmarks, team, 'three_rate');
+  const ftRateScore = getPercentileScore(benchmarks, team, 'ft_rate');
+
+  if (paceScore >= 70) return 'transition';
+  if (threeRateScore >= 60) return 'periméter';
+  if (twoRateScore >= 60 || ftRateScore >= 60) return 'festék';
+
+  const maxScore = Math.max(paceScore, twoRateScore, threeRateScore);
+  if (maxScore === paceScore) return 'transition';
+  if (maxScore === threeRateScore) return 'periméter';
+  return 'festék';
+};
+
 const buildTeamStyle = (team: NormalizedTeamStats, benchmarks: LeagueTeamBenchmarks) => {
   const offense: string[] = [];
   const defense: string[] = [];
@@ -373,10 +389,10 @@ const identifyKeyPlayers = (players: PlayerSeasonStat[], teamUsageShare: number)
   const variance = usageValues.reduce((sum, v) => sum + Math.pow(v - mean, 2), 0) / (usageValues.length || 1);
   const sd = Math.sqrt(variance);
 
-  const primaryScorers: string[] = [];
-  const primaryPlaymakers: string[] = [];
-  const stretchThreats: string[] = [];
-  const mismatchCandidates: string[] = [];
+  const primaryScorers: Array<{ name: string; score: number }> = [];
+  const primaryPlaymakers: Array<{ name: string; score: number }> = [];
+  const stretchThreats: Array<{ name: string; score: number }> = [];
+  const mismatchCandidates: Array<{ name: string; score: number }> = [];
 
   const heightByPos = players.reduce((acc, player) => {
     if (player.heightCm && Number.isFinite(player.heightCm)) {
@@ -398,37 +414,65 @@ const identifyKeyPlayers = (players: PlayerSeasonStat[], teamUsageShare: number)
     const usage = computePlayerUsage(player);
     const posAvgHeight = avgHeight(player.position);
 
-    if (usage > mean + sd) primaryScorers.push(player.name);
-    if (player.ast >= 3 && astTo >= 1.6) primaryPlaymakers.push(player.name);
-    if (player.fga3 >= 2 && threePct >= 38) stretchThreats.push(player.name);
-    if (usage >= mean && player.val >= 10) mismatchCandidates.push(player.name);
+    if (usage > mean + sd) primaryScorers.push({ name: player.name, score: usage + player.val * 1.2 });
+    if (player.ast >= 3 && astTo >= 1.6) {
+      primaryPlaymakers.push({ name: player.name, score: player.ast * 1.6 + astTo * 2 });
+    }
+    if (player.fga3 >= 2 && threePct >= 38) {
+      stretchThreats.push({ name: player.name, score: player.fga3 * 2 + threePct });
+    }
+    if (usage >= mean && player.val >= 10) {
+      mismatchCandidates.push({ name: player.name, score: player.val + usage * 0.4 });
+    }
     if (posAvgHeight && player.heightCm && player.heightCm >= posAvgHeight + 5) {
-      mismatchCandidates.push(`${player.name} (magassági előny)`);
+      mismatchCandidates.push({ name: `${player.name} (magassági előny)`, score: player.val + 8 });
     }
   });
 
   if (teamUsageShare >= 0.55 && primaryScorers.length === 0) {
-    primaryScorers.push(players.sort((a, b) => computePlayerUsage(b) - computePlayerUsage(a))[0]?.name ?? '');
+    const topUsage = players.sort((a, b) => computePlayerUsage(b) - computePlayerUsage(a))[0];
+    if (topUsage) primaryScorers.push({ name: topUsage.name, score: computePlayerUsage(topUsage) });
   }
 
+  const pickTop = (items: Array<{ name: string; score: number }>) => {
+    const unique = new Map<string, number>();
+    items.forEach(item => {
+      const current = unique.get(item.name) ?? -Infinity;
+      if (item.score > current) unique.set(item.name, item.score);
+    });
+    return Array.from(unique.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .map(([name]) => name)
+      .filter(Boolean);
+  };
+
   return {
-    primaryScorers: primaryScorers.filter(Boolean),
-    primaryPlaymakers: primaryPlaymakers.filter(Boolean),
-    stretchThreats: stretchThreats.filter(Boolean),
-    mismatchCandidates: mismatchCandidates.filter(Boolean),
+    primaryScorers: pickTop(primaryScorers),
+    primaryPlaymakers: pickTop(primaryPlaymakers),
+    stretchThreats: pickTop(stretchThreats),
+    mismatchCandidates: pickTop(mismatchCandidates),
   };
 };
 
 const buildThreats = (team: NormalizedTeamStats, benchmarks: LeagueTeamBenchmarks, usageShare: number) => {
   const threats: string[] = [];
-  if (scoreAbove(benchmarks, team, 'three_rate', 60)) threats.push('Magas tripla-volumen');
-  if (scoreAbove(benchmarks, team, 'three_pct', 60)) threats.push('Erős 3P-hatékonyság');
-  if (scoreAbove(benchmarks, team, 'assist_rate', 60)) threats.push('Szervezett labdajáratás');
-  if (scoreAbove(benchmarks, team, 'efg', 60)) threats.push('Hatékony dobás');
-  if (scoreAbove(benchmarks, team, 'two_rate', 60) && scoreAbove(benchmarks, team, 'ft_rate', 60)) {
-    threats.push('Festékdomináns támadás');
+  if (scoreAbove(benchmarks, team, 'three_rate', 60)) {
+    threats.push('Magas tripla-volumen → scoring variancia, run veszély');
   }
-  if (usageShare >= 0.55) threats.push('Kulcsjátékos dominancia');
+  if (scoreAbove(benchmarks, team, 'three_pct', 60)) {
+    threats.push('Erős 3P-hatékonyság → gyors pontfutás kockázat');
+  }
+  if (scoreAbove(benchmarks, team, 'assist_rate', 60)) {
+    threats.push('Szervezett labdajáratás → rotációs bontás veszély');
+  }
+  if (scoreAbove(benchmarks, team, 'efg', 60)) {
+    threats.push('Hatékony dobás → félpályás megállítás nehezebb');
+  }
+  if (scoreAbove(benchmarks, team, 'two_rate', 60) && scoreAbove(benchmarks, team, 'ft_rate', 60)) {
+    threats.push('Festékdomináns támadás → faultterhelés és belső nyomás');
+  }
+  if (usageShare >= 0.55) threats.push('Kulcsjátékos dominancia → fókuszált elfojtás szükséges');
   return threats;
 };
 
@@ -475,6 +519,19 @@ const buildFocusPoints = (
     focus.push('Labdajáratásból előny építése');
   }
 
+  if (scoreBelow(benchmarks, opponent, 'three_pct', 40) && scoreAbove(benchmarks, ownTeam, 'three_rate', 60)) {
+    focus.push('Külső dobóterhelés növelése (opp gyenge periméter-hatékonyság)');
+  }
+  if (scoreBelow(benchmarks, opponent, 'turnover_rate', 40) && scoreAbove(benchmarks, ownTeam, 'turnover_rate', 60)) {
+    focus.push('Labdabiztonság kiemelt, az ellenfél védekezése nem kényszerít TO-t');
+  }
+  if (scoreAbove(benchmarks, opponent, 'turnover_rate', 60) && scoreAbove(benchmarks, ownTeam, 'stl_per_game', 60)) {
+    focus.push('Labdaszerzés maximalizálása, agresszív nyomás engedhető');
+  }
+  if (scoreBelow(benchmarks, opponent, 'two_rate', 40) && scoreAbove(benchmarks, ownTeam, 'two_rate', 60)) {
+    focus.push('Festékelőny erőltetése (opp alacsony 2P-fókusz)');
+  }
+
   return focus.slice(0, 5);
 };
 
@@ -482,15 +539,54 @@ const buildSummary = (
   opponent: NormalizedTeamStats,
   profile: ReturnType<typeof buildTeamStyle>,
   threats: string[],
-  vulnerabilities: string[]
+  vulnerabilities: string[],
+  benchmarks: LeagueTeamBenchmarks,
+  winProbability: ScoutingReport['winProbability'],
+  positionComparison: PositionComparison[]
 ) => {
   const tempo = opponent.pace >= 70 ? 'gyors tempójú' : opponent.pace <= 60 ? 'lassú tempójú' : 'közepes tempójú';
   const offense = profile.offense.length > 0 ? profile.offense.join(', ') : 'kiegyensúlyozott';
   const defense = profile.defense.length > 0 ? profile.defense.join(', ') : 'kiegyensúlyozott';
-  const threatText = threats.length > 0 ? `Fő támadó veszélyek: ${threats.join(', ')}.` : 'Nincs kiemelt támadó veszély.';
-  const vulnText = vulnerabilities.length > 0 ? `Sebezhetőségek: ${vulnerabilities.join(', ')}.` : 'Nincs kiemelt sebezhetőség.';
+  const dominantAxis = getDominantAxis(opponent, benchmarks);
+  const axisLabel = dominantAxis === 'transition'
+    ? 'transition'
+    : dominantAxis === 'periméter'
+      ? 'periméter'
+      : 'festék';
+  const axisText = `Domináns tengely: ${axisLabel}.`;
 
-  return `Az ellenfél ${tempo}, ${offense} támadást játszik, védekezésben ${defense} jellegű. ${threatText} ${vulnText}`;
+  const threatText = threats.length > 0
+    ? `Fő támadó veszélyek: ${threats.join(', ')}.`
+    : 'Nincs kiemelt támadó veszély.';
+  const vulnText = vulnerabilities.length > 0
+    ? `Sebezhetőségek: ${vulnerabilities.join(', ')}.`
+    : 'Nincs kiemelt sebezhetőség.';
+
+  const perimeterDelta = positionComparison
+    .filter(item => ['PG', 'SG', 'SF'].includes(item.position))
+    .reduce((sum, item) => sum + item.deltaValPer36, 0);
+  const frontcourtDelta = positionComparison
+    .filter(item => ['PF', 'C'].includes(item.position))
+    .reduce((sum, item) => sum + item.deltaValPer36, 0);
+  const posSummary = perimeterDelta >= 3 && frontcourtDelta <= -1
+    ? 'Periméteren saját előny (PG–SG–SF), az ellenfél előnye inkább a frontcourtban jelentkezik.'
+    : frontcourtDelta >= 3 && perimeterDelta <= -1
+      ? 'Frontcourt előny (PF–C), periméteren óvatos matchup szükséges.'
+      : 'Pozíciós előnyök elosztottak, matchup-alapú döntés javasolt.';
+
+  const probabilityNote = `A statisztikai esély (${winProbability.ownPct}% / ${winProbability.opponentPct}%) nem jelent biztos kimenetet; taktikai kockázatok döntőek.`;
+
+  const varianceNote = scoreAbove(benchmarks, opponent, 'three_rate', 60)
+    ? 'Magas tripla-volumen miatt a variancia nagyobb, run-ok gyorsan dönthetnek.'
+    : '';
+
+  const xFactor = threats.some(item => item.includes('tripla-volumen'))
+    ? 'X-faktor: a periméter kontrollja és a tripla-variancia kezelése billentheti el a meccset.'
+    : vulnerabilities.some(item => item.includes('labdaeladás'))
+      ? 'X-faktor: labdaszerzések és extra támadások döntőek lehetnek.'
+      : 'X-faktor: a festék kontrollja és a faultterhelés kezelése lehet döntő.';
+
+  return `Az ellenfél ${tempo}, ${offense} támadást játszik, védekezésben ${defense} jellegű. ${axisText} ${threatText} ${vulnText} ${posSummary} ${probabilityNote} ${varianceNote} ${xFactor}`.trim();
 };
 
 const computeTeamRating = (team: NormalizedTeamStats, benchmarks: LeagueTeamBenchmarks) => {
@@ -619,6 +715,14 @@ export const analyzePreGameScouting = (
       mismatchCandidates: [...keyPlayers.mismatchCandidates, ...heightMismatchNotes].slice(0, 4),
     },
     focusPoints,
-    summary: buildSummary(normalizedOpponent, profile, threats, vulnerabilities),
+    summary: buildSummary(
+      normalizedOpponent,
+      profile,
+      threats,
+      vulnerabilities,
+      leagueBenchmarks,
+      winProbability,
+      positionComparison
+    ),
   };
 };

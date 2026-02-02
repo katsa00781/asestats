@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, type ReactNode } from 'react';
 import { PlayerStats } from "@/app/page";
 
 import {
@@ -22,8 +22,13 @@ import {
   TrendingUp, 
   TrendingDown,
   Calendar,
-  X
+  X,
+  ArrowUp,
+  ArrowDown,
+  AlertTriangle,
+  Minus
 } from "lucide-react";
+import { buildPlayerTrendReport, type PlayerTrend } from '@/lib/player-analysis';
 import {
   ResponsiveContainer,
   RadarChart,
@@ -58,6 +63,90 @@ function PlayerDetails( { player, onBack }: PlayerDetailProps) {
     // Az első N meccset vegyük (már dátum szerint csökkenő sorrendben vannak)
     return player.gameHistory.slice(0, lastNGames);
   }, [player, lastNGames]);
+
+  const computedTrend = useMemo<PlayerTrend | null>(() => {
+    if (!player || player.gameHistory.length < 5) return null;
+    const lastFive = player.gameHistory.slice(0, 5);
+    const valValues = lastFive.map(game => game.valuation);
+    const valAvg5 = valValues.reduce((sum, v) => sum + v, 0) / valValues.length;
+    const valSeasonAvg = player.valuation;
+    const valVariance = valValues.reduce((sum, v) => sum + Math.pow(v - valAvg5, 2), 0) / valValues.length;
+    const valStd5 = Math.sqrt(valVariance);
+
+    const usageFive = lastFive.map(game => {
+      const fga = game.shooting.close.attempted + game.shooting.mid.attempted + game.shooting.three.attempted;
+      const fta = game.shooting.freeThrow.attempted;
+      return fga + 0.44 * fta + game.turnovers;
+    });
+    const usageAvg5 = usageFive.reduce((sum, v) => sum + v, 0) / usageFive.length;
+
+    const totalFga = player.shooting.close.attempted + player.shooting.mid.attempted + player.shooting.three.attempted;
+    const totalFta = player.shooting.freeThrow.attempted;
+    const usageSeasonAvg = player.gamesPlayed > 0
+      ? (totalFga + 0.44 * totalFta + player.turnovers) / player.gamesPlayed
+      : 0;
+
+    const minutesAvg5 = lastFive.reduce((sum, game) => sum + game.minutes, 0) / lastFive.length;
+
+    const trendLabel = valAvg5 <= valSeasonAvg * 0.8
+      ? 'Strongly Declining'
+      : valAvg5 <= valSeasonAvg * 0.9
+        ? 'Declining'
+        : valAvg5 >= valSeasonAvg * 1.1
+          ? 'Improving'
+          : 'Stable';
+
+    const consistencyLabel = valStd5 <= 2
+      ? 'High'
+      : valStd5 <= 4
+        ? 'Medium'
+        : 'Low';
+
+    const roleTrendLabel = usageAvg5 >= usageSeasonAvg * 1.1
+      ? 'Expanding'
+      : usageAvg5 <= usageSeasonAvg * 0.9
+        ? 'Shrinking'
+        : 'Stable';
+
+    return {
+      name: player.name,
+      position: (player.position as PlayerTrend['position']) ?? 'SG',
+      roles: player.trend?.roles ?? [],
+      VAL_avg_5: valAvg5,
+      VAL_season_avg: valSeasonAvg,
+      VAL_std_5: valStd5,
+      usage_avg_5: usageAvg5,
+      usage_season_avg: usageSeasonAvg,
+      minutes_avg_5: minutesAvg5,
+      trendLabel,
+      consistencyLabel,
+      roleTrendLabel,
+      context: 'player-profile',
+    };
+  }, [player]);
+
+  const trendReport = useMemo(() => {
+    if (!player) return null;
+    const sourceTrend = player.trend ?? computedTrend;
+    if (!sourceTrend) return null;
+    return buildPlayerTrendReport(sourceTrend);
+  }, [computedTrend, player]);
+
+  const trendBadgeClasses: Record<string, string> = {
+    green: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
+    'light-green': 'bg-emerald-400/15 text-emerald-200 border-emerald-400/30',
+    grey: 'bg-slate-700/40 text-slate-200 border-slate-600/40',
+    orange: 'bg-orange-500/20 text-orange-200 border-orange-500/40',
+    red: 'bg-red-500/20 text-red-200 border-red-500/40',
+  };
+
+  const trendIconMap: Record<string, ReactNode> = {
+    'arrow-up': <ArrowUp size={14} />,
+    'trending-up': <TrendingUp size={14} />,
+    minus: <Minus size={14} />,
+    'arrow-down': <ArrowDown size={14} />,
+    'alert-triangle': <AlertTriangle size={14} />,
+  };
 
   if (!player) {
     return <div className="text-center py-8 text-slate-400">Válassz egy játékost a részletek megtekintéséhez</div>;
@@ -735,6 +824,32 @@ function PlayerDetails( { player, onBack }: PlayerDetailProps) {
 
       {/* Teljesítmény trendek */}
       <PlayerTrends gameHistory={player.gameHistory} />
+
+      <Card className="mt-6 bg-slate-900 border-slate-800">
+        <CardHeader>
+          <CardTitle className="text-slate-50">Last 5 Games Trend</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3 text-sm text-slate-200">
+          {trendReport ? (
+            <>
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge className={trendBadgeClasses[trendReport.badge.color] ?? 'bg-slate-700/40 text-slate-200 border-slate-600/40'}>
+                  <span className="mr-1">{trendIconMap[trendReport.badge.icon] ?? <Minus size={14} />}</span>
+                  {trendReport.badge.label}
+                </Badge>
+                <span className="text-xs text-slate-400">Severity: {trendReport.badge.severity}</span>
+              </div>
+              <div>{trendReport.summary}</div>
+              <div>{trendReport.stability}</div>
+              <div>{trendReport.roleTrend}</div>
+              <div>{trendReport.roleContext}</div>
+              <div className="text-slate-300">{trendReport.takeaway}</div>
+            </>
+          ) : (
+            <div className="text-slate-400">Nincs elérhető trend riport.</div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   )
 }

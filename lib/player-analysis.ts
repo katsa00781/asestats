@@ -88,6 +88,41 @@ export type PlayerAnalysis = {
   roleConfidence: number;
 };
 
+export type PlayerTrend = {
+  name: string;
+  position: Position;
+  roles: string[];
+  VAL_avg_5: number;
+  VAL_season_avg: number;
+  VAL_std_5: number;
+  usage_avg_5: number;
+  usage_season_avg: number;
+  minutes_avg_5: number;
+  trendLabel: 'Improving' | 'Stable' | 'Declining' | 'Strongly Declining';
+  consistencyLabel: 'High' | 'Medium' | 'Low';
+  roleTrendLabel: 'Expanding' | 'Stable' | 'Shrinking';
+  context: 'pre-game' | 'post-game' | 'player-profile';
+};
+
+export type VisualTrendBadge = {
+  label: string;
+  icon: string;
+  color: string;
+  severity: 'Low' | 'Medium' | 'High';
+};
+
+export type PlayerTrendReport = {
+  section: string;
+  sectionTitle: string;
+  focus: string[];
+  summary: string;
+  stability: string;
+  roleTrend: string;
+  roleContext: string;
+  badge: VisualTrendBadge;
+  takeaway: string;
+};
+
 const REQUIRED_MIN_GAMES = 10;
 const REQUIRED_MIN_MINUTES_PER_GAME = 15;
 
@@ -528,7 +563,11 @@ const buildLimitations = (skills: SkillScores) => {
     .map(([key]) => SKILL_LABELS[key as keyof SkillScores]);
 };
 
-const buildImprovementPoints = (player: NormalizedStats, benchmarks: LeagueBenchmarks) => {
+const buildImprovementPoints = (
+  player: NormalizedStats,
+  benchmarks: LeagueBenchmarks,
+  roles: string[]
+) => {
   const improvements: string[] = [];
 
   const threshold = (stat: string, pct: keyof BenchmarkPercentiles) =>
@@ -584,6 +623,29 @@ const buildImprovementPoints = (player: NormalizedStats, benchmarks: LeagueBench
     improvements.push(`Rim protection javítása (BLK/36: ${round(blk, 1)}).`);
   }
 
+  const lowAst = ast <= threshold('ast_per36', 'P40');
+  const low3PA = threePA <= threshold('threePA_per36', 'P40');
+  const ftBelowAvg = ftPct <= threshold('ft_pct', 'P50');
+  const foulsPer36 = normalizePer36(player.fouls.committed, player.minutes);
+  const highFouls = foulsPer36 >= 4;
+
+  if (roles.includes('Roll Man') && lowAst) {
+    improvements.push('Short roll döntéshozatal és passzopciók fejlesztése.');
+  }
+  if (ftBelowAvg) {
+    improvements.push('Büntetődobás stabilitás javítása.');
+  }
+  if (highFouls) {
+    improvements.push('Defensive foul control javítása, felesleges faultok csökkentése.');
+  }
+  if (low3PA && roles.includes('Stretch 5') === false && roles.includes('Stretch 4') === false) {
+    improvements.push('Spacing-érték növelése (minimum corner/short corner fenyegetés).');
+  }
+
+  if (improvements.length === 0) {
+    improvements.push('Low priority development: szerep-optimalizálás és matchup-fókusz.');
+  }
+
   return improvements.slice(0, 3);
 };
 
@@ -594,6 +656,7 @@ const buildSummary = (
   benchmarks: LeagueBenchmarks
 ) => {
   const intro = roles[0]?.role ? ROLE_INTROS[roles[0].role] : `${player.position} poszton szereplő játékos.`;
+  const roleNames = roles.map(role => role.role);
   const strengths = buildStrengths(skills);
   const limitations = buildLimitations(skills);
 
@@ -615,7 +678,28 @@ const buildSummary = (
     valSentence = 'VAL mutatói a ligaátlag körül mozognak.';
   }
 
-  return [intro, primaryStrength, secondaryStrength, limitation, valSentence]
+  const twoAttempts = player.close.attempted + player.mid.attempted;
+  const twoMade = player.close.made + player.mid.made;
+  const twoPct = twoAttempts > 0 ? (twoMade / twoAttempts) * 100 : 0;
+  const outsidePaintShare = player.fga > 0
+    ? (player.mid.attempted + player.three.attempted) / player.fga
+    : 0;
+  const lowAst = player.astPer36 <= getBenchmarkThreshold(benchmarks, player, 'ast_per36', 'P40');
+  const highTwoPct = twoPct >= 55;
+  const lowOutsidePaint = outsidePaintShare <= 0.35;
+  const highValPer36 = player.valPer36 >= getBenchmarkThreshold(benchmarks, player, 'val_per36', 'P75');
+  const lowUsage = player.usageProxyPer36 <= getBenchmarkThreshold(benchmarks, player, 'usage_proxy', 'P40');
+  const hasInteriorRole = roleNames.includes('Rim Protector') || roleNames.includes('Roll Man');
+  const hasRollMan = roleNames.includes('Roll Man');
+
+  const interiorContext = hasInteriorRole && highTwoPct && lowAst && lowOutsidePaint && highValPer36
+    ? [
+        `Pontszerzése elsősorban ${hasRollMan ? 'pick&roll befejezésekből, ' : ''}támadólepattanókból és közeli helyzetekből érkezik.`,
+        lowUsage ? 'Nem igényel labdát, alacsony usage mellett is magas hatékonyságot biztosít.' : '',
+      ].filter(Boolean).join(' ')
+    : '';
+
+  return [intro, interiorContext, primaryStrength, secondaryStrength, limitation, valSentence]
     .filter(Boolean)
     .join(' ')
     .trim();
@@ -627,17 +711,86 @@ const roleConfidenceLabel = (confidence: number): PlayerAnalysis['confidence'] =
   return 'Low';
 };
 
-export const analyzePlayerSeason = (
+// Clamp skill scores to 0-100 range.
+const clampSkillScores = (scores: SkillScores): SkillScores => ({
+  scoring: clamp(Math.round(scores.scoring), 0, 100),
+  shooting: clamp(Math.round(scores.shooting), 0, 100),
+  playmaking: clamp(Math.round(scores.playmaking), 0, 100),
+  rebounding: clamp(Math.round(scores.rebounding), 0, 100),
+  defense: clamp(Math.round(scores.defense), 0, 100),
+  efficiency: clamp(Math.round(scores.efficiency), 0, 100),
+});
+
+// Clamp role confidence to 0-1 range with a conservative ceiling.
+const clampRoleConfidence = (confidence: number, games: number) => {
+  const cap = games >= 20 ? 0.95 : 0.9;
+  return clamp(round(confidence, 2), 0, cap);
+};
+
+// Compute percentiles used to cap skill scores.
+const computeSkillPercentiles = (player: NormalizedStats, benchmarks: LeagueBenchmarks) => {
+  const scoring = getPercentile(benchmarks, player, 'pts_per36');
+  const shooting = player.position === 'PF' || player.position === 'C'
+    ? scoreFromStats([
+        getPercentile(benchmarks, player, 'ft_pct'),
+        getPercentile(benchmarks, player, 'efg'),
+      ])
+    : scoreFromStats([
+        getPercentile(benchmarks, player, 'threeP_pct'),
+        getPercentile(benchmarks, player, 'ft_pct'),
+        getPercentile(benchmarks, player, 'efg'),
+      ]);
+  const playmakingWeights = player.position === 'PG' || player.position === 'SG'
+    ? [0.7, 0.3]
+    : [0.5, 0.5];
+  const playmaking = scoreFromStats([
+    getPercentile(benchmarks, player, 'ast_per36') * playmakingWeights[0],
+    getPercentile(benchmarks, player, 'ast_to') * playmakingWeights[1],
+  ]);
+  const rebounding = getPercentile(benchmarks, player, 'reb_per36');
+  const defense = player.position === 'PF' || player.position === 'C'
+    ? scoreFromStats([
+        getPercentile(benchmarks, player, 'blk_per36'),
+        getPercentile(benchmarks, player, 'def_reb_per36'),
+      ])
+    : scoreFromStats([
+        getPercentile(benchmarks, player, 'stl_per36') * 0.5,
+        getPercentile(benchmarks, player, 'def_reb_per36') * 0.25,
+        getPercentile(benchmarks, player, 'blk_per36') * 0.25,
+      ]);
+  const efficiency = scoreFromStats([
+    getPercentile(benchmarks, player, 'val_per36'),
+    getPercentile(benchmarks, player, 'efg'),
+  ]);
+
+  return { scoring, shooting, playmaking, rebounding, defense, efficiency };
+};
+
+// Cap skill scores at 95 unless percentile indicates an outlier (>=95).
+const applySkillCaps = (scores: SkillScores, percentiles: SkillScores): SkillScores => ({
+  scoring: percentiles.scoring >= 95 ? clamp(scores.scoring, 0, 100) : Math.min(scores.scoring, 95),
+  shooting: percentiles.shooting >= 95 ? clamp(scores.shooting, 0, 100) : Math.min(scores.shooting, 95),
+  playmaking: percentiles.playmaking >= 95 ? clamp(scores.playmaking, 0, 100) : Math.min(scores.playmaking, 95),
+  rebounding: percentiles.rebounding >= 95 ? clamp(scores.rebounding, 0, 100) : Math.min(scores.rebounding, 95),
+  defense: percentiles.defense >= 95 ? clamp(scores.defense, 0, 100) : Math.min(scores.defense, 95),
+  efficiency: percentiles.efficiency >= 95 ? clamp(scores.efficiency, 0, 100) : Math.min(scores.efficiency, 95),
+});
+
+// Build a validated PlayerAnalysis object from raw stats.
+const buildValidatedAnalysis = (
   raw: RawPlayerSeasonStat,
   benchmarks: LeagueBenchmarks
 ): PlayerAnalysis => {
   const normalized = normalizePlayerStats(raw);
   const roles = detectRoles(normalized, benchmarks);
   const roleConfidence = roles.length > 0 ? roles[0].confidence : 0;
-  const skills = computeSkillScores(normalized, benchmarks);
+  const rawSkills = clampSkillScores(computeSkillScores(normalized, benchmarks));
+  const skillPercentiles = computeSkillPercentiles(normalized, benchmarks);
+  const skills = applySkillCaps(rawSkills, skillPercentiles);
   const strengths = buildStrengths(skills);
-  const limitations = buildLimitations(skills);
-  const improvements = buildImprovementPoints(normalized, benchmarks);
+  const limitations = buildDetailedLimitations(normalized, benchmarks, roles.map(role => role.role), skills);
+  const improvements = buildImprovementPoints(normalized, benchmarks, roles.map(role => role.role));
+  const cappedConfidence = clampRoleConfidence(roleConfidence, raw.games);
 
   return {
     position: raw.position,
@@ -647,29 +800,240 @@ export const analyzePlayerSeason = (
     limitations,
     improvements,
     summary: buildSummary(normalized, roles, skills, benchmarks),
-    confidence: roleConfidenceLabel(roleConfidence),
-    roleConfidence: round(roleConfidence, 2),
+    confidence: roleConfidenceLabel(cappedConfidence),
+    roleConfidence: cappedConfidence,
   };
 };
 
+// Build limitation strings with functional + tactical consequence context.
+const buildDetailedLimitations = (
+  player: NormalizedStats,
+  benchmarks: LeagueBenchmarks,
+  roleNames: string[],
+  skills: SkillScores
+) => {
+  const limitations: string[] = [];
+  const lowAst = player.astPer36 <= getBenchmarkThreshold(benchmarks, player, 'ast_per36', 'P40');
+  const low3PA = player.threePAPer36 <= getBenchmarkThreshold(benchmarks, player, 'threePA_per36', 'P40');
+  const highUsage = player.usageProxyPer36 >= getBenchmarkThreshold(benchmarks, player, 'usage_proxy', 'P60');
+  const outsidePaintShare = player.fga > 0
+    ? (player.mid.attempted + player.three.attempted) / player.fga
+    : 0;
+  const paintHeavy = outsidePaintShare <= 0.35;
+
+  if (lowAst && skills.playmaking <= 40) {
+    limitations.push('Játéképítés: nem secondary creator, short roll playmaking limitált.');
+  }
+  if (low3PA && (roleNames.includes('Stretch 5') === false && roleNames.includes('Stretch 4') === false)) {
+    limitations.push('Spacing-limit: nem stretch center, festékben extra védőt vonzhat.');
+  }
+  if (highUsage && paintHeavy && low3PA) {
+    limitations.push('Festékfókusz: támadásban extra help védekezést hívhat, spacing sérülhet.');
+  }
+
+  if (limitations.length === 0) {
+    return buildLimitations(skills).map(item => `${item}: szerepkörben limitált, matchup-kockázatot jelenthet.`);
+  }
+
+  return limitations.slice(0, 3);
+};
+
+// Build a coach-facing one-line summary from analysis output.
+export const buildCoachSummary = (analysis: PlayerAnalysis) => {
+  if (analysis.roles.includes('Rim Protector') || analysis.roles.includes('Roll Man')) {
+    return 'Low-usage, high-impact center, aki védekezésben stabilizálja a festéket, támadásban pedig pick&roll rendszerben maximális hatékonyságot hoz – labda nélkül.';
+  }
+  if (analysis.roles.includes('Scoring Wing') || analysis.roles.includes('Offensive Hub')) {
+    return 'Elsődleges pontszerző szerepben hatékony, támadásban magas felelősséggel használható – stabil spacing mellett.';
+  }
+  if (analysis.roles.includes('3&D Wing') || analysis.roles.includes('Defensive Guard')) {
+    return 'Kétoldalú periméter szerepben értékes, védekezésben matchup-stabil, támadásban kiegészítő spacing-opció.';
+  }
+  return 'Kiegészítő szerepkörben stabil rotációs érték, matchup-alapú optimalizálással.';
+};
+
+const buildTrendSummary = (trend: PlayerTrend) => {
+  const base = `${trend.name} az utolsó 5 mérkőzés alapján ${trend.trendLabel} formát mutat.`;
+  if (trend.trendLabel !== 'Stable') return `${base} Eltérés a szezonátlagtól érzékelhető.`;
+  return base;
+};
+
+const buildStabilityText = (trend: PlayerTrend) => {
+  if (trend.consistencyLabel === 'High') return 'Meccsről meccsre stabil teljesítmény.';
+  if (trend.consistencyLabel === 'Medium') return 'Mérsékelt ingadozás, matchup-érzékeny teljesítmény.';
+  return 'Volatilis forma, rotációs kockázat.';
+};
+
+const buildRoleTrendText = (trend: PlayerTrend) => {
+  const roles = trend.roles.length > 0 ? trend.roles.join(', ') : 'szerepkör nélkül';
+  if (trend.roleTrendLabel === 'Expanding') {
+    return `Növekvő támadó felelősség (${roles}).`;
+  }
+  if (trend.roleTrendLabel === 'Shrinking') {
+    return `Csökkenő usage vagy szerep (${roles}).`;
+  }
+  return `Változatlan szerepkör (${roles}).`;
+};
+
+const buildRoleContext = (trend: PlayerTrend) => {
+  const roles = trend.roles.join(', ');
+  const isAttackRole = trend.roles.some(role => ['Scoring Wing', 'Offensive Hub'].includes(role));
+  const isDefenseRole = trend.roles.some(role => ['3&D Wing', 'Defensive Guard', 'Rim Protector'].includes(role));
+  const highUsage = trend.usage_avg_5 >= trend.usage_season_avg;
+
+  const parts: string[] = [];
+  if (isAttackRole) {
+    parts.push('Támadásfókuszú szerepkör mellett a forma alakulása közvetlenül hat a scoring stabilitására.');
+  } else if (isDefenseRole) {
+    parts.push('Defenzív szerepkörben a stabilitás elsődleges, a trend elsősorban meccsritmusra utal.');
+  } else {
+    parts.push('A szerepkör inkább kiegészítő jellegű, a trend a rotációs értéket befolyásolja.');
+  }
+
+  if (trend.trendLabel === 'Declining' && highUsage) {
+    parts.push('Csökkenő forma magas usage mellett csapatkockázatot jelent.');
+  } else if (trend.trendLabel === 'Strongly Declining' && highUsage) {
+    parts.push('Erősen visszaeső forma magas usage mellett fokozott kockázat.');
+  }
+
+  if (!roles) return parts.slice(0, 2).join(' ');
+  return parts.slice(0, 2).join(' ');
+};
+
+const buildTrendBadge = (trend: PlayerTrend): VisualTrendBadge => {
+  if (trend.trendLabel === 'Improving' && trend.consistencyLabel === 'High') {
+    return { label: 'Hot', icon: 'arrow-up', color: 'green', severity: 'Low' };
+  }
+  if (trend.trendLabel === 'Improving' && trend.consistencyLabel !== 'High') {
+    return { label: 'Positive Trend', icon: 'trending-up', color: 'light-green', severity: 'Low' };
+  }
+  if (trend.trendLabel === 'Stable') {
+    return { label: 'Stable', icon: 'minus', color: 'grey', severity: 'Low' };
+  }
+  if (trend.trendLabel === 'Strongly Declining' || (trend.trendLabel === 'Declining' && trend.consistencyLabel === 'Low')) {
+    return { label: 'Warning', icon: 'alert-triangle', color: 'red', severity: 'High' };
+  }
+  if (trend.trendLabel === 'Declining') {
+    return { label: 'Cold', icon: 'arrow-down', color: 'orange', severity: 'Medium' };
+  }
+  return { label: 'Stable', icon: 'minus', color: 'grey', severity: 'Low' };
+};
+
+const buildCoachTakeaway = (trend: PlayerTrend) => {
+  if (trend.trendLabel === 'Improving' && trend.roleTrendLabel === 'Expanding') {
+    return 'Szerep növelése kontrollált usage mellett.';
+  }
+  if (trend.trendLabel === 'Improving') {
+    return 'Szerep fenntartása, stabil terhelés mellett.';
+  }
+  if (trend.trendLabel === 'Stable' && trend.consistencyLabel === 'High') {
+    return 'Szerep fenntartása, megbízható rotációs opcióként.';
+  }
+  if (trend.trendLabel === 'Declining' || trend.trendLabel === 'Strongly Declining') {
+    return 'Matchup-alapú használat vagy rotációs óvatosság.';
+  }
+  return 'Szerep fenntartása, matchup-kontroll mellett.';
+};
+
+export const analyzePlayerSeason = (
+  raw: RawPlayerSeasonStat,
+  benchmarks: LeagueBenchmarks
+): PlayerAnalysis => {
+  return buildValidatedAnalysis(raw, benchmarks);
+};
+
+// Build a normalized skill vector (0-1 scale) for similarity.
 export const buildSkillVector = (analysis: PlayerAnalysis) => {
+  const scores = clampSkillScores(analysis.skillScores);
   return [
-    analysis.skillScores.scoring,
-    analysis.skillScores.shooting,
-    analysis.skillScores.playmaking,
-    analysis.skillScores.rebounding,
-    analysis.skillScores.defense,
-    analysis.skillScores.efficiency,
+    scores.scoring / 100,
+    scores.shooting / 100,
+    scores.playmaking / 100,
+    scores.rebounding / 100,
+    scores.defense / 100,
+    scores.efficiency / 100,
   ];
 };
 
+// Compute similarity on normalized vectors with bounded output.
 export const computeSimilarity = (a: PlayerAnalysis, b: PlayerAnalysis) => {
   if (a.position !== b.position) return 0;
   const vecA = buildSkillVector(a);
   const vecB = buildSkillVector(b);
   const sumSq = vecA.reduce((sum, value, idx) => sum + Math.pow(value - vecB[idx], 2), 0);
   const distance = Math.sqrt(sumSq);
-  const maxDistance = Math.sqrt(vecA.length * Math.pow(100, 2));
+  const maxDistance = Math.sqrt(vecA.length);
   const similarity = 1 - distance / maxDistance;
   return clamp(round(similarity, 3), 0, 1);
+};
+
+export const buildPlayerTrendReport = (trend: PlayerTrend): PlayerTrendReport => {
+  const summary = buildTrendSummary(trend);
+  const stability = buildStabilityText(trend);
+  const roleTrend = buildRoleTrendText(trend);
+  const roleContext = buildRoleContext(trend);
+  const badge = buildTrendBadge(trend);
+  const takeaway = buildCoachTakeaway(trend);
+
+  const section = trend.context === 'pre-game'
+    ? 'Pre-Game Report'
+    : trend.context === 'post-game'
+      ? 'Post-Game Report'
+      : 'Player Profile';
+
+  const sectionTitle = trend.context === 'pre-game'
+    ? 'Hot / Cold Players (Last 5 Games)'
+    : trend.context === 'post-game'
+      ? 'Performance vs Recent Form'
+      : 'Last 5 Games Trend';
+
+  const focus = trend.context === 'pre-game'
+    ? ['forma iránya', 'várható impact', 'matchup-kockázat vagy előny']
+    : trend.context === 'post-game'
+      ? ['trend igazolása vagy cáfolata', 'pozitív/negatív megerősítés']
+      : ['hosszabb távú forma', 'szerep stabilitása', 'rotációs érték'];
+
+  return {
+    section,
+    sectionTitle,
+    focus,
+    summary,
+    stability,
+    roleTrend,
+    roleContext,
+    badge,
+    takeaway,
+  };
+};
+
+// Build PlayerAnalysis entries for a list of raw players.
+export const buildPlayerAnalyses = (
+  players: RawPlayerSeasonStat[],
+  benchmarks: LeagueBenchmarks
+): PlayerAnalysis[] => {
+  return players.map(raw => buildValidatedAnalysis(raw, benchmarks));
+};
+
+// Validate trend labels and return a safe PlayerTrend input.
+const normalizePlayerTrend = (trend: PlayerTrend): PlayerTrend => {
+  const trendLabel = trend.trendLabel;
+  const consistencyLabel = trend.consistencyLabel;
+  const roleTrendLabel = trend.roleTrendLabel;
+  return {
+    ...trend,
+    trendLabel,
+    consistencyLabel,
+    roleTrendLabel,
+    VAL_avg_5: Number.isFinite(trend.VAL_avg_5) ? trend.VAL_avg_5 : 0,
+    VAL_season_avg: Number.isFinite(trend.VAL_season_avg) ? trend.VAL_season_avg : 0,
+    VAL_std_5: Number.isFinite(trend.VAL_std_5) ? trend.VAL_std_5 : 0,
+    usage_avg_5: Number.isFinite(trend.usage_avg_5) ? trend.usage_avg_5 : 0,
+    usage_season_avg: Number.isFinite(trend.usage_season_avg) ? trend.usage_season_avg : 0,
+    minutes_avg_5: Number.isFinite(trend.minutes_avg_5) ? trend.minutes_avg_5 : 0,
+  };
+};
+
+// Build a safe PlayerTrendReport from trend input.
+export const buildValidatedPlayerTrendReport = (trend: PlayerTrend): PlayerTrendReport => {
+  return buildPlayerTrendReport(normalizePlayerTrend(trend));
 };
