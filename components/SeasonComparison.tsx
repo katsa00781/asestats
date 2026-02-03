@@ -1357,6 +1357,49 @@ export function SeasonComparison({
   useEffect(() => {
     let isMounted = true;
 
+    const loadPregameNarrative = async () => {
+      if (!selectedGameId) {
+        if (!isMounted) return;
+        setPregameText('');
+        return;
+      }
+
+      setPregameTextError(null);
+
+      try {
+        const { data, error } = await supabase
+          .from('game_text_reports')
+          .select('narrative')
+          .eq('game_id', selectedGameId)
+          .eq('report_type', 'pregame')
+          .maybeSingle();
+
+        if (!isMounted) return;
+
+        if (error && error.code !== 'PGRST116') {
+          setPregameText('');
+          setPregameTextError('Nem sikerült betölteni a pre-game elemzést.');
+          return;
+        }
+
+        setPregameText(data?.narrative ?? '');
+      } catch {
+        if (!isMounted) return;
+        setPregameText('');
+        setPregameTextError('Nem sikerült betölteni a pre-game elemzést.');
+      }
+    };
+
+    loadPregameNarrative();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedGameId]);
+
+  useEffect(() => {
+    let isMounted = true;
+
     const loadReport = async () => {
       if (!selectedGameId) {
         if (!isMounted) return;
@@ -1426,6 +1469,7 @@ export function SeasonComparison({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          gameId: selectedGame?.id ?? selectedGameId ?? null,
           pregameReport,
           ownTeamName: pregameOwnTeam?.teamName ?? 'Saját csapat',
           opponentTeamName: pregameReport.opponentTeamName,
