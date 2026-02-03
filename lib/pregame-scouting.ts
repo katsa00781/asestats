@@ -485,7 +485,7 @@ const identifyKeyPlayers = (players: PlayerSeasonStat[], teamUsageShare: number)
 const buildThreats = (team: NormalizedTeamStats, benchmarks: LeagueTeamBenchmarks, usageShare: number) => {
   const threats: string[] = [];
   if (scoreAbove(benchmarks, team, 'three_rate', 60)) {
-    threats.push('Magas tripla-volumen → scoring variancia, run veszély');
+    threats.push('Magas tripla-volumen → nagyobb pontszerzési variancia, gyors futások veszélye');
   }
   if (scoreAbove(benchmarks, team, 'three_pct', 60)) {
     threats.push('Erős 3P-hatékonyság → gyors pontfutás kockázat');
@@ -526,13 +526,13 @@ const buildFocusPoints = (
   const focus: string[] = [];
 
   if (scoreAbove(benchmarks, opponent, 'three_rate', 60)) {
-    focus.push('Periméter-védekezés kiemelt, contest a triplákon');
+    focus.push('Periméter-védekezés kiemelt, agresszív kilépések a triplákon');
   }
   if (scoreAbove(benchmarks, opponent, 'three_pct', 60)) {
-    focus.push('Closeout fegyelem, ne engedj tiszta triplát');
+    focus.push('Kilépés fegyelem, ne engedj tiszta triplát');
   }
   if (scoreAbove(benchmarks, opponent, 'ft_rate', 60)) {
-    focus.push('Foul-limitáció, betörések védése');
+    focus.push('Fault-limitáció, betörések védése');
   }
   if (scoreAbove(benchmarks, opponent, 'two_rate', 60)) {
     focus.push('Festékzárás, help rotációk gyorsítása');
@@ -552,20 +552,20 @@ const buildFocusPoints = (
   }
 
   if (scoreBelow(benchmarks, opponent, 'three_pct', 40) && scoreAbove(benchmarks, ownTeam, 'three_rate', 60)) {
-    focus.push('Külső dobóterhelés növelése (opp gyenge periméter-hatékonyság)');
+    focus.push('Külső dobóterhelés növelése (ellenfél gyenge periméter-hatékonyság)');
   }
   if (scoreBelow(benchmarks, opponent, 'turnover_rate', 40) && scoreAbove(benchmarks, ownTeam, 'turnover_rate', 60)) {
-    focus.push('Labdabiztonság kiemelt, az ellenfél védekezése nem kényszerít TO-t');
+    focus.push('Labdabiztonság kiemelt, az ellenfél védekezése nem kényszerít labdaeladást');
   }
   if (scoreAbove(benchmarks, opponent, 'turnover_rate', 60) && scoreAbove(benchmarks, ownTeam, 'stl_per_game', 60)) {
     focus.push('Labdaszerzés maximalizálása, agresszív nyomás engedhető');
   }
   if (scoreBelow(benchmarks, opponent, 'two_rate', 40) && scoreAbove(benchmarks, ownTeam, 'two_rate', 60)) {
-    focus.push('Festékelőny erőltetése (opp alacsony 2P-fókusz)');
+    focus.push('Festékelőny erőltetése (ellenfél alacsony 2P-fókusz)');
   }
 
   if (scoreAbove(benchmarks, opponent, 'stl_per_game', 60) && scoreAbove(benchmarks, ownTeam, 'turnover_rate', 50)) {
-    focus.push('Labdabiztonság vs labdanyomás, egyszerűsített döntések, press break');
+    focus.push('Labdabiztonság vs labdanyomás, egyszerűsített döntések, letámadás-bontó sémák');
   }
   if (scoreAbove(benchmarks, ownTeam, 'oreb_rate', 60) && scoreBelow(benchmarks, opponent, 'oreb_rate', 40)) {
     focus.push('OREB agresszivitás növelése, második esélyek kihasználása');
@@ -615,8 +615,8 @@ const buildTempoControlNote = (
 
   const ownPaceScore = getPercentileScore(benchmarks, ownTeam, 'pace');
   return ownPaceScore <= 45
-    ? 'Kontrollált tempó kockázat: transition-orientált ellenfél, futások megfékezése kulcs.'
-    : 'Tempó-run kontroll: futások kezelése és defensive balance kiemelt feladat.';
+    ? 'Kontrollált tempó kockázat: átmeneti játékot preferáló ellenfél, futások megfékezése kulcs.'
+    : 'Tempó-futás kontroll: futások kezelése és defenzív egyensúly fenntartása kiemelt feladat.';
 };
 
 const buildMatchupRealizationNote = (
@@ -632,10 +632,10 @@ const buildMatchupRealizationNote = (
 
   const notes: string[] = [];
   if (perimeterDelta >= 3 && profile.defense.includes('Labdanyomás')) {
-    notes.push('Periméter előny csak stabil labdabiztonsággal és spacinggel realizálható (ellenfél labdanyomás).');
+    notes.push('Periméter előny csak stabil labdabiztonsággal és tudatos térnyitással realizálható (ellenfél labdanyomás).');
   }
   if (frontcourtDelta >= 3 && (profile.defense.includes('Festékvédelem') || profile.defense.includes('Kevés faultos védekezés'))) {
-    notes.push('Frontcourt előny kihasználása spacinget és faultkikényszerítést igényel (festékvédelem).');
+    notes.push('Belső poszt előny kihasználása térnyitást és faultkikényszerítést igényel (festékvédelem).');
   }
 
   return notes.join(' ');
@@ -665,7 +665,7 @@ const buildXFactors = (
     candidates.push({ key: 'rebound', label: 'második esélyek és lepattanó kontroll', short: 'lepattanó kontroll' });
   }
   if (tempoScore >= 70) {
-    candidates.push({ key: 'tempo', label: 'transition-run kontroll és visszarendeződés', short: 'tempó kontroll' });
+    candidates.push({ key: 'tempo', label: 'átmeneti futások kontrollja és visszarendeződés', short: 'tempó kontroll' });
   }
 
   const defaultCandidate = { key: 'paint', label: 'festék kontrollja és faultterhelés menedzselése', short: 'festék kontroll' };
@@ -697,7 +697,7 @@ const buildSummary = (
   const defense = profile.defense.length > 0 ? profile.defense.join(', ') : 'kiegyensúlyozott';
   const dominantAxis = getDominantAxis(opponent, benchmarks);
   const axisLabel = dominantAxis === 'transition'
-    ? 'transition'
+    ? 'átmeneti játék'
     : dominantAxis === 'periméter'
       ? 'periméter'
       : 'festék';
@@ -717,15 +717,15 @@ const buildSummary = (
     .filter(item => ['PF', 'C'].includes(item.position))
     .reduce((sum, item) => sum + item.deltaValPer36, 0);
   const posSummary = perimeterDelta >= 3 && frontcourtDelta <= -1
-    ? 'Periméteren saját előny (PG–SG–SF), az ellenfél előnye inkább a frontcourtban jelentkezik.'
+    ? 'Periméteren saját előny (PG–SG–SF), az ellenfél inkább a magas posztokon veszélyes.'
     : frontcourtDelta >= 3 && perimeterDelta <= -1
-      ? 'Frontcourt előny (PF–C), periméteren óvatos matchup szükséges.'
-      : 'Pozíciós előnyök elosztottak, matchup-alapú döntés javasolt.';
+      ? 'Belső poszt előny (PF–C), periméteren óvatos párosítás szükséges.'
+      : 'Pozíciós előnyök megoszlanak, párosítás-alapú döntés javasolt.';
 
   const probabilityNote = `A statisztikai esély (${winProbability.ownPct}% / ${winProbability.opponentPct}%) nem jelent biztos kimenetet; taktikai kockázatok döntőek.`;
 
   const varianceNote = scoreAbove(benchmarks, opponent, 'three_rate', 60)
-    ? 'Magas tripla-volumen miatt a variancia nagyobb, run-ok gyorsan dönthetnek.'
+    ? 'Magas tripla-volumen miatt a variancia nagyobb, futások gyorsan dönthetnek.'
     : '';
 
   const xFactorText = `Elsődleges X-faktor: ${xFactors.primary.label}. Másodlagos: ${xFactors.secondary.label}.`;

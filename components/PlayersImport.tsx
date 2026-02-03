@@ -183,6 +183,25 @@ export function PlayersImport({
       let newPlayers = 0;
       let updatedPlayers = 0;
       let movedPlayers = 0;
+      let deactivatedPlayers = 0;
+
+      const buildPlayerKey = (number?: number | null, name?: string | null) => {
+        const normalizedName = name?.trim().toLowerCase();
+        if (!normalizedName) return null;
+        const normalizedNumber = typeof number === 'number' ? number : 'unknown';
+        return `${normalizedName}::${normalizedNumber}`;
+      };
+
+      const importedPlayerKeys = new Set<string>();
+      const importedNameKeys = new Set<string>();
+
+      parsedPlayers.forEach(player => {
+        if (player.name) {
+          importedNameKeys.add(player.name.trim().toLowerCase());
+        }
+        const key = buildPlayerKey(player.number, player.name);
+        if (key) importedPlayerKeys.add(key);
+      });
 
       for (const player of parsedPlayers) {
         // Először keressük meg MINDEN rekordot (név + mezszám + szezon)
@@ -268,10 +287,42 @@ export function PlayersImport({
         }
       }
 
+      const { data: activePlayers, error: activePlayersError } = await supabase
+        .from('players')
+        .select('id, number, name')
+        .eq('season_id', targetSeasonId)
+        .eq('team_id', targetTeamId)
+        .eq('is_active', true);
+
+      if (activePlayersError) throw activePlayersError;
+
+      const playersToDeactivate =
+        activePlayers?.filter(player => {
+          const key = buildPlayerKey(player.number, player.name);
+          const normalizedName = player.name?.trim().toLowerCase() ?? '';
+          const keepByKey = key ? importedPlayerKeys.has(key) : false;
+          const keepByName = normalizedName ? importedNameKeys.has(normalizedName) : false;
+          return !(keepByKey || keepByName);
+        }) ?? [];
+
+      if (playersToDeactivate.length > 0) {
+        const { error: deactivateError } = await supabase
+          .from('players')
+          .update({ is_active: false })
+          .in(
+            'id',
+            playersToDeactivate.map(player => player.id)
+          );
+
+        if (deactivateError) throw deactivateError;
+        deactivatedPlayers = playersToDeactivate.length;
+      }
+
       const messageParts = [];
       if (newPlayers > 0) messageParts.push(`${newPlayers} új játékos`);
       if (updatedPlayers > 0) messageParts.push(`${updatedPlayers} frissítve`);
       if (movedPlayers > 0) messageParts.push(`${movedPlayers} áthelyezve más csapatból`);
+      if (deactivatedPlayers > 0) messageParts.push(`${deactivatedPlayers} inaktiválva`);
 
       setMessage({
         type: 'success',

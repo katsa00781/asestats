@@ -477,21 +477,39 @@ export function SeasonComparison({
     });
   }, [allPlayers, resolvedSeasonId]);
 
-  const filteredPlayers = useMemo(() => {
-    const base = resolvedTeamId !== 'all'
-      ? seasonPlayers.filter(player => player.teamId === resolvedTeamId)
-      : seasonPlayers;
-    return [...base].sort((a, b) => a.name.localeCompare(b.name, 'hu'));
-  }, [resolvedTeamId, seasonPlayers]);
-
   const activeSeasonPlayers = useMemo(() => {
     return seasonPlayers.filter(player => player.isActive !== false);
   }, [seasonPlayers]);
 
+  const filteredPlayers = useMemo(() => {
+    const base = resolvedTeamId !== 'all'
+      ? activeSeasonPlayers.filter(player => player.teamId === resolvedTeamId)
+      : activeSeasonPlayers;
+
+    const uniqueMap = new Map<string, PlayerStats>();
+    base.forEach(player => {
+      const nameKey = player.name?.trim().toLowerCase() ?? player.id;
+      const teamKey = player.teamId ?? 'unknown-team';
+      const numberKey = typeof player.number === 'number' ? player.number : 'unknown-number';
+      const key = `${teamKey}::${nameKey}::${numberKey}`;
+      if (!uniqueMap.has(key)) {
+        uniqueMap.set(key, player);
+      }
+    });
+
+    return Array.from(uniqueMap.values()).sort((a, b) => a.name.localeCompare(b.name, 'hu'));
+  }, [resolvedTeamId, activeSeasonPlayers]);
+
   const selectedPlayer = useMemo(() => {
     if (!selectedPlayerId) return null;
-    return seasonPlayers.find(player => player.id === selectedPlayerId) || null;
-  }, [seasonPlayers, selectedPlayerId]);
+    return activeSeasonPlayers.find(player => player.id === selectedPlayerId) || null;
+  }, [activeSeasonPlayers, selectedPlayerId]);
+
+  useEffect(() => {
+    if (!selectedPlayerId) return;
+    if (activeSeasonPlayers.some(player => player.id === selectedPlayerId)) return;
+    setSelectedPlayerId('');
+  }, [activeSeasonPlayers, selectedPlayerId]);
 
 
   const lastFiveGames = useMemo(() => {
@@ -1350,28 +1368,39 @@ export function SeasonComparison({
   }, [currentTeamPlayerIds, league, playerGameStats, playerTeamMap, postgameBenchmarks, pregameReport, rolesByPlayerId, seasonPlayers, selectedGame, resolvedTeamId, selectedTeamStats]);
 
   useEffect(() => {
+    if (selectedGameId || selectedOpponentTeamId) return;
     setPregameText('');
     setPregameTextError(null);
-  }, [selectedOpponentTeamId, pregameReport]);
+  }, [selectedOpponentTeamId, selectedGameId]);
 
   useEffect(() => {
     let isMounted = true;
 
     const loadPregameNarrative = async () => {
-      if (!selectedGameId) {
+      if (!selectedGameId && !selectedOpponentTeamId) {
         if (!isMounted) return;
         setPregameText('');
+        setPregameTextError(null);
         return;
       }
 
       setPregameTextError(null);
 
       try {
-        const { data, error } = await supabase
+        let query = supabase
           .from('game_text_reports')
           .select('narrative')
-          .eq('game_id', selectedGameId)
-          .eq('report_type', 'pregame')
+          .eq('report_type', 'pregame');
+
+        if (selectedGameId) {
+          query = query.eq('game_id', selectedGameId);
+        } else if (selectedOpponentTeamId) {
+          query = query.contains('pregame_snapshot', { opponentTeamId: selectedOpponentTeamId });
+        }
+
+        const { data, error } = await query
+          .order('generated_at', { ascending: false })
+          .limit(1)
           .maybeSingle();
 
         if (!isMounted) return;
@@ -1395,7 +1424,7 @@ export function SeasonComparison({
     return () => {
       isMounted = false;
     };
-  }, [selectedGameId]);
+  }, [selectedGameId, selectedOpponentTeamId]);
 
   useEffect(() => {
     let isMounted = true;
@@ -1459,6 +1488,7 @@ export function SeasonComparison({
   const canGenerateTextReport = Boolean(selectedGame && pregameReport && postgameReport);
 
   const canGeneratePregameText = Boolean(pregameReport);
+  const hasPregameLookupTarget = Boolean(selectedGameId || selectedOpponentTeamId);
 
   const handleGeneratePregameText = async () => {
     if (!pregameReport) return;
@@ -2273,7 +2303,7 @@ export function SeasonComparison({
                 </div>
               </div>
 
-              <div className="border-t border-slate-800 pt-4 space-y-3">
+              <div className="border-t border-slate-800 pt-4">
                 <div className="flex flex-wrap items-center gap-3">
                   <Button
                     type="button"
@@ -2287,27 +2317,37 @@ export function SeasonComparison({
                     Szigorúan adat-alapú, 6–10 mondatos összefoglaló készül.
                   </div>
                 </div>
-
-                {pregameTextError && (
-                  <div className="text-sm text-rose-300 bg-rose-900/30 border border-rose-800 rounded-md px-3 py-2">
-                    {pregameTextError}
-                  </div>
-                )}
-
-                {pregameText && (
-                  <div className="text-sm text-slate-50 whitespace-pre-line bg-slate-800/60 border border-slate-700 rounded-lg px-4 py-3">
-                    {pregameText}
-                  </div>
-                )}
-
-                {!pregameText && !pregameTextError && (
-                  <div className="text-sm text-slate-400">
-                    Még nincs generált pre-game szöveges értékelés ehhez a matchuphoz.
-                  </div>
-                )}
               </div>
             </div>
           )}
+
+          <div className="border-t border-slate-800 pt-4 space-y-3">
+            <div className="text-sm text-slate-300 font-medium">Mentett pre-game jelentés</div>
+
+            {!hasPregameLookupTarget && (
+              <div className="text-sm text-slate-400">
+                Válassz meccset vagy ellenfelet a mentett pre-game szöveg megjelenítéséhez.
+              </div>
+            )}
+
+            {hasPregameLookupTarget && pregameTextError && (
+              <div className="text-sm text-rose-300 bg-rose-900/30 border border-rose-800 rounded-md px-3 py-2">
+                {pregameTextError}
+              </div>
+            )}
+
+            {hasPregameLookupTarget && !pregameTextError && !pregameText && (
+              <div className="text-sm text-slate-400">
+                Nincs mentett pre-game szöveges értékelés a kiválasztott meccshez vagy ellenfélhez.
+              </div>
+            )}
+
+            {hasPregameLookupTarget && pregameText && (
+              <div className="text-sm text-slate-50 whitespace-pre-line bg-slate-800/60 border border-slate-700 rounded-lg px-4 py-3">
+                {pregameText}
+              </div>
+            )}
+          </div>
         </CardContent>
       </Card>
 
