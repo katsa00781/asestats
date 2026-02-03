@@ -91,6 +91,7 @@ export type ScoutingReport = {
     mismatchCandidates: string[];
   };
   focusPoints: string[];
+  xFactorContext?: PreGameXFactorContext;
   summary: string;
 };
 
@@ -101,6 +102,25 @@ export type PositionComparison = {
   ownPointsPer36: number;
   oppPointsPer36: number;
   deltaValPer36: number;
+};
+
+type XFactorCandidate = {
+  key: string;
+  label: string;
+  short: string;
+};
+
+type XFactorInsight = {
+  primary: XFactorCandidate;
+  secondary: XFactorCandidate;
+};
+
+export type PreGameXFactorContext = {
+  primaryKey: string;
+  secondaryKey?: string;
+  primaryLabel?: string;
+  secondaryLabel?: string;
+  riskFlags?: string[];
 };
 
 const round = (value: number, digits = 2) => {
@@ -132,6 +152,8 @@ const getStatValue = (team: NormalizedTeamStats, stat: string) => {
       return team.assistRate;
     case 'turnover_rate':
       return team.turnoverRate;
+    case 'oreb_rate':
+      return (team.oreb + team.dreb) > 0 ? team.oreb / (team.oreb + team.dreb) : 0;
     case 'two_rate':
       return team.twoRate;
     case 'three_rate':
@@ -161,6 +183,7 @@ export type NormalizedTeamStats = TeamSeasonStat & {
   pace: number; // per game
   assistRate: number;
   turnoverRate: number;
+  orebRate: number;
   twoRate: number;
   threeRate: number;
   threePct: number;
@@ -176,6 +199,7 @@ export const normalizeTeamStats = (raw: TeamSeasonStat): NormalizedTeamStats => 
   const pace = (fga + 0.44 * raw.fta + raw.tov) / games;
   const assistRate = fga > 0 ? raw.ast / fga : 0;
   const turnoverRate = pace > 0 ? (raw.tov / games) / pace : 0;
+  const orebRate = (raw.oreb + raw.dreb) > 0 ? raw.oreb / (raw.oreb + raw.dreb) : 0;
   const twoRate = fga > 0 ? raw.fga2 / fga : 0;
   const threeRate = fga > 0 ? raw.fga3 / fga : 0;
   const threePct = raw.fga3 > 0 ? (raw.fgm3 / raw.fga3) * 100 : 0;
@@ -190,6 +214,7 @@ export const normalizeTeamStats = (raw: TeamSeasonStat): NormalizedTeamStats => 
     pace: round(pace, 2),
     assistRate: round(assistRate, 3),
     turnoverRate: round(turnoverRate, 3),
+    orebRate: round(orebRate, 3),
     twoRate: round(twoRate, 3),
     threeRate: round(threeRate, 3),
     threePct: round(threePct, 1),
@@ -203,6 +228,7 @@ const TEAM_STAT_KEYS = [
   'pace',
   'assist_rate',
   'turnover_rate',
+  'oreb_rate',
   'two_rate',
   'three_rate',
   'three_pct',
@@ -472,6 +498,9 @@ const buildThreats = (team: NormalizedTeamStats, benchmarks: LeagueTeamBenchmark
   if (scoreAbove(benchmarks, team, 'two_rate', 60) && scoreAbove(benchmarks, team, 'ft_rate', 60)) {
     threats.push('Festékdomináns támadás → faultterhelés és belső nyomás');
   }
+  if (scoreAbove(benchmarks, team, 'oreb_rate', 60)) {
+    threats.push('Erős támadólepattanózás → második esély pontok veszélye');
+  }
   if (usageShare >= 0.55) threats.push('Kulcsjátékos dominancia → fókuszált elfojtás szükséges');
   return threats;
 };
@@ -483,13 +512,15 @@ const buildVulnerabilities = (team: NormalizedTeamStats, benchmarks: LeagueTeamB
   if (scoreBelow(benchmarks, team, 'efg', 40)) vulnerabilities.push('Alacsony dobáshatékonyság');
   if (scoreBelow(benchmarks, team, 'ft_rate', 40)) vulnerabilities.push('Kevés büntető');
   if (scoreBelow(benchmarks, team, 'three_pct', 40)) vulnerabilities.push('Gyenge periméter-hatékonyság');
+  if (scoreBelow(benchmarks, team, 'oreb_rate', 40)) vulnerabilities.push('Gyenge támadólepattanózás');
   return vulnerabilities;
 };
 
 const buildFocusPoints = (
   opponent: NormalizedTeamStats,
   ownTeam: NormalizedTeamStats,
-  benchmarks: LeagueTeamBenchmarks
+  benchmarks: LeagueTeamBenchmarks,
+  xFactors?: XFactorInsight
 ) => {
   const focus: string[] = [];
 
@@ -532,7 +563,119 @@ const buildFocusPoints = (
     focus.push('Festékelőny erőltetése (opp alacsony 2P-fókusz)');
   }
 
-  return focus.slice(0, 5);
+  if (scoreAbove(benchmarks, opponent, 'stl_per_game', 60) && scoreAbove(benchmarks, ownTeam, 'turnover_rate', 50)) {
+    focus.push('Labdabiztonság vs labdanyomás, egyszerűsített döntések, press break');
+  }
+  if (scoreAbove(benchmarks, ownTeam, 'oreb_rate', 60) && scoreBelow(benchmarks, opponent, 'oreb_rate', 40)) {
+    focus.push('OREB agresszivitás növelése, második esélyek kihasználása');
+  }
+
+  if (xFactors && !focus.some(item => item.startsWith('Ha '))) {
+    focus.push(`Ha ${xFactors.primary.short} nem működik → ${xFactors.secondary.short}`);
+  }
+
+  const uniqueFocus = Array.from(new Set(focus));
+  return uniqueFocus.slice(0, 5);
+};
+
+const buildRiskNotes = (
+  opponent: NormalizedTeamStats,
+  ownTeam: NormalizedTeamStats,
+  benchmarks: LeagueTeamBenchmarks
+) => {
+  const riskFlags: string[] = [];
+
+  if (scoreAbove(benchmarks, opponent, 'ft_rate', 65)) {
+    riskFlags.push('FT-rate volumen kockázat (fault + vonal)');
+  }
+  if (scoreAbove(benchmarks, opponent, 'oreb_rate', 65)) {
+    riskFlags.push('OREB volumen kockázat (második esélyek)');
+  }
+  if (scoreAbove(benchmarks, opponent, 'stl_per_game', 60) && scoreAbove(benchmarks, ownTeam, 'turnover_rate', 50)) {
+    riskFlags.push('Labdabiztonsági kockázat (nyomás alatti TO)');
+  }
+
+  return {
+    note: riskFlags.length > 0 ? `Kockázati jelzők: ${riskFlags.join(', ')}.` : '',
+    flags: riskFlags,
+  };
+};
+
+const buildTempoControlNote = (
+  opponent: NormalizedTeamStats,
+  ownTeam: NormalizedTeamStats,
+  benchmarks: LeagueTeamBenchmarks
+) => {
+  const dominantAxis = getDominantAxis(opponent, benchmarks);
+  if (dominantAxis !== 'transition') return '';
+
+  const opponentPaceScore = getPercentileScore(benchmarks, opponent, 'pace');
+  if (opponentPaceScore < 65) return '';
+
+  const ownPaceScore = getPercentileScore(benchmarks, ownTeam, 'pace');
+  return ownPaceScore <= 45
+    ? 'Kontrollált tempó kockázat: transition-orientált ellenfél, futások megfékezése kulcs.'
+    : 'Tempó-run kontroll: futások kezelése és defensive balance kiemelt feladat.';
+};
+
+const buildMatchupRealizationNote = (
+  positionComparison: PositionComparison[],
+  profile: ReturnType<typeof buildTeamStyle>
+) => {
+  const perimeterDelta = positionComparison
+    .filter(item => ['PG', 'SG', 'SF'].includes(item.position))
+    .reduce((sum, item) => sum + item.deltaValPer36, 0);
+  const frontcourtDelta = positionComparison
+    .filter(item => ['PF', 'C'].includes(item.position))
+    .reduce((sum, item) => sum + item.deltaValPer36, 0);
+
+  const notes: string[] = [];
+  if (perimeterDelta >= 3 && profile.defense.includes('Labdanyomás')) {
+    notes.push('Periméter előny csak stabil labdabiztonsággal és spacinggel realizálható (ellenfél labdanyomás).');
+  }
+  if (frontcourtDelta >= 3 && (profile.defense.includes('Festékvédelem') || profile.defense.includes('Kevés faultos védekezés'))) {
+    notes.push('Frontcourt előny kihasználása spacinget és faultkikényszerítést igényel (festékvédelem).');
+  }
+
+  return notes.join(' ');
+};
+
+const buildXFactors = (
+  opponent: NormalizedTeamStats,
+  ownTeam: NormalizedTeamStats,
+  benchmarks: LeagueTeamBenchmarks,
+  threats: string[],
+  vulnerabilities: string[]
+): XFactorInsight => {
+  const candidates: XFactorCandidate[] = [];
+
+  const hasPerimeterThreat = threats.some(item => item.includes('tripla') || item.includes('3P'));
+  const hasTurnoverWeakness = vulnerabilities.some(item => item.toLowerCase().includes('labdaeladás'));
+  const hasReboundWeakness = vulnerabilities.some(item => item.toLowerCase().includes('lepattanó'));
+  const tempoScore = getPercentileScore(benchmarks, opponent, 'pace');
+
+  if (hasPerimeterThreat) {
+    candidates.push({ key: 'perimeter', label: 'periméter kontrollja és tripla-variancia kezelése', short: 'periméter kontroll' });
+  }
+  if (hasTurnoverWeakness) {
+    candidates.push({ key: 'turnover', label: 'labdaszerzések és extra támadások menedzselése', short: 'labdaszerzés / extra támadások' });
+  }
+  if (hasReboundWeakness) {
+    candidates.push({ key: 'rebound', label: 'második esélyek és lepattanó kontroll', short: 'lepattanó kontroll' });
+  }
+  if (tempoScore >= 70) {
+    candidates.push({ key: 'tempo', label: 'transition-run kontroll és visszarendeződés', short: 'tempó kontroll' });
+  }
+
+  const defaultCandidate = { key: 'paint', label: 'festék kontrollja és faultterhelés menedzselése', short: 'festék kontroll' };
+  if (!candidates.some(item => item.key === defaultCandidate.key)) {
+    candidates.push(defaultCandidate);
+  }
+
+  const primary = candidates[0];
+  const secondary = candidates.find(item => item.key !== primary.key) || defaultCandidate;
+
+  return { primary, secondary };
 };
 
 const buildSummary = (
@@ -542,7 +685,11 @@ const buildSummary = (
   vulnerabilities: string[],
   benchmarks: LeagueTeamBenchmarks,
   winProbability: ScoutingReport['winProbability'],
-  positionComparison: PositionComparison[]
+  positionComparison: PositionComparison[],
+  xFactors: XFactorInsight,
+  riskNoteText: string,
+  matchupRealizationNote: string,
+  tempoControlNote: string
 ) => {
   const tempo = opponent.pace >= 70 ? 'gyors tempójú' : opponent.pace <= 60 ? 'lassú tempójú' : 'közepes tempójú';
   const offense = profile.offense.length > 0 ? profile.offense.join(', ') : 'kiegyensúlyozott';
@@ -580,13 +727,12 @@ const buildSummary = (
     ? 'Magas tripla-volumen miatt a variancia nagyobb, run-ok gyorsan dönthetnek.'
     : '';
 
-  const xFactor = threats.some(item => item.includes('tripla-volumen'))
-    ? 'X-faktor: a periméter kontrollja és a tripla-variancia kezelése billentheti el a meccset.'
-    : vulnerabilities.some(item => item.includes('labdaeladás'))
-      ? 'X-faktor: labdaszerzések és extra támadások döntőek lehetnek.'
-      : 'X-faktor: a festék kontrollja és a faultterhelés kezelése lehet döntő.';
+  const xFactorText = `Elsődleges X-faktor: ${xFactors.primary.label}. Másodlagos: ${xFactors.secondary.label}.`;
+  const tempoNote = tempoControlNote ? ` ${tempoControlNote}` : '';
+  const riskNote = riskNoteText ? ` ${riskNoteText}` : '';
+  const matchupNote = matchupRealizationNote ? ` ${matchupRealizationNote}` : '';
 
-  return `Az ellenfél ${tempo}, ${offense} támadást játszik, védekezésben ${defense} jellegű. ${axisText} ${threatText} ${vulnText} ${posSummary} ${probabilityNote} ${varianceNote} ${xFactor}`.trim();
+  return `Az ellenfél ${tempo}, ${offense} támadást játszik, védekezésben ${defense} jellegű. ${axisText} ${threatText} ${vulnText} ${posSummary} ${probabilityNote} ${varianceNote} ${xFactorText}${tempoNote}${riskNote}${matchupNote}`.trim();
 };
 
 const computeTeamRating = (team: NormalizedTeamStats, benchmarks: LeagueTeamBenchmarks) => {
@@ -594,6 +740,7 @@ const computeTeamRating = (team: NormalizedTeamStats, benchmarks: LeagueTeamBenc
     { stat: 'efg', weight: 1.4, invert: false },
     { stat: 'turnover_rate', weight: 1.2, invert: true },
     { stat: 'assist_rate', weight: 1.0, invert: false },
+    { stat: 'oreb_rate', weight: 0.6, invert: false },
     { stat: 'ft_rate', weight: 0.6, invert: false },
     { stat: 'three_pct', weight: 0.8, invert: false },
     { stat: 'val_per_game', weight: 1.4, invert: false },
@@ -620,16 +767,30 @@ const computeWinProbability = (
   const ownRating = computeTeamRating(ownTeam, benchmarks);
   const opponentRating = computeTeamRating(opponentTeam, benchmarks);
   const diff = ownRating - opponentRating;
-  const probability = 1 / (1 + Math.exp(-diff / 15));
-  const ownPct = clamp(probability, 0.05, 0.95) * 100;
-  const opponentPct = 100 - ownPct;
-  const absDiff = Math.abs(diff);
 
-  const confidence: 'Low' | 'Medium' | 'High' = absDiff >= 12
+  const ownThreeRateScore = getPercentileScore(benchmarks, ownTeam, 'three_rate');
+  const oppThreeRateScore = getPercentileScore(benchmarks, opponentTeam, 'three_rate');
+  const volatilityFactor = ownThreeRateScore >= 70 || oppThreeRateScore >= 70 ? 0.9 : 1;
+
+  const adjustedDiff = diff * volatilityFactor;
+  const probability = 1 / (1 + Math.exp(-adjustedDiff / 18));
+  const ownPct = clamp(probability, 0.08, 0.92) * 100;
+  const opponentPct = 100 - ownPct;
+  const absDiff = Math.abs(adjustedDiff);
+
+  let confidence: 'Low' | 'Medium' | 'High' = absDiff >= 16
     ? 'High'
-    : absDiff >= 6
+    : absDiff >= 8
       ? 'Medium'
       : 'Low';
+
+  const minGames = Math.min(ownTeam.games || 0, opponentTeam.games || 0);
+  if (minGames < 10 && confidence === 'High') {
+    confidence = 'Medium';
+  }
+  if (volatilityFactor < 1 && confidence === 'High') {
+    confidence = 'Medium';
+  }
 
   const predictedWinner: 'own' | 'opponent' | 'even' = absDiff < 2
     ? 'even'
@@ -692,9 +853,20 @@ export const analyzePreGameScouting = (
   });
   const threats = buildThreats(normalizedOpponent, leagueBenchmarks, usageShare);
   const vulnerabilities = buildVulnerabilities(normalizedOpponent, leagueBenchmarks);
-  const focusPoints = buildFocusPoints(normalizedOpponent, normalizedOwn, leagueBenchmarks);
   const positionComparison = buildPositionComparison(ownPlayers, opponentPlayers);
   const winProbability = computeWinProbability(normalizedOwn, normalizedOpponent, leagueBenchmarks);
+  const xFactors = buildXFactors(normalizedOpponent, normalizedOwn, leagueBenchmarks, threats, vulnerabilities);
+  const riskNotes = buildRiskNotes(normalizedOpponent, normalizedOwn, leagueBenchmarks);
+  const tempoControlNote = buildTempoControlNote(normalizedOpponent, normalizedOwn, leagueBenchmarks);
+  const matchupRealizationNote = buildMatchupRealizationNote(positionComparison, profile);
+  const focusPoints = buildFocusPoints(normalizedOpponent, normalizedOwn, leagueBenchmarks, xFactors);
+  const xFactorContext: PreGameXFactorContext = {
+    primaryKey: xFactors.primary.key,
+    primaryLabel: xFactors.primary.label,
+    secondaryKey: xFactors.secondary?.key,
+    secondaryLabel: xFactors.secondary?.label,
+    riskFlags: riskNotes.flags,
+  };
 
   return {
     opponentTeamId: opponentTeam.teamId,
@@ -715,6 +887,7 @@ export const analyzePreGameScouting = (
       mismatchCandidates: [...keyPlayers.mismatchCandidates, ...heightMismatchNotes].slice(0, 4),
     },
     focusPoints,
+    xFactorContext,
     summary: buildSummary(
       normalizedOpponent,
       profile,
@@ -722,7 +895,11 @@ export const analyzePreGameScouting = (
       vulnerabilities,
       leagueBenchmarks,
       winProbability,
-      positionComparison
+      positionComparison,
+      xFactors,
+      riskNotes.note,
+      matchupRealizationNote,
+      tempoControlNote
     ),
   };
 };

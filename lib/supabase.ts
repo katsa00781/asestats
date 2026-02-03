@@ -5,6 +5,14 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
+export type Json =
+  | string
+  | number
+  | boolean
+  | null
+  | { [key: string]: Json }
+  | Json[]
+
 // Típusok a Supabase táblákhoz
 export type Database = {
   public: {
@@ -72,6 +80,30 @@ export type Database = {
         }
         Insert: Omit<Database['public']['Tables']['player_game_stats']['Row'], 'id' | 'created_at'>
         Update: Partial<Database['public']['Tables']['player_game_stats']['Insert']>
+      }
+      game_text_reports: {
+        Row: {
+          id: string
+          game_id: string
+          report_type: 'pregame' | 'postgame' | 'combined'
+          narrative: string
+          pregame_snapshot: Json | null
+          postgame_snapshot: Json | null
+          generated_by: string | null
+          generated_at: string
+          updated_at: string
+        }
+        Insert: {
+          game_id: string
+          report_type: 'pregame' | 'postgame' | 'combined'
+          narrative: string
+          pregame_snapshot?: Json | null
+          postgame_snapshot?: Json | null
+          generated_by?: string | null
+          generated_at?: string
+          updated_at?: string
+        }
+        Update: Partial<Database['public']['Tables']['game_text_reports']['Insert']>
       }
     }
     Views: {

@@ -2,13 +2,14 @@
 
 import { TerminologyGlossary } from './TerminologyGlossary';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { supabase, type Database } from '@/lib/supabase';
 import type { PlayerStats, TeamGame } from '@/app/page';
 import {
   analyzePlayerSeason,
@@ -80,6 +81,8 @@ type GamePlayerStatRow = {
   players?: { team_id?: string | null } | null;
   fouls_committed?: number;
 };
+
+type GameTextReportRow = Database['public']['Tables']['game_text_reports']['Row'];
 
 const mapPosition = (pos: string): Position => {
   const normalized = pos?.toUpperCase?.() || '';
@@ -441,6 +444,20 @@ export function SeasonComparison({
   const [incomingPlayer, setIncomingPlayer] = useState<IncomingPlayerInput>(DEFAULT_INCOMING_PLAYER);
   const [focusedIncomingField, setFocusedIncomingField] = useState<IncomingField | null>(null);
   const [useRecentFormPregame, setUseRecentFormPregame] = useState(false);
+  const [pregameText, setPregameText] = useState('');
+  const [pregameTextError, setPregameTextError] = useState<string | null>(null);
+  const [isGeneratingPregameText, setIsGeneratingPregameText] = useState(false);
+  const [textReport, setTextReport] = useState('');
+  const [textReportMeta, setTextReportMeta] = useState<{ generatedAt?: string | null; generatedBy?: string | null }>({});
+  const [textReportError, setTextReportError] = useState<string | null>(null);
+  const [isLoadingTextReport, setIsLoadingTextReport] = useState(false);
+  const [isGeneratingTextReport, setIsGeneratingTextReport] = useState(false);
+  const formatGeneratedAt = (value?: string | null) => {
+    if (!value) return null;
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+    return new Intl.DateTimeFormat('hu-HU', { dateStyle: 'medium', timeStyle: 'short' }).format(date);
+  };
 
   const MIN_PREGAME_GAMES = 4;
   const MIN_RECENT_GAMES_TEAM = 3;
@@ -1323,8 +1340,153 @@ export function SeasonComparison({
       val: selectedTeamStats.val,
     };
 
-    return analyzePostGameReport(teamGame, opponentGame, seasonStats, postgameBenchmarks, players);
-  }, [currentTeamPlayerIds, league, playerGameStats, playerTeamMap, postgameBenchmarks, rolesByPlayerId, seasonPlayers, selectedGame, resolvedTeamId, selectedTeamStats]);
+    const normalizedOpponentName = selectedGame.opponent?.toLowerCase() ?? '';
+    const alignedXFactorContext =
+      pregameReport && pregameReport.opponentTeamName.toLowerCase() === normalizedOpponentName
+        ? pregameReport.xFactorContext
+        : undefined;
+
+    return analyzePostGameReport(teamGame, opponentGame, seasonStats, postgameBenchmarks, players, alignedXFactorContext);
+  }, [currentTeamPlayerIds, league, playerGameStats, playerTeamMap, postgameBenchmarks, pregameReport, rolesByPlayerId, seasonPlayers, selectedGame, resolvedTeamId, selectedTeamStats]);
+
+  useEffect(() => {
+    setPregameText('');
+    setPregameTextError(null);
+  }, [selectedOpponentTeamId, pregameReport]);
+
+  useEffect(() => {
+    let isMounted = true;
+    if (!selectedGameId) {
+      setTextReport('');
+      setTextReportMeta({});
+      setTextReportError(null);
+      setIsLoadingTextReport(false);
+      return () => {
+        isMounted = false;
+      };
+    }
+
+    setIsLoadingTextReport(true);
+    setTextReportError(null);
+
+    supabase
+      .from('game_text_reports')
+      .select('narrative, generated_at, generated_by')
+      .eq('game_id', selectedGameId)
+      .eq('report_type', 'combined')
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (!isMounted) return;
+        if (error && error.code !== 'PGRST116') {
+          setTextReport('');
+          setTextReportMeta({});
+          setTextReportError('Nem sikerült betölteni a szöveges elemzést.');
+          return;
+        }
+        if (data) {
+          setTextReport(data.narrative ?? '');
+          setTextReportMeta({ generatedAt: data.generated_at, generatedBy: data.generated_by });
+        } else {
+          setTextReport('');
+          setTextReportMeta({});
+        }
+      })
+      .catch(() => {
+        if (!isMounted) return;
+        setTextReport('');
+        setTextReportMeta({});
+        setTextReportError('Nem sikerült betölteni a szöveges elemzést.');
+      })
+      .finally(() => {
+        if (isMounted) {
+          setIsLoadingTextReport(false);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedGameId]);
+
+  const canGenerateTextReport = Boolean(selectedGame && pregameReport && postgameReport);
+
+  const canGeneratePregameText = Boolean(pregameReport);
+
+  const handleGeneratePregameText = async () => {
+    if (!pregameReport) return;
+    setIsGeneratingPregameText(true);
+    setPregameTextError(null);
+    try {
+      const response = await fetch('/api/generate-pregame-text', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          pregameReport,
+          ownTeamName: pregameOwnTeam?.teamName ?? 'Saját csapat',
+          opponentTeamName: pregameReport.opponentTeamName,
+          generatedBy: 'season-comparison-ui',
+        }),
+      });
+
+      const payload = (await response.json().catch(() => ({}))) as {
+        ok?: boolean;
+        narrative?: string;
+        error?: string;
+      };
+
+      if (!response.ok || !payload.ok) {
+        throw new Error(payload.error ?? 'A pre-game szöveges elemzés nem sikerült.');
+      }
+
+      setPregameText(payload.narrative ?? '');
+    } catch (error) {
+      setPregameTextError(error instanceof Error ? error.message : 'Ismeretlen hiba történt a generálás során.');
+    } finally {
+      setIsGeneratingPregameText(false);
+    }
+  };
+
+  const handleGenerateTextReport = async () => {
+    if (!selectedGame || !pregameReport || !postgameReport) return;
+    setIsGeneratingTextReport(true);
+    setTextReportError(null);
+    try {
+      const response = await fetch('/api/generate-game-text-report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          gameId: selectedGame.id,
+          opponentName: selectedGame.opponent,
+          reportType: 'combined',
+          pregameReport,
+          postgameReport,
+          generatedBy: 'season-comparison-ui',
+        }),
+      });
+
+      const payload = (await response.json().catch(() => ({}))) as {
+        ok?: boolean;
+        narrative?: string;
+        report?: GameTextReportRow;
+        error?: string;
+      };
+
+      if (!response.ok || !payload.ok) {
+        throw new Error(payload.error ?? 'A szöveges elemzés generálása nem sikerült.');
+      }
+
+      const narrative = payload.narrative ?? payload.report?.narrative ?? '';
+      setTextReport(narrative);
+      setTextReportMeta({
+        generatedAt: payload.report?.generated_at ?? new Date().toISOString(),
+        generatedBy: payload.report?.generated_by ?? 'gpt-automata',
+      });
+    } catch (error) {
+      setTextReportError(error instanceof Error ? error.message : 'Ismeretlen hiba történt a generálás során.');
+    } finally {
+      setIsGeneratingTextReport(false);
+    }
+  };
 
   const similarityList = useMemo(() => {
     if (!analysis || !benchmarks || !resolvedSeasonId || !selectedPlayer) return [];
@@ -1489,6 +1651,7 @@ export function SeasonComparison({
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex flex-wrap items-center gap-2">
+
                   {analysis.roles.map(role => (
                     <Badge key={role} className="bg-orange-600/20 text-orange-300 border border-orange-600/40">
                       {role}
@@ -2060,6 +2223,40 @@ export function SeasonComparison({
                   )}
                 </div>
               </div>
+
+              <div className="border-t border-slate-800 pt-4 space-y-3">
+                <div className="flex flex-wrap items-center gap-3">
+                  <Button
+                    type="button"
+                    onClick={handleGeneratePregameText}
+                    disabled={!canGeneratePregameText || isGeneratingPregameText}
+                    className="bg-sky-600 hover:bg-sky-500 text-white disabled:opacity-60"
+                  >
+                    {isGeneratingPregameText ? 'Pre-game értékelés készítése…' : 'Pre-game GPT értékelés'}
+                  </Button>
+                  <div className="text-xs text-slate-400">
+                    Szigorúan adat-alapú, 6–10 mondatos összefoglaló készül.
+                  </div>
+                </div>
+
+                {pregameTextError && (
+                  <div className="text-sm text-rose-300 bg-rose-900/30 border border-rose-800 rounded-md px-3 py-2">
+                    {pregameTextError}
+                  </div>
+                )}
+
+                {pregameText && (
+                  <div className="text-sm text-slate-50 whitespace-pre-line bg-slate-800/60 border border-slate-700 rounded-lg px-4 py-3">
+                    {pregameText}
+                  </div>
+                )}
+
+                {!pregameText && !pregameTextError && (
+                  <div className="text-sm text-slate-400">
+                    Még nincs generált pre-game szöveges értékelés ehhez a matchuphoz.
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </CardContent>
@@ -2101,6 +2298,17 @@ export function SeasonComparison({
           {postgameReport && (
             <div className="space-y-4">
               <div className="text-sm text-slate-200 leading-relaxed">{postgameReport.summary}</div>
+
+              {(postgameReport.reflection.xFactor || postgameReport.reflection.risk) && (
+                <div className="text-xs text-amber-200 space-y-1">
+                  {postgameReport.reflection.xFactor && (
+                    <div className="font-medium">{postgameReport.reflection.xFactor}</div>
+                  )}
+                  {postgameReport.reflection.risk && (
+                    <div className="text-slate-400">{postgameReport.reflection.risk}</div>
+                  )}
+                </div>
+              )}
 
               {postgameReport.dataNotes.length > 0 && (
                 <div className="text-xs text-slate-400">
@@ -2208,10 +2416,15 @@ export function SeasonComparison({
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <div className="text-sm text-slate-300 font-medium mb-2">Döntő tényezők</div>
-                  {postgameReport.decisiveFactors.offense.concat(postgameReport.decisiveFactors.defense).length > 0 ? (
-                    postgameReport.decisiveFactors.offense
-                      .concat(postgameReport.decisiveFactors.defense)
-                      .map(item => <div key={item} className="text-sm text-slate-200">• {item}</div>)
+                  {postgameReport.decisiveFactorMeta.length > 0 ? (
+                    postgameReport.decisiveFactorMeta.map((item, index) => (
+                      <div key={`${item.axis}-${item.label}-${index}`} className="flex items-center justify-between text-sm text-slate-200">
+                        <span>• {item.label}</span>
+                        <span className={`text-xs ${item.axis === 'offense' ? 'text-emerald-300' : 'text-sky-300'}`}>
+                          {item.axis === 'offense' ? 'Támadás' : 'Védekezés'} • {item.type}
+                        </span>
+                      </div>
+                    ))
                   ) : (
                     <div className="text-sm text-slate-400">Nincs kiemelt faktor.</div>
                   )}
@@ -2250,6 +2463,68 @@ export function SeasonComparison({
                   <div className="text-sm text-slate-400">Nincs kiemelt fókuszpont.</div>
                 )}
               </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card className="bg-slate-900 border-slate-800">
+        <CardHeader>
+          <CardTitle className="text-slate-50">Szöveges mérkőzés-elemzés (GPT)</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <Button
+              type="button"
+              onClick={handleGenerateTextReport}
+              disabled={!canGenerateTextReport || isGeneratingTextReport}
+              className="bg-indigo-500 hover:bg-indigo-400 text-white disabled:opacity-60"
+            >
+              {isGeneratingTextReport
+                ? 'Elemzés készítése...'
+                : textReport
+                  ? 'Elemzés újragenerálása'
+                  : 'Szöveges elemzés generálása'}
+            </Button>
+            <div className="text-xs text-slate-400">
+              {(() => {
+                if (!selectedGameId) return 'Válassz mérkőzést a gomb aktiválásához.';
+                if (!pregameReport) return 'A pre-game elemzés szükséges a generáláshoz.';
+                if (!postgameReport) return 'A post-game jelentés nélkül nem generálható.';
+                if (isLoadingTextReport) return 'Korábbi jelentés betöltése folyamatban…';
+                if (textReportMeta.generatedAt) {
+                  return `Utolsó mentés: ${formatGeneratedAt(textReportMeta.generatedAt) ?? 'ismeretlen időpont'}`;
+                }
+                return 'Generálj egy szöveges összefoglalót, amit automatikusan el is mentünk.';
+              })()}
+            </div>
+          </div>
+
+          {textReportError && (
+            <div className="text-sm text-rose-300 bg-rose-900/30 border border-rose-800 rounded-md px-3 py-2">
+              {textReportError}
+            </div>
+          )}
+
+          {isLoadingTextReport && !textReport && (
+            <div className="text-sm text-slate-400">Korábbi jelentés betöltése…</div>
+          )}
+
+          {textReport && (
+            <div className="space-y-2">
+              <div className="text-xs text-slate-400">
+                Mentve: {formatGeneratedAt(textReportMeta.generatedAt) ?? 'ismeretlen időpont'} • Forrás:{' '}
+                {textReportMeta.generatedBy ?? 'gpt-automata'}
+              </div>
+              <div className="text-sm text-slate-50 whitespace-pre-line bg-slate-800/60 border border-slate-700 rounded-lg px-4 py-3">
+                {textReport}
+              </div>
+            </div>
+          )}
+
+          {!textReport && !isLoadingTextReport && !textReportError && (
+            <div className="text-sm text-slate-400">
+              Még nincs elmentett szöveges elemzés ehhez a meccshez.
             </div>
           )}
         </CardContent>

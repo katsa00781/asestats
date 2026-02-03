@@ -71,6 +71,22 @@ CREATE INDEX IF NOT EXISTS idx_games_date ON games(date DESC);
 CREATE INDEX IF NOT EXISTS idx_player_game_stats_game_id ON player_game_stats(game_id);
 CREATE INDEX IF NOT EXISTS idx_player_game_stats_player_id ON player_game_stats(player_id);
 
+-- 4/b. Szöveges meccsjelentések tárolása
+CREATE TABLE IF NOT EXISTS game_text_reports (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  game_id UUID NOT NULL REFERENCES games(id) ON DELETE CASCADE,
+  report_type VARCHAR(20) NOT NULL CHECK (report_type IN ('pregame', 'postgame', 'combined')),
+  narrative TEXT NOT NULL,
+  pregame_snapshot JSONB,
+  postgame_snapshot JSONB,
+  generated_by VARCHAR(255),
+  generated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc', NOW()),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc', NOW()),
+  UNIQUE(game_id, report_type)
+);
+
+CREATE INDEX IF NOT EXISTS idx_game_text_reports_game_id ON game_text_reports(game_id);
+
 -- 5. Updated_at automatikus frissítése
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$
@@ -80,11 +96,17 @@ BEGIN
 END;
 $$ language 'plpgsql';
 
+DROP TRIGGER IF EXISTS update_games_updated_at ON games;
 CREATE TRIGGER update_games_updated_at BEFORE UPDATE ON games
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_players_updated_at ON players;
 CREATE TRIGGER update_players_updated_at BEFORE UPDATE ON players
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS update_game_text_reports_updated_at ON game_text_reports;
+CREATE TRIGGER update_game_text_reports_updated_at BEFORE UPDATE ON game_text_reports
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- 6. View az aggregált játékos statisztikákhoz
 -- SECURITY INVOKER módban, hogy az RLS policy-k érvényesek legyenek
@@ -131,23 +153,43 @@ GRANT SELECT ON player_season_stats TO anon, authenticated;
 ALTER TABLE games ENABLE ROW LEVEL SECURITY;
 ALTER TABLE players ENABLE ROW LEVEL SECURITY;
 ALTER TABLE player_game_stats ENABLE ROW LEVEL SECURITY;
+ALTER TABLE game_text_reports ENABLE ROW LEVEL SECURITY;
 
 -- Mindenki olvashat
+DROP POLICY IF EXISTS "Enable read access for all users" ON games;
 CREATE POLICY "Enable read access for all users" ON games FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Enable read access for all users" ON players;
 CREATE POLICY "Enable read access for all users" ON players FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Enable read access for all users" ON player_game_stats;
 CREATE POLICY "Enable read access for all users" ON player_game_stats FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Enable read access for all users" ON game_text_reports;
+CREATE POLICY "Enable read access for all users" ON game_text_reports FOR SELECT USING (true);
 
 -- Írás jogosultság (később finomhangolható)
+DROP POLICY IF EXISTS "Enable insert for authenticated users" ON games;
 CREATE POLICY "Enable insert for authenticated users" ON games FOR INSERT WITH CHECK (true);
+DROP POLICY IF EXISTS "Enable update for authenticated users" ON games;
 CREATE POLICY "Enable update for authenticated users" ON games FOR UPDATE USING (true);
+DROP POLICY IF EXISTS "Enable delete for authenticated users" ON games;
 CREATE POLICY "Enable delete for authenticated users" ON games FOR DELETE USING (true);
 
+DROP POLICY IF EXISTS "Enable insert for authenticated users" ON players;
 CREATE POLICY "Enable insert for authenticated users" ON players FOR INSERT WITH CHECK (true);
+DROP POLICY IF EXISTS "Enable update for authenticated users" ON players;
 CREATE POLICY "Enable update for authenticated users" ON players FOR UPDATE USING (true);
 
+DROP POLICY IF EXISTS "Enable insert for authenticated users" ON player_game_stats;
 CREATE POLICY "Enable insert for authenticated users" ON player_game_stats FOR INSERT WITH CHECK (true);
+DROP POLICY IF EXISTS "Enable update for authenticated users" ON player_game_stats;
 CREATE POLICY "Enable update for authenticated users" ON player_game_stats FOR UPDATE USING (true);
+DROP POLICY IF EXISTS "Enable delete for authenticated users" ON player_game_stats;
 CREATE POLICY "Enable delete for authenticated users" ON player_game_stats FOR DELETE USING (true);
+DROP POLICY IF EXISTS "Enable insert for authenticated users" ON game_text_reports;
+CREATE POLICY "Enable insert for authenticated users" ON game_text_reports FOR INSERT WITH CHECK (true);
+DROP POLICY IF EXISTS "Enable update for authenticated users" ON game_text_reports;
+CREATE POLICY "Enable update for authenticated users" ON game_text_reports FOR UPDATE USING (true);
+DROP POLICY IF EXISTS "Enable delete for authenticated users" ON game_text_reports;
+CREATE POLICY "Enable delete for authenticated users" ON game_text_reports FOR DELETE USING (true);
 
 -- 8. Mintaadatok beszúrása a már meglévő JSON-ból (opcionális)
 -- Ezt majd a Node.js kódból fogjuk megtenni
