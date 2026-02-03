@@ -62,6 +62,24 @@ export type LeagueBenchmarks = Record<
   Record<string, Record<Position, StatBenchmarks>>
 >;
 
+export type RoleKey =
+  | 'Primary Ball Handler'
+  | 'Secondary Creator'
+  | 'Defensive Guard'
+  | '3&D Wing'
+  | 'Scoring Wing'
+  | 'Secondary Playmaker'
+  | 'Glue Guy'
+  | 'Stretch 4'
+  | 'Physical 4'
+  | 'Rim Protector'
+  | 'Roll Man'
+  | 'Stretch 5'
+  | 'Energy Big'
+  | 'Offensive Hub'
+  | 'Slasher'
+  | 'Floor Spacer';
+
 export type SkillScores = {
   scoring: number;
   shooting: number;
@@ -72,19 +90,20 @@ export type SkillScores = {
 };
 
 export type RoleResult = {
-  role: string;
+  role: RoleKey;
   confidence: number;
 };
 
 export type PlayerAnalysis = {
   position: Position;
+  roleKeys: RoleKey[];
   roles: string[];
   skillScores: SkillScores;
   strengths: string[];
   limitations: string[];
   improvements: string[];
   summary: string;
-  confidence: 'High' | 'Medium' | 'Low';
+  confidence: 'Magas' | 'Közepes' | 'Alacsony';
   roleConfidence: number;
 };
 
@@ -108,7 +127,7 @@ export type VisualTrendBadge = {
   label: string;
   icon: string;
   color: string;
-  severity: 'Low' | 'Medium' | 'High';
+  severity: 'Alacsony' | 'Közepes' | 'Magas';
 };
 
 export type PlayerTrendReport = {
@@ -135,24 +154,60 @@ const SKILL_LABELS: Record<keyof SkillScores, string> = {
   efficiency: 'Hatékonyság',
 };
 
-const ROLE_INTROS: Record<string, string> = {
-  'Primary Ball Handler': 'Irányító poszton elsődleges labdás játékos.',
-  'Secondary Creator': 'Irányító poszton másodlagos támadásépítő.',
-  'Defensive Guard': 'Periméteren védekező specialista guard.',
-  '3&D Wing': 'Periméter poszton megbízható 3&D játékos, aki dobással spacinget biztosít.',
-  'Scoring Wing': 'Periméteren elsődleges pontszerző opció.',
-  'Secondary Playmaker': 'Periméteren kiegészítő játéképítő.',
-  'Glue Guy': 'Csapatjátékos szerepkörben értékes kiegészítő.',
-  'Stretch 4': 'Magas poszton stretch 4 típus, aki kintről is veszélyes.',
-  'Physical 4': 'Fizikai 4-es, aki lepattanóban és festékben erős.',
-  'Rim Protector': 'Festékben rim protector szerepkör.',
-  'Roll Man': 'Pick-and-roll befejező típus a gyűrű közelében.',
-  'Stretch 5': 'Stretch 5, aki kintről is elkapja.',
-  'Energy Big': 'Energikus magas, aki munkával termel.',
-  'Offensive Hub': 'Támadásban központi szerepű, magas usage és ponttermelésű játékos.',
-  'Slasher': 'Betörésekből hatékonyan támadó, faultot kiharcoló játékos.',
-  'Floor Spacer': 'Külső dobással teret nyitó, alacsonyabb usage-ú játékos.',
+export const ROLE_LABELS_HU: Record<RoleKey, string> = {
+  'Primary Ball Handler': 'Elsődleges irányító',
+  'Secondary Creator': 'Másodlagos szervező',
+  'Defensive Guard': 'Védekező hátvéd',
+  '3&D Wing': 'Triplázó-védő csatár',
+  'Scoring Wing': 'Pontszerző csatár',
+  'Secondary Playmaker': 'Kiegészítő játéképítő',
+  'Glue Guy': 'Csapatember',
+  'Stretch 4': 'Térnyitó 4-es',
+  'Physical 4': 'Fizikai 4-es',
+  'Rim Protector': 'Gyűrűvédő',
+  'Roll Man': 'Kettő-kettő befejező',
+  'Stretch 5': 'Térnyitó center',
+  'Energy Big': 'Energikus magas',
+  'Offensive Hub': 'Támadó vezér',
+  'Slasher': 'Betörő',
+  'Floor Spacer': 'Térnyitó dobó',
 };
+
+const ROLE_INTROS: Record<RoleKey, string> = {
+  'Primary Ball Handler': 'Elsődleges irányító, aki a támadások fő szervezője és labdakihozatala.',
+  'Secondary Creator': 'Másodlagos szervező, aki tehermentesíti az első számú labdakezelőt.',
+  'Defensive Guard': 'Periméteren védekező specialista hátvéd, aki ritmust tör meg.',
+  '3&D Wing': 'Periméteren megbízható triplázó-védő opció, dobásaival teret nyit.',
+  'Scoring Wing': 'Periméteren elsődleges pontszerző opció, önmagának is dobást teremt.',
+  'Secondary Playmaker': 'Periméteren kiegészítő játéképítő, aki extra passzt és flow-t ad.',
+  'Glue Guy': 'Csapatember szerepben sok apró dolgot tesz hozzá, összetartja a sorokat.',
+  'Stretch 4': 'Magas poszton térnyitó 4-es, aki kintről is folyamatosan veszélyes.',
+  'Physical 4': 'Fizikai 4-es, aki lepattanóban és a festékben dominál.',
+  'Rim Protector': 'Festékben megbízható gyűrűvédő, aki lezárja a palánkot.',
+  'Roll Man': 'Kettő-kettő helyzetekben veszélyes befejező, a gyűrű közelében él.',
+  'Stretch 5': 'Térnyitó center, aki külső dobással is fenyeget.',
+  'Energy Big': 'Energikus magas, aki munkabírásból és küzdésből él.',
+  'Offensive Hub': 'Támadásban központi vezér, magas labdabirtoklási aránnyal és ponttermeléssel.',
+  'Slasher': 'Betörésekből hatékonyan támadó, faultot kiharcoló játékos.',
+  'Floor Spacer': 'Külső dobással teret nyitó, alacsonyabb labdaigényű opció.',
+};
+
+const translateRoleLabel = (role: RoleKey) => ROLE_LABELS_HU[role] ?? role;
+
+const translateTrendRoles = (roles: string[]) => roles.map(role => ROLE_LABELS_HU[role as RoleKey] ?? role);
+
+const ROLE_LABEL_ENTRIES = Object.entries(ROLE_LABELS_HU) as Array<[RoleKey, string]>;
+
+export const resolveRoleKey = (role: string): RoleKey | null => {
+  if ((ROLE_LABELS_HU as Record<string, string>)[role]) {
+    return role as RoleKey;
+  }
+  const match = ROLE_LABEL_ENTRIES.find(([, label]) => label === role);
+  return match ? match[0] : null;
+};
+
+export const normalizeRoleKeys = (roles: string[]): RoleKey[] =>
+  roles.map(resolveRoleKey).filter((role): role is RoleKey => role !== null);
 
 const STATS_FOR_BENCHMARKS = [
   'pts_per36',
@@ -435,7 +490,7 @@ const detectRoles = (player: NormalizedStats, benchmarks: LeagueBenchmarks): Rol
     return compare === '>=' ? actual >= target : actual < target;
   };
 
-  const pushRole = (role: string, conditions: boolean[]) => {
+  const pushRole = (role: RoleKey, conditions: boolean[]) => {
     const satisfied = conditions.filter(Boolean).length;
     const confidence = conditions.length > 0 ? satisfied / conditions.length : 0;
     if (confidence > 0) {
@@ -566,7 +621,7 @@ const buildLimitations = (skills: SkillScores) => {
 const buildImprovementPoints = (
   player: NormalizedStats,
   benchmarks: LeagueBenchmarks,
-  roles: string[]
+  roles: RoleKey[]
 ) => {
   const improvements: string[] = [];
 
@@ -588,39 +643,39 @@ const buildImprovementPoints = (
   const blk = player.blkPer36;
 
   if (threePct >= threshold('threeP_pct', 'P75') && threePA <= threshold('threePA_per36', 'P40')) {
-    improvements.push(`3P hatékonyság jó (${round(threePct, 1)}%), de alacsony volumen (${round(threePA, 1)} 3PA/36).`);
+    improvements.push(`Tripla hatékonyság erős (${round(threePct, 1)}%), de alacsony volumen (${round(threePA, 1)} hármaskísérlet/36).`);
   }
 
   if (ftPct >= threshold('ft_pct', 'P75') && fta <= threshold('fta_per36', 'P40')) {
-    improvements.push(`Büntető hatékonyság jó (${round(ftPct, 1)}%), de kevés kiharcolt büntető (${round(fta, 1)} FTA/36).`);
+    improvements.push(`Büntető hatékonyság jó (${round(ftPct, 1)}%), de kevés kiharcolt dobás (${round(fta, 1)} büntető/36).`);
   }
 
   if (efg <= threshold('efg', 'P40') && usage >= threshold('usage_proxy', 'P60')) {
-    improvements.push(`Magas usage (${round(usage, 1)}/36) mellett alacsony eFG (${round(efg, 1)}%) → dobásminőség javítása.`);
+    improvements.push(`Magas labdabirtoklási arány (${round(usage, 1)}/36) mellett alacsony effektív mezőny% (${round(efg, 1)}%) → dobásminőség javítása szükséges.`);
   }
 
   if (usage <= threshold('usage_proxy', 'P40') && efg >= threshold('efg', 'P60')) {
-    improvements.push(`Alacsony usage (${round(usage, 1)}/36) mellett jó eFG (${round(efg, 1)}%) → több támadó szerep vállalható.`);
+    improvements.push(`Alacsony labdabirtoklási arány (${round(usage, 1)}/36) mellett jó effektív mezőny% (${round(efg, 1)}%) → több támadó szerep vállalható.`);
   }
 
   if (tov >= threshold('tov_per36', 'P60') && astTo <= threshold('ast_to', 'P40')) {
-    improvements.push(`Labdaeladás csökkentése (TO/36: ${round(tov, 1)}, AST/TO: ${round(astTo, 2)}).`);
+    improvements.push(`Labdaeladások mérséklése (eladott labdák/36: ${round(tov, 1)}, gólpassz/eladott labda: ${round(astTo, 2)}).`);
   }
 
   if ((player.position === 'PG' || player.position === 'SG') && ast <= threshold('ast_per36', 'P40') && usage >= threshold('usage_proxy', 'P50')) {
-    improvements.push(`Játéképítés fejlesztése (AST/36: ${round(ast, 1)}) a labdával töltött időhöz képest.`);
+    improvements.push(`Játéképítés fejlesztése (gólpassz/36: ${round(ast, 1)}) a labdával töltött időhöz mérten.`);
   }
 
   if ((player.position === 'PF' || player.position === 'C') && reb <= threshold('reb_per36', 'P40')) {
-    improvements.push(`Lepattanózás erősítése (REB/36: ${round(reb, 1)}).`);
+    improvements.push(`Lepattanózás erősítése (lepattanó/36: ${round(reb, 1)}).`);
   }
 
   if ((player.position === 'SG' || player.position === 'SF') && stl <= threshold('stl_per36', 'P40') && defReb <= threshold('def_reb_per36', 'P40')) {
-    improvements.push(`Periméter védekezés/possession-érték növelése (STL/36: ${round(stl, 1)}, DREB/36: ${round(defReb, 1)}).`);
+    improvements.push(`Periméter védekezés és birtoklásonkénti érték növelése (labdaszerzés/36: ${round(stl, 1)}, védőlepattanó/36: ${round(defReb, 1)}).`);
   }
 
   if ((player.position === 'PF' || player.position === 'C') && blk <= threshold('blk_per36', 'P40')) {
-    improvements.push(`Rim protection javítása (BLK/36: ${round(blk, 1)}).`);
+    improvements.push(`Gyűrűvédelem javítása (blokkok/36: ${round(blk, 1)}).`);
   }
 
   const lowAst = ast <= threshold('ast_per36', 'P40');
@@ -630,20 +685,20 @@ const buildImprovementPoints = (
   const highFouls = foulsPer36 >= 4;
 
   if (roles.includes('Roll Man') && lowAst) {
-    improvements.push('Short roll döntéshozatal és passzopciók fejlesztése.');
+    improvements.push('Rövid lefordulásos döntéshozatal és passzopciók fejlesztése.');
   }
   if (ftBelowAvg) {
     improvements.push('Büntetődobás stabilitás javítása.');
   }
   if (highFouls) {
-    improvements.push('Defensive foul control javítása, felesleges faultok csökkentése.');
+    improvements.push('Fault fegyelem javítása, felesleges szabálytalanságok csökkentése.');
   }
   if (low3PA && roles.includes('Stretch 5') === false && roles.includes('Stretch 4') === false) {
-    improvements.push('Spacing-érték növelése (minimum corner/short corner fenyegetés).');
+    improvements.push('Térnyitás növelése (legalább sarokból érkező fenyegetés).');
   }
 
   if (improvements.length === 0) {
-    improvements.push('Low priority development: szerep-optimalizálás és matchup-fókusz.');
+    improvements.push('Alacsony prioritású fejlesztés: szerep optimalizálása és párosítás-alapú finomhangolás.');
   }
 
   return improvements.slice(0, 3);
@@ -656,7 +711,7 @@ const buildSummary = (
   benchmarks: LeagueBenchmarks
 ) => {
   const intro = roles[0]?.role ? ROLE_INTROS[roles[0].role] : `${player.position} poszton szereplő játékos.`;
-  const roleNames = roles.map(role => role.role);
+  const roleKeys = roles.map(role => role.role);
   const strengths = buildStrengths(skills);
   const limitations = buildLimitations(skills);
 
@@ -671,7 +726,7 @@ const buildSummary = (
   if (skills.scoring >= 70 && valPct < 40) {
     valSentence = 'Magas ponttermelés mellett a VAL hatékonysági mutató visszafogott.';
   } else if (usagePct < 40 && valPct >= 70) {
-    valSentence = 'Alacsony usage mellett is magas VAL értékek, ami glue guy profilt jelez.';
+    valSentence = 'Alacsony labdabirtoklási arány mellett is magas VAL érték; értékes kiegészítő szerep.';
   } else if (valPct >= 75) {
     valSentence = 'Kiemelkedő VAL mutatók, hatékony hozzájárulás.';
   } else {
@@ -689,13 +744,13 @@ const buildSummary = (
   const lowOutsidePaint = outsidePaintShare <= 0.35;
   const highValPer36 = player.valPer36 >= getBenchmarkThreshold(benchmarks, player, 'val_per36', 'P75');
   const lowUsage = player.usageProxyPer36 <= getBenchmarkThreshold(benchmarks, player, 'usage_proxy', 'P40');
-  const hasInteriorRole = roleNames.includes('Rim Protector') || roleNames.includes('Roll Man');
-  const hasRollMan = roleNames.includes('Roll Man');
+  const hasInteriorRole = roleKeys.includes('Rim Protector') || roleKeys.includes('Roll Man');
+  const hasRollMan = roleKeys.includes('Roll Man');
 
   const interiorContext = hasInteriorRole && highTwoPct && lowAst && lowOutsidePaint && highValPer36
     ? [
-        `Pontszerzése elsősorban ${hasRollMan ? 'pick&roll befejezésekből, ' : ''}támadólepattanókból és közeli helyzetekből érkezik.`,
-        lowUsage ? 'Nem igényel labdát, alacsony usage mellett is magas hatékonyságot biztosít.' : '',
+        `Pontjainak döntő része ${hasRollMan ? 'kettő-kettő befejezésekből, ' : ''}támadólepattanókból és közeli szituációkból érkezik.`,
+        lowUsage ? 'Kevés labdát igényel, alacsony labdabirtoklási arány mellett is magas hatékonyságot ad.' : '',
       ].filter(Boolean).join(' ')
     : '';
 
@@ -706,9 +761,9 @@ const buildSummary = (
 };
 
 const roleConfidenceLabel = (confidence: number): PlayerAnalysis['confidence'] => {
-  if (confidence >= 0.75) return 'High';
-  if (confidence >= 0.5) return 'Medium';
-  return 'Low';
+  if (confidence >= 0.75) return 'Magas';
+  if (confidence >= 0.5) return 'Közepes';
+  return 'Alacsony';
 };
 
 // Clamp skill scores to 0-100 range.
@@ -784,17 +839,19 @@ const buildValidatedAnalysis = (
   const normalized = normalizePlayerStats(raw);
   const roles = detectRoles(normalized, benchmarks);
   const roleConfidence = roles.length > 0 ? roles[0].confidence : 0;
+  const roleKeys = roles.map(role => role.role);
   const rawSkills = clampSkillScores(computeSkillScores(normalized, benchmarks));
   const skillPercentiles = computeSkillPercentiles(normalized, benchmarks);
   const skills = applySkillCaps(rawSkills, skillPercentiles);
   const strengths = buildStrengths(skills);
-  const limitations = buildDetailedLimitations(normalized, benchmarks, roles.map(role => role.role), skills);
-  const improvements = buildImprovementPoints(normalized, benchmarks, roles.map(role => role.role));
+  const limitations = buildDetailedLimitations(normalized, benchmarks, roleKeys, skills);
+  const improvements = buildImprovementPoints(normalized, benchmarks, roleKeys);
   const cappedConfidence = clampRoleConfidence(roleConfidence, raw.games);
 
   return {
     position: raw.position,
-    roles: roles.map(r => r.role),
+    roleKeys,
+    roles: roleKeys.map(translateRoleLabel),
     skillScores: skills,
     strengths,
     limitations,
@@ -809,7 +866,7 @@ const buildValidatedAnalysis = (
 const buildDetailedLimitations = (
   player: NormalizedStats,
   benchmarks: LeagueBenchmarks,
-  roleNames: string[],
+  roleNames: RoleKey[],
   skills: SkillScores
 ) => {
   const limitations: string[] = [];
@@ -822,17 +879,17 @@ const buildDetailedLimitations = (
   const paintHeavy = outsidePaintShare <= 0.35;
 
   if (lowAst && skills.playmaking <= 40) {
-    limitations.push('Játéképítés: nem secondary creator, short roll playmaking limitált.');
+    limitations.push('Játéképítés: nem másodlagos szervező, rövid lefordulásokból nehezen hoz döntést.');
   }
   if (low3PA && (roleNames.includes('Stretch 5') === false && roleNames.includes('Stretch 4') === false)) {
-    limitations.push('Spacing-limit: nem stretch center, festékben extra védőt vonzhat.');
+    limitations.push('Térnyitási limit: nem térnyitó center, a festékben extra védőt vonzhat.');
   }
   if (highUsage && paintHeavy && low3PA) {
-    limitations.push('Festékfókusz: támadásban extra help védekezést hívhat, spacing sérülhet.');
+    limitations.push('Festékfókusz: támadásban plusz segítő védekezést hív, emiatt szűkül a tér.');
   }
 
   if (limitations.length === 0) {
-    return buildLimitations(skills).map(item => `${item}: szerepkörben limitált, matchup-kockázatot jelenthet.`);
+    return buildLimitations(skills).map(item => `${item}: szerepkörben limitált, párosítási kockázatot jelenthet.`);
   }
 
   return limitations.slice(0, 3);
@@ -840,50 +897,63 @@ const buildDetailedLimitations = (
 
 // Build a coach-facing one-line summary from analysis output.
 export const buildCoachSummary = (analysis: PlayerAnalysis) => {
-  if (analysis.roles.includes('Rim Protector') || analysis.roles.includes('Roll Man')) {
-    return 'Low-usage, high-impact center, aki védekezésben stabilizálja a festéket, támadásban pedig pick&roll rendszerben maximális hatékonyságot hoz – labda nélkül.';
+  const hasRole = (role: RoleKey) => analysis.roleKeys.includes(role);
+
+  if (hasRole('Rim Protector') || hasRole('Roll Man')) {
+    return 'Alacsony labdaigényű, nagy hatású center: védekezésben stabilizálja a festéket, támadásban kettő-kettő rendszerben hatékony befejező.';
   }
-  if (analysis.roles.includes('Scoring Wing') || analysis.roles.includes('Offensive Hub')) {
-    return 'Elsődleges pontszerző szerepben hatékony, támadásban magas felelősséggel használható – stabil spacing mellett.';
+  if (hasRole('Scoring Wing') || hasRole('Offensive Hub')) {
+    return 'Elsődleges pontszerzőként megbízható, támadásban nagy felelősség adható neki – megfelelő térnyitás mellett.';
   }
-  if (analysis.roles.includes('3&D Wing') || analysis.roles.includes('Defensive Guard')) {
-    return 'Kétoldalú periméter szerepben értékes, védekezésben matchup-stabil, támadásban kiegészítő spacing-opció.';
+  if (hasRole('3&D Wing') || hasRole('Defensive Guard')) {
+    return 'Kétoldalú periméter opció, védekezésben stabil párosítás, támadásban megbízható térnyitás.';
   }
-  return 'Kiegészítő szerepkörben stabil rotációs érték, matchup-alapú optimalizálással.';
+  return 'Kiegészítő szerepkörben stabil rotációs érték, párosításalapú optimalizálással.';
 };
 
+const TREND_LABELS_HU: Record<PlayerTrend['trendLabel'], string> = {
+  Improving: 'javuló',
+  Stable: 'stabil',
+  Declining: 'romló',
+  'Strongly Declining': 'erősen romló',
+};
+
+const translateTrendLabel = (label: PlayerTrend['trendLabel']) => TREND_LABELS_HU[label] ?? label;
+
 const buildTrendSummary = (trend: PlayerTrend) => {
-  const base = `${trend.name} az utolsó 5 mérkőzés alapján ${trend.trendLabel} formát mutat.`;
-  if (trend.trendLabel !== 'Stable') return `${base} Eltérés a szezonátlagtól érzékelhető.`;
+  const label = translateTrendLabel(trend.trendLabel);
+  const base = `${trend.name} az utolsó 5 mérkőzés alapján ${label} formát mutat.`;
+  if (trend.trendLabel !== 'Stable') return `${base} Érezhető eltérés a szezonátlagtól.`;
   return base;
 };
 
 const buildStabilityText = (trend: PlayerTrend) => {
   if (trend.consistencyLabel === 'High') return 'Meccsről meccsre stabil teljesítmény.';
-  if (trend.consistencyLabel === 'Medium') return 'Mérsékelt ingadozás, matchup-érzékeny teljesítmény.';
+  if (trend.consistencyLabel === 'Medium') return 'Mérsékelt ingadozás, párosítás-érzékeny teljesítmény.';
   return 'Volatilis forma, rotációs kockázat.';
 };
 
 const buildRoleTrendText = (trend: PlayerTrend) => {
-  const roles = trend.roles.length > 0 ? trend.roles.join(', ') : 'szerepkör nélkül';
+  const translatedRoles = translateTrendRoles(trend.roles);
+  const roles = translatedRoles.length > 0 ? translatedRoles.join(', ') : 'szerepkör nélkül';
   if (trend.roleTrendLabel === 'Expanding') {
     return `Növekvő támadó felelősség (${roles}).`;
   }
   if (trend.roleTrendLabel === 'Shrinking') {
-    return `Csökkenő usage vagy szerep (${roles}).`;
+    return `Csökkenő labdabirtoklási arány vagy szerep (${roles}).`;
   }
   return `Változatlan szerepkör (${roles}).`;
 };
 
 const buildRoleContext = (trend: PlayerTrend) => {
-  const roles = trend.roles.join(', ');
-  const isAttackRole = trend.roles.some(role => ['Scoring Wing', 'Offensive Hub'].includes(role));
-  const isDefenseRole = trend.roles.some(role => ['3&D Wing', 'Defensive Guard', 'Rim Protector'].includes(role));
+  const roleKeys = normalizeRoleKeys(trend.roles);
+  const isAttackRole = roleKeys.some(role => ['Scoring Wing', 'Offensive Hub'].includes(role));
+  const isDefenseRole = roleKeys.some(role => ['3&D Wing', 'Defensive Guard', 'Rim Protector'].includes(role));
   const highUsage = trend.usage_avg_5 >= trend.usage_season_avg;
 
   const parts: string[] = [];
   if (isAttackRole) {
-    parts.push('Támadásfókuszú szerepkör mellett a forma alakulása közvetlenül hat a scoring stabilitására.');
+    parts.push('Támadásfókuszú szerepkör mellett a forma alakulása közvetlenül hat a pontszerzés stabilitására.');
   } else if (isDefenseRole) {
     parts.push('Defenzív szerepkörben a stabilitás elsődleges, a trend elsősorban meccsritmusra utal.');
   } else {
@@ -891,37 +961,36 @@ const buildRoleContext = (trend: PlayerTrend) => {
   }
 
   if (trend.trendLabel === 'Declining' && highUsage) {
-    parts.push('Csökkenő forma magas usage mellett csapatkockázatot jelent.');
+    parts.push('Csökkenő forma magas labdabirtoklási arány mellett csapatkockázatot jelent.');
   } else if (trend.trendLabel === 'Strongly Declining' && highUsage) {
-    parts.push('Erősen visszaeső forma magas usage mellett fokozott kockázat.');
+    parts.push('Erősen visszaeső forma magas labdabirtoklási arány mellett fokozott kockázat.');
   }
 
-  if (!roles) return parts.slice(0, 2).join(' ');
   return parts.slice(0, 2).join(' ');
 };
 
 const buildTrendBadge = (trend: PlayerTrend): VisualTrendBadge => {
   if (trend.trendLabel === 'Improving' && trend.consistencyLabel === 'High') {
-    return { label: 'Hot', icon: 'arrow-up', color: 'green', severity: 'Low' };
+    return { label: 'Forró forma', icon: 'arrow-up', color: 'green', severity: 'Alacsony' };
   }
   if (trend.trendLabel === 'Improving' && trend.consistencyLabel !== 'High') {
-    return { label: 'Positive Trend', icon: 'trending-up', color: 'light-green', severity: 'Low' };
+    return { label: 'Pozitív trend', icon: 'trending-up', color: 'light-green', severity: 'Alacsony' };
   }
   if (trend.trendLabel === 'Stable') {
-    return { label: 'Stable', icon: 'minus', color: 'grey', severity: 'Low' };
+    return { label: 'Stabil', icon: 'minus', color: 'grey', severity: 'Alacsony' };
   }
   if (trend.trendLabel === 'Strongly Declining' || (trend.trendLabel === 'Declining' && trend.consistencyLabel === 'Low')) {
-    return { label: 'Warning', icon: 'alert-triangle', color: 'red', severity: 'High' };
+    return { label: 'Figyelmeztetés', icon: 'alert-triangle', color: 'red', severity: 'Magas' };
   }
   if (trend.trendLabel === 'Declining') {
-    return { label: 'Cold', icon: 'arrow-down', color: 'orange', severity: 'Medium' };
+    return { label: 'Visszaesés', icon: 'arrow-down', color: 'orange', severity: 'Közepes' };
   }
-  return { label: 'Stable', icon: 'minus', color: 'grey', severity: 'Low' };
+  return { label: 'Stabil', icon: 'minus', color: 'grey', severity: 'Alacsony' };
 };
 
 const buildCoachTakeaway = (trend: PlayerTrend) => {
   if (trend.trendLabel === 'Improving' && trend.roleTrendLabel === 'Expanding') {
-    return 'Szerep növelése kontrollált usage mellett.';
+    return 'Szerep növelése kontrollált labdabirtoklási arány mellett.';
   }
   if (trend.trendLabel === 'Improving') {
     return 'Szerep fenntartása, stabil terhelés mellett.';
@@ -930,9 +999,9 @@ const buildCoachTakeaway = (trend: PlayerTrend) => {
     return 'Szerep fenntartása, megbízható rotációs opcióként.';
   }
   if (trend.trendLabel === 'Declining' || trend.trendLabel === 'Strongly Declining') {
-    return 'Matchup-alapú használat vagy rotációs óvatosság.';
+    return 'Párosítás-alapú használat vagy rotációs óvatosság.';
   }
-  return 'Szerep fenntartása, matchup-kontroll mellett.';
+  return 'Szerep fenntartása, párosítás-kontroll mellett.';
 };
 
 export const analyzePlayerSeason = (
@@ -976,19 +1045,19 @@ export const buildPlayerTrendReport = (trend: PlayerTrend): PlayerTrendReport =>
   const takeaway = buildCoachTakeaway(trend);
 
   const section = trend.context === 'pre-game'
-    ? 'Pre-Game Report'
+    ? 'Mérkőzés előtti riport'
     : trend.context === 'post-game'
-      ? 'Post-Game Report'
-      : 'Player Profile';
+      ? 'Mérkőzés utáni riport'
+      : 'Játékos profil';
 
   const sectionTitle = trend.context === 'pre-game'
-    ? 'Hot / Cold Players (Last 5 Games)'
+    ? 'Formamutató (utolsó 5 meccs)'
     : trend.context === 'post-game'
-      ? 'Performance vs Recent Form'
-      : 'Last 5 Games Trend';
+      ? 'Teljesítmény vs aktuális forma'
+      : 'Utolsó 5 meccs trendje';
 
   const focus = trend.context === 'pre-game'
-    ? ['forma iránya', 'várható impact', 'matchup-kockázat vagy előny']
+    ? ['forma iránya', 'várható hatás', 'párosítási kockázat vagy előny']
     : trend.context === 'post-game'
       ? ['trend igazolása vagy cáfolata', 'pozitív/negatív megerősítés']
       : ['hosszabb távú forma', 'szerep stabilitása', 'rotációs érték'];

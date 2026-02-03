@@ -827,7 +827,7 @@ function PlayerDetails( { player, onBack }: PlayerDetailProps) {
 
       <Card className="mt-6 bg-slate-900 border-slate-800">
         <CardHeader>
-          <CardTitle className="text-slate-50">Last 5 Games Trend</CardTitle>
+          <CardTitle className="text-slate-50">Utolsó 5 meccs trendje</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3 text-sm text-slate-200">
           {trendReport ? (
@@ -837,7 +837,7 @@ function PlayerDetails( { player, onBack }: PlayerDetailProps) {
                   <span className="mr-1">{trendIconMap[trendReport.badge.icon] ?? <Minus size={14} />}</span>
                   {trendReport.badge.label}
                 </Badge>
-                <span className="text-xs text-slate-400">Severity: {trendReport.badge.severity}</span>
+                <span className="text-xs text-slate-400">Súlyosság: {trendReport.badge.severity}</span>
               </div>
               <div>{trendReport.summary}</div>
               <div>{trendReport.stability}</div>

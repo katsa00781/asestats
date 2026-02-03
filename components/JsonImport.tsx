@@ -145,7 +145,7 @@ export function JsonImport({ onImportComplete, lastImportedGame, selectedSeasonI
       }
     }
     fetchData();
-  }, []);
+  }, [preferredSeasonId]);
 
   const loadExistingGames = useCallback(async () => {
     if (!selectedSeasonId) return;

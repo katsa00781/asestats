@@ -1,5 +1,5 @@
 'use client';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -66,7 +66,7 @@ export function GameQuickImport({ onImportComplete, selectedSeasonId }: GameQuic
       .map(token => (token.length <= 2 ? token : token[0]))
       .join('');
 
-  const findTeamIdForName = (teamName: string): string => {
+  const findTeamIdForName = useCallback((teamName: string): string => {
     const normalizedTarget = normalizeName(teamName);
     if (!normalizedTarget) return '';
     const targetAbbr = buildAbbreviation(normalizedTarget);
@@ -100,7 +100,7 @@ export function GameQuickImport({ onImportComplete, selectedSeasonId }: GameQuic
     if (partial) return partial.id;
 
     return '';
-  };
+  }, [teams]);
 
   useEffect(() => {
     let isMounted = true;
@@ -143,7 +143,7 @@ export function GameQuickImport({ onImportComplete, selectedSeasonId }: GameQuic
 
     setHomeTeamId(prev => prev || findTeamIdForName(parsedData.homeTeam));
     setAwayTeamId(prev => prev || findTeamIdForName(parsedData.awayTeam));
-  }, [parsedData, teams]);
+  }, [parsedData, teams, findTeamIdForName]);
 
   // Parse the input text
   const parseGameInfo = (text: string): ParsedGameInfo => {

@@ -1,3 +1,5 @@
+import { normalizeRoleKeys } from './player-analysis';
+
 export type Position = 'PG' | 'SG' | 'SF' | 'PF' | 'C';
 
 export type TeamSeasonStat = {
@@ -544,7 +546,8 @@ const buildRosterSummary = (team: NormalizedTeamStats) => {
       heightSum += player.heightCm;
       heightCount += 1;
     }
-    player.roles.forEach(role => {
+    const normalizedRoles = normalizeRoleKeys(player.roles);
+    normalizedRoles.forEach(role => {
       roleCounts[role] = (roleCounts[role] ?? 0) + 1;
     });
   });
@@ -562,7 +565,10 @@ const buildRosterSummary = (team: NormalizedTeamStats) => {
   const top2UsageShare = round(top2Usage / totalUsage, 3);
 
   const creatorRoles = ['Primary Ball Handler', 'Secondary Creator', 'Secondary Playmaker'];
-  const creators = team.roster.filter(player => player.roles.some(role => creatorRoles.includes(role))).length;
+  const creators = team.roster.filter(player => {
+    const playerRoles = normalizeRoleKeys(player.roles);
+    return playerRoles.some(role => creatorRoles.includes(role));
+  }).length;
 
   const bigShare = (positionMinutesShare.PF + positionMinutesShare.C) / 100;
 

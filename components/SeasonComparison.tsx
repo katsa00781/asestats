@@ -193,9 +193,9 @@ const buildSimilarityReason = (base: PlayerAnalysis, other: PlayerAnalysis) => {
 
 const getConfidenceTone = (confidence: PlayerAnalysis['confidence']) => {
   switch (confidence) {
-    case 'High':
+    case 'Magas':
       return 'text-emerald-400';
-    case 'Medium':
+    case 'Közepes':
       return 'text-amber-400';
     default:
       return 'text-rose-400';
@@ -1750,14 +1750,14 @@ export function SeasonComparison({
                   <span className={`font-semibold ${getConfidenceTone(analysis.confidence)}`}>
                     Bizonyosság: {analysis.confidence}
                   </span>
-                  <span className="text-slate-400">Role confidence: {(analysis.roleConfidence * 100).toFixed(0)}%</span>
+                  <span className="text-slate-400">Szerep biztonság: {(analysis.roleConfidence * 100).toFixed(0)}%</span>
                 </div>
               </CardContent>
             </Card>
 
             <Card className="bg-slate-900 border-slate-800">
               <CardHeader>
-                <CardTitle className="text-slate-50">Skill score-ok</CardTitle>
+                <CardTitle className="text-slate-50">Képesség pontszámok</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 {Object.entries(analysis.skillScores).map(([key, value]) => (
@@ -2950,14 +2950,14 @@ export function SeasonComparison({
                           <span className={`font-semibold ${getConfidenceTone(incomingAnalysis.confidence)}`}>
                             Bizonyosság: {incomingAnalysis.confidence}
                           </span>
-                          <span className="text-slate-400">Role confidence: {(incomingAnalysis.roleConfidence * 100).toFixed(0)}%</span>
+                          <span className="text-slate-400">Szerep biztonság: {(incomingAnalysis.roleConfidence * 100).toFixed(0)}%</span>
                         </div>
                       </CardContent>
                     </Card>
 
                     <Card className="bg-slate-900 border-slate-800">
                       <CardHeader>
-                        <CardTitle className="text-slate-50">Skill score-ok</CardTitle>
+                        <CardTitle className="text-slate-50">Képesség pontszámok</CardTitle>
                       </CardHeader>
                       <CardContent className="space-y-3">
                         {Object.entries(incomingAnalysis.skillScores).map(([key, value]) => (

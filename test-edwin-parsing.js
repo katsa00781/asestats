@@ -83,6 +83,7 @@ console.log('Steals:', steals);
 console.log('Turnovers:', turnovers);
 console.log('Blocks:', blocks);
 console.log('Fouls:', fouls);
+console.log('Plus/Minus:', plusMinus);
 console.log('Valuation:', valuation);
 console.log('OffRtg:', offensiveRating);
 console.log('DefRtg:', defensiveRating);

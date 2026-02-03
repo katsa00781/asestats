@@ -16,7 +16,7 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 async function addColumns() {
   console.log('Oszlopok hozzáadása...\n');
 
-  const { data, error } = await supabase.rpc('exec_sql', {
+  const { error } = await supabase.rpc('exec_sql', {
     sql: `
       ALTER TABLE players 
       ADD COLUMN IF NOT EXISTS birth_year INTEGER,
