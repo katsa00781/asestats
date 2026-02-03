@@ -84,9 +84,14 @@ export type Database = {
       game_text_reports: {
         Row: {
           id: string
-          game_id: string
+          game_id: string | null
+          team_pair_key: string | null
           report_type: 'pregame' | 'postgame' | 'combined'
           narrative: string
+          own_team_id: string | null
+          own_team_name: string | null
+          opponent_team_id: string | null
+          opponent_team_name: string | null
           pregame_snapshot: Json | null
           postgame_snapshot: Json | null
           generated_by: string | null
@@ -94,9 +99,14 @@ export type Database = {
           updated_at: string
         }
         Insert: {
-          game_id: string
+          game_id?: string | null
+          team_pair_key?: string | null
           report_type: 'pregame' | 'postgame' | 'combined'
           narrative: string
+          own_team_id?: string | null
+          own_team_name?: string | null
+          opponent_team_id?: string | null
+          opponent_team_name?: string | null
           pregame_snapshot?: Json | null
           postgame_snapshot?: Json | null
           generated_by?: string | null

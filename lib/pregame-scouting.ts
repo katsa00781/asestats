@@ -66,6 +66,8 @@ export type LeagueTeamBenchmarks = Record<
 >;
 
 export type ScoutingReport = {
+  ownTeamId: string;
+  ownTeamName: string;
   opponentTeamId: string;
   opponentTeamName: string;
   league: string;
@@ -870,6 +872,8 @@ export const analyzePreGameScouting = (
   };
 
   return {
+    ownTeamId: ownTeam.teamId,
+    ownTeamName: ownTeam.teamName,
     opponentTeamId: opponentTeam.teamId,
     opponentTeamName: opponentTeam.teamName,
     league: opponentTeam.league,

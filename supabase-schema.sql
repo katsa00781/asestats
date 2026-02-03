@@ -74,18 +74,53 @@ CREATE INDEX IF NOT EXISTS idx_player_game_stats_player_id ON player_game_stats(
 -- 4/b. Szöveges meccsjelentések tárolása
 CREATE TABLE IF NOT EXISTS game_text_reports (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  game_id UUID NOT NULL REFERENCES games(id) ON DELETE CASCADE,
+  game_id UUID REFERENCES games(id) ON DELETE CASCADE,
+  team_pair_key UUID,
   report_type VARCHAR(20) NOT NULL CHECK (report_type IN ('pregame', 'postgame', 'combined')),
   narrative TEXT NOT NULL,
+  own_team_id UUID,
+  own_team_name VARCHAR(255),
+  opponent_team_id UUID,
+  opponent_team_name VARCHAR(255),
   pregame_snapshot JSONB,
   postgame_snapshot JSONB,
   generated_by VARCHAR(255),
   generated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc', NOW()),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc', NOW()),
-  UNIQUE(game_id, report_type)
+  CONSTRAINT chk_game_or_team_pair CHECK (game_id IS NOT NULL OR team_pair_key IS NOT NULL),
+  UNIQUE(game_id, report_type),
+  UNIQUE(team_pair_key, report_type)
 );
 
-CREATE INDEX IF NOT EXISTS idx_game_text_reports_game_id ON game_text_reports(game_id);
+-- Biztosítsuk, hogy a fenti módosítások meglévő adatbázisokon is érvényesüljenek
+ALTER TABLE game_text_reports
+  ALTER COLUMN game_id DROP NOT NULL;
+
+ALTER TABLE game_text_reports
+  ADD COLUMN IF NOT EXISTS team_pair_key UUID;
+
+ALTER TABLE game_text_reports
+  DROP CONSTRAINT IF EXISTS chk_game_or_team_pair;
+
+ALTER TABLE game_text_reports
+  ADD CONSTRAINT chk_game_or_team_pair CHECK (game_id IS NOT NULL OR team_pair_key IS NOT NULL);
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'game_text_reports_team_pair_report_type_key'
+  ) THEN
+    ALTER TABLE game_text_reports
+      ADD CONSTRAINT game_text_reports_team_pair_report_type_key UNIQUE (team_pair_key, report_type);
+  END IF;
+END $$;
+
+CREATE INDEX IF NOT EXISTS idx_game_text_reports_own_team ON game_text_reports(own_team_id);
+CREATE INDEX IF NOT EXISTS idx_game_text_reports_opponent_team ON game_text_reports(opponent_team_id);
+CREATE INDEX IF NOT EXISTS idx_game_text_reports_team_names ON game_text_reports(own_team_name, opponent_team_name);
+CREATE INDEX IF NOT EXISTS idx_game_text_reports_team_pair ON game_text_reports(team_pair_key);
 
 -- 5. Updated_at automatikus frissítése
 CREATE OR REPLACE FUNCTION update_updated_at_column()

@@ -447,6 +447,10 @@ export function SeasonComparison({
   const [pregameText, setPregameText] = useState('');
   const [pregameTextError, setPregameTextError] = useState<string | null>(null);
   const [isGeneratingPregameText, setIsGeneratingPregameText] = useState(false);
+  const [pregameTextMeta, setPregameTextMeta] = useState<{ generatedAt?: string | null; generatedBy?: string | null }>({});
+  const [pregameSaveStatus, setPregameSaveStatus] = useState<
+    { type: 'success' | 'warning' | 'error'; message: string } | null
+  >(null);
   const [textReport, setTextReport] = useState('');
   const [textReportMeta, setTextReportMeta] = useState<{ generatedAt?: string | null; generatedBy?: string | null }>({});
   const [textReportError, setTextReportError] = useState<string | null>(null);
@@ -1367,17 +1371,25 @@ export function SeasonComparison({
     return analyzePostGameReport(teamGame, opponentGame, seasonStats, postgameBenchmarks, players, alignedXFactorContext);
   }, [currentTeamPlayerIds, league, playerGameStats, playerTeamMap, postgameBenchmarks, pregameReport, rolesByPlayerId, seasonPlayers, selectedGame, resolvedTeamId, selectedTeamStats]);
 
+  const canLookupPregameByTeams = Boolean(
+    selectedOpponentTeamId &&
+    resolvedTeamId &&
+    resolvedTeamId !== 'all'
+  );
+
   useEffect(() => {
-    if (selectedGameId || selectedOpponentTeamId) return;
+    if (selectedGameId || canLookupPregameByTeams) return;
     setPregameText('');
     setPregameTextError(null);
-  }, [selectedOpponentTeamId, selectedGameId]);
+    setPregameTextMeta({});
+    setPregameSaveStatus(null);
+  }, [canLookupPregameByTeams, selectedGameId]);
 
   useEffect(() => {
     let isMounted = true;
 
     const loadPregameNarrative = async () => {
-      if (!selectedGameId && !selectedOpponentTeamId) {
+      if (!selectedGameId && !canLookupPregameByTeams) {
         if (!isMounted) return;
         setPregameText('');
         setPregameTextError(null);
@@ -1389,13 +1401,35 @@ export function SeasonComparison({
       try {
         let query = supabase
           .from('game_text_reports')
-          .select('narrative')
+          .select('narrative, generated_at, generated_by')
           .eq('report_type', 'pregame');
+        let usedTeamMatch = false;
 
         if (selectedGameId) {
           query = query.eq('game_id', selectedGameId);
+        } else if (canLookupPregameByTeams && resolvedTeamId && resolvedTeamId !== 'all' && selectedOpponentTeamId) {
+          usedTeamMatch = true;
+          query = query
+            .eq('own_team_id', resolvedTeamId)
+            .eq('opponent_team_id', selectedOpponentTeamId);
+
+          if (resolvedSeasonId) {
+            query = query.filter('pregame_snapshot->>season', 'eq', resolvedSeasonId);
+          }
+
+          if (league) {
+            query = query.filter('pregame_snapshot->>league', 'eq', league);
+          }
         } else if (selectedOpponentTeamId) {
-          query = query.contains('pregame_snapshot', { opponentTeamId: selectedOpponentTeamId });
+          query = query.filter('pregame_snapshot->>opponentTeamId', 'eq', selectedOpponentTeamId);
+
+          if (resolvedSeasonId) {
+            query = query.filter('pregame_snapshot->>season', 'eq', resolvedSeasonId);
+          }
+
+          if (league) {
+            query = query.filter('pregame_snapshot->>league', 'eq', league);
+          }
         }
 
         const { data, error } = await query
@@ -1403,19 +1437,55 @@ export function SeasonComparison({
           .limit(1)
           .maybeSingle();
 
+        let finalData = data;
+        let finalError = error;
+
+        if (!finalData && !finalError && usedTeamMatch && selectedOpponentTeamId) {
+          let legacyQuery = supabase
+            .from('game_text_reports')
+            .select('narrative, generated_at, generated_by')
+            .eq('report_type', 'pregame')
+            .filter('pregame_snapshot->>opponentTeamId', 'eq', selectedOpponentTeamId);
+
+          if (resolvedSeasonId) {
+            legacyQuery = legacyQuery.filter('pregame_snapshot->>season', 'eq', resolvedSeasonId);
+          }
+
+          if (league) {
+            legacyQuery = legacyQuery.filter('pregame_snapshot->>league', 'eq', league);
+          }
+
+          const legacyResult = await legacyQuery
+            .order('generated_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          finalData = legacyResult.data;
+          finalError = legacyResult.error;
+        }
+
         if (!isMounted) return;
 
-        if (error && error.code !== 'PGRST116') {
+        if (finalError && finalError.code !== 'PGRST116') {
           setPregameText('');
           setPregameTextError('Nem sikerült betölteni a pre-game elemzést.');
+          setPregameTextMeta({});
+          setPregameSaveStatus(null);
           return;
         }
 
-        setPregameText(data?.narrative ?? '');
+        setPregameText(finalData?.narrative ?? '');
+        setPregameTextMeta(
+          finalData
+            ? { generatedAt: finalData.generated_at, generatedBy: finalData.generated_by }
+            : {}
+        );
       } catch {
         if (!isMounted) return;
         setPregameText('');
         setPregameTextError('Nem sikerült betölteni a pre-game elemzést.');
+        setPregameTextMeta({});
+        setPregameSaveStatus(null);
       }
     };
 
@@ -1424,7 +1494,7 @@ export function SeasonComparison({
     return () => {
       isMounted = false;
     };
-  }, [selectedGameId, selectedOpponentTeamId]);
+  }, [canLookupPregameByTeams, league, resolvedSeasonId, resolvedTeamId, selectedGameId, selectedOpponentTeamId]);
 
   useEffect(() => {
     let isMounted = true;
@@ -1488,21 +1558,38 @@ export function SeasonComparison({
   const canGenerateTextReport = Boolean(selectedGame && pregameReport && postgameReport);
 
   const canGeneratePregameText = Boolean(pregameReport);
-  const hasPregameLookupTarget = Boolean(selectedGameId || selectedOpponentTeamId);
+  const hasPregameLookupTarget = Boolean(selectedGameId || canLookupPregameByTeams);
+
+  useEffect(() => {
+    setPregameSaveStatus(null);
+  }, [selectedGameId, selectedOpponentTeamId]);
 
   const handleGeneratePregameText = async () => {
     if (!pregameReport) return;
     setIsGeneratingPregameText(true);
     setPregameTextError(null);
+    setPregameSaveStatus(null);
     try {
+      const ownTeamIdPayload =
+        resolvedTeamId && resolvedTeamId !== 'all'
+          ? resolvedTeamId
+          : pregameReport.ownTeamId ?? null;
+      const ownTeamNamePayload =
+        pregameOwnTeam?.teamName ?? pregameReport.ownTeamName ?? 'Saját csapat';
+      const opponentTeamIdPayload = selectedOpponentTeamId || pregameReport.opponentTeamId;
+      const opponentTeamNamePayload =
+        pregameOpponentTeam?.teamName ?? pregameReport.opponentTeamName;
+
       const response = await fetch('/api/generate-pregame-text', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           gameId: selectedGame?.id ?? selectedGameId ?? null,
           pregameReport,
-          ownTeamName: pregameOwnTeam?.teamName ?? 'Saját csapat',
-          opponentTeamName: pregameReport.opponentTeamName,
+          ownTeamId: ownTeamIdPayload,
+          ownTeamName: ownTeamNamePayload,
+          opponentTeamId: opponentTeamIdPayload,
+          opponentTeamName: opponentTeamNamePayload,
           generatedBy: 'season-comparison-ui',
         }),
       });
@@ -1510,6 +1597,8 @@ export function SeasonComparison({
       const payload = (await response.json().catch(() => ({}))) as {
         ok?: boolean;
         narrative?: string;
+        report?: GameTextReportRow | null;
+        saveStatus?: { saved?: boolean; message?: string } | null;
         error?: string;
       };
 
@@ -1518,8 +1607,34 @@ export function SeasonComparison({
       }
 
       setPregameText(payload.narrative ?? '');
+      if (payload.report) {
+        setPregameTextMeta({
+          generatedAt: payload.report.generated_at,
+          generatedBy: payload.report.generated_by,
+        });
+      } else {
+        setPregameTextMeta({});
+      }
+
+      if (payload.saveStatus?.message) {
+        setPregameSaveStatus({
+          type: payload.saveStatus.saved ? 'success' : 'warning',
+          message: payload.saveStatus.message,
+        });
+      } else {
+        setPregameSaveStatus(
+          payload.report
+            ? { type: 'success', message: 'Pre-game jelentés elmentve.' }
+            : {
+                type: 'warning',
+                message: 'Nem történt mentés, mert nem volt kiválasztott meccs (gameId).',
+              }
+        );
+      }
     } catch (error) {
-      setPregameTextError(error instanceof Error ? error.message : 'Ismeretlen hiba történt a generálás során.');
+      const message = error instanceof Error ? error.message : 'Ismeretlen hiba történt a generálás során.';
+      setPregameTextError(message);
+      setPregameSaveStatus({ type: 'error', message: `Mentés meghiúsult: ${message}` });
     } finally {
       setIsGeneratingPregameText(false);
     }
@@ -2304,18 +2419,33 @@ export function SeasonComparison({
               </div>
 
               <div className="border-t border-slate-800 pt-4">
-                <div className="flex flex-wrap items-center gap-3">
-                  <Button
-                    type="button"
-                    onClick={handleGeneratePregameText}
-                    disabled={!canGeneratePregameText || isGeneratingPregameText}
-                    className="bg-sky-600 hover:bg-sky-500 text-white disabled:opacity-60"
-                  >
-                    {isGeneratingPregameText ? 'Pre-game értékelés készítése…' : 'Pre-game GPT értékelés'}
-                  </Button>
-                  <div className="text-xs text-slate-400">
-                    Szigorúan adat-alapú, 6–10 mondatos összefoglaló készül.
+                <div className="space-y-1">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <Button
+                      type="button"
+                      onClick={handleGeneratePregameText}
+                      disabled={!canGeneratePregameText || isGeneratingPregameText}
+                      className="bg-sky-600 hover:bg-sky-500 text-white disabled:opacity-60"
+                    >
+                      {isGeneratingPregameText ? 'Pre-game értékelés készítése…' : 'Pre-game GPT értékelés'}
+                    </Button>
+                    <div className="text-xs text-slate-400">
+                      Szigorúan adat-alapú, 6–10 mondatos összefoglaló készül.
+                    </div>
                   </div>
+                  {pregameSaveStatus && (
+                    <div
+                      className={`text-xs ${
+                        pregameSaveStatus.type === 'success'
+                          ? 'text-emerald-400'
+                          : pregameSaveStatus.type === 'warning'
+                            ? 'text-amber-300'
+                            : 'text-rose-300'
+                      }`}
+                    >
+                      {pregameSaveStatus.message}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -2343,8 +2473,20 @@ export function SeasonComparison({
             )}
 
             {hasPregameLookupTarget && pregameText && (
-              <div className="text-sm text-slate-50 whitespace-pre-line bg-slate-800/60 border border-slate-700 rounded-lg px-4 py-3">
-                {pregameText}
+              <div className="space-y-1">
+                <div className="text-xs text-slate-400">
+                  {pregameTextMeta.generatedAt ? (
+                    <>
+                      Mentve: {formatGeneratedAt(pregameTextMeta.generatedAt) ?? 'ismeretlen időpont'} • Forrás:{' '}
+                      {pregameTextMeta.generatedBy ?? 'gpt-automata'}
+                    </>
+                  ) : (
+                    'Ez a szöveg még nincs adatbázisban mentve.'
+                  )}
+                </div>
+                <div className="text-sm text-slate-50 whitespace-pre-line bg-slate-800/60 border border-slate-700 rounded-lg px-4 py-3">
+                  {pregameText}
+                </div>
               </div>
             )}
           </div>

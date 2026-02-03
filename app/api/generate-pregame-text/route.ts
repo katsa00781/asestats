@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { createHash } from 'node:crypto';
 import type { ScoutingReport } from '@/lib/pregame-scouting';
 
 export const runtime = 'nodejs';
@@ -66,19 +67,62 @@ type PregameTextPayload = {
   pregameReport: ScoutingReport;
   ownTeamName?: string | null;
   opponentTeamName?: string | null;
+  ownTeamId?: string | null;
+  opponentTeamId?: string | null;
   generatedBy?: string | null;
 };
 
+const normalizeUuid = (value?: string | null) => {
+  if (!value) return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+};
+
+const resolveOwnTeamId = (payload: PregameTextPayload) =>
+  payload.ownTeamId ?? payload.pregameReport.ownTeamId ?? null;
+
+const resolveOwnTeamName = (payload: PregameTextPayload) =>
+  payload.ownTeamName ?? payload.pregameReport.ownTeamName ?? 'Saját csapat';
+
+const resolveOpponentTeamId = (payload: PregameTextPayload) =>
+  payload.opponentTeamId ?? payload.pregameReport.opponentTeamId ?? null;
+
+const resolveOpponentTeamName = (payload: PregameTextPayload) =>
+  payload.opponentTeamName ?? payload.pregameReport.opponentTeamName;
+
 const buildUserPrompt = (payload: PregameTextPayload) => {
   const contextBlock = {
-    ownTeamName: payload.ownTeamName ?? 'Saját csapat',
-    opponentTeamName: payload.opponentTeamName ?? payload.pregameReport.opponentTeamName,
+    ownTeamName: resolveOwnTeamName(payload),
+    opponentTeamName: resolveOpponentTeamName(payload),
     report: payload.pregameReport,
   };
   return USER_PROMPT_TEMPLATE.replace(
     '{{PRE_GAME_ANALYSIS_OBJECT}}',
     JSON.stringify(contextBlock, null, 2)
   );
+};
+
+const hashToUuid = (hash: string) =>
+  [
+    hash.slice(0, 8),
+    hash.slice(8, 12),
+    hash.slice(12, 16),
+    hash.slice(16, 20),
+    hash.slice(20, 32),
+  ].join('-');
+
+const buildTeamPairKey = (
+  payload: PregameTextPayload,
+  ownTeamId: string | null,
+  opponentTeamId: string | null
+) => {
+  if (!ownTeamId || !opponentTeamId) return null;
+  const season = payload.pregameReport?.season;
+  const league = payload.pregameReport?.league;
+  if (!season || !league) return null;
+  const raw = `pregame:${league}:${season}:${ownTeamId}:${opponentTeamId}`;
+  const hash = createHash('sha1').update(raw).digest('hex');
+  return hashToUuid(hash);
 };
 
 const callOpenAi = async (prompt: string) => {
@@ -131,18 +175,32 @@ export async function POST(request: Request) {
     const prompt = buildUserPrompt(payload);
     const narrative = await callOpenAi(prompt);
     let savedReport = null;
+    const gameId = normalizeUuid(payload.gameId);
+    const ownTeamId = normalizeUuid(resolveOwnTeamId(payload));
+    const ownTeamName = resolveOwnTeamName(payload);
+    const opponentTeamId = normalizeUuid(resolveOpponentTeamId(payload));
+    const opponentTeamName = resolveOpponentTeamName(payload);
+    const teamPairKey = gameId ? null : buildTeamPairKey(payload, ownTeamId, opponentTeamId);
+    const generatedAt = new Date().toISOString();
+    let saveStatus: { saved: boolean; message: string };
 
-    if (payload.gameId) {
+    if (gameId) {
       const { data, error } = await supabaseAdmin
         .from('game_text_reports')
         .upsert(
           {
-            game_id: payload.gameId,
+            game_id: gameId,
+            team_pair_key: null,
             report_type: 'pregame',
             narrative,
             pregame_snapshot: payload.pregameReport,
             postgame_snapshot: null,
             generated_by: payload.generatedBy ?? 'gpt-automata',
+            generated_at: generatedAt,
+            own_team_id: ownTeamId,
+            own_team_name: ownTeamName,
+            opponent_team_id: opponentTeamId,
+            opponent_team_name: opponentTeamName,
           },
           { onConflict: 'game_id,report_type' }
         )
@@ -153,9 +211,51 @@ export async function POST(request: Request) {
         throw new Error(error.message);
       }
       savedReport = data;
+      saveStatus = {
+        saved: true,
+        message: 'Pre-game jelentés elmentve a game_text_reports táblába.',
+      };
+    } else {
+      if (teamPairKey) {
+        const { data, error } = await supabaseAdmin
+          .from('game_text_reports')
+          .upsert(
+            {
+              game_id: null,
+              team_pair_key: teamPairKey,
+              report_type: 'pregame',
+              narrative,
+              pregame_snapshot: payload.pregameReport,
+              postgame_snapshot: null,
+              generated_by: payload.generatedBy ?? 'gpt-automata',
+              generated_at: generatedAt,
+              own_team_id: ownTeamId,
+              own_team_name: ownTeamName,
+              opponent_team_id: opponentTeamId,
+              opponent_team_name: opponentTeamName,
+            },
+            { onConflict: 'team_pair_key,report_type' }
+          )
+          .select()
+          .single();
+
+        if (error) {
+          throw new Error(error.message);
+        }
+        savedReport = data;
+        saveStatus = {
+          saved: true,
+          message: 'Pre-game jelentés elmentve (ellenfél alapú azonosítás).',
+        };
+      } else {
+        saveStatus = {
+          saved: false,
+          message: 'Nem történt mentés, mert nincs meccs ID és hiányzik a csapatpár.',
+        };
+      }
     }
 
-    return NextResponse.json({ ok: true, narrative, report: savedReport });
+    return NextResponse.json({ ok: true, narrative, report: savedReport, saveStatus });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Ismeretlen hiba történt.';
     return NextResponse.json({ ok: false, error: message }, { status: 500 });

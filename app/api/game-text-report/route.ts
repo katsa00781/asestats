@@ -25,6 +25,10 @@ type SaveTextReportPayload = {
   pregameSnapshot?: ScoutingReport | null;
   postgameSnapshot?: PostGameReport | null;
   generatedBy?: string | null;
+  ownTeamId?: string | null;
+  ownTeamName?: string | null;
+  opponentTeamId?: string | null;
+  opponentTeamName?: string | null;
 };
 
 export async function POST(request: Request) {
@@ -43,6 +47,26 @@ export async function POST(request: Request) {
   }
 
   const reportType = payload.reportType ?? 'combined';
+  const ownTeamId =
+    payload.ownTeamId ??
+    payload.postgameSnapshot?.teamId ??
+    payload.pregameSnapshot?.ownTeamId ??
+    null;
+  const ownTeamName =
+    payload.ownTeamName ??
+    payload.postgameSnapshot?.teamName ??
+    payload.pregameSnapshot?.ownTeamName ??
+    null;
+  const opponentTeamId =
+    payload.opponentTeamId ??
+    payload.pregameSnapshot?.opponentTeamId ??
+    null;
+  const opponentTeamName =
+    payload.opponentTeamName ??
+    payload.pregameSnapshot?.opponentTeamName ??
+    payload.postgameSnapshot?.opponentName ??
+    null;
+  const generatedAt = new Date().toISOString();
 
   const { data, error } = await supabaseAdmin
     .from('game_text_reports')
@@ -54,6 +78,11 @@ export async function POST(request: Request) {
         pregame_snapshot: payload.pregameSnapshot ?? null,
         postgame_snapshot: payload.postgameSnapshot ?? null,
         generated_by: payload.generatedBy ?? null,
+        generated_at: generatedAt,
+        own_team_id: ownTeamId,
+        own_team_name: ownTeamName,
+        opponent_team_id: opponentTeamId,
+        opponent_team_name: opponentTeamName,
       },
       { onConflict: 'game_id,report_type' }
     )

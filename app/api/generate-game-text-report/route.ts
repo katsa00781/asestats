@@ -37,6 +37,18 @@ type GeneratePayload = {
   generatedBy?: string | null;
 };
 
+const resolveOwnTeamId = (payload: GeneratePayload) =>
+  payload.postgameReport.teamId ?? payload.pregameReport.ownTeamId ?? null;
+
+const resolveOwnTeamName = (payload: GeneratePayload) =>
+  payload.postgameReport.teamName ?? payload.pregameReport.ownTeamName ?? 'Saját csapat';
+
+const resolveOpponentTeamId = (payload: GeneratePayload) =>
+  payload.pregameReport.opponentTeamId ?? null;
+
+const resolveOpponentTeamName = (payload: GeneratePayload) =>
+  payload.opponentName ?? payload.pregameReport.opponentTeamName ?? payload.postgameReport.opponentName ?? null;
+
 const extractPregameContext = (report: ScoutingReport) => ({
   summary: report.summary,
   winProbability: report.winProbability,
@@ -158,6 +170,11 @@ export async function POST(request: Request) {
     const prompt = buildUserPrompt(payload);
     const narrative = await callOpenAi(prompt);
     const reportType = payload.reportType ?? 'combined';
+    const ownTeamId = resolveOwnTeamId(payload);
+    const ownTeamName = resolveOwnTeamName(payload);
+    const opponentTeamId = resolveOpponentTeamId(payload);
+    const opponentTeamName = resolveOpponentTeamName(payload);
+    const generatedAt = new Date().toISOString();
 
     const { data, error } = await supabaseAdmin
       .from('game_text_reports')
@@ -169,6 +186,11 @@ export async function POST(request: Request) {
           pregame_snapshot: payload.pregameReport,
           postgame_snapshot: payload.postgameReport,
           generated_by: payload.generatedBy ?? 'gpt-automata',
+          generated_at: generatedAt,
+          own_team_id: ownTeamId,
+          own_team_name: ownTeamName,
+          opponent_team_id: opponentTeamId,
+          opponent_team_name: opponentTeamName,
         },
         { onConflict: 'game_id,report_type' }
       )
