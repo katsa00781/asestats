@@ -1356,33 +1356,37 @@ export function SeasonComparison({
 
   useEffect(() => {
     let isMounted = true;
-    if (!selectedGameId) {
-      setTextReport('');
-      setTextReportMeta({});
-      setTextReportError(null);
-      setIsLoadingTextReport(false);
-      return () => {
-        isMounted = false;
-      };
-    }
 
-    setIsLoadingTextReport(true);
-    setTextReportError(null);
-
-    supabase
-      .from('game_text_reports')
-      .select('narrative, generated_at, generated_by')
-      .eq('game_id', selectedGameId)
-      .eq('report_type', 'combined')
-      .maybeSingle()
-      .then(({ data, error }) => {
+    const loadReport = async () => {
+      if (!selectedGameId) {
         if (!isMounted) return;
+        setTextReport('');
+        setTextReportMeta({});
+        setTextReportError(null);
+        setIsLoadingTextReport(false);
+        return;
+      }
+
+      setIsLoadingTextReport(true);
+      setTextReportError(null);
+
+      try {
+        const { data, error } = await supabase
+          .from('game_text_reports')
+          .select('narrative, generated_at, generated_by')
+          .eq('game_id', selectedGameId)
+          .eq('report_type', 'combined')
+          .maybeSingle();
+
+        if (!isMounted) return;
+
         if (error && error.code !== 'PGRST116') {
           setTextReport('');
           setTextReportMeta({});
           setTextReportError('Nem sikerült betölteni a szöveges elemzést.');
           return;
         }
+
         if (data) {
           setTextReport(data.narrative ?? '');
           setTextReportMeta({ generatedAt: data.generated_at, generatedBy: data.generated_by });
@@ -1390,18 +1394,19 @@ export function SeasonComparison({
           setTextReport('');
           setTextReportMeta({});
         }
-      })
-      .catch(() => {
+      } catch {
         if (!isMounted) return;
         setTextReport('');
         setTextReportMeta({});
         setTextReportError('Nem sikerült betölteni a szöveges elemzést.');
-      })
-      .finally(() => {
+      } finally {
         if (isMounted) {
           setIsLoadingTextReport(false);
         }
-      });
+      }
+    };
+
+    loadReport();
 
     return () => {
       isMounted = false;

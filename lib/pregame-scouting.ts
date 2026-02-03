@@ -92,6 +92,7 @@ export type ScoutingReport = {
   };
   focusPoints: string[];
   xFactorContext?: PreGameXFactorContext;
+  riskFlags?: string[];
   summary: string;
 };
 
@@ -888,6 +889,7 @@ export const analyzePreGameScouting = (
     },
     focusPoints,
     xFactorContext,
+    riskFlags: riskNotes.flags,
     summary: buildSummary(
       normalizedOpponent,
       profile,
