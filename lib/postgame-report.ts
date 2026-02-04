@@ -780,18 +780,37 @@ const buildSummary = (
       ? 'védekezésben romlott a hatékonyság'
       : 'védekezésben átlagos volt';
 
-  const decisiveText = [...decisive.offense, ...decisive.defense].slice(0, 2).join('; ');
-  const impactText = playerImpact.positive.length > 0
+  const decisiveText = [...decisive.offense, ...decisive.defense].slice(0, 3).join('; ');
+  const positiveImpact = playerImpact.positive.length > 0
     ? `Pozitív impact: ${playerImpact.positive.join(', ')}.`
+    : 'Pozitív impact: nincs kiemelt szereplő.';
+  const negativeImpact = playerImpact.negative.length > 0
+    ? `Negatív impact: ${playerImpact.negative.join(', ')}.`
     : '';
+  const overUnderText = [
+    playerImpact.overperformers.length > 0 ? `Kiugró teljesítmény: ${playerImpact.overperformers.join(', ')}.` : '',
+    playerImpact.underperformers.length > 0 ? `Visszaesés: ${playerImpact.underperformers.join(', ')}.` : '',
+  ].filter(Boolean).join(' ');
 
   const focusText = nextFocus.length > 0
     ? `Következő fókusz: ${nextFocus.join(' • ')}.`
     : 'Következő fókusz: végrehajtás stabilizálása.';
 
   const noteText = dataNotes.length > 0 ? `Megjegyzés: ${dataNotes.join(' ')}.` : '';
-  const reflectionText = reflectionLine ? ` ${reflectionLine}` : '';
-  return `${teamName} ${result === 'win' ? 'megnyerte' : 'elveszítette'} a mérkőzést ${opponentName} ellen. Tempó: ${tempoText}, a csapat ${offenseText}, és ${defenseText}. ${decisiveText ? `Döntő faktorok: ${decisiveText}.` : ''} ${impactText} ${focusText} ${noteText}${reflectionText}`.trim();
+  const reflectionText = reflectionLine ? `Reflexió: ${reflectionLine}` : '';
+
+  const sections = [
+    `${teamName} ${result === 'win' ? 'győzelemmel' : 'vereséggel'} zárt ${opponentName} ellen.`,
+    `Tempó és hatékonyság: ${tempoText} mérkőzés, a csapat ${offenseText}, védekezésben ${defenseText}.`,
+    decisiveText ? `Döntő tényezők: ${decisiveText}.` : '',
+    `Játékos hatások: ${[positiveImpact, negativeImpact, overUnderText].filter(Boolean).join(' ')}`.trim(),
+    focusText,
+    [noteText, reflectionText].filter(Boolean).join(' '),
+  ]
+    .map(line => line.trim())
+    .filter(line => line.length > 0);
+
+  return sections.join('\n');
 };
 
 const interpretGameContext = (context: PostGameReport['context']) => {

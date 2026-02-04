@@ -47,6 +47,8 @@ Feladatod:
 - emeld ki az ellenfél játékából fakadó, ADATOKKAL ALÁTÁMASZTOTT fő kockázatokat
 - nevezd meg a mérkőzés döntő tényezőjét (X-faktor), kizárólag az elemzés alapján
 - ne ismételd szó szerint a felsorolásokat, hanem szintetizáld őket
+- fogalmazz leíró, narratív stílusban, kerülve a felsorolás-szerű monotonitást
+- adj konkrét, adat-alapú mérkőzésstratégiát az ellenfél ellen (pl. tempó, párosítás, fókuszpontok)
 
 ⚠️ SZAKNYELVI KÖTELEZETTSÉG:
 - Magyar kosárlabda-szaknyelvet használj.
@@ -58,9 +60,13 @@ Strukturált adatok:
 
 Elvárt kimenet:
 - 6–10 mondatos összefoglaló
-- egybefüggő, logikusan felépített szöveg
+- tagolt, logikusan felépített szöveg az alábbi logikai blokkokkal (sorszámot nem kell írni, de a témákat külön mondatcsoportokban fejtsd ki):
+  • Kontextus (tempó, tengely, statisztikai esély)
+  • Fenyegetések és sebezhetőségek (adatokra hivatkozva)
+  • Pozíciós dinamika és kulcspárosítások
+  • Stratégiai javaslat az ellenfél ellen, a fókuszpontok/X-faktor alapján
 - magyar szaknyelv használata
-- edzői döntéshozatalt támogató hangsúlyok`;
+- edzői döntéshozatalt támogató hangsúlyok, egyértelmű ajánlások`;
 
 type PregameTextPayload = {
   gameId?: string | null;

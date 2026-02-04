@@ -692,7 +692,8 @@ const buildSummary = (
   xFactors: XFactorInsight,
   riskNoteText: string,
   matchupRealizationNote: string,
-  tempoControlNote: string
+  tempoControlNote: string,
+  focusPoints: string[]
 ) => {
   const tempo = opponent.pace >= 70 ? 'gyors tempójú' : opponent.pace <= 60 ? 'lassú tempójú' : 'közepes tempójú';
   const offense = profile.offense.length > 0 ? profile.offense.join(', ') : 'kiegyensúlyozott';
@@ -705,12 +706,11 @@ const buildSummary = (
       : 'festék';
   const axisText = `Domináns tengely: ${axisLabel}.`;
 
-  const threatText = threats.length > 0
-    ? `Fő támadó veszélyek: ${threats.join(', ')}.`
-    : 'Nincs kiemelt támadó veszély.';
-  const vulnText = vulnerabilities.length > 0
-    ? `Sebezhetőségek: ${vulnerabilities.join(', ')}.`
-    : 'Nincs kiemelt sebezhetőség.';
+  const formatList = (items: string[], fallback: string) =>
+    items.length > 0 ? items.join('; ') : fallback;
+
+  const threatText = formatList(threats, 'nincs kiemelt támadó veszély');
+  const vulnText = formatList(vulnerabilities, 'nincs kiemelt sebezhetőség');
 
   const perimeterDelta = positionComparison
     .filter(item => ['PG', 'SG', 'SF'].includes(item.position))
@@ -724,18 +724,34 @@ const buildSummary = (
       ? 'Belső poszt előny (PF–C), periméteren óvatos párosítás szükséges.'
       : 'Pozíciós előnyök megoszlanak, párosítás-alapú döntés javasolt.';
 
-  const probabilityNote = `A statisztikai esély (${winProbability.ownPct}% / ${winProbability.opponentPct}%) nem jelent biztos kimenetet; taktikai kockázatok döntőek.`;
+  const probabilityNote = `Statisztikai esély: ${winProbability.ownPct}% vs ${winProbability.opponentPct}% (bizonytalanság: ${winProbability.confidence}).`;
 
   const varianceNote = scoreAbove(benchmarks, opponent, 'three_rate', 60)
-    ? 'Magas tripla-volumen miatt a variancia nagyobb, futások gyorsan dönthetnek.'
+    ? 'Megjegyzés: magas tripla-volumen miatt a pontszám varianciája nagy.'
     : '';
 
-  const xFactorText = `Elsődleges X-faktor: ${xFactors.primary.label}. Másodlagos: ${xFactors.secondary.label}.`;
-  const tempoNote = tempoControlNote ? ` ${tempoControlNote}` : '';
-  const riskNote = riskNoteText ? ` ${riskNoteText}` : '';
-  const matchupNote = matchupRealizationNote ? ` ${matchupRealizationNote}` : '';
+  const xFactorText = `Elsődleges X-faktor: ${xFactors.primary.label}, másodlagos: ${xFactors.secondary.label}.`;
+  const tempoNote = tempoControlNote || '';
+  const riskNote = riskNoteText || '';
+  const tempoRiskText = [tempoNote, riskNote].filter(text => text && text.trim().length > 0).join(' ');
+  const matchupNote = matchupRealizationNote || '';
+  const focusText = focusPoints.length > 0
+    ? `Fókuszpontok: ${focusPoints.join(' • ')}.`
+    : '';
 
-  return `Az ellenfél ${tempo}, ${offense} támadást játszik, védekezésben ${defense} jellegű. ${axisText} ${threatText} ${vulnText} ${posSummary} ${probabilityNote} ${varianceNote} ${xFactorText}${tempoNote}${riskNote}${matchupNote}`.trim();
+  const sections = [
+    `Kontextus: Az ellenfél ${tempo}, ${offense} támadást játszik, védekezése ${defense}. ${axisText}`.trim(),
+    `Fenyegetések vs sebezhetőségek: ${threatText}. Sebezhetőségek: ${vulnText}.`.trim(),
+    `Pozíciós dinamika: ${posSummary} ${matchupNote}`.trim(),
+    focusText,
+    tempoRiskText ? `Tempó és kockázat: ${tempoRiskText}`.trim() : '',
+    `X-faktor: ${xFactorText}`.trim(),
+    `Valószínűség és variancia: ${[probabilityNote, varianceNote].filter(Boolean).join(' ')}`.trim(),
+  ]
+    .map(line => line.trim())
+    .filter(line => line.length > 0);
+
+  return sections.join('\n');
 };
 
 const computeTeamRating = (team: NormalizedTeamStats, benchmarks: LeagueTeamBenchmarks) => {
@@ -905,7 +921,8 @@ export const analyzePreGameScouting = (
       xFactors,
       riskNotes.note,
       matchupRealizationNote,
-      tempoControlNote
+      tempoControlNote,
+      focusPoints
     ),
   };
 };
