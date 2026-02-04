@@ -82,6 +82,9 @@ Kritikus szabályok:
 - Ne adj hozzá új adatot, csak értelmezd a meglévőt.
 - Ha bizonytalanság szerepel a pre-game elemzésben, azt kontextusként kezeld, nem hibaként.
 - Az X-faktor kontextust csak egyszer említsd meg, ne duplikáld sem a pre-, sem a post-game blokkból.
+- Narratív, leíró hangnemben fogalmazz; minden blokk legyen legalább 2 összefüggő mondat.
+- A post-game értékelés során mindig köss össze adatot és következményt ("mert" szerkezet vagy ok-okozati fordulat).
+- Adj konkrét edzői javaslatot arra, hogyan használható fel a tapasztalat a következő meccsen / visszavágón.
 
 Terminológiai egység:
 - Kizárólag magyar kosárlabda-szaknyelvet használj.
@@ -90,18 +93,19 @@ Terminológiai egység:
 
 Kötelező szerkezet (alcímeket is írd ki):
 1️⃣ Kiindulási kép – Pre-game kontextus (3–4 mondat)
-2️⃣ A mérkőzés tényleges képe – Post-game valóság
-3️⃣ Pre-game várakozás vs. realizáció (minden kulcspontot ✓ / ↺ / ✗ jelöléssel minősíts)
-4️⃣ Mi döntötte el valójában a mérkőzést? – Nevezd meg, hogy hatékonyság-, volumen- vagy kontroll-alapú faktor volt, és térj ki arra is, hogy a kulcsra kijelölt X-faktor miért nem (vagy hogyan) lett tényleges döntő tényező.
+2️⃣ A mérkőzés tényleges képe – Post-game valóság (legalább 3 mondat, mindig adj konkrét példát a statisztikai eltérésre)
+3️⃣ Pre-game várakozás vs. realizáció (minden kulcspontot ✓ / ↺ / ✗ jelöléssel minősíts, rövid magyarázattal)
+4️⃣ Mi döntötte el valójában a mérkőzést? – Nevezd meg, hogy hatékonyság-, volumen- vagy kontroll-alapú faktor volt, és térj ki arra is, hogy a kulcsra kijelölt X-faktor miért nem (vagy hogyan) lett tényleges döntő tényező. Zárd le a bekezdést egy stratégiai javaslattal a következő találkozóra.
 4️⃣/b RiskFlags – ha a pre-game riport tartalmazott risk flag-eket, itt kezeld önálló bekezdésben, rendezetten felsorolva a bekövetkezett vs. elmaradt kockázatokat.
-5️⃣ Tanulság és alkalmazhatóság – 1–2 mondatban fogalmazd meg, hogyan hasznosítható mindez a következő meccseken/edzéseken.
+5️⃣ Tanulság és alkalmazhatóság – 2–3 mondatban fogalmazd meg, hogyan hasznosítható mindez a következő meccseken/edzéseken (tempó, rotáció, védekező elvek, speciális játékhelyzetek).
 
 Plusz elvárások:
 - Adj rövid indoklást arra, hogy melyik előzetes fókuszpont miért NEM vált döntővé (ha releváns).
 - Emeld ki, ha valamely kockázati jelző nem materializálódott, és miért.
 - A záró tanulság mindig mutasson előre (edzésfókusz, rotáció, taktikai döntés).
+- Használj kötőszavakat, amelyek segítik a logikus átmenetet ("emiatt", "ezért", "mivel").
 
-Terjedelem: kb. 12–18 mondat. Alkoss összefüggő, UI-ba illeszthető szöveget.`;
+Terjedelem: 14–20 mondat. Alkoss összefüggő, UI-ba illeszthető szöveget.`;
 
 const buildUserPrompt = (payload: GeneratePayload) => {
   const pregame = extractPregameContext(payload.pregameReport);
