@@ -1316,6 +1316,16 @@ export function SeasonComparison({
       teamGame.pointsAgainst = selectedGame.oppScore;
     }
 
+    teamGame.actualPointsFor = selectedGame.ourScore;
+    teamGame.actualPointsAgainst = selectedGame.oppScore;
+    teamGame.result = selectedGame.result;
+
+    if (opponentGame) {
+      opponentGame.actualPointsFor = selectedGame.oppScore;
+      opponentGame.actualPointsAgainst = selectedGame.ourScore;
+      opponentGame.result = selectedGame.result === 'win' ? 'loss' : 'win';
+    }
+
     const players: PlayerGameStat[] = teamPlayers.map(row => ({
       playerId: row.player_id,
       name: seasonPlayers.find(player => player.id === row.player_id)?.name || row.player_id,

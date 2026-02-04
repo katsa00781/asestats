@@ -23,6 +23,9 @@ export type TeamGameStat = {
   blk: number;
   fouls: number;
   val: number;
+  actualPointsFor?: number;
+  actualPointsAgainst?: number;
+  result?: 'win' | 'loss';
 };
 
 export type PlayerGameStat = {
@@ -999,13 +1002,16 @@ export const analyzePostGameReport = (
   players: PlayerGameStat[],
   preGameContext?: PreGameXFactorContext
 ): PostGameReport => {
+  const actualPointsFor = teamGame.actualPointsFor ?? teamGame.pointsFor;
+  const actualPointsAgainst = teamGame.actualPointsAgainst ?? teamGame.pointsAgainst;
+
   const opponentFallback: TeamGameStat = opponentGame || {
     teamId: 'opponent',
     teamName: 'Ellenfél',
     league: teamGame.league,
     season: teamGame.season,
-    pointsFor: teamGame.pointsAgainst,
-    pointsAgainst: teamGame.pointsFor,
+    pointsFor: actualPointsAgainst,
+    pointsAgainst: actualPointsFor,
     fga2: 0,
     fgm2: 0,
     fga3: 0,
@@ -1022,8 +1028,19 @@ export const analyzePostGameReport = (
     val: 0,
   };
 
-  const game = normalizeTeamGame(teamGame, opponentFallback);
-  const opponent = opponentGame ? normalizeTeamGame(opponentFallback, teamGame) : null;
+  const calibratedTeamGame: TeamGameStat = {
+    ...teamGame,
+    pointsFor: actualPointsFor,
+    pointsAgainst: actualPointsAgainst,
+  };
+  const calibratedOpponent: TeamGameStat = {
+    ...opponentFallback,
+    pointsFor: actualPointsAgainst,
+    pointsAgainst: actualPointsFor,
+  };
+
+  const game = normalizeTeamGame(calibratedTeamGame, calibratedOpponent);
+  const opponent = opponentGame ? normalizeTeamGame(calibratedOpponent, calibratedTeamGame) : null;
   const season = normalizeTeamSeason(teamSeason);
 
   const paceDelta = classifyDelta(game.pace - season.pace, 2.5);
@@ -1043,7 +1060,8 @@ export const analyzePostGameReport = (
 
   const metricsSummary = buildPostgameMetrics(game, season, leagueBenchmarks);
 
-  const result: 'win' | 'loss' = teamGame.pointsFor >= teamGame.pointsAgainst ? 'win' : 'loss';
+  const result: 'win' | 'loss' =
+    teamGame.result ?? (actualPointsFor >= actualPointsAgainst ? 'win' : 'loss');
 
   const dataNotes = opponent ? [] : ['Ellenfél statisztikák nem elérhetők, a védekező értékelés korlátozott.'];
 
