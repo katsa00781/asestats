@@ -26,6 +26,7 @@ import {
 import {
   analyzeTeamSeason,
   buildTeamBenchmarks,
+  normalizeTeamStats,
   type TeamAnalysis,
   type TeamSeasonStat,
 } from '@/lib/team-analysis';
@@ -138,6 +139,10 @@ const SKILL_LABELS_HU: Record<string, string> = {
 };
 
 const RECENT_GAMES_WINDOW = 5;
+const TEAM_FORM_WINDOW = 5;
+const TEAM_FORM_CHART_POINTS = 8;
+const TEAM_FORM_EFG_THRESHOLD = 3;
+const TEAM_FORM_MARGIN_THRESHOLD = 4;
 
 const roundValue = (value: number, digits = 1) => {
   const factor = Math.pow(10, digits);
@@ -151,6 +156,11 @@ const stdDev = (values: number[]) => {
   return Math.sqrt(variance);
 };
 
+const average = (values: number[]) => {
+  if (values.length === 0) return 0;
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
+};
+
 const buildTeamGameMetrics = (rows: GamePlayerStatRow[]) => {
   const totals = rows.reduce(
     (acc, row) => {
@@ -160,20 +170,25 @@ const buildTeamGameMetrics = (rows: GamePlayerStatRow[]) => {
       acc.fgm3 += row.three_made || 0;
       acc.fta += row.free_throw_attempted || 0;
       acc.tov += row.turnovers || 0;
+      acc.points += row.points || 0;
       return acc;
     },
-    { fga2: 0, fgm2: 0, fga3: 0, fgm3: 0, fta: 0, tov: 0 }
+    { fga2: 0, fgm2: 0, fga3: 0, fgm3: 0, fta: 0, tov: 0, points: 0 }
   );
 
   const fga = totals.fga2 + totals.fga3;
+  const fgm = totals.fgm2 + totals.fgm3;
   const pace = fga + 0.44 * totals.fta + totals.tov;
   const threePct = totals.fga3 > 0 ? (totals.fgm3 / totals.fga3) * 100 : 0;
   const turnoverRate = pace > 0 ? totals.tov / pace : 0;
+  const efg = fga > 0 ? ((fgm + 0.5 * totals.fgm3) / fga) * 100 : 0;
 
   return {
     pace,
     threePct,
     turnoverRate,
+    efg,
+    points: totals.points,
   };
 };
 
@@ -625,8 +640,39 @@ export function SeasonComparison({
 
   const teamSeasonStats = useMemo(() => {
     if (!resolvedSeasonId) return [];
-    return buildTeamSeasonStats(seasonPlayers, league, resolvedSeasonId, allTeams, rolesByPlayerId);
-  }, [allTeams, league, resolvedSeasonId, rolesByPlayerId, seasonPlayers]);
+    const baseStats = buildTeamSeasonStats(seasonPlayers, league, resolvedSeasonId, allTeams, rolesByPlayerId);
+
+    const playerToTeam = new Map<string, string>();
+    seasonPlayers.forEach(player => {
+      if (player.teamId) playerToTeam.set(player.id, player.teamId);
+    });
+
+    const gamePoints = new Map<string, Map<string, number>>();
+    playerGameStats.forEach(row => {
+      if (resolvedSeasonId && String(row.games?.season_id ?? '') !== String(resolvedSeasonId)) return;
+      const teamId = row.players?.team_id ?? playerToTeam.get(row.player_id);
+      if (!teamId) return;
+      if (!gamePoints.has(row.game_id)) gamePoints.set(row.game_id, new Map());
+      const byTeam = gamePoints.get(row.game_id)!;
+      byTeam.set(teamId, (byTeam.get(teamId) ?? 0) + (row.points || 0));
+    });
+
+    const againstTotals = new Map<string, number>();
+    gamePoints.forEach(teamMap => {
+      const total = Array.from(teamMap.values()).reduce((sum, value) => sum + value, 0);
+      teamMap.forEach((points, teamId) => {
+        const against = total - points;
+        againstTotals.set(teamId, (againstTotals.get(teamId) ?? 0) + against);
+      });
+    });
+
+    if (againstTotals.size === 0) return baseStats;
+
+    return baseStats.map(team => ({
+      ...team,
+      pointsAgainst: againstTotals.get(team.teamId) ?? team.pointsAgainst,
+    }));
+  }, [allTeams, league, playerGameStats, resolvedSeasonId, rolesByPlayerId, seasonPlayers]);
 
   const teamBenchmarks = useMemo(() => {
     if (teamSeasonStats.length === 0) return null;
@@ -646,6 +692,11 @@ export function SeasonComparison({
     const byName = teamSeasonStats.find(team => team.teamName === selectedTeamName) || null;
     return byName ?? byId;
   }, [allTeams, resolvedTeamId, teamSeasonStats]);
+
+  const normalizedTeamStats = useMemo(() => {
+    if (!selectedTeamStats) return null;
+    return normalizeTeamStats(selectedTeamStats);
+  }, [selectedTeamStats]);
 
   const teamAnalysis = useMemo<TeamAnalysis | null>(() => {
     if (!selectedTeamStats || !teamBenchmarks) return null;
@@ -710,22 +761,167 @@ export function SeasonComparison({
     return set;
   }, [currentTeamPlayers]);
 
+  const teamPlayerRowsByGame = useMemo(() => {
+    const map = new Map<string, GamePlayerStatRow[]>();
+    if (!resolvedTeamId) return map;
+    playerGameStats.forEach(row => {
+      if (resolvedSeasonId && String(row.games?.season_id ?? '') !== String(resolvedSeasonId)) return;
+      const belongsToTeam = row.players?.team_id === resolvedTeamId
+        || currentTeamPlayerIds.has(row.player_id)
+        || playerTeamMap.get(row.player_id) === resolvedTeamId;
+      if (!belongsToTeam) return;
+      if (!map.has(row.game_id)) map.set(row.game_id, []);
+      map.get(row.game_id)!.push(row);
+    });
+    return map;
+  }, [currentTeamPlayerIds, playerGameStats, playerTeamMap, resolvedSeasonId, resolvedTeamId]);
+
   const recentGameMetrics = useMemo(() => {
     if (!resolvedTeamId) return [];
-    const recentGames = games.slice(0, RECENT_GAMES_WINDOW);
-    return recentGames
+    const sortedGames = [...games].sort((a, b) => {
+      const aDate = a.date ? new Date(a.date).getTime() : 0;
+      const bDate = b.date ? new Date(b.date).getTime() : 0;
+      return bDate - aDate;
+    });
+    return sortedGames
+      .slice(0, RECENT_GAMES_WINDOW)
       .map(game => {
-        const rows = playerGameStats.filter(row => (
-          row.game_id === game.id
-          && (row.players?.team_id === resolvedTeamId
-            || currentTeamPlayerIds.has(row.player_id)
-            || playerTeamMap.get(row.player_id) === resolvedTeamId)
-        ));
+        const rows = teamPlayerRowsByGame.get(game.id) ?? [];
         if (rows.length === 0) return null;
         return buildTeamGameMetrics(rows);
       })
       .filter((item): item is ReturnType<typeof buildTeamGameMetrics> => Boolean(item));
-  }, [currentTeamPlayerIds, games, playerGameStats, playerTeamMap, resolvedTeamId]);
+  }, [games, resolvedTeamId, teamPlayerRowsByGame]);
+
+  const teamFormSeries = useMemo(() => {
+    if (!resolvedTeamId) return [];
+    const uniqueGamesMap = new Map<string, TeamGame>();
+    games.forEach(game => {
+      uniqueGamesMap.set(game.id, game);
+    });
+    const sortedGames = Array.from(uniqueGamesMap.values()).sort((a, b) => {
+      const aDate = a.date ? new Date(a.date).getTime() : 0;
+      const bDate = b.date ? new Date(b.date).getTime() : 0;
+      return bDate - aDate;
+    });
+
+    return sortedGames.map(game => {
+      const rows = teamPlayerRowsByGame.get(game.id) ?? [];
+      const metrics = rows.length > 0 ? buildTeamGameMetrics(rows) : null;
+      const pointsByTeam = gameTeamPoints.get(game.id);
+      const derivedOurScore = typeof resolvedTeamId === 'string'
+        ? pointsByTeam?.get(resolvedTeamId)
+        : undefined;
+      const ourScore = typeof game.ourScore === 'number' && Number.isFinite(game.ourScore) && game.ourScore > 0
+        ? game.ourScore
+        : typeof derivedOurScore === 'number'
+          ? derivedOurScore
+          : metrics?.points ?? null;
+      let derivedOppScore: number | null = null;
+      if (pointsByTeam && typeof derivedOurScore === 'number') {
+        const totalPoints = Array.from(pointsByTeam.values()).reduce((sum, value) => sum + value, 0);
+        derivedOppScore = totalPoints - derivedOurScore;
+      }
+      const oppScore = typeof game.oppScore === 'number' && Number.isFinite(game.oppScore) && game.oppScore > 0
+        ? game.oppScore
+        : derivedOppScore;
+      const hasScores = typeof ourScore === 'number' && typeof oppScore === 'number';
+      const margin = hasScores ? ourScore - oppScore : 0;
+      const result = game.result
+        ?? (hasScores ? (ourScore >= oppScore ? 'win' : 'loss') : 'loss');
+
+      return {
+        id: game.id,
+        date: game.date,
+        opponent: game.opponent,
+        result,
+        margin,
+        ourScore: typeof ourScore === 'number' ? ourScore : 0,
+        oppScore: typeof oppScore === 'number' ? oppScore : 0,
+        efg: metrics?.efg ?? null,
+        pace: metrics?.pace ?? null,
+      };
+    });
+  }, [gameTeamPoints, games, resolvedTeamId, teamPlayerRowsByGame]);
+
+  const teamFormSummary = useMemo(() => {
+    if (!normalizedTeamStats || teamFormSeries.length === 0) return null;
+    const windowGames = teamFormSeries.slice(0, TEAM_FORM_WINDOW);
+    if (windowGames.length === 0) return null;
+    const marginAvg = average(windowGames.map(item => item.margin));
+    const seasonMarginFromGames = teamFormSeries.length > 0
+      ? average(teamFormSeries.map(item => item.margin))
+      : null;
+    const seasonMargin = seasonMarginFromGames ?? (
+      normalizedTeamStats.games > 0
+        ? (normalizedTeamStats.pointsFor - normalizedTeamStats.pointsAgainst) / normalizedTeamStats.games
+        : 0
+    );
+    const marginDelta = roundValue(marginAvg - seasonMargin, 1);
+
+    const efgValues = windowGames
+      .map(item => item.efg)
+      .filter((value): value is number => Number.isFinite(value));
+    const recentEfgAvg = efgValues.length > 0 ? roundValue(average(efgValues), 1) : null;
+    const efgDelta = recentEfgAvg !== null ? roundValue(recentEfgAvg - normalizedTeamStats.efg, 1) : null;
+
+    let status: 'up' | 'down' | 'flat' = 'flat';
+    if (marginDelta >= TEAM_FORM_MARGIN_THRESHOLD || (efgDelta !== null && efgDelta >= TEAM_FORM_EFG_THRESHOLD)) {
+      status = 'up';
+    } else if (marginDelta <= -TEAM_FORM_MARGIN_THRESHOLD || (efgDelta !== null && efgDelta <= -TEAM_FORM_EFG_THRESHOLD)) {
+      status = 'down';
+    }
+
+    const badgeLabel = status === 'up'
+      ? 'Forma javul'
+      : status === 'down'
+        ? 'Forma romlik'
+        : 'Forma stabil';
+    const badgeClass = status === 'up'
+      ? 'bg-emerald-600/20 text-emerald-200 border border-emerald-500/60'
+      : status === 'down'
+        ? 'bg-rose-600/20 text-rose-200 border border-rose-500/60'
+        : 'bg-slate-800 text-slate-200 border border-slate-700';
+
+    const descriptionParts = [
+      `Pontkülönbség átlag: ${marginAvg >= 0 ? '+' : ''}${roundValue(marginAvg, 1)} (szezon: ${seasonMargin >= 0 ? '+' : ''}${roundValue(seasonMargin, 1)})`,
+    ];
+    if (recentEfgAvg !== null && efgDelta !== null) {
+      descriptionParts.push(`eFG: ${recentEfgAvg.toFixed(1)}% (${efgDelta >= 0 ? '+' : ''}${efgDelta.toFixed(1)} pp)`);
+    }
+
+    return {
+      badgeLabel,
+      badgeClass,
+      description: descriptionParts.join(' • '),
+      windowSize: windowGames.length,
+      seasonMargin: roundValue(seasonMargin, 1),
+      marginAvg: roundValue(marginAvg, 1),
+      marginDelta,
+      seasonEfg: normalizedTeamStats.efg,
+      recentEfgAvg,
+      efgDelta,
+    };
+  }, [normalizedTeamStats, teamFormSeries]);
+
+  const teamFormChartData = useMemo(() => {
+    return teamFormSeries
+      .slice(0, TEAM_FORM_CHART_POINTS)
+      .reverse()
+      .map(item => {
+        const timestamp = item.date ? new Date(item.date).getTime() : 0;
+        const label = timestamp
+          ? new Date(timestamp).toLocaleDateString('hu-HU', { month: 'short', day: 'numeric' })
+          : 'Ismeretlen';
+        return {
+          label,
+          margin: roundValue(item.margin, 1),
+          efg: item.efg !== null ? roundValue(item.efg, 1) : null,
+          opponent: item.opponent,
+          result: item.result,
+        };
+      });
+  }, [teamFormSeries]);
 
   const consistencyInsights = useMemo(() => {
     if (recentGameMetrics.length < 3) return [];
@@ -2055,6 +2251,94 @@ export function SeasonComparison({
                 )}
               </div>
 
+              {teamFormSummary && (
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <div className="text-sm text-slate-300 font-medium">
+                      Forma trend (utolsó {teamFormSummary.windowSize} meccs)
+                    </div>
+                    <Badge className={teamFormSummary.badgeClass}>{teamFormSummary.badgeLabel}</Badge>
+                    <div className="text-sm text-slate-200">{teamFormSummary.description}</div>
+                    <div className="text-xs text-slate-400">
+                      Pontkülönbség: {teamFormSummary.marginAvg >= 0 ? '+' : ''}{teamFormSummary.marginAvg.toFixed(1)} • Szezon: {teamFormSummary.seasonMargin >= 0 ? '+' : ''}{teamFormSummary.seasonMargin.toFixed(1)}
+                    </div>
+                    {teamFormSummary.recentEfgAvg !== null && teamFormSummary.efgDelta !== null && (
+                      <div className="text-xs text-slate-400">
+                        eFG: {teamFormSummary.recentEfgAvg.toFixed(1)}% ({teamFormSummary.efgDelta >= 0 ? '+' : ''}{teamFormSummary.efgDelta.toFixed(1)} pp)
+                      </div>
+                    )}
+                  </div>
+                  <div className="lg:col-span-2">
+                    <div className="h-56 rounded-lg border border-slate-800 bg-slate-950/40 p-3">
+                      {teamFormChartData.length > 0 ? (
+                        <ResponsiveContainer width="100%" height="100%">
+                          <LineChart data={teamFormChartData} margin={{ left: 8, right: 16 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
+                            <XAxis dataKey="label" stroke="#94a3b8" tick={{ fontSize: 11 }} />
+                            <YAxis yAxisId="margin" stroke="#f97316" tick={{ fontSize: 11 }} width={48} />
+                            <YAxis
+                              yAxisId="efg"
+                              orientation="right"
+                              stroke="#22d3ee"
+                              tickFormatter={value => `${value}%`}
+                              tick={{ fontSize: 11 }}
+                              width={56}
+                            />
+                            <Tooltip
+                              content={({ active, payload }) => {
+                                if (!active || !payload || payload.length === 0) return null;
+                                const datum = payload[0]?.payload as {
+                                  label: string;
+                                  opponent: string;
+                                  margin: number;
+                                  efg: number | null;
+                                  result: 'win' | 'loss';
+                                };
+                                if (!datum) return null;
+                                return (
+                                  <div className="rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-100 space-y-1">
+                                    <div className="font-semibold text-slate-50">
+                                      {datum.label} • {datum.opponent}
+                                    </div>
+                                    <div>
+                                      Eredmény: {datum.result === 'win' ? 'Győzelem' : 'Vereség'} ({datum.margin >= 0 ? '+' : ''}{datum.margin})
+                                    </div>
+                                    {typeof datum.efg === 'number' && (
+                                      <div>eFG: {datum.efg.toFixed(1)}%</div>
+                                    )}
+                                  </div>
+                                );
+                              }}
+                            />
+                            <Line
+                              yAxisId="margin"
+                              type="monotone"
+                              dataKey="margin"
+                              stroke="#f97316"
+                              strokeWidth={2}
+                              dot={{ r: 3 }}
+                              name="Pontkülönbség"
+                            />
+                            <Line
+                              yAxisId="efg"
+                              type="monotone"
+                              dataKey="efg"
+                              stroke="#22d3ee"
+                              strokeWidth={2}
+                              dot={{ r: 3 }}
+                              name="eFG%"
+                              connectNulls
+                            />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      ) : (
+                        <div className="text-sm text-slate-400">Nincs trend adat.</div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <div className="text-sm text-slate-300 font-medium">Erősségek</div>
@@ -2143,27 +2427,24 @@ export function SeasonComparison({
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <div className="text-sm text-slate-300 font-medium">Posztmegoszlás</div>
-                  {(Object.entries(displayTeamAnalysis.rosterSummary.positionMinutesShare) as [string, number][])
-                    .map(([pos, share]) => (
-                      {
-                        pos,
-                        share,
-                        label: pos === 'PG'
-                          ? 'Irányító'
-                          : pos === 'SG'
-                            ? 'Dobó'
-                            : pos === 'SF'
-                              ? 'Bedobó'
-                              : pos === 'PF'
-                                ? 'Erőcsatár'
-                                : pos === 'C'
-                                  ? 'Center'
-                                  : pos,
-                      }
-                    ))
-                    .map(({ pos, share, label }) => (
-                      <div key={pos} className="text-sm text-slate-200">
-                        {label}: {share.toFixed(1)}%
+                  {(Object.entries(displayTeamAnalysis.rosterSummary.positionMinutesShare) as Array<[Position, number]>)
+                    .map(([pos, share]) => ({
+                      pos,
+                      share,
+                      label: getPositionLabel(pos),
+                      players: displayTeamAnalysis.rosterSummary.positionPlayers[pos] ?? [],
+                    }))
+                    .map(({ pos, share, label, players }) => (
+                      <div key={pos} className="text-sm text-slate-200 space-y-0.5">
+                        <div>
+                          {label}: {share.toFixed(1)}%
+                        </div>
+                        {players.length > 0 && (
+                          <div className="text-xs text-slate-400">
+                            {players.slice(0, 4).join(', ')}
+                            {players.length > 4 ? '…' : ''}
+                          </div>
+                        )}
                       </div>
                     ))}
                   {displayTeamAnalysis.rosterSummary.avgHeightOverall && (
@@ -2176,7 +2457,7 @@ export function SeasonComparison({
                   <div className="text-sm text-slate-300 font-medium">Role-megoszlás</div>
                   {Object.keys(displayTeamAnalysis.rosterSummary.roleCounts).length > 0 ? (
                     Object.entries(displayTeamAnalysis.rosterSummary.roleCounts).map(([role, count]) => (
-                      <div key={role} className="text-sm text-slate-200">
+                      <div key={role} className="text-sm text-slate-200 space-y-0.5">
                         <div>
                           {count >= 3
                             ? `${role}: redundáns (${count}) – rotációs előny, de szerepütközés lehetséges`
@@ -2184,12 +2465,20 @@ export function SeasonComparison({
                               ? `${role}: hiány – taktikai opció nem elérhető`
                               : `${role}: ${count}`}
                         </div>
-                        {count > 0 && (rolePlayersByRole.get(role)?.length ?? 0) > 0 && (
-                          <div className="text-xs text-slate-400">
-                            {rolePlayersByRole.get(role)!.slice(0, 4).join(', ')}
-                            {rolePlayersByRole.get(role)!.length > 4 ? '…' : ''}
-                          </div>
-                        )}
+                        {(() => {
+                          const playerNames = displayTeamAnalysis.rosterSummary.rolePlayers[role] ?? [];
+                          if (playerNames.length === 0 && (rolePlayersByRole.get(role)?.length ?? 0) === 0) return null;
+                          const inferredNames = playerNames.length > 0
+                            ? playerNames
+                            : rolePlayersByRole.get(role) ?? [];
+                          if (inferredNames.length === 0) return null;
+                          return (
+                            <div className="text-xs text-slate-400">
+                              {inferredNames.slice(0, 4).join(', ')}
+                              {inferredNames.length > 4 ? '…' : ''}
+                            </div>
+                          );
+                        })()}
                       </div>
                     ))
                   ) : (

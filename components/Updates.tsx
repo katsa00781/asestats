@@ -15,6 +15,15 @@ type UpdateItem = {
 
 const updates: UpdateItem[] = [
   {
+    date: '2026. február 4.',
+    version: '1.6.2',
+    category: 'improvement',
+    icon: <TrendingUp className="w-5 h-5" />,
+    title: 'Csapatelemzés forma trend finomhangolás',
+    description:
+      'A csapatelemzés forma badge-je és grafikonja most már valós meccspontokra épül: kikerülnek a duplikált összecsapások, a margin/efg átlagok a tényleges eredményekhez igazodnak, így pontosabb visszajelzést kapsz az aktuális formáról.',
+  },
+  {
     date: '2026. február 2.',
     version: '1.6.1',
     category: 'improvement',

@@ -120,10 +120,12 @@ export type TeamAnalysis = {
   rosterSummary: {
     positionMinutesShare: Record<Position, number>;
     roleCounts: Record<string, number>;
+    rolePlayers: Record<string, string[]>;
     top2UsageShare: number;
     flags: RosterFlags;
     avgHeightByPosition: Record<Position, number | null>;
     avgHeightOverall: number | null;
+    positionPlayers: Record<Position, string[]>;
     totalMinutes: number;
   };
   rosterInsights: string[];
@@ -524,6 +526,14 @@ const buildRosterSummary = (team: NormalizedTeamStats) => {
     C: 0,
   };
 
+  const positionPlayers: Record<Position, Array<{ name: string; minutes: number }>> = {
+    PG: [],
+    SG: [],
+    SF: [],
+    PF: [],
+    C: [],
+  };
+
   const heightTotals: Record<Position, { sum: number; count: number }> = {
     PG: { sum: 0, count: 0 },
     SG: { sum: 0, count: 0 },
@@ -538,8 +548,13 @@ const buildRosterSummary = (team: NormalizedTeamStats) => {
     acc[role] = 0;
     return acc;
   }, {} as Record<string, number>);
+  const rolePlayers: Record<string, string[]> = ROLE_CATALOG.reduce((acc, role) => {
+    acc[role] = [];
+    return acc;
+  }, {} as Record<string, string[]>);
   team.roster.forEach(player => {
     positionMinutesShare[player.position] += player.minutes;
+    positionPlayers[player.position].push({ name: player.name, minutes: player.minutes || 0 });
     if (player.heightCm && Number.isFinite(player.heightCm)) {
       heightTotals[player.position].sum += player.heightCm;
       heightTotals[player.position].count += 1;
@@ -549,6 +564,8 @@ const buildRosterSummary = (team: NormalizedTeamStats) => {
     const normalizedRoles = normalizeRoleKeys(player.roles);
     normalizedRoles.forEach(role => {
       roleCounts[role] = (roleCounts[role] ?? 0) + 1;
+      if (!rolePlayers[role]) rolePlayers[role] = [];
+      rolePlayers[role].push(player.name);
     });
   });
 
@@ -595,13 +612,31 @@ const buildRosterSummary = (team: NormalizedTeamStats) => {
 
   const avgHeightOverall = heightCount > 0 ? round(heightSum / heightCount, 1) : null;
 
+  const positionPlayerNames = (Object.keys(positionPlayers) as Position[]).reduce(
+    (acc, pos) => {
+      acc[pos] = positionPlayers[pos]
+        .sort((a, b) => (b.minutes ?? 0) - (a.minutes ?? 0))
+        .map(entry => entry.name);
+      return acc;
+    },
+    {
+      PG: [],
+      SG: [],
+      SF: [],
+      PF: [],
+      C: [],
+    } as Record<Position, string[]>
+  );
+
   return {
     positionMinutesShare,
     roleCounts,
+    rolePlayers,
     top2UsageShare,
     flags,
     avgHeightByPosition,
     avgHeightOverall,
+    positionPlayers: positionPlayerNames,
     totalMinutes,
   };
 };
