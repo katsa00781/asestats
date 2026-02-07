@@ -31,42 +31,50 @@ const SYSTEM_PROMPT = `Te a klub szakmai stábjának mesterséges intelligencia 
 - Tilos új mutatót, százalékot, előnyt vagy kockázatot kitalálni.
 - Magyar kosárlabda-szaknyelvet kell használnod, angol zsargont (run, transition, pace stb.) nem írhatsz.`;
 
-const USER_PROMPT_TEMPLATE = `Az alábbi adatok egy kosárlabda mérkőzés pre-game elemzéséből származnak.
-Az adatok egy algoritmus által számított, validált kimenetek.
+const USER_PROMPT_TEMPLATE = `KONTEXTUS:
+- Elemzés nézőpontja: [CSAPAT_NEVE] (esélyük: X%)
+- Ellenfél: [ELLENFÉL_NEVE] (esélyük: Y%)
+- KRITIKUS: Használd a csapatneveket, NE "favorit/ellenfél" kifejezéseket
 
-⚠️ KRITIKUS SZABÁLY – HALLUCINÁCIÓ TILTÁSA:
-- KIZÁRÓLAG a megadott, számított értékeket és megállapításokat használhatod.
-- Nem számolhatsz, nem becsülhetsz és nem vezethetsz le új statisztikát.
-- Nem nevezhetsz meg olyan előnyt, kockázatot vagy tendenciát, amely nem szerepel az adatokban.
-- Nem használhatsz „általában”, „jellemzően”, „várhatóan” típusú általánosítást.
-- Ha egy tényező bizonytalan vagy alacsony bizonyosságú, azt kizárólag kontextusként, nem értékítéletként kezeld.
+KÖTELEZŐ INPUT-ELLENŐRZÉS:
+1. Van-e saját csapat stílus-leírása? (Ha nincs → jelezd hiányként)
+2. Van-e poszt-összehasonlítás magyarázat? (Miért X% esély, ha Y poszt-előny van?)
+3. Kulcsjátékosok nevesítve vannak-e?
 
-Feladatod:
-- készíts szakmailag pontos, szöveges mérkőzés előtti értékelést
-- értelmezd a MEGLÉVŐ statisztikai esélyeket és poszt-összehasonlításokat
-- emeld ki az ellenfél játékából fakadó, ADATOKKAL ALÁTÁMASZTOTT fő kockázatokat
-- nevezd meg a mérkőzés döntő tényezőjét (X-faktor), kizárólag az elemzés alapján
-- ne ismételd szó szerint a felsorolásokat, hanem szintetizáld őket
-- fogalmazz leíró, narratív stílusban, kerülve a felsorolás-szerű monotonitást
-- adj konkrét, adat-alapú mérkőzésstratégiát az ellenfél ellen (pl. tempó, párosítás, fókuszpontok)
+SZERKEZET:
+1. Mérkőzés alapkép
+   - "[CSAPAT] X% eséllyel indul, [ELLENFÉL] Y%-kal"
+   - Variancia-forrás nevesítése (tripla%, fault-arány, konkrét matchup)
 
-⚠️ SZAKNYELVI KÖTELEZETTSÉG:
-- Magyar kosárlabda-szaknyelvet használj.
-- Kerüld az angol vagy amerikanizált kifejezéseket.
-- Használd a bevett magyar szakmai fogalmakat.
+2. Stílusütközés
+   - [CSAPAT] játékstílusa: [ADAT: tempó, támadási fókusz, védekezési típus]
+   - [ELLENFÉL] játékstílusa: [ADAT]
+   - Várható tempó és dinamika
 
-Strukturált adatok:
-{{PRE_GAME_ANALYSIS_OBJECT}}
+3. Kritikus matchupok
+   - Poszt-összehasonlítás legnagyobb eltérései (±10 VAL felett)
+   - Konkrét játékosnevek: pl. "[JÁTÉKOS] +23.1 VAL az irányítóposzton"
+   - Magyarázd meg, miért nem döntő önmagában egy matchup
 
-Elvárt kimenet:
-- 6–10 mondatos összefoglaló
-- tagolt, logikusan felépített szöveg az alábbi logikai blokkokkal (sorszámot nem kell írni, de a témákat külön mondatcsoportokban fejtsd ki):
-  • Kontextus (tempó, tengely, statisztikai esély)
-  • Fenyegetések és sebezhetőségek (adatokra hivatkozva)
-  • Pozíciós dinamika és kulcspárosítások
-  • Stratégiai javaslat az ellenfél ellen, a fókuszpontok/X-faktor alapján
-- magyar szaknyelv használata
-- edzői döntéshozatalt támogató hangsúlyok, egyértelmű ajánlások`;
+4. Taktikai válaszok
+   - [CSAPAT] válasza [ELLENFÉL] fő veszélyeire (fókuszpontok alapján)
+   - Küszöbértékek ahol rendelkezésre állnak (pl. "<25 tripla-kísérlet")
+
+5. X-faktorok operacionalizálása
+   - Elsődleges: konkrét esemény/stat → hatás (pl. "ha Whelan >40% triplából → +12 pont várható")
+   - Másodlagos: feltételes forgatókönyv
+
+6. Forgatókönyvek
+   - IF [feltétel alapján strukturált adatokból] THEN [következmény]
+   - Példa: "Ha Atomerőmű >45% lepattanót szerez → 62% esély növekedés"
+
+TILOS:
+- Általános kijelentések játékstílus nélkül ("gyors csapat" – miből derül ki?)
+- Névtelen X-faktorok ("a periméterjátékos" – ki?)
+- Ellentmondás a strukturált adatokkal (ellenőrizd irányító-matchup előjelét!)
+
+STRUKTURÁLT ADATOK (változtatás nélkül dolgozz velük):
+{{PRE_GAME_ANALYSIS_OBJECT}}`;
 
 type PregameTextPayload = {
   gameId?: string | null;

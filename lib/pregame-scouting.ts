@@ -65,6 +65,35 @@ export type LeagueTeamBenchmarks = Record<
   Record<string, TeamBenchmarks>
 >;
 
+export type PositionComparison = {
+  position: Position;
+  ownValPer36: number;
+  oppValPer36: number;
+  ownPointsPer36: number;
+  oppPointsPer36: number;
+  deltaValPer36: number;
+  matchupFlag?: 'critical_disadvantage' | 'clear_advantage';
+};
+
+export type ScoutingReportLLMContext = {
+  opponentTempoDescriptor: string;
+  ownTempoDescriptor: string;
+  opponentDominantAxis: 'transition' | 'periméter' | 'festék';
+  tempoControlNote?: string;
+  matchupRealizationNote?: string;
+  riskNote?: string;
+  varianceDrivers: string[];
+  positionDeltaSummary: {
+    perimeterDelta: number;
+    frontcourtDelta: number;
+  };
+  significantMatchups: Array<{
+    position: Position;
+    deltaValPer36: number;
+    matchupFlag?: PositionComparison['matchupFlag'];
+  }>;
+};
+
 export type ScoutingReport = {
   ownTeamId: string;
   ownTeamName: string;
@@ -84,6 +113,11 @@ export type ScoutingReport = {
     offense: string[];
     defense: string[];
   };
+  ownTeamProfile?: {
+    tempo: string;
+    offense: string[];
+    defense: string[];
+  };
   threats: string[];
   vulnerabilities: string[];
   keyPlayers: {
@@ -95,16 +129,9 @@ export type ScoutingReport = {
   focusPoints: string[];
   xFactorContext?: PreGameXFactorContext;
   riskFlags?: string[];
+  positionComparisonNote?: string;
+  llmContext?: ScoutingReportLLMContext;
   summary: string;
-};
-
-export type PositionComparison = {
-  position: Position;
-  ownValPer36: number;
-  oppValPer36: number;
-  ownPointsPer36: number;
-  oppPointsPer36: number;
-  deltaValPer36: number;
 };
 
 type XFactorCandidate = {
@@ -133,6 +160,97 @@ const round = (value: number, digits = 2) => {
 
 const clamp = (value: number, min: number, max: number) =>
   Math.min(Math.max(value, min), max);
+
+const POSITION_LABELS: Record<Position, string> = {
+  PG: 'irányító',
+  SG: 'dobóhátvéd',
+  SF: 'kiscsatár',
+  PF: 'erőcsatár',
+  C: 'center',
+};
+
+const BALL_HANDLER_ROLE_HINTS = new Set<string>([
+  'Primary Ball Handler',
+  'Secondary Creator',
+  'Secondary Playmaker',
+  'Offensive Hub',
+]);
+
+// Ensures PG slot stats fall back to combo guards if no natural point guard logged minutes.
+const selectPlayersForPosition = (players: PlayerSeasonStat[], position: Position) => {
+  const primaryMatches = players.filter(player => player.position === position);
+  if (position !== 'PG') return primaryMatches;
+  if (primaryMatches.length > 0) return primaryMatches;
+
+  const comboGuards = players.filter(player => {
+    const guardSlot = player.position === 'PG' || player.position === 'SG';
+    const handlesBall = (player.roles ?? []).some(role => BALL_HANDLER_ROLE_HINTS.has(role));
+    return guardSlot && handlesBall;
+  });
+  if (comboGuards.length > 0) return comboGuards;
+
+  return players.filter(player => player.position === 'SG');
+};
+
+const CRITICAL_MATCHUP_DELTA = -20;
+const CLEAR_ADVANTAGE_DELTA = 12;
+const SIGNIFICANT_MATCHUP_DELTA = 10;
+
+const describeTempo = (pace: number) => {
+  if (pace >= 70) return 'gyors tempójú';
+  if (pace <= 60) return 'lassú tempójú';
+  return 'közepes tempójú';
+};
+
+const summarizePositionDeltas = (positionComparison: PositionComparison[]) => {
+  const perimeterDelta = positionComparison
+    .filter(item => ['PG', 'SG', 'SF'].includes(item.position))
+    .reduce((sum, item) => sum + item.deltaValPer36, 0);
+  const frontcourtDelta = positionComparison
+    .filter(item => ['PF', 'C'].includes(item.position))
+    .reduce((sum, item) => sum + item.deltaValPer36, 0);
+  return { perimeterDelta, frontcourtDelta };
+};
+
+const buildVarianceDrivers = (
+  opponent: NormalizedTeamStats,
+  ownTeam: NormalizedTeamStats,
+  benchmarks: LeagueTeamBenchmarks,
+  riskFlags: string[] = []
+) => {
+  const drivers: string[] = [];
+  const tripleVariance =
+    scoreAbove(benchmarks, opponent, 'three_rate', 60) ||
+    scoreAbove(benchmarks, opponent, 'three_pct', 60) ||
+    scoreAbove(benchmarks, ownTeam, 'three_rate', 60) ||
+    scoreAbove(benchmarks, ownTeam, 'three_pct', 60);
+  if (tripleVariance) drivers.push('tripla-variancia');
+
+  const ftVariance =
+    scoreAbove(benchmarks, opponent, 'ft_rate', 60) ||
+    scoreAbove(benchmarks, ownTeam, 'ft_rate', 60) ||
+    riskFlags.some(flag => {
+      const lowered = flag.toLowerCase();
+      return (
+        lowered.includes('fault') ||
+        lowered.includes('ft-rate') ||
+        lowered.includes('büntető') ||
+        lowered.includes('bünteto')
+      );
+    });
+  if (ftVariance) drivers.push('büntetőarány / faultterhelés');
+
+  return drivers;
+};
+
+const buildSignificantMatchups = (positionComparison: PositionComparison[]) =>
+  positionComparison
+    .filter(item => Math.abs(item.deltaValPer36) >= SIGNIFICANT_MATCHUP_DELTA)
+    .map(item => ({
+      position: item.position,
+      deltaValPer36: item.deltaValPer36,
+      matchupFlag: item.matchupFlag,
+    }));
 
 
 const quantile = (sorted: number[], percentile: number) => {
@@ -362,8 +480,8 @@ const buildPositionComparison = (ownPlayers: PlayerSeasonStat[], opponentPlayers
   const positions: Position[] = ['PG', 'SG', 'SF', 'PF', 'C'];
 
   const aggregate = (players: PlayerSeasonStat[], position: Position) => {
-    return players
-      .filter(player => player.position === position)
+    const bucket = selectPlayersForPosition(players, position);
+    return bucket
       .reduce(
         (acc, player) => {
           acc.games += player.games || 0;
@@ -401,13 +519,22 @@ const buildPositionComparison = (ownPlayers: PlayerSeasonStat[], opponentPlayers
         ? opp.points / opp.games
         : 0;
 
+    const deltaValPer36 = round(ownValPer36 - oppValPer36, 1);
+    let matchupFlag: PositionComparison['matchupFlag'];
+    if (deltaValPer36 <= CRITICAL_MATCHUP_DELTA) {
+      matchupFlag = 'critical_disadvantage';
+    } else if (deltaValPer36 >= CLEAR_ADVANTAGE_DELTA) {
+      matchupFlag = 'clear_advantage';
+    }
+
     return {
       position,
       ownValPer36: round(ownValPer36, 1),
       oppValPer36: round(oppValPer36, 1),
       ownPointsPer36: round(ownPointsPer36, 1),
       oppPointsPer36: round(oppPointsPer36, 1),
-      deltaValPer36: round(ownValPer36 - oppValPer36, 1),
+      deltaValPer36,
+      matchupFlag,
     };
   });
 };
@@ -643,6 +770,32 @@ const buildMatchupRealizationNote = (
   return notes.join(' ');
 };
 
+const buildCriticalMatchupNote = (
+  positionComparison: PositionComparison[],
+  winProbability: ScoutingReport['winProbability'],
+  ownTeamName: string
+) => {
+  if (winProbability.predictedWinner !== 'own') return '';
+  const critical = positionComparison.find(item => item.matchupFlag === 'critical_disadvantage');
+  if (!critical) return '';
+
+  const compensatingPositions = positionComparison
+    .filter(item => item.deltaValPer36 >= 5)
+    .map(item => POSITION_LABELS[item.position] ?? item.position);
+
+  const joinLabels = (labels: string[]) => {
+    if (labels.length === 0) return '';
+    if (labels.length === 1) return labels[0];
+    return labels.join('-');
+  };
+
+  const compensationCore = compensatingPositions.length > 0
+    ? `${joinLabels(compensatingPositions)} posztjain mutatkozó fölénye`
+    : 'rendszerszintű szervezettsége';
+
+  return `Megjegyzés: a ${POSITION_LABELS[critical.position]} poszt jelentős matchup-hátránya (${critical.deltaValPer36} VAL/36), amelyet ${ownTeamName} ${compensationCore} részben kompenzál.`;
+};
+
 const buildXFactors = (
   opponent: NormalizedTeamStats,
   ownTeam: NormalizedTeamStats,
@@ -683,6 +836,7 @@ const buildXFactors = (
 
 const buildSummary = (
   opponent: NormalizedTeamStats,
+  ownTeam: NormalizedTeamStats,
   profile: ReturnType<typeof buildTeamStyle>,
   threats: string[],
   vulnerabilities: string[],
@@ -690,12 +844,14 @@ const buildSummary = (
   winProbability: ScoutingReport['winProbability'],
   positionComparison: PositionComparison[],
   xFactors: XFactorInsight,
-  riskNoteText: string,
   matchupRealizationNote: string,
   tempoControlNote: string,
-  focusPoints: string[]
+  focusPoints: string[],
+  ownTeamName: string,
+  riskFlags: string[] = [],
+  positionComparisonNote?: string
 ) => {
-  const tempo = opponent.pace >= 70 ? 'gyors tempójú' : opponent.pace <= 60 ? 'lassú tempójú' : 'közepes tempójú';
+  const tempo = describeTempo(opponent.pace);
   const offense = profile.offense.length > 0 ? profile.offense.join(', ') : 'kiegyensúlyozott';
   const defense = profile.defense.length > 0 ? profile.defense.join(', ') : 'kiegyensúlyozott';
   const dominantAxis = getDominantAxis(opponent, benchmarks);
@@ -704,49 +860,92 @@ const buildSummary = (
     : dominantAxis === 'periméter'
       ? 'periméter'
       : 'festék';
-  const axisText = `Domináns tengely: ${axisLabel}.`;
 
-  const formatList = (items: string[], fallback: string) =>
-    items.length > 0 ? items.join('; ') : fallback;
+  const viewpointLine = `Elemzés nézőpontja: ${ownTeamName}`;
+  const favoredLabel = winProbability.predictedWinner === 'even'
+    ? 'Nincs (egyensúly)'
+    : winProbability.predictedWinner === 'own'
+      ? ownTeamName
+      : opponent.teamName;
+  const probabilityText = winProbability.predictedWinner === 'even'
+    ? 'Valószínűség: 50-50'
+    : `Valószínűség: ${winProbability.ownPct}% - ${winProbability.opponentPct}%`;
+  const favoredPct = winProbability.predictedWinner === 'even'
+    ? 50
+    : winProbability.predictedWinner === 'own'
+      ? winProbability.ownPct
+      : winProbability.opponentPct;
+  const confidenceMap: Record<ScoutingReport['winProbability']['confidence'], string> = {
+    High: 'Bizonyosság: Magas',
+    Medium: 'Bizonyosság: Közepes',
+    Low: 'Bizonyosság: Alacsony',
+  };
+  const probabilityConfidenceLabel = favoredPct >= 55 && favoredPct <= 60
+    ? 'Bizonyosság: Közepes–alacsony'
+    : confidenceMap[winProbability.confidence];
+  const probabilityLine = `Eredmény-prognózis: Várható győztes: ${favoredLabel} | ${probabilityText} | ${probabilityConfidenceLabel}.`;
 
-  const threatText = formatList(threats, 'nincs kiemelt támadó veszély');
-  const vulnText = formatList(vulnerabilities, 'nincs kiemelt sebezhetőség');
+  const threatText = threats.length > 0
+    ? threats.join('; ')
+    : 'kiegyensúlyozott fegyvertár, extrém veszély nélkül';
+  const vulnText = vulnerabilities.length > 0
+    ? vulnerabilities.join('; ')
+    : 'matchupfüggő, rendszerszintű rés nem látszik';
+  const ownRiskText = riskFlags.length > 0
+    ? riskFlags.join('; ')
+    : 'általános faultterhelés- és lepattanó-kontroll figyelmeztetés, konkrét riasztás nélkül';
 
-  const perimeterDelta = positionComparison
-    .filter(item => ['PG', 'SG', 'SF'].includes(item.position))
-    .reduce((sum, item) => sum + item.deltaValPer36, 0);
-  const frontcourtDelta = positionComparison
-    .filter(item => ['PF', 'C'].includes(item.position))
-    .reduce((sum, item) => sum + item.deltaValPer36, 0);
+  const { perimeterDelta, frontcourtDelta } = summarizePositionDeltas(positionComparison);
   const posSummary = perimeterDelta >= 3 && frontcourtDelta <= -1
     ? 'Periméteren saját előny (PG–SG–SF), az ellenfél inkább a magas posztokon veszélyes.'
     : frontcourtDelta >= 3 && perimeterDelta <= -1
       ? 'Belső poszt előny (PF–C), periméteren óvatos párosítás szükséges.'
       : 'Pozíciós előnyök megoszlanak, párosítás-alapú döntés javasolt.';
 
-  const probabilityNote = `Statisztikai esély: ${winProbability.ownPct}% vs ${winProbability.opponentPct}% (bizonytalanság: ${winProbability.confidence}).`;
+  const formatDelta = (value: number) => (value > 0 ? `+${value}` : `${value}`);
+  const criticalLine = positionComparison
+    .filter(item => item.matchupFlag === 'critical_disadvantage')
+    .map(item => `${POSITION_LABELS[item.position] ?? item.position} (${formatDelta(item.deltaValPer36)})`)
+    .join(', ');
+  const advantageLine = positionComparison
+    .filter(item => item.matchupFlag === 'clear_advantage')
+    .map(item => `${POSITION_LABELS[item.position] ?? item.position} (${formatDelta(item.deltaValPer36)})`)
+    .join(', ');
 
-  const varianceNote = scoreAbove(benchmarks, opponent, 'three_rate', 60)
-    ? 'Megjegyzés: magas tripla-volumen miatt a pontszám varianciája nagy.'
+  const positionSectionParts = [
+    `Pozíciós dinamika: ${posSummary} ${matchupRealizationNote}`.trim(),
+    criticalLine ? `Kritikus hátrány: ${criticalLine}.` : '',
+    advantageLine ? `Egyértelmű előny: ${advantageLine}.` : '',
+    positionComparisonNote?.trim() ?? '',
+  ].filter(part => part.length > 0);
+  const positionSection = positionSectionParts.join(' ');
+
+  const focusLine = focusPoints.length > 0
+    ? `Fókuszpontok (reakciók): ${focusPoints.join(' • ')}.`
     : '';
 
-  const xFactorText = `Elsődleges X-faktor: ${xFactors.primary.label}, másodlagos: ${xFactors.secondary.label}.`;
-  const tempoNote = tempoControlNote || '';
-  const riskNote = riskNoteText || '';
-  const tempoRiskText = [tempoNote, riskNote].filter(text => text && text.trim().length > 0).join(' ');
-  const matchupNote = matchupRealizationNote || '';
-  const focusText = focusPoints.length > 0
-    ? `Fókuszpontok: ${focusPoints.join(' • ')}.`
+  const varianceReasons = buildVarianceDrivers(opponent, ownTeam, benchmarks, riskFlags);
+  const varianceNote = varianceReasons.length > 0
+    ? `Magas varianciájú mérkőzés: ${varianceReasons.join(' + ')}.`
     : '';
+  const tempoLineParts = [tempoControlNote, varianceNote].filter(Boolean);
+  const tempoLine = tempoLineParts.length > 0
+    ? `Tempó és variancia: ${tempoLineParts.join(' ')}`
+    : '';
+
+  const xFactorLine = `X-faktor: Elsődleges: ${xFactors.primary.label}; Másodlagos: ${xFactors.secondary.label}.`;
 
   const sections = [
-    `Kontextus: Az ellenfél ${tempo}, ${offense} támadást játszik, védekezése ${defense}. ${axisText}`.trim(),
-    `Fenyegetések vs sebezhetőségek: ${threatText}. Sebezhetőségek: ${vulnText}.`.trim(),
-    `Pozíciós dinamika: ${posSummary} ${matchupNote}`.trim(),
-    focusText,
-    tempoRiskText ? `Tempó és kockázat: ${tempoRiskText}`.trim() : '',
-    `X-faktor: ${xFactorText}`.trim(),
-    `Valószínűség és variancia: ${[probabilityNote, varianceNote].filter(Boolean).join(' ')}`.trim(),
+    viewpointLine,
+    probabilityLine,
+    `Kontextus: Az ellenfél ${tempo}, ${offense} támadást játszik, védekezése ${defense}. Domináns tengely: ${axisLabel}.`,
+    `Fő veszélyek: ${threatText}.`,
+    `Feltételes sebezhetőségek (ellenfél): ${vulnText}.`,
+    `Saját kockázati pontok: ${ownRiskText}.`,
+    positionSection,
+    focusLine,
+    tempoLine,
+    xFactorLine,
   ]
     .map(line => line.trim())
     .filter(line => line.length > 0);
@@ -835,7 +1034,8 @@ export const analyzePreGameScouting = (
   const normalizedOpponent = normalizeTeamStats(opponentTeam);
   const normalizedOwn = normalizeTeamStats(ownTeam);
 
-  const profile = buildTeamStyle(normalizedOpponent, leagueBenchmarks);
+  const opponentStyle = buildTeamStyle(normalizedOpponent, leagueBenchmarks);
+  const ownStyle = buildTeamStyle(normalizedOwn, leagueBenchmarks);
   const usageShare = computeUsageConcentration(opponentPlayers);
   const keyPlayers = identifyKeyPlayers(opponentPlayers, usageShare);
 
@@ -877,8 +1077,29 @@ export const analyzePreGameScouting = (
   const xFactors = buildXFactors(normalizedOpponent, normalizedOwn, leagueBenchmarks, threats, vulnerabilities);
   const riskNotes = buildRiskNotes(normalizedOpponent, normalizedOwn, leagueBenchmarks);
   const tempoControlNote = buildTempoControlNote(normalizedOpponent, normalizedOwn, leagueBenchmarks);
-  const matchupRealizationNote = buildMatchupRealizationNote(positionComparison, profile);
+  const matchupRealizationNote = buildMatchupRealizationNote(positionComparison, opponentStyle);
   const focusPoints = buildFocusPoints(normalizedOpponent, normalizedOwn, leagueBenchmarks, xFactors);
+  const positionComparisonNote = buildCriticalMatchupNote(positionComparison, winProbability, ownTeam.teamName);
+  const { perimeterDelta, frontcourtDelta } = summarizePositionDeltas(positionComparison);
+  const varianceDrivers = buildVarianceDrivers(normalizedOpponent, normalizedOwn, leagueBenchmarks, riskNotes.flags);
+  const opponentTempoDescriptor = describeTempo(normalizedOpponent.pace);
+  const ownTempoDescriptor = describeTempo(normalizedOwn.pace);
+  const dominantAxis = getDominantAxis(normalizedOpponent, leagueBenchmarks);
+  const significantMatchups = buildSignificantMatchups(positionComparison);
+  const llmContext: ScoutingReportLLMContext = {
+    opponentTempoDescriptor,
+    ownTempoDescriptor,
+    opponentDominantAxis: dominantAxis,
+    tempoControlNote: tempoControlNote || undefined,
+    matchupRealizationNote: matchupRealizationNote || undefined,
+    riskNote: riskNotes.note || undefined,
+    varianceDrivers,
+    positionDeltaSummary: {
+      perimeterDelta,
+      frontcourtDelta,
+    },
+    significantMatchups,
+  };
   const xFactorContext: PreGameXFactorContext = {
     primaryKey: xFactors.primary.key,
     primaryLabel: xFactors.primary.label,
@@ -898,8 +1119,13 @@ export const analyzePreGameScouting = (
     positionComparison,
     profile: {
       tempo: normalizedOpponent.pace >= 70 ? 'Magas' : normalizedOpponent.pace <= 60 ? 'Alacsony' : 'Közepes',
-      offense: profile.offense,
-      defense: profile.defense,
+      offense: opponentStyle.offense,
+      defense: opponentStyle.defense,
+    },
+    ownTeamProfile: {
+      tempo: normalizedOwn.pace >= 70 ? 'Magas' : normalizedOwn.pace <= 60 ? 'Alacsony' : 'Közepes',
+      offense: ownStyle.offense,
+      defense: ownStyle.defense,
     },
     threats,
     vulnerabilities,
@@ -910,19 +1136,24 @@ export const analyzePreGameScouting = (
     focusPoints,
     xFactorContext,
     riskFlags: riskNotes.flags,
+    positionComparisonNote: positionComparisonNote || undefined,
+    llmContext,
     summary: buildSummary(
       normalizedOpponent,
-      profile,
+      normalizedOwn,
+      opponentStyle,
       threats,
       vulnerabilities,
       leagueBenchmarks,
       winProbability,
       positionComparison,
       xFactors,
-      riskNotes.note,
       matchupRealizationNote,
       tempoControlNote,
-      focusPoints
+      focusPoints,
+      ownTeam.teamName,
+      riskNotes.flags,
+      positionComparisonNote || ''
     ),
   };
 };

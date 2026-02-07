@@ -194,6 +194,12 @@ const buildTeamGameMetrics = (rows: GamePlayerStatRow[]) => {
 
 const getPositionLabel = (position: Position) => POSITION_LABELS[position] ?? position;
 
+const hasSampleForPregame = (games: number, preferredMinimum: number, fallbackMinimum: number) => {
+  if (!Number.isFinite(games)) return false;
+  if (games >= preferredMinimum) return true;
+  return games >= fallbackMinimum;
+};
+
 const buildSimilarityReason = (base: PlayerAnalysis, other: PlayerAnalysis) => {
   const sharedRoles = base.roles.filter(role => other.roles.includes(role)).slice(0, 1);
   const sharedSkills = (Object.keys(base.skillScores) as Array<keyof PlayerAnalysis['skillScores']>)
@@ -479,6 +485,7 @@ export function SeasonComparison({
   };
 
   const MIN_PREGAME_GAMES = 4;
+  const MIN_PREGAME_GAMES_FLOOR = 2;
   const MIN_RECENT_GAMES_TEAM = 3;
 
   const resolvedSeasonId = selectedSeasonId || currentSeasonId || allSeasons[0]?.id || '';
@@ -567,7 +574,7 @@ export function SeasonComparison({
     seasonPlayers.forEach(player => {
       const raw = toRawStat(player, league, resolvedSeasonId);
       const normalized = normalizePlayerStats(raw);
-      if (!isEligibleSample(normalized) && normalized.games < MIN_PREGAME_GAMES) {
+      if (!isEligibleSample(normalized) && normalized.games < MIN_PREGAME_GAMES_FLOOR) {
         map.set(player.id, []);
         return;
       }
@@ -575,7 +582,7 @@ export function SeasonComparison({
       map.set(player.id, playerAnalysis.roles);
     });
     return map;
-  }, [benchmarks, league, resolvedSeasonId, seasonPlayers]);
+  }, [MIN_PREGAME_GAMES_FLOOR, benchmarks, league, resolvedSeasonId, seasonPlayers]);
 
   const displayIncomingValue = (field: IncomingField, value: number) => {
     if (focusedIncomingField !== field && (!Number.isFinite(value) || value === 0)) return '';
@@ -1188,7 +1195,7 @@ export function SeasonComparison({
     const buildFromSeason = () =>
       activeSeasonPlayers
         .filter(player => player.teamId === selectedOpponentTeamId)
-        .filter(player => (player.gamesPlayed || 0) >= MIN_PREGAME_GAMES)
+        .filter(player => hasSampleForPregame(player.gamesPlayed || 0, MIN_PREGAME_GAMES, MIN_PREGAME_GAMES_FLOOR))
         .map(player => ({
           playerId: player.id,
           name: player.name,
@@ -1280,9 +1287,9 @@ export function SeasonComparison({
         ...player,
         games: gamesMap.get(player.playerId)?.size ?? 0,
       }))
-      .filter(player => (player.games || 0) >= MIN_PREGAME_GAMES)
+      .filter(player => hasSampleForPregame(player.games || 0, MIN_PREGAME_GAMES, MIN_PREGAME_GAMES_FLOOR))
       .filter(player => seasonPlayerMap.get(player.playerId)?.isActive !== false);
-  }, [MIN_PREGAME_GAMES, MIN_RECENT_GAMES_TEAM, activeSeasonPlayers, playerGameStats, playerTeamMap, recentGameIdsByTeam, rolesByPlayerId, seasonPlayerMap, selectedOpponentTeamId, useRecentFormPregame]);
+  }, [MIN_PREGAME_GAMES, MIN_PREGAME_GAMES_FLOOR, MIN_RECENT_GAMES_TEAM, activeSeasonPlayers, playerGameStats, playerTeamMap, recentGameIdsByTeam, rolesByPlayerId, seasonPlayerMap, selectedOpponentTeamId, useRecentFormPregame]);
 
   const pregameOwnPlayers = useMemo<PlayerSeasonStat[]>(() => {
     if (!resolvedTeamId || resolvedTeamId === 'all') return [];
@@ -1290,7 +1297,7 @@ export function SeasonComparison({
     const buildFromSeason = () =>
       activeSeasonPlayers
         .filter(player => player.teamId === resolvedTeamId)
-        .filter(player => (player.gamesPlayed || 0) >= MIN_PREGAME_GAMES)
+        .filter(player => hasSampleForPregame(player.gamesPlayed || 0, MIN_PREGAME_GAMES, MIN_PREGAME_GAMES_FLOOR))
         .map(player => ({
           playerId: player.id,
           name: player.name,
@@ -1382,9 +1389,9 @@ export function SeasonComparison({
         ...player,
         games: gamesMap.get(player.playerId)?.size ?? 0,
       }))
-      .filter(player => (player.games || 0) >= MIN_PREGAME_GAMES)
+      .filter(player => hasSampleForPregame(player.games || 0, MIN_PREGAME_GAMES, MIN_PREGAME_GAMES_FLOOR))
       .filter(player => seasonPlayerMap.get(player.playerId)?.isActive !== false);
-  }, [MIN_PREGAME_GAMES, MIN_RECENT_GAMES_TEAM, activeSeasonPlayers, playerGameStats, playerTeamMap, recentGameIdsByTeam, resolvedTeamId, rolesByPlayerId, seasonPlayerMap, useRecentFormPregame]);
+  }, [MIN_PREGAME_GAMES, MIN_PREGAME_GAMES_FLOOR, MIN_RECENT_GAMES_TEAM, activeSeasonPlayers, playerGameStats, playerTeamMap, recentGameIdsByTeam, resolvedTeamId, rolesByPlayerId, seasonPlayerMap, useRecentFormPregame]);
 
   const pregameReport = useMemo(() => {
     if (!pregameBenchmarks || !pregameOwnTeam || !pregameOpponentTeam) return null;
@@ -2567,46 +2574,235 @@ export function SeasonComparison({
             <div className="text-sm text-slate-300">Nincs elég adat a pre-game scoutinghoz.</div>
           )}
 
-          {pregameReport && (
-            <div className="space-y-4">
-              <div className="p-3 bg-slate-800/50 rounded-lg">
-                <div className="text-sm text-slate-300 font-medium mb-2">
-                  Várható győztes (statisztikai becslés)
-                </div>
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-emerald-300">
-                    {(pregameOwnTeam?.teamName ?? 'Saját csapat')}: {pregameReport.winProbability.ownPct.toFixed(1)}%
-                  </span>
-                  <span className="text-slate-400">vs</span>
-                  <span className="text-orange-300">
-                    {pregameReport.opponentTeamName}: {pregameReport.winProbability.opponentPct.toFixed(1)}%
-                  </span>
-                </div>
-                <div className="mt-2 h-2 w-full bg-slate-700 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-emerald-500"
-                    style={{ width: `${pregameReport.winProbability.ownPct}%` }}
-                  />
-                </div>
-                <div className="text-xs text-slate-400 mt-2">
-                  Várható győztes:{' '}
-                  {pregameReport.winProbability.predictedWinner === 'even'
-                    ? 'Kiegyenlített'
-                    : pregameReport.winProbability.predictedWinner === 'own'
-                      ? (pregameOwnTeam?.teamName ?? 'Saját csapat')
-                      : pregameReport.opponentTeamName}
-                  {' • '}Bizonyosság:{' '}
-                  {pregameReport.winProbability.confidence === 'High'
-                    ? 'Magas'
-                    : pregameReport.winProbability.confidence === 'Medium'
-                      ? 'Közepes'
-                      : 'Alacsony'}
-                </div>
-              </div>
+          {pregameReport && (() => {
+            const ownLabel = pregameOwnTeam?.teamName ?? pregameReport.ownTeamName ?? 'Saját csapat';
+            const opponentLabel = pregameReport.opponentTeamName;
+            const predictedWinner = pregameReport.winProbability.predictedWinner;
+            const favoredTeamLabel = predictedWinner === 'even'
+              ? 'Kiegyenlített'
+              : predictedWinner === 'own'
+                ? ownLabel
+                : opponentLabel;
+            const favoredPct = predictedWinner === 'even'
+              ? 50
+              : predictedWinner === 'own'
+                ? pregameReport.winProbability.ownPct
+                : pregameReport.winProbability.opponentPct;
+            const probabilitySpread = predictedWinner === 'even'
+              ? '50-50'
+              : `${pregameReport.winProbability.ownPct.toFixed(1)}% - ${pregameReport.winProbability.opponentPct.toFixed(1)}%`;
+            const probabilityConfidenceLabel = favoredPct >= 55 && favoredPct <= 60
+              ? 'Közepes–alacsony'
+              : pregameReport.winProbability.confidence === 'High'
+                ? 'Magas'
+                : pregameReport.winProbability.confidence === 'Medium'
+                  ? 'Közepes'
+                  : 'Alacsony';
+            const riskFlags = pregameReport.riskFlags ?? [];
+            const ownProfile = pregameReport.ownTeamProfile;
+            const opponentProfile = pregameReport.profile;
+            const llmContext = pregameReport.llmContext;
+            const axisLabelMap: Record<'transition' | 'periméter' | 'festék', string> = {
+              transition: 'átmeneti játék',
+              periméter: 'periméter',
+              festék: 'festék',
+            };
+            const formatDelta = (value: number) => `${value >= 0 ? '+' : ''}${value.toFixed(1)}`;
 
-              <div className="text-sm text-slate-200 leading-relaxed">{pregameReport.summary}</div>
+            return (
+              <div className="space-y-4">
+                <div className="p-3 bg-slate-800/50 rounded-lg">
+                  <div className="flex flex-wrap items-center justify-between text-xs text-slate-400 mb-1">
+                    <span>Elemzés nézőpontja: {ownLabel}</span>
+                    <span>Ellenfél: {opponentLabel}</span>
+                  </div>
+                  <div className="text-sm text-slate-300 font-medium mb-2">Statisztikai esélyek (modell)</div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-emerald-300">
+                      {ownLabel}: {pregameReport.winProbability.ownPct.toFixed(1)}%
+                    </span>
+                    <span className="text-slate-400">vs</span>
+                    <span className="text-orange-300">
+                      {opponentLabel}: {pregameReport.winProbability.opponentPct.toFixed(1)}%
+                    </span>
+                  </div>
+                  <div className="mt-2 h-2 w-full bg-slate-700 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-emerald-500"
+                      style={{ width: `${pregameReport.winProbability.ownPct}%` }}
+                    />
+                  </div>
+                  <div className="text-xs text-slate-400 mt-2">
+                    Eredmény-prognózis: {favoredTeamLabel} • Valószínűség: {probabilitySpread} • Bizonyosság: {probabilityConfidenceLabel}
+                  </div>
+                </div>
 
-              <div className="p-3 bg-slate-800/50 rounded-lg">
+                <div className="text-sm text-slate-200 leading-relaxed whitespace-pre-line">{pregameReport.summary}</div>
+
+                {(ownProfile || opponentProfile || llmContext) && (
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    {(ownProfile || opponentProfile) && (
+                      <div className="p-3 bg-slate-800/50 rounded-lg space-y-3">
+                        <div className="text-sm text-slate-300 font-medium">Játékstílus összevetés</div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <div className="flex items-center justify-between text-xs text-slate-400">
+                              <span>{ownLabel}</span>
+                              <span>Tempó: {ownProfile?.tempo ?? 'n.a.'}</span>
+                            </div>
+                            {ownProfile ? (
+                              <div className="mt-2 space-y-2 text-sm">
+                                <div>
+                                  <div className="text-[11px] uppercase tracking-wide text-slate-500">Támadás</div>
+                                  <div className="mt-1 flex flex-wrap gap-1">
+                                    {ownProfile.offense.length > 0 ? (
+                                      ownProfile.offense.map(item => (
+                                        <Badge
+                                          key={`own-offense-${item}`}
+                                          className="bg-sky-600/20 text-sky-200 border border-sky-700/40"
+                                        >
+                                          {item}
+                                        </Badge>
+                                      ))
+                                    ) : (
+                                      <span className="text-xs text-slate-500">Nincs adat</span>
+                                    )}
+                                  </div>
+                                </div>
+                                <div>
+                                  <div className="text-[11px] uppercase tracking-wide text-slate-500">Védekezés</div>
+                                  <div className="mt-1 flex flex-wrap gap-1">
+                                    {ownProfile.defense.length > 0 ? (
+                                      ownProfile.defense.map(item => (
+                                        <Badge
+                                          key={`own-defense-${item}`}
+                                          className="bg-emerald-600/20 text-emerald-200 border border-emerald-700/40"
+                                        >
+                                          {item}
+                                        </Badge>
+                                      ))
+                                    ) : (
+                                      <span className="text-xs text-slate-500">Nincs adat</span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="mt-2 text-xs text-slate-500">Ehhez a csapathoz még nincs profil adat.</div>
+                            )}
+                          </div>
+                          <div>
+                            <div className="flex items-center justify-between text-xs text-slate-400">
+                              <span>{opponentLabel}</span>
+                              <span>Tempó: {opponentProfile?.tempo ?? 'n.a.'}</span>
+                            </div>
+                            {opponentProfile ? (
+                              <div className="mt-2 space-y-2 text-sm">
+                                <div>
+                                  <div className="text-[11px] uppercase tracking-wide text-slate-500">Támadás</div>
+                                  <div className="mt-1 flex flex-wrap gap-1">
+                                    {opponentProfile.offense.length > 0 ? (
+                                      opponentProfile.offense.map(item => (
+                                        <Badge
+                                          key={`opp-offense-${item}`}
+                                          className="bg-orange-600/20 text-orange-200 border border-orange-700/40"
+                                        >
+                                          {item}
+                                        </Badge>
+                                      ))
+                                    ) : (
+                                      <span className="text-xs text-slate-500">Nincs adat</span>
+                                    )}
+                                  </div>
+                                </div>
+                                <div>
+                                  <div className="text-[11px] uppercase tracking-wide text-slate-500">Védekezés</div>
+                                  <div className="mt-1 flex flex-wrap gap-1">
+                                    {opponentProfile.defense.length > 0 ? (
+                                      opponentProfile.defense.map(item => (
+                                        <Badge
+                                          key={`opp-defense-${item}`}
+                                          className="bg-emerald-600/20 text-emerald-200 border border-emerald-700/40"
+                                        >
+                                          {item}
+                                        </Badge>
+                                      ))
+                                    ) : (
+                                      <span className="text-xs text-slate-500">Nincs adat</span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="mt-2 text-xs text-slate-500">Ehhez az ellenfélhez nincs profil adat.</div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    {llmContext && (
+                      <div className="p-3 bg-slate-800/50 rounded-lg space-y-2">
+                        <div className="text-sm text-slate-300 font-medium">LLM bemeneti kontextus</div>
+                        <div className="text-xs text-slate-400">
+                          Tempó: {ownLabel} → {llmContext.ownTempoDescriptor}, {opponentLabel} → {llmContext.opponentTempoDescriptor}
+                        </div>
+                        <div className="text-xs text-slate-400">
+                          Domináns tengely (ellenfél): {axisLabelMap[llmContext.opponentDominantAxis] ?? llmContext.opponentDominantAxis}
+                        </div>
+                        {llmContext.varianceDrivers.length > 0 ? (
+                          <div className="text-xs text-slate-400">
+                            Varianciát okozó tényezők: <span className="text-slate-200">{llmContext.varianceDrivers.join(' + ')}</span>
+                          </div>
+                        ) : (
+                          <div className="text-xs text-slate-500">Nincs kiemelt variancia-forrás.</div>
+                        )}
+                        {llmContext.tempoControlNote && (
+                          <div className="text-xs text-amber-200">{llmContext.tempoControlNote}</div>
+                        )}
+                        {llmContext.matchupRealizationNote && (
+                          <div className="text-xs text-amber-200">{llmContext.matchupRealizationNote}</div>
+                        )}
+                        {llmContext.riskNote && (
+                          <div className="text-xs text-rose-200">{llmContext.riskNote}</div>
+                        )}
+                        <div className="grid grid-cols-2 gap-2 text-xs text-slate-300">
+                          <div className="bg-slate-900/40 border border-slate-800 rounded-md px-2 py-1">
+                            <div className="text-[10px] uppercase tracking-wide text-slate-500">Periméter delta</div>
+                            <div className="font-mono text-sm">
+                              {formatDelta(llmContext.positionDeltaSummary.perimeterDelta)} VAL/36
+                            </div>
+                          </div>
+                          <div className="bg-slate-900/40 border border-slate-800 rounded-md px-2 py-1">
+                            <div className="text-[10px] uppercase tracking-wide text-slate-500">Belső poszt delta</div>
+                            <div className="font-mono text-sm">
+                              {formatDelta(llmContext.positionDeltaSummary.frontcourtDelta)} VAL/36
+                            </div>
+                          </div>
+                        </div>
+                        {llmContext.significantMatchups.length > 0 && (
+                          <div className="pt-1">
+                            <div className="text-xs text-slate-400 font-medium">Jelentős párosítások</div>
+                            <div className="mt-1 space-y-1">
+                              {llmContext.significantMatchups.map(item => (
+                                <div
+                                  key={item.position}
+                                  className="flex items-center justify-between bg-slate-900/40 border border-slate-800 rounded-md px-2 py-1"
+                                >
+                                  <span className="text-slate-200">{POSITION_LABELS[item.position] ?? item.position}</span>
+                                  <span className={item.deltaValPer36 >= 0 ? 'text-emerald-300' : 'text-rose-300'}>
+                                    {formatDelta(item.deltaValPer36)} VAL/36
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div className="p-3 bg-slate-800/50 rounded-lg">
                 <div className="text-sm text-slate-300 font-medium mb-2">Poszt-összehasonlítás (VAL/36)</div>
                 {(() => {
                   const positionLabels: Record<string, string> = {
@@ -2645,110 +2841,129 @@ export function SeasonComparison({
 
                       <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
                         {positionComparisonChart.map(item => {
+                          const deltaLabel = `${item.deltaValPer36 >= 0 ? '+' : ''}${item.deltaValPer36.toFixed(1)} VAL/36`;
                           let tone = 'text-slate-400';
-                          let label = 'Kiegyenlített';
-                          if (item.deltaValPer36 >= 2) {
+                          let label = `Kiegyenlített (${deltaLabel})`;
+                          let container = 'bg-slate-900/40 border border-slate-800';
+
+                          if (item.matchupFlag === 'critical_disadvantage') {
+                            tone = 'text-rose-300';
+                            label = `Kritikus hátrány (${deltaLabel})`;
+                            container = 'bg-rose-950/40 border border-rose-800/60';
+                          } else if (item.matchupFlag === 'clear_advantage') {
+                            tone = 'text-emerald-300';
+                            label = `Egyértelmű előny (${deltaLabel})`;
+                            container = 'bg-emerald-950/30 border border-emerald-800/50';
+                          } else if (item.deltaValPer36 >= 2) {
                             tone = 'text-emerald-400';
-                            label = `Saját előny (+${item.deltaValPer36.toFixed(1)} VAL/36)`;
+                            label = `Saját előny (${deltaLabel})`;
                           } else if (item.deltaValPer36 <= -2) {
                             tone = 'text-rose-400';
-                            label = `Ellenfél előny (${item.deltaValPer36.toFixed(1)} VAL/36)`;
+                            label = `Ellenfél előny (${deltaLabel})`;
                           }
+
                           return (
-                            <div key={item.position} className="flex items-center justify-between bg-slate-900/40 rounded-md px-3 py-2">
+                            <div
+                              key={item.position}
+                              className={`${container} flex items-center justify-between rounded-md px-3 py-2`}
+                            >
                               <span className="text-slate-200">{item.label}</span>
                               <span className={tone}>{label}</span>
                             </div>
                           );
                         })}
                       </div>
+
+                      {pregameReport.positionComparisonNote && (
+                        <div className="mt-3 text-xs text-amber-200 bg-amber-900/20 border border-amber-700/40 rounded-md px-3 py-2">
+                          {pregameReport.positionComparisonNote}
+                        </div>
+                      )}
                     </>
                   );
                 })()}
-              </div>
-
-              <div className="flex flex-wrap gap-2">
-                {pregameReport.profile.offense.map(item => (
-                  <Badge key={item} className="bg-orange-600/20 text-orange-200 border border-orange-600/40">
-                    {item}
-                  </Badge>
-                ))}
-                {pregameReport.profile.defense.map(item => (
-                  <Badge key={item} className="bg-emerald-600/20 text-emerald-200 border border-emerald-600/40">
-                    {item}
-                  </Badge>
-                ))}
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <div className="text-sm text-slate-300 font-medium mb-2">Fő veszélyek</div>
-                  {pregameReport.threats.length > 0 ? (
-                    pregameReport.threats.map(item => <div key={item} className="text-sm text-slate-200">• {item}</div>)
-                  ) : (
-                    <div className="text-sm text-slate-400">Nincs kiemelt veszély.</div>
-                  )}
                 </div>
-                <div>
-                  <div className="text-sm text-slate-300 font-medium mb-2">Sebezhetőségek</div>
-                  {pregameReport.vulnerabilities.length > 0 ? (
-                    pregameReport.vulnerabilities.map(item => <div key={item} className="text-sm text-slate-200">• {item}</div>)
-                  ) : (
-                    <div className="text-sm text-slate-400">Nincs kiemelt sebezhetőség.</div>
-                  )}
-                </div>
-              </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <div className="text-sm text-slate-300 font-medium mb-2">Kulcsjátékosok</div>
-                  <div className="text-sm text-slate-200">Scorer: {pregameReport.keyPlayers.primaryScorers.join(', ') || '-'}</div>
-                  <div className="text-sm text-slate-200">Playmaker: {pregameReport.keyPlayers.primaryPlaymakers.join(', ') || '-'}</div>
-                  <div className="text-sm text-slate-200">Stretch: {pregameReport.keyPlayers.stretchThreats.join(', ') || '-'}</div>
-                  <div className="text-sm text-slate-200">Mismatch: {pregameReport.keyPlayers.mismatchCandidates.join(', ') || '-'}</div>
-                </div>
-                <div>
-                  <div className="text-sm text-slate-300 font-medium mb-2">Fókuszpontok</div>
-                  {pregameReport.focusPoints.length > 0 ? (
-                    pregameReport.focusPoints.map(item => <div key={item} className="text-sm text-slate-200">• {item}</div>)
-                  ) : (
-                    <div className="text-sm text-slate-400">Nincs kiemelt fókuszpont.</div>
-                  )}
-                </div>
-              </div>
-
-              <div className="border-t border-slate-800 pt-4">
-                <div className="space-y-1">
-                  <div className="flex flex-wrap items-center gap-3">
-                    <Button
-                      type="button"
-                      onClick={handleGeneratePregameText}
-                      disabled={!canGeneratePregameText || isGeneratingPregameText}
-                      className="bg-sky-600 hover:bg-sky-500 text-white disabled:opacity-60"
-                    >
-                      {isGeneratingPregameText ? 'Pre-game értékelés készítése…' : 'Pre-game GPT értékelés'}
-                    </Button>
-                    <div className="text-xs text-slate-400">
-                      Szigorúan adat-alapú, 6–10 mondatos összefoglaló készül.
-                    </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <div className="text-sm text-slate-300 font-medium mb-2">Fő veszélyek</div>
+                    {pregameReport.threats.length > 0 ? (
+                      pregameReport.threats.map(item => <div key={item} className="text-sm text-slate-200">• {item}</div>)
+                    ) : (
+                      <div className="text-sm text-slate-400">Kiegyensúlyozott fegyvertár, extrém veszély nélkül.</div>
+                    )}
                   </div>
-                  {pregameSaveStatus && (
-                    <div
-                      className={`text-xs ${
-                        pregameSaveStatus.type === 'success'
-                          ? 'text-emerald-400'
-                          : pregameSaveStatus.type === 'warning'
-                            ? 'text-amber-300'
-                            : 'text-rose-300'
-                      }`}
-                    >
-                      {pregameSaveStatus.message}
+                  <div>
+                    <div className="text-sm text-slate-300 font-medium mb-2">Feltételes sebezhetőségek (ellenfél)</div>
+                    {pregameReport.vulnerabilities.length > 0 ? (
+                      pregameReport.vulnerabilities.map(item => <div key={item} className="text-sm text-slate-200">• {item}</div>)
+                    ) : (
+                      <div className="text-sm text-slate-400">Matchupfüggő, rendszerszintű rés nem látszik.</div>
+                    )}
+                  </div>
+                  <div>
+                    <div className="text-sm text-slate-300 font-medium mb-2">Saját kockázati pontok</div>
+                    {riskFlags.length > 0 ? (
+                      riskFlags.map(item => <div key={item} className="text-sm text-slate-200">• {item}</div>)
+                    ) : (
+                      <div className="text-sm text-slate-400">
+                        Általános faultterhelés- és lepattanó-kontroll figyelmeztetés, konkrét riasztás nélkül.
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <div className="text-sm text-slate-300 font-medium mb-2">Kulcsjátékosok</div>
+                    <div className="text-sm text-slate-200">Pontfelelősök: {pregameReport.keyPlayers.primaryScorers.join(', ') || '-'}</div>
+                    <div className="text-sm text-slate-200">Elsődleges szervezők: {pregameReport.keyPlayers.primaryPlaymakers.join(', ') || '-'}</div>
+                    <div className="text-sm text-slate-200">Stretch fenyegetések: {pregameReport.keyPlayers.stretchThreats.join(', ') || '-'}</div>
+                    <div className="text-sm text-slate-200">Mismatch jelöltek: {pregameReport.keyPlayers.mismatchCandidates.join(', ') || '-'}</div>
+                  </div>
+                  <div>
+                    <div className="text-sm text-slate-300 font-medium mb-2">Fókuszpontok</div>
+                    {pregameReport.focusPoints.length > 0 ? (
+                      pregameReport.focusPoints.map(item => <div key={item} className="text-sm text-slate-200">• {item}</div>)
+                    ) : (
+                      <div className="text-sm text-slate-400">Nincs kiemelt fókuszpont.</div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="border-t border-slate-800 pt-4">
+                  <div className="space-y-1">
+                    <div className="flex flex-wrap items-center gap-3">
+                      <Button
+                        type="button"
+                        onClick={handleGeneratePregameText}
+                        disabled={!canGeneratePregameText || isGeneratingPregameText}
+                        className="bg-sky-600 hover:bg-sky-500 text-white disabled:opacity-60"
+                      >
+                        {isGeneratingPregameText ? 'Pre-game értékelés készítése…' : 'Pre-game GPT értékelés'}
+                      </Button>
+                      <div className="text-xs text-slate-400">
+                        Szigorúan adat-alapú, 6–10 mondatos összefoglaló készül.
+                      </div>
                     </div>
-                  )}
+                    {pregameSaveStatus && (
+                      <div
+                        className={`text-xs ${
+                          pregameSaveStatus.type === 'success'
+                            ? 'text-emerald-400'
+                            : pregameSaveStatus.type === 'warning'
+                              ? 'text-amber-300'
+                              : 'text-rose-300'
+                        }`}
+                      >
+                        {pregameSaveStatus.message}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           <div className="border-t border-slate-800 pt-4 space-y-3">
             <div className="text-sm text-slate-300 font-medium">Mentett pre-game jelentés</div>
