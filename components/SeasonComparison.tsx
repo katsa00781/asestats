@@ -637,6 +637,10 @@ export function SeasonComparison({
   const [incomingPlayer, setIncomingPlayer] = useState<IncomingPlayerInput>(DEFAULT_INCOMING_PLAYER);
   const [focusedIncomingField, setFocusedIncomingField] = useState<IncomingField | null>(null);
   const [useRecentFormPregame, setUseRecentFormPregame] = useState(false);
+  const [pregameOwnInjuries, setPregameOwnInjuries] = useState<string[]>([]);
+  const [pregameOpponentInjuries, setPregameOpponentInjuries] = useState<string[]>([]);
+  const [showOwnInjuryPicker, setShowOwnInjuryPicker] = useState(false);
+  const [showOpponentInjuryPicker, setShowOpponentInjuryPicker] = useState(false);
   const [pregameText, setPregameText] = useState('');
   const [pregameTextError, setPregameTextError] = useState<string | null>(null);
   const [isGeneratingPregameText, setIsGeneratingPregameText] = useState(false);
@@ -651,6 +655,14 @@ export function SeasonComparison({
   const [isGeneratingTextReport, setIsGeneratingTextReport] = useState(false);
   const [expandedPlayerImpactId, setExpandedPlayerImpactId] = useState<string | null>(null);
   const [playerNarratives, setPlayerNarratives] = useState<Record<string, PlayerNarrativeStatus>>({});
+  const handleToggleOwnInjury = (playerId: string) => {
+    setPregameOwnInjuries(prev => (prev.includes(playerId) ? prev.filter(id => id !== playerId) : [...prev, playerId]));
+  };
+  const handleToggleOpponentInjury = (playerId: string) => {
+    setPregameOpponentInjuries(prev =>
+      prev.includes(playerId) ? prev.filter(id => id !== playerId) : [...prev, playerId]
+    );
+  };
   const formatGeneratedAt = (value?: string | null) => {
     if (!value) return null;
     const date = new Date(value);
@@ -680,6 +692,30 @@ export function SeasonComparison({
   const activeSeasonPlayers = useMemo(() => {
     return seasonPlayers.filter(player => player.isActive !== false);
   }, [seasonPlayers]);
+
+  const pregameOwnRosterOptions = useMemo(() => {
+    if (!resolvedTeamId || resolvedTeamId === 'all') return [];
+    return activeSeasonPlayers
+      .filter(player => String(player.teamId ?? '') === String(resolvedTeamId))
+      .map(player => ({
+        id: player.id,
+        name: player.name,
+        position: mapPosition(player.position),
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name, 'hu'));
+  }, [activeSeasonPlayers, resolvedTeamId]);
+
+  const pregameOpponentRosterOptions = useMemo(() => {
+    if (!selectedOpponentTeamId) return [];
+    return activeSeasonPlayers
+      .filter(player => String(player.teamId ?? '') === String(selectedOpponentTeamId))
+      .map(player => ({
+        id: player.id,
+        name: player.name,
+        position: mapPosition(player.position),
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name, 'hu'));
+  }, [activeSeasonPlayers, selectedOpponentTeamId]);
 
   const filteredPlayers = useMemo(() => {
     const base = resolvedTeamId !== 'all'
@@ -727,6 +763,16 @@ export function SeasonComparison({
       })
       .slice(0, 5);
   }, [playerGameStats, resolvedSeasonId, selectedPlayer]);
+
+  useEffect(() => {
+    setPregameOwnInjuries([]);
+    setShowOwnInjuryPicker(false);
+  }, [resolvedTeamId]);
+
+  useEffect(() => {
+    setPregameOpponentInjuries([]);
+    setShowOpponentInjuryPicker(false);
+  }, [selectedOpponentTeamId]);
 
   const benchmarks = useMemo<LeagueBenchmarks | null>(() => {
     if (!resolvedSeasonId || seasonPlayers.length === 0) return null;
@@ -897,6 +943,28 @@ export function SeasonComparison({
     seasonPlayers.forEach(player => map.set(player.id, player));
     return map;
   }, [seasonPlayers]);
+
+  const pregameOwnInjuryNames = useMemo(() => {
+    return pregameOwnInjuries
+      .map(playerId => seasonPlayerMap.get(playerId)?.name)
+      .filter((name): name is string => Boolean(name));
+  }, [pregameOwnInjuries, seasonPlayerMap]);
+
+  const pregameOpponentInjuryNames = useMemo(() => {
+    return pregameOpponentInjuries
+      .map(playerId => seasonPlayerMap.get(playerId)?.name)
+      .filter((name): name is string => Boolean(name));
+  }, [pregameOpponentInjuries, seasonPlayerMap]);
+
+  const pregameInjuryContext = useMemo(() => {
+    const hasOwn = pregameOwnInjuryNames.length > 0;
+    const hasOpponent = pregameOpponentInjuryNames.length > 0;
+    if (!hasOwn && !hasOpponent) return undefined;
+    return {
+      own: pregameOwnInjuryNames,
+      opponent: pregameOpponentInjuryNames,
+    };
+  }, [pregameOpponentInjuryNames, pregameOwnInjuryNames]);
 
   const recentGameIdsByTeam = useMemo(() => {
     const map = new Map<string, Map<string, number>>();
@@ -1518,6 +1586,7 @@ export function SeasonComparison({
 
   const pregameOpponentPlayers = useMemo<PlayerSeasonStat[]>(() => {
     if (!selectedOpponentTeamId) return [];
+    const injurySet = new Set(pregameOpponentInjuries);
 
     const excludeGameId = shouldUseHistoricalPregameSnapshot ? excludeOpponentPregameGameId : null;
 
@@ -1556,7 +1625,8 @@ export function SeasonComparison({
         excludeGameId,
         teamGamePlayerRows
       )
-        .filter(player => hasSampleForPregame(player.games || 0, MIN_PREGAME_GAMES, MIN_PREGAME_GAMES_FLOOR));
+        .filter(player => hasSampleForPregame(player.games || 0, MIN_PREGAME_GAMES, MIN_PREGAME_GAMES_FLOOR))
+        .filter(player => !injurySet.has(player.playerId));
 
     if (!useRecentFormPregame) return buildFromSeason();
 
@@ -1626,13 +1696,15 @@ export function SeasonComparison({
         games: gamesMap.get(player.playerId)?.size ?? 0,
       }))
       .filter(player => hasSampleForPregame(player.games || 0, MIN_PREGAME_GAMES, MIN_PREGAME_GAMES_FLOOR))
-      .filter(player => seasonPlayerMap.get(player.playerId)?.isActive !== false);
+      .filter(player => seasonPlayerMap.get(player.playerId)?.isActive !== false)
+      .filter(player => !injurySet.has(player.playerId));
   }, [
     MIN_PREGAME_GAMES,
     MIN_PREGAME_GAMES_FLOOR,
     MIN_RECENT_GAMES_TEAM,
     activeSeasonPlayers,
     excludeOpponentPregameGameId,
+    pregameOpponentInjuries,
     playerGameStats,
     playerTeamMap,
     recentGameIdsByTeam,
@@ -1646,6 +1718,7 @@ export function SeasonComparison({
 
   const pregameOwnPlayers = useMemo<PlayerSeasonStat[]>(() => {
     if (!resolvedTeamId || resolvedTeamId === 'all') return [];
+    const injurySet = new Set(pregameOwnInjuries);
 
     const excludeGameId = shouldUseHistoricalPregameSnapshot ? excludeOwnPregameGameId : null;
 
@@ -1684,7 +1757,8 @@ export function SeasonComparison({
         excludeGameId,
         teamGamePlayerRows
       )
-        .filter(player => hasSampleForPregame(player.games || 0, MIN_PREGAME_GAMES, MIN_PREGAME_GAMES_FLOOR));
+        .filter(player => hasSampleForPregame(player.games || 0, MIN_PREGAME_GAMES, MIN_PREGAME_GAMES_FLOOR))
+        .filter(player => !injurySet.has(player.playerId));
 
     if (!useRecentFormPregame) return buildFromSeason();
 
@@ -1754,13 +1828,15 @@ export function SeasonComparison({
         games: gamesMap.get(player.playerId)?.size ?? 0,
       }))
       .filter(player => hasSampleForPregame(player.games || 0, MIN_PREGAME_GAMES, MIN_PREGAME_GAMES_FLOOR))
-      .filter(player => seasonPlayerMap.get(player.playerId)?.isActive !== false);
+      .filter(player => seasonPlayerMap.get(player.playerId)?.isActive !== false)
+      .filter(player => !injurySet.has(player.playerId));
   }, [
     MIN_PREGAME_GAMES,
     MIN_PREGAME_GAMES_FLOOR,
     MIN_RECENT_GAMES_TEAM,
     activeSeasonPlayers,
     excludeOwnPregameGameId,
+    pregameOwnInjuries,
     playerGameStats,
     playerTeamMap,
     recentGameIdsByTeam,
@@ -1780,9 +1856,17 @@ export function SeasonComparison({
       pregameOpponentPlayers,
       pregameOwnTeam,
       pregameBenchmarks,
-      pregameOwnPlayers
+      pregameOwnPlayers,
+      pregameInjuryContext
     );
-  }, [pregameBenchmarks, pregameOpponentPlayers, pregameOpponentTeam, pregameOwnPlayers, pregameOwnTeam]);
+  }, [
+    pregameBenchmarks,
+    pregameInjuryContext,
+    pregameOpponentPlayers,
+    pregameOpponentTeam,
+    pregameOwnPlayers,
+    pregameOwnTeam,
+  ]);
 
   const postgameBenchmarks = useMemo(() => {
     if (teamSeasonStats.length === 0) return null;
@@ -3027,6 +3111,117 @@ export function SeasonComparison({
             </div>
           </div>
 
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <div className="flex items-center justify-between gap-2">
+                <label className="text-sm text-slate-400">Saját sérültek / kihagyók</label>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={showOwnInjuryPicker ? 'default' : 'outline'}
+                  disabled={pregameOwnRosterOptions.length === 0}
+                  onClick={() => setShowOwnInjuryPicker(value => !value)}
+                  className={showOwnInjuryPicker
+                    ? 'bg-rose-700 hover:bg-rose-600 text-white'
+                    : 'border-slate-700 text-slate-300 hover:bg-slate-800'}
+                >
+                  {showOwnInjuryPicker ? 'Kész' : 'Sérültlista szerkesztése'}
+                </Button>
+              </div>
+              <div className="text-xs text-slate-400 mt-1">
+                {pregameOwnRosterOptions.length === 0
+                  ? 'Válaszd ki a csapatot a lista betöltéséhez.'
+                  : pregameOwnInjuryNames.length > 0
+                    ? `Megjelölve: ${pregameOwnInjuryNames.join(', ')}`
+                    : 'Jelöld ki a hiányzókat (nem számítjuk őket az elemzésben).'}
+              </div>
+              {showOwnInjuryPicker && pregameOwnRosterOptions.length > 0 && (
+                <>
+                  <div className="max-h-32 overflow-y-auto rounded-md border border-slate-800/70 bg-slate-900/70 p-2 flex flex-wrap gap-2 mt-2">
+                    {pregameOwnRosterOptions.map(player => {
+                      const isSelected = pregameOwnInjuries.includes(player.id);
+                      return (
+                        <button
+                          type="button"
+                          key={player.id}
+                          onClick={() => handleToggleOwnInjury(player.id)}
+                          className={`text-xs px-2 py-1 rounded-md border transition focus:outline-none focus:ring-2 focus:ring-slate-500 ${
+                            isSelected
+                              ? 'bg-rose-900/40 border-rose-700 text-rose-100'
+                              : 'bg-slate-900/40 border-slate-700 text-slate-200 hover:border-slate-500'
+                          }`}
+                          aria-pressed={isSelected}
+                        >
+                          {player.name}
+                          <span className="text-[10px] text-slate-400 ml-1">
+                            ({POSITION_LABELS[player.position] ?? player.position})
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div className="text-xs text-slate-500 mt-1">
+                    Válassz ki minden hiányzót, majd zárd a panelt a "Kész" gombbal.
+                  </div>
+                </>
+              )}
+            </div>
+            <div>
+              <div className="flex items-center justify-between gap-2">
+                <label className="text-sm text-slate-400">Ellenfél sérültek</label>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={showOpponentInjuryPicker ? 'default' : 'outline'}
+                  disabled={pregameOpponentRosterOptions.length === 0}
+                  onClick={() => setShowOpponentInjuryPicker(value => !value)}
+                  className={showOpponentInjuryPicker
+                    ? 'bg-rose-700 hover:bg-rose-600 text-white'
+                    : 'border-slate-700 text-slate-300 hover:bg-slate-800'}
+                >
+                  {showOpponentInjuryPicker ? 'Kész' : 'Sérültlista szerkesztése'}
+                </Button>
+              </div>
+              <div className="text-xs text-slate-400 mt-1">
+                {pregameOpponentRosterOptions.length === 0
+                  ? 'Válassz ellenfelet a lista szerkesztéséhez.'
+                  : pregameOpponentInjuryNames.length > 0
+                    ? `Megjelölve: ${pregameOpponentInjuryNames.join(', ')}`
+                    : 'Add meg, kik hiányozhatnak az ellenféltől.'}
+              </div>
+              {showOpponentInjuryPicker && pregameOpponentRosterOptions.length > 0 && (
+                <>
+                  <div className="max-h-32 overflow-y-auto rounded-md border border-slate-800/70 bg-slate-900/70 p-2 flex flex-wrap gap-2 mt-2">
+                    {pregameOpponentRosterOptions.map(player => {
+                      const isSelected = pregameOpponentInjuries.includes(player.id);
+                      return (
+                        <button
+                          type="button"
+                          key={player.id}
+                          onClick={() => handleToggleOpponentInjury(player.id)}
+                          className={`text-xs px-2 py-1 rounded-md border transition focus:outline-none focus:ring-2 focus:ring-slate-500 ${
+                            isSelected
+                              ? 'bg-rose-900/40 border-rose-700 text-rose-100'
+                              : 'bg-slate-900/40 border-slate-700 text-slate-200 hover:border-slate-500'
+                          }`}
+                          aria-pressed={isSelected}
+                        >
+                          {player.name}
+                          <span className="text-[10px] text-slate-400 ml-1">
+                            ({POSITION_LABELS[player.position] ?? player.position})
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div className="text-xs text-slate-500 mt-1">
+                    A jelöltek nem kerülnek bele a matchup elemzésbe és a GPT jelentésbe; zárd vissza a panelt a "Kész" gombbal.
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+
           {!selectedOpponentTeamId && (
             <div className="text-sm text-slate-300">Válassz ellenfelet a pre-game jelentéshez.</div>
           )}
@@ -3373,6 +3568,35 @@ export function SeasonComparison({
                     )}
                   </div>
                 </div>
+
+                {(pregameReport.injuryContext?.own?.length || pregameReport.injuryContext?.opponent?.length) && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <div className="text-sm text-slate-300 font-medium mb-2">Saját sérültek</div>
+                      {pregameReport.injuryContext?.own?.length ? (
+                        pregameReport.injuryContext.own.map(name => (
+                          <div key={`own-injury-${name}`} className="text-sm text-slate-200">
+                            • {name}
+                          </div>
+                        ))
+                      ) : (
+                        <div className="text-sm text-slate-400">Nincs megjelölt kihagyó.</div>
+                      )}
+                    </div>
+                    <div>
+                      <div className="text-sm text-slate-300 font-medium mb-2">Ellenfél sérültek</div>
+                      {pregameReport.injuryContext?.opponent?.length ? (
+                        pregameReport.injuryContext.opponent.map(name => (
+                          <div key={`opp-injury-${name}`} className="text-sm text-slate-200">
+                            • {name}
+                          </div>
+                        ))
+                      ) : (
+                        <div className="text-sm text-slate-400">Nincs megjelölt kihagyó.</div>
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>

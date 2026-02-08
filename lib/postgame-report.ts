@@ -661,6 +661,22 @@ const buildXFactorReflection = (
   };
 };
 
+const computePlayerTrueShooting = (player: PlayerGameStat) => {
+  const fga = player.fga2 + player.fga3;
+  const denominator = 2 * (fga + 0.44 * player.fta);
+  if (denominator === 0) return 0;
+  return player.points / denominator;
+};
+
+const formatPositiveContributorLabel = (player: PlayerGameStat) => {
+  const ts = computePlayerTrueShooting(player);
+  const limitedScoringPlaymaker = player.ast >= 7 && ts <= 0.4 && player.points <= 6;
+  if (limitedScoringPlaymaker) {
+    return `${player.name} (${player.ast} assziszt, playmaker szerep – dobóhatékonyság fejlesztendő)`;
+  }
+  return player.name;
+};
+
 const analyzePlayerImpact = (players: PlayerGameStat[]) => {
   const positive: string[] = [];
   const negative: string[] = [];
@@ -670,7 +686,7 @@ const analyzePlayerImpact = (players: PlayerGameStat[]) => {
   players.forEach(player => {
     const usage = computePlayerUsage(player);
     if (usage >= 10 && player.val <= 5) negative.push(player.name);
-    if (usage <= 6 && player.val >= 10) positive.push(player.name);
+    if (usage <= 6 && player.val >= 10) positive.push(formatPositiveContributorLabel(player));
 
     if (player.val >= 15) overperformers.push(player.name);
     if (player.val <= 4) underperformers.push(player.name);
@@ -871,9 +887,9 @@ const buildOpponentProfileSection = (
 ) => {
   const descriptors: string[] = [];
   const threeDelta = round(game.threePct - season.threePct, 1);
-  if (threeDelta <= -4) descriptors.push(`periméter-limit (${game.threePct.toFixed(1)}% 3P vs ${season.threePct.toFixed(1)}%)`);
+  if (threeDelta <= -4) descriptors.push(`korlátozta a perimétert (${game.threePct.toFixed(1)}% 3P vs ${season.threePct.toFixed(1)}%)`);
   const ftDelta = toPct(game.ftRate - season.ftRate, 1);
-  if (ftDelta <= -6) descriptors.push(`kontaktus-limit (${toPct(game.ftRate, 1)}% FT-rate vs ${toPct(season.ftRate, 1)}%)`);
+  if (ftDelta <= -6) descriptors.push(`limitálta a kontaktokat (${toPct(game.ftRate, 1)}% FT-rate vs ${toPct(season.ftRate, 1)}%)`);
   const orebDelta = toPct(game.orebRate - season.orebRate, 1);
   if (orebDelta <= -6) descriptors.push(`lepattanó kontroll (${toPct(game.orebRate, 1)}% OREB vs ${toPct(season.orebRate, 1)}%)`);
   const assistDelta = toPct(game.assistRate - season.assistRate, 1);

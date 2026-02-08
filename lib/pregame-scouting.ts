@@ -129,6 +129,10 @@ export type ScoutingReport = {
   focusPoints: string[];
   xFactorContext?: PreGameXFactorContext;
   riskFlags?: string[];
+  injuryContext?: {
+    own: string[];
+    opponent: string[];
+  };
   positionComparisonNote?: string;
   llmContext?: ScoutingReportLLMContext;
   summary: string;
@@ -849,7 +853,8 @@ const buildSummary = (
   focusPoints: string[],
   ownTeamName: string,
   riskFlags: string[] = [],
-  positionComparisonNote?: string
+  positionComparisonNote?: string,
+  injuryContext?: { own: string[]; opponent: string[] }
 ) => {
   const tempo = describeTempo(opponent.pace);
   const offense = profile.offense.length > 0 ? profile.offense.join(', ') : 'kiegyensúlyozott';
@@ -894,6 +899,16 @@ const buildSummary = (
   const ownRiskText = riskFlags.length > 0
     ? riskFlags.join('; ')
     : 'általános faultterhelés- és lepattanó-kontroll figyelmeztetés, konkrét riasztás nélkül';
+  const injuryLine = (() => {
+    const parts: string[] = [];
+    if (injuryContext?.own?.length) {
+      parts.push(`${ownTeamName}: ${injuryContext.own.join(', ')}`);
+    }
+    if (injuryContext?.opponent?.length) {
+      parts.push(`${opponent.teamName}: ${injuryContext.opponent.join(', ')}`);
+    }
+    return parts.length > 0 ? `Sérülések: ${parts.join(' | ')}.` : '';
+  })();
 
   const { perimeterDelta, frontcourtDelta } = summarizePositionDeltas(positionComparison);
   const posSummary = perimeterDelta >= 3 && frontcourtDelta <= -1
@@ -942,6 +957,7 @@ const buildSummary = (
     `Fő veszélyek: ${threatText}.`,
     `Feltételes sebezhetőségek (ellenfél): ${vulnText}.`,
     `Saját kockázati pontok: ${ownRiskText}.`,
+    injuryLine,
     positionSection,
     focusLine,
     tempoLine,
@@ -1029,7 +1045,8 @@ export const analyzePreGameScouting = (
   opponentPlayers: PlayerSeasonStat[],
   ownTeam: TeamSeasonStat,
   leagueBenchmarks: LeagueTeamBenchmarks,
-  ownPlayers: PlayerSeasonStat[] = []
+  ownPlayers: PlayerSeasonStat[] = [],
+  injuryContext?: { own: string[]; opponent: string[] }
 ): ScoutingReport => {
   const normalizedOpponent = normalizeTeamStats(opponentTeam);
   const normalizedOwn = normalizeTeamStats(ownTeam);
@@ -1153,7 +1170,9 @@ export const analyzePreGameScouting = (
       focusPoints,
       ownTeam.teamName,
       riskNotes.flags,
-      positionComparisonNote || ''
+      positionComparisonNote || '',
+      injuryContext
     ),
+    injuryContext,
   };
 };

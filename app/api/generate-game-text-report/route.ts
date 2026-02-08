@@ -59,6 +59,7 @@ const extractPregameContext = (report: ScoutingReport) => ({
   focusPoints: report.focusPoints,
   xFactorContext: report.xFactorContext,
   riskFlags: report.riskFlags ?? [],
+  injuryContext: report.injuryContext,
 });
 
 const extractPostgameContext = (report: PostGameReport) => ({
@@ -94,7 +95,7 @@ Terminológiai egység:
 Kötelező szerkezet (alcímeket is írd ki):
 1️⃣ Kiindulási kép – Pre-game kontextus (3–4 mondat)
 2️⃣ A mérkőzés tényleges képe – Post-game valóság (legalább 3 mondat, mindig adj konkrét példát a statisztikai eltérésre)
-3️⃣ Pre-game várakozás vs. realizáció (minden kulcspontot ✓ / ↺ / ✗ jelöléssel minősíts, rövid magyarázattal)
+3️⃣ Pre-game várakozás vs. realizáció – kezdj egy félkövér alcímmel (**3️⃣ Pre-game várakozás vs. realizáció**), majd minden kulcspontot két sorban írj le: az első sor legyen pl. "✓ **Teljesült**: fókusz", a második sor "  → rövid magyarázat". Használd a ✓ / ↺ / ✗ jelöléseket.
 4️⃣ Mi döntötte el valójában a mérkőzést? – Nevezd meg, hogy hatékonyság-, volumen- vagy kontroll-alapú faktor volt, és térj ki arra is, hogy a kulcsra kijelölt X-faktor miért nem (vagy hogyan) lett tényleges döntő tényező. Zárd le a bekezdést egy stratégiai javaslattal a következő találkozóra.
 4️⃣/b RiskFlags – ha a pre-game riport tartalmazott risk flag-eket, itt kezeld önálló bekezdésben, rendezetten felsorolva a bekövetkezett vs. elmaradt kockázatokat.
 5️⃣ Tanulság és alkalmazhatóság – 2–3 mondatban fogalmazd meg, hogyan hasznosítható mindez a következő meccseken/edzéseken (tempó, rotáció, védekező elvek, speciális játékhelyzetek).
