@@ -15,6 +15,15 @@ type UpdateItem = {
 
 const updates: UpdateItem[] = [
   {
+    date: '2026. február 8.',
+    version: '1.6.3',
+    category: 'feature',
+    icon: <Users className="w-5 h-5" />,
+    title: 'Post-game játékos értékelések',
+    description:
+      'A post-game riportból most már egy kattintással kérhető GPT-alapú játékoselemzés: minden kosaras személyre szabott narratívát kap a meccsbeli szerepéről, kiemelve az X-faktorokat és a fejlesztendő pontokat.',
+  },
+  {
     date: '2026. február 4.',
     version: '1.6.2',
     category: 'improvement',

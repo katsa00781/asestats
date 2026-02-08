@@ -83,6 +83,13 @@ type GamePlayerStatRow = {
   fouls_committed?: number;
 };
 
+type PlayerNarrativeStatus = {
+  status: 'idle' | 'loading' | 'success' | 'error';
+  text?: string;
+  error?: string;
+  generatedAt?: string;
+};
+
 type GameTextReportRow = Database['public']['Tables']['game_text_reports']['Row'];
 
 const mapPosition = (pos: string): Position => {
@@ -143,6 +150,7 @@ const TEAM_FORM_WINDOW = 5;
 const TEAM_FORM_CHART_POINTS = 8;
 const TEAM_FORM_EFG_THRESHOLD = 3;
 const TEAM_FORM_MARGIN_THRESHOLD = 4;
+const HEAD_TO_HEAD_MATCH_WINDOW_MS = 36 * 60 * 60 * 1000; // 36 hours tolerance when pairing mirrored game IDs
 
 const roundValue = (value: number, digits = 1) => {
   const factor = Math.pow(10, digits);
@@ -190,6 +198,170 @@ const buildTeamGameMetrics = (rows: GamePlayerStatRow[]) => {
     efg,
     points: totals.points,
   };
+};
+
+const clampStat = (value: number) => (value < 0 ? 0 : value);
+
+const aggregateTeamGameRows = (rows: GamePlayerStatRow[]) => {
+  return rows.reduce(
+    (acc, row) => {
+      acc.pointsFor += row.points || 0;
+      acc.fga2 += (row.close_attempted || 0) + (row.mid_attempted || 0);
+      acc.fgm2 += (row.close_made || 0) + (row.mid_made || 0);
+      acc.fga3 += row.three_attempted || 0;
+      acc.fgm3 += row.three_made || 0;
+      acc.fta += row.free_throw_attempted || 0;
+      acc.ftm += row.free_throw_made || 0;
+      acc.oreb += row.offensive_rebounds || 0;
+      acc.dreb += row.defensive_rebounds || 0;
+      acc.ast += row.assists || 0;
+      acc.tov += row.turnovers || 0;
+      acc.stl += row.steals || 0;
+      acc.blk += row.blocks || 0;
+      acc.fouls += row.fouls_committed || 0;
+      acc.val += row.valuation || 0;
+      return acc;
+    },
+    {
+      pointsFor: 0,
+      fga2: 0,
+      fgm2: 0,
+      fga3: 0,
+      fgm3: 0,
+      fta: 0,
+      ftm: 0,
+      oreb: 0,
+      dreb: 0,
+      ast: 0,
+      tov: 0,
+      stl: 0,
+      blk: 0,
+      fouls: 0,
+      val: 0,
+    }
+  );
+};
+
+const subtractGameFromTeamAggregate = (
+  team: PregameTeamSeasonStat,
+  teamId: string | null | undefined,
+  gameId: string | null | undefined,
+  teamGamePlayerRows: Map<string, Map<string, GamePlayerStatRow[]>>,
+  gameTeamPoints: Map<string, Map<string, number>>
+) => {
+  if (!teamId || !gameId) return team;
+  const rows = teamGamePlayerRows.get(teamId)?.get(gameId);
+  if (!rows || rows.length === 0) return team;
+  const totals = aggregateTeamGameRows(rows);
+  const scoreMap = gameTeamPoints.get(gameId);
+  const ownPoints = scoreMap?.get(teamId) ?? totals.pointsFor;
+  const totalPoints = scoreMap
+    ? Array.from(scoreMap.values()).reduce((sum, value) => sum + value, 0)
+    : ownPoints;
+  const opponentPoints = Math.max(0, totalPoints - ownPoints);
+
+  return {
+    ...team,
+    games: Math.max(0, (team.games || 0) - 1),
+    pointsFor: clampStat(team.pointsFor - totals.pointsFor),
+    pointsAgainst: clampStat(team.pointsAgainst - opponentPoints),
+    fga2: clampStat(team.fga2 - totals.fga2),
+    fgm2: clampStat(team.fgm2 - totals.fgm2),
+    fga3: clampStat(team.fga3 - totals.fga3),
+    fgm3: clampStat(team.fgm3 - totals.fgm3),
+    fta: clampStat(team.fta - totals.fta),
+    ftm: clampStat(team.ftm - totals.ftm),
+    oreb: clampStat(team.oreb - totals.oreb),
+    dreb: clampStat(team.dreb - totals.dreb),
+    ast: clampStat(team.ast - totals.ast),
+    tov: clampStat(team.tov - totals.tov),
+    stl: clampStat(team.stl - totals.stl),
+    blk: clampStat(team.blk - totals.blk),
+    fouls: clampStat(team.fouls - totals.fouls),
+    val: clampStat(team.val - totals.val),
+  };
+};
+
+const subtractGameFromPlayerAggregates = (
+  players: PlayerSeasonStat[],
+  teamId: string | null | undefined,
+  gameId: string | null | undefined,
+  teamGamePlayerRows: Map<string, Map<string, GamePlayerStatRow[]>>
+) => {
+  if (!teamId || !gameId || players.length === 0) return players;
+  const rows = teamGamePlayerRows.get(teamId)?.get(gameId);
+  if (!rows || rows.length === 0) return players;
+  const rowsByPlayer = new Map<string, GamePlayerStatRow[]>();
+  rows.forEach(row => {
+    if (!rowsByPlayer.has(row.player_id)) rowsByPlayer.set(row.player_id, []);
+    rowsByPlayer.get(row.player_id)!.push(row);
+  });
+
+  return players
+    .map(player => {
+      const playerRows = rowsByPlayer.get(player.playerId);
+      if (!playerRows || playerRows.length === 0) return player;
+      const totals = playerRows.reduce(
+        (acc, row) => {
+          acc.games += 1;
+          acc.minutes += row.minutes || 0;
+          acc.points += row.points || 0;
+          acc.fga2 += (row.close_attempted || 0) + (row.mid_attempted || 0);
+          acc.fgm2 += (row.close_made || 0) + (row.mid_made || 0);
+          acc.fga3 += row.three_attempted || 0;
+          acc.fgm3 += row.three_made || 0;
+          acc.fta += row.free_throw_attempted || 0;
+          acc.ftm += row.free_throw_made || 0;
+          acc.oreb += row.offensive_rebounds || 0;
+          acc.dreb += row.defensive_rebounds || 0;
+          acc.ast += row.assists || 0;
+          acc.tov += row.turnovers || 0;
+          acc.stl += row.steals || 0;
+          acc.blk += row.blocks || 0;
+          acc.val += row.valuation || 0;
+          return acc;
+        },
+        {
+          games: 0,
+          minutes: 0,
+          points: 0,
+          fga2: 0,
+          fgm2: 0,
+          fga3: 0,
+          fgm3: 0,
+          fta: 0,
+          ftm: 0,
+          oreb: 0,
+          dreb: 0,
+          ast: 0,
+          tov: 0,
+          stl: 0,
+          blk: 0,
+          val: 0,
+        }
+      );
+
+      return {
+        ...player,
+        games: Math.max(0, (player.games || 0) - totals.games),
+        minutes: clampStat(player.minutes - totals.minutes),
+        points: clampStat(player.points - totals.points),
+        fga2: clampStat(player.fga2 - totals.fga2),
+        fgm2: clampStat(player.fgm2 - totals.fgm2),
+        fga3: clampStat(player.fga3 - totals.fga3),
+        fgm3: clampStat(player.fgm3 - totals.fgm3),
+        fta: clampStat(player.fta - totals.fta),
+        ftm: clampStat(player.ftm - totals.ftm),
+        oreb: clampStat(player.oreb - totals.oreb),
+        dreb: clampStat(player.dreb - totals.dreb),
+        ast: clampStat(player.ast - totals.ast),
+        tov: clampStat(player.tov - totals.tov),
+        stl: clampStat(player.stl - totals.stl),
+        blk: clampStat(player.blk - totals.blk),
+        val: clampStat(player.val - totals.val),
+      };
+    })
+    .filter(player => player.games > 0);
 };
 
 const getPositionLabel = (position: Position) => POSITION_LABELS[position] ?? position;
@@ -477,6 +649,8 @@ export function SeasonComparison({
   const [textReportError, setTextReportError] = useState<string | null>(null);
   const [isLoadingTextReport, setIsLoadingTextReport] = useState(false);
   const [isGeneratingTextReport, setIsGeneratingTextReport] = useState(false);
+  const [expandedPlayerImpactId, setExpandedPlayerImpactId] = useState<string | null>(null);
+  const [playerNarratives, setPlayerNarratives] = useState<Record<string, PlayerNarrativeStatus>>({});
   const formatGeneratedAt = (value?: string | null) => {
     if (!value) return null;
     const date = new Date(value);
@@ -509,13 +683,13 @@ export function SeasonComparison({
 
   const filteredPlayers = useMemo(() => {
     const base = resolvedTeamId !== 'all'
-      ? activeSeasonPlayers.filter(player => player.teamId === resolvedTeamId)
+      ? activeSeasonPlayers.filter(player => String(player.teamId ?? '') === String(resolvedTeamId))
       : activeSeasonPlayers;
 
     const uniqueMap = new Map<string, PlayerStats>();
     base.forEach(player => {
       const nameKey = player.name?.trim().toLowerCase() ?? player.id;
-      const teamKey = player.teamId ?? 'unknown-team';
+      const teamKey = String(player.teamId ?? 'unknown-team');
       const numberKey = typeof player.number === 'number' ? player.number : 'unknown-number';
       const key = `${teamKey}::${nameKey}::${numberKey}`;
       if (!uniqueMap.has(key)) {
@@ -761,6 +935,108 @@ export function SeasonComparison({
     });
     return map;
   }, [playerGameStats, playerTeamMap, resolvedSeasonId]);
+
+  const teamGamePlayerRows = useMemo(() => {
+    const map = new Map<string, Map<string, GamePlayerStatRow[]>>();
+    playerGameStats.forEach(row => {
+      if (resolvedSeasonId && String(row.games?.season_id ?? '') !== String(resolvedSeasonId)) return;
+      const teamId = row.players?.team_id ?? playerTeamMap.get(row.player_id);
+      if (!teamId) return;
+      if (!map.has(teamId)) map.set(teamId, new Map());
+      const byGame = map.get(teamId)!;
+      if (!byGame.has(row.game_id)) byGame.set(row.game_id, []);
+      byGame.get(row.game_id)!.push(row);
+    });
+    return map;
+  }, [playerGameStats, playerTeamMap, resolvedSeasonId]);
+
+  const selectedGame = useMemo(() => {
+    if (!selectedGameId) return null;
+    return games.find(game => game.id === selectedGameId) || null;
+  }, [games, selectedGameId]);
+
+  type HeadToHeadGame = { ownGameId: string; opponentGameId: string | null; timestamp: number };
+
+  const latestHeadToHeadGame = useMemo<HeadToHeadGame | null>(() => {
+    if (!resolvedTeamId || resolvedTeamId === 'all' || !selectedOpponentTeamId) return null;
+    const ownGames = teamGamePlayerRows.get(resolvedTeamId);
+    if (!ownGames || ownGames.size === 0) return null;
+    const opponentGames = teamGamePlayerRows.get(selectedOpponentTeamId);
+
+    const rowsToTimestamp = (rows: GamePlayerStatRow[]) => {
+      return rows.reduce((max, row) => {
+        if (!row.games?.date) return max;
+        const value = new Date(row.games.date).getTime();
+        return Number.isFinite(value) && value > max ? value : max;
+      }, 0);
+    };
+
+    const findOpponentGameIdByTimestamp = (target: number) => {
+      if (!opponentGames || !target) return null;
+      let bestGameId: string | null = null;
+      let bestDelta = Number.POSITIVE_INFINITY;
+      opponentGames.forEach((rows, gameId) => {
+        if (!rows || rows.length === 0) return;
+        const ts = rowsToTimestamp(rows);
+        if (!ts) return;
+        const delta = Math.abs(ts - target);
+        const withinWindow = delta <= HEAD_TO_HEAD_MATCH_WINDOW_MS;
+        if (withinWindow && delta < bestDelta) {
+          bestGameId = gameId;
+          bestDelta = delta;
+        }
+      });
+      return bestGameId;
+    };
+
+    let latest: HeadToHeadGame | null = null;
+    ownGames.forEach((rows, gameId) => {
+      if (!rows || rows.length === 0) return;
+      const pointsMap = gameTeamPoints.get(gameId);
+      if (!pointsMap || !pointsMap.has(selectedOpponentTeamId)) return;
+      const timestamp = rowsToTimestamp(rows);
+      if (!timestamp) return;
+
+      let opponentGameId: string | null = opponentGames?.has(gameId) ? gameId : null;
+      if (!opponentGameId) {
+        opponentGameId = findOpponentGameIdByTimestamp(timestamp);
+      }
+
+      if (!latest || timestamp > latest.timestamp) {
+        latest = { ownGameId: gameId, opponentGameId, timestamp };
+      }
+    });
+
+    return latest;
+  }, [gameTeamPoints, resolvedTeamId, selectedOpponentTeamId, teamGamePlayerRows]);
+
+  const selectedGameOpponentTeamId = useMemo(() => {
+    if (!selectedGame) return null;
+    const resolveFromGame = (gameId?: string | null) => {
+      if (!gameId) return null;
+      const byTeam = gameTeamPoints.get(gameId);
+      if (!byTeam) return null;
+      const candidate = Array.from(byTeam.keys()).find(id => id !== resolvedTeamId);
+      return candidate ?? null;
+    };
+    return resolveFromGame(selectedGame.opponentGameId) ?? resolveFromGame(selectedGame.id);
+  }, [gameTeamPoints, resolvedTeamId, selectedGame]);
+
+  const shouldUseHistoricalPregameSnapshot = useMemo(() => {
+    if (!selectedGame || !selectedOpponentTeamId || !selectedGameOpponentTeamId) return false;
+    return selectedOpponentTeamId === selectedGameOpponentTeamId;
+  }, [selectedGame, selectedGameOpponentTeamId, selectedOpponentTeamId]);
+
+  const excludeOwnPregameGameId = shouldUseHistoricalPregameSnapshot
+    ? selectedGame?.id ?? latestHeadToHeadGame?.ownGameId ?? null
+    : latestHeadToHeadGame?.ownGameId ?? null;
+  const excludeOpponentPregameGameId = shouldUseHistoricalPregameSnapshot
+    ? selectedGame?.opponentGameId
+        ?? selectedGame?.id
+        ?? latestHeadToHeadGame?.opponentGameId
+        ?? latestHeadToHeadGame?.ownGameId
+        ?? null
+    : latestHeadToHeadGame?.opponentGameId ?? latestHeadToHeadGame?.ownGameId ?? null;
 
   const currentTeamPlayerIds = useMemo(() => {
     const set = new Set<string>();
@@ -1015,13 +1291,22 @@ export function SeasonComparison({
   }, [teamSeasonStats]);
 
   const buildRecentTeamStat = useMemo(() => {
-    return (teamId: string): PregameTeamSeasonStat | null => {
+    return (
+      teamId: string,
+      options?: {
+        excludeGameId?: string | null;
+      }
+    ): PregameTeamSeasonStat | null => {
       if (!teamId || teamId === 'all') return null;
       const meta = teamSeasonStats.find(team => team.teamId === teamId);
       if (!meta) return null;
       const recentGameIds = recentGameIdsByTeam.get(teamId) ?? [];
-      if (recentGameIds.length < MIN_RECENT_GAMES_TEAM) return null;
-      const recentGameSet = new Set(recentGameIds);
+      const excludeGameId = options?.excludeGameId ?? null;
+      const filteredRecentIds = excludeGameId
+        ? recentGameIds.filter(id => id !== excludeGameId)
+        : recentGameIds;
+      if (filteredRecentIds.length < MIN_RECENT_GAMES_TEAM) return null;
+      const recentGameSet = new Set(filteredRecentIds);
 
       const totals = {
         pointsFor: 0,
@@ -1065,7 +1350,7 @@ export function SeasonComparison({
 
       let pointsAgainst = 0;
       let countedGames = 0;
-      recentGameIds.forEach(gameId => {
+      filteredRecentIds.forEach(gameId => {
         const byTeam = gameTeamPoints.get(gameId);
         if (!byTeam) return;
         const ownPoints = byTeam.get(teamId);
@@ -1104,96 +1389,141 @@ export function SeasonComparison({
   }, [MIN_RECENT_GAMES_TEAM, gameTeamPoints, playerGameStats, playerTeamMap, recentGameIdsByTeam, teamSeasonStats]);
 
   const pregameOwnTeam = useMemo<PregameTeamSeasonStat | null>(() => {
+    let recentSnapshot: PregameTeamSeasonStat | null = null;
     if (useRecentFormPregame) {
-      return buildRecentTeamStat(resolvedTeamId) ?? (selectedTeamStats ? {
-        teamId: selectedTeamStats.teamId,
-        teamName: selectedTeamStats.teamName,
-        league: selectedTeamStats.league,
-        season: selectedTeamStats.season,
-        games: selectedTeamStats.games,
-        pointsFor: selectedTeamStats.pointsFor,
-        pointsAgainst: selectedTeamStats.pointsAgainst,
-        fga2: selectedTeamStats.fga2,
-        fgm2: selectedTeamStats.fgm2,
-        fga3: selectedTeamStats.fga3,
-        fgm3: selectedTeamStats.fgm3,
-        fta: selectedTeamStats.fta,
-        ftm: selectedTeamStats.ftm,
-        oreb: selectedTeamStats.oreb,
-        dreb: selectedTeamStats.dreb,
-        ast: selectedTeamStats.ast,
-        tov: selectedTeamStats.tov,
-        stl: selectedTeamStats.stl,
-        blk: selectedTeamStats.blk,
-        fouls: selectedTeamStats.fouls,
-        val: selectedTeamStats.val,
-      } : null);
+      recentSnapshot = buildRecentTeamStat(resolvedTeamId, {
+        excludeGameId: excludeOwnPregameGameId,
+      });
     }
-    if (!selectedTeamStats) return null;
-    return {
-      teamId: selectedTeamStats.teamId,
-      teamName: selectedTeamStats.teamName,
-      league: selectedTeamStats.league,
-      season: selectedTeamStats.season,
-      games: selectedTeamStats.games,
-      pointsFor: selectedTeamStats.pointsFor,
-      pointsAgainst: selectedTeamStats.pointsAgainst,
-      fga2: selectedTeamStats.fga2,
-      fgm2: selectedTeamStats.fgm2,
-      fga3: selectedTeamStats.fga3,
-      fgm3: selectedTeamStats.fgm3,
-      fta: selectedTeamStats.fta,
-      ftm: selectedTeamStats.ftm,
-      oreb: selectedTeamStats.oreb,
-      dreb: selectedTeamStats.dreb,
-      ast: selectedTeamStats.ast,
-      tov: selectedTeamStats.tov,
-      stl: selectedTeamStats.stl,
-      blk: selectedTeamStats.blk,
-      fouls: selectedTeamStats.fouls,
-      val: selectedTeamStats.val,
-    };
-  }, [buildRecentTeamStat, resolvedTeamId, selectedTeamStats, useRecentFormPregame]);
+
+    const fallbackSeason = selectedTeamStats
+      ? {
+          teamId: selectedTeamStats.teamId,
+          teamName: selectedTeamStats.teamName,
+          league: selectedTeamStats.league,
+          season: selectedTeamStats.season,
+          games: selectedTeamStats.games,
+          pointsFor: selectedTeamStats.pointsFor,
+          pointsAgainst: selectedTeamStats.pointsAgainst,
+          fga2: selectedTeamStats.fga2,
+          fgm2: selectedTeamStats.fgm2,
+          fga3: selectedTeamStats.fga3,
+          fgm3: selectedTeamStats.fgm3,
+          fta: selectedTeamStats.fta,
+          ftm: selectedTeamStats.ftm,
+          oreb: selectedTeamStats.oreb,
+          dreb: selectedTeamStats.dreb,
+          ast: selectedTeamStats.ast,
+          tov: selectedTeamStats.tov,
+          stl: selectedTeamStats.stl,
+          blk: selectedTeamStats.blk,
+          fouls: selectedTeamStats.fouls,
+          val: selectedTeamStats.val,
+        }
+      : null;
+
+    let base = recentSnapshot ?? fallbackSeason;
+    if (!base) return null;
+
+    const shouldAdjustSeasonAggregate = Boolean(
+      excludeOwnPregameGameId && (!useRecentFormPregame || !recentSnapshot)
+    );
+
+    if (shouldAdjustSeasonAggregate) {
+      base = subtractGameFromTeamAggregate(
+        base,
+        resolvedTeamId,
+        excludeOwnPregameGameId,
+        teamGamePlayerRows,
+        gameTeamPoints
+      );
+    }
+
+    return base;
+  }, [
+    buildRecentTeamStat,
+    excludeOwnPregameGameId,
+    gameTeamPoints,
+    resolvedTeamId,
+    selectedTeamStats,
+    teamGamePlayerRows,
+    useRecentFormPregame,
+  ]);
 
   const pregameOpponentTeam = useMemo<PregameTeamSeasonStat | null>(() => {
     if (!selectedOpponentTeamId || selectedOpponentTeamId === resolvedTeamId) return null;
+
+    let recentSnapshot: PregameTeamSeasonStat | null = null;
     if (useRecentFormPregame) {
-      return buildRecentTeamStat(selectedOpponentTeamId)
-        ?? teamSeasonStats.find(team => team.teamId === selectedOpponentTeamId)
-        ?? null;
+      recentSnapshot = buildRecentTeamStat(selectedOpponentTeamId, {
+        excludeGameId: excludeOpponentPregameGameId,
+      }) ?? null;
     }
-    const opponent = teamSeasonStats.find(team => team.teamId === selectedOpponentTeamId);
-    if (!opponent) return null;
-    return {
-      teamId: opponent.teamId,
-      teamName: opponent.teamName,
-      league: opponent.league,
-      season: opponent.season,
-      games: opponent.games,
-      pointsFor: opponent.pointsFor,
-      pointsAgainst: opponent.pointsAgainst,
-      fga2: opponent.fga2,
-      fgm2: opponent.fgm2,
-      fga3: opponent.fga3,
-      fgm3: opponent.fgm3,
-      fta: opponent.fta,
-      ftm: opponent.ftm,
-      oreb: opponent.oreb,
-      dreb: opponent.dreb,
-      ast: opponent.ast,
-      tov: opponent.tov,
-      stl: opponent.stl,
-      blk: opponent.blk,
-      fouls: opponent.fouls,
-      val: opponent.val,
-    };
-  }, [buildRecentTeamStat, resolvedTeamId, selectedOpponentTeamId, teamSeasonStats, useRecentFormPregame]);
+
+    const seasonAggregate = teamSeasonStats.find(team => team.teamId === selectedOpponentTeamId);
+    const fallbackSeason = seasonAggregate
+      ? {
+          teamId: seasonAggregate.teamId,
+          teamName: seasonAggregate.teamName,
+          league: seasonAggregate.league,
+          season: seasonAggregate.season,
+          games: seasonAggregate.games,
+          pointsFor: seasonAggregate.pointsFor,
+          pointsAgainst: seasonAggregate.pointsAgainst,
+          fga2: seasonAggregate.fga2,
+          fgm2: seasonAggregate.fgm2,
+          fga3: seasonAggregate.fga3,
+          fgm3: seasonAggregate.fgm3,
+          fta: seasonAggregate.fta,
+          ftm: seasonAggregate.ftm,
+          oreb: seasonAggregate.oreb,
+          dreb: seasonAggregate.dreb,
+          ast: seasonAggregate.ast,
+          tov: seasonAggregate.tov,
+          stl: seasonAggregate.stl,
+          blk: seasonAggregate.blk,
+          fouls: seasonAggregate.fouls,
+          val: seasonAggregate.val,
+        }
+      : null;
+
+    let base = recentSnapshot ?? fallbackSeason;
+    if (!base) return null;
+
+    const shouldAdjustSeasonAggregate = Boolean(
+      excludeOpponentPregameGameId && (!useRecentFormPregame || !recentSnapshot)
+    );
+
+    if (shouldAdjustSeasonAggregate) {
+      base = subtractGameFromTeamAggregate(
+        base,
+        selectedOpponentTeamId,
+        excludeOpponentPregameGameId,
+        teamGamePlayerRows,
+        gameTeamPoints
+      );
+    }
+
+    return base;
+  }, [
+    buildRecentTeamStat,
+    excludeOpponentPregameGameId,
+    gameTeamPoints,
+    resolvedTeamId,
+    selectedOpponentTeamId,
+    teamGamePlayerRows,
+    teamSeasonStats,
+    useRecentFormPregame,
+  ]);
 
   const pregameOpponentPlayers = useMemo<PlayerSeasonStat[]>(() => {
     if (!selectedOpponentTeamId) return [];
 
+    const excludeGameId = shouldUseHistoricalPregameSnapshot ? excludeOpponentPregameGameId : null;
+
     const buildFromSeason = () =>
-      activeSeasonPlayers
+      subtractGameFromPlayerAggregates(
+        activeSeasonPlayers
         .filter(player => player.teamId === selectedOpponentTeamId)
         .filter(player => hasSampleForPregame(player.gamesPlayed || 0, MIN_PREGAME_GAMES, MIN_PREGAME_GAMES_FLOOR))
         .map(player => ({
@@ -1221,13 +1551,21 @@ export function SeasonComparison({
             return totalValuation > 0 ? totalValuation : computeTotalValuation(player);
           })(),
           roles: rolesByPlayerId.get(player.id) ?? [],
-        }));
+        })),
+        selectedOpponentTeamId,
+        excludeGameId,
+        teamGamePlayerRows
+      )
+        .filter(player => hasSampleForPregame(player.games || 0, MIN_PREGAME_GAMES, MIN_PREGAME_GAMES_FLOOR));
 
     if (!useRecentFormPregame) return buildFromSeason();
 
     const recentGameIds = recentGameIdsByTeam.get(selectedOpponentTeamId) ?? [];
-    if (recentGameIds.length < MIN_RECENT_GAMES_TEAM) return buildFromSeason();
-    const recentGameSet = new Set(recentGameIds);
+    const filteredRecentIds = excludeGameId
+      ? recentGameIds.filter(id => id !== excludeGameId)
+      : recentGameIds;
+    if (filteredRecentIds.length < MIN_RECENT_GAMES_TEAM) return buildFromSeason();
+    const recentGameSet = new Set(filteredRecentIds);
     const statsMap = new Map<string, PlayerSeasonStat>();
     const gamesMap = new Map<string, Set<string>>();
 
@@ -1289,13 +1627,31 @@ export function SeasonComparison({
       }))
       .filter(player => hasSampleForPregame(player.games || 0, MIN_PREGAME_GAMES, MIN_PREGAME_GAMES_FLOOR))
       .filter(player => seasonPlayerMap.get(player.playerId)?.isActive !== false);
-  }, [MIN_PREGAME_GAMES, MIN_PREGAME_GAMES_FLOOR, MIN_RECENT_GAMES_TEAM, activeSeasonPlayers, playerGameStats, playerTeamMap, recentGameIdsByTeam, rolesByPlayerId, seasonPlayerMap, selectedOpponentTeamId, useRecentFormPregame]);
+  }, [
+    MIN_PREGAME_GAMES,
+    MIN_PREGAME_GAMES_FLOOR,
+    MIN_RECENT_GAMES_TEAM,
+    activeSeasonPlayers,
+    excludeOpponentPregameGameId,
+    playerGameStats,
+    playerTeamMap,
+    recentGameIdsByTeam,
+    rolesByPlayerId,
+    seasonPlayerMap,
+    selectedOpponentTeamId,
+    shouldUseHistoricalPregameSnapshot,
+    teamGamePlayerRows,
+    useRecentFormPregame,
+  ]);
 
   const pregameOwnPlayers = useMemo<PlayerSeasonStat[]>(() => {
     if (!resolvedTeamId || resolvedTeamId === 'all') return [];
 
+    const excludeGameId = shouldUseHistoricalPregameSnapshot ? excludeOwnPregameGameId : null;
+
     const buildFromSeason = () =>
-      activeSeasonPlayers
+      subtractGameFromPlayerAggregates(
+        activeSeasonPlayers
         .filter(player => player.teamId === resolvedTeamId)
         .filter(player => hasSampleForPregame(player.gamesPlayed || 0, MIN_PREGAME_GAMES, MIN_PREGAME_GAMES_FLOOR))
         .map(player => ({
@@ -1323,13 +1679,21 @@ export function SeasonComparison({
             return totalValuation > 0 ? totalValuation : computeTotalValuation(player);
           })(),
           roles: rolesByPlayerId.get(player.id) ?? [],
-        }));
+        })),
+        resolvedTeamId,
+        excludeGameId,
+        teamGamePlayerRows
+      )
+        .filter(player => hasSampleForPregame(player.games || 0, MIN_PREGAME_GAMES, MIN_PREGAME_GAMES_FLOOR));
 
     if (!useRecentFormPregame) return buildFromSeason();
 
     const recentGameIds = recentGameIdsByTeam.get(resolvedTeamId) ?? [];
-    if (recentGameIds.length < MIN_RECENT_GAMES_TEAM) return buildFromSeason();
-    const recentGameSet = new Set(recentGameIds);
+    const filteredRecentIds = excludeGameId
+      ? recentGameIds.filter(id => id !== excludeGameId)
+      : recentGameIds;
+    if (filteredRecentIds.length < MIN_RECENT_GAMES_TEAM) return buildFromSeason();
+    const recentGameSet = new Set(filteredRecentIds);
     const statsMap = new Map<string, PlayerSeasonStat>();
     const gamesMap = new Map<string, Set<string>>();
 
@@ -1391,7 +1755,22 @@ export function SeasonComparison({
       }))
       .filter(player => hasSampleForPregame(player.games || 0, MIN_PREGAME_GAMES, MIN_PREGAME_GAMES_FLOOR))
       .filter(player => seasonPlayerMap.get(player.playerId)?.isActive !== false);
-  }, [MIN_PREGAME_GAMES, MIN_PREGAME_GAMES_FLOOR, MIN_RECENT_GAMES_TEAM, activeSeasonPlayers, playerGameStats, playerTeamMap, recentGameIdsByTeam, resolvedTeamId, rolesByPlayerId, seasonPlayerMap, useRecentFormPregame]);
+  }, [
+    MIN_PREGAME_GAMES,
+    MIN_PREGAME_GAMES_FLOOR,
+    MIN_RECENT_GAMES_TEAM,
+    activeSeasonPlayers,
+    excludeOwnPregameGameId,
+    playerGameStats,
+    playerTeamMap,
+    recentGameIdsByTeam,
+    resolvedTeamId,
+    rolesByPlayerId,
+    seasonPlayerMap,
+    shouldUseHistoricalPregameSnapshot,
+    teamGamePlayerRows,
+    useRecentFormPregame,
+  ]);
 
   const pregameReport = useMemo(() => {
     if (!pregameBenchmarks || !pregameOwnTeam || !pregameOpponentTeam) return null;
@@ -1432,11 +1811,6 @@ export function SeasonComparison({
     }));
     return buildPostgameBenchmarks(postTeams);
   }, [teamSeasonStats]);
-
-  const selectedGame = useMemo(() => {
-    if (!selectedGameId) return null;
-    return games.find(game => game.id === selectedGameId) || null;
-  }, [games, selectedGameId]);
 
   const postgameReport = useMemo<PostGameReport | null>(() => {
     if (!selectedGame || !selectedTeamStats || !postgameBenchmarks || !resolvedTeamId || resolvedTeamId === 'all') return null;
@@ -1584,6 +1958,22 @@ export function SeasonComparison({
     return analyzePostGameReport(teamGame, opponentGame, seasonStats, postgameBenchmarks, players, alignedXFactorContext);
   }, [currentTeamPlayerIds, league, playerGameStats, playerTeamMap, postgameBenchmarks, pregameReport, rolesByPlayerId, seasonPlayers, selectedGame, resolvedTeamId, selectedTeamStats]);
 
+  const decisiveFactorGroups = useMemo(() => {
+    if (!postgameReport) return [] as Array<{ key: string; axis: 'offense' | 'defense'; type: string; label: string; items: string[] }>;
+    const grouped = new Map<string, { key: string; axis: 'offense' | 'defense'; type: string; items: string[] }>();
+    postgameReport.decisiveFactorMeta.forEach(factor => {
+      const key = `${factor.axis}-${factor.type}`;
+      if (!grouped.has(key)) {
+        grouped.set(key, { key, axis: factor.axis, type: factor.type, items: [] });
+      }
+      grouped.get(key)!.items.push(factor.label);
+    });
+    return Array.from(grouped.values()).map(group => ({
+      ...group,
+      label: `${group.axis === 'offense' ? 'Támadás' : 'Védekezés'} – ${group.type}`,
+    }));
+  }, [postgameReport]);
+
   const canLookupPregameByTeams = Boolean(
     selectedOpponentTeamId &&
     resolvedTeamId &&
@@ -1647,11 +2037,10 @@ export function SeasonComparison({
 
         const { data, error } = await query
           .order('generated_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
+          .limit(1);
 
-        let finalData = data;
-        let finalError = error;
+        let finalData = data?.[0] ?? null;
+        let finalError = error ?? null;
 
         if (!finalData && !finalError && usedTeamMatch && selectedOpponentTeamId) {
           let legacyQuery = supabase
@@ -1670,16 +2059,15 @@ export function SeasonComparison({
 
           const legacyResult = await legacyQuery
             .order('generated_at', { ascending: false })
-            .limit(1)
-            .maybeSingle();
+            .limit(1);
 
-          finalData = legacyResult.data;
-          finalError = legacyResult.error;
+          finalData = legacyResult.data?.[0] ?? null;
+          finalError = legacyResult.error ?? null;
         }
 
         if (!isMounted) return;
 
-        if (finalError && finalError.code !== 'PGRST116') {
+        if (finalError) {
           setPregameText('');
           setPregameTextError('Nem sikerült betölteni a pre-game elemzést.');
           setPregameTextMeta({});
@@ -1777,8 +2165,21 @@ export function SeasonComparison({
     setPregameSaveStatus(null);
   }, [selectedGameId, selectedOpponentTeamId]);
 
+  useEffect(() => {
+    setExpandedPlayerImpactId(null);
+    setPlayerNarratives({});
+  }, [selectedGameId]);
+
   const handleGeneratePregameText = async () => {
     if (!pregameReport) return;
+
+    const opponentLabel = pregameOpponentTeam?.teamName ?? pregameReport.opponentTeamName ?? 'ellenfél';
+    const confirmed = window.confirm(
+      `Biztosan lefuttatod a ${opponentLabel} elleni pre-game GPT értékelést? A meglévő szöveg felülíródhat.`
+    );
+    if (!confirmed) {
+      return;
+    }
     setIsGeneratingPregameText(true);
     setPregameTextError(null);
     setPregameSaveStatus(null);
@@ -1892,6 +2293,66 @@ export function SeasonComparison({
       setTextReportError(error instanceof Error ? error.message : 'Ismeretlen hiba történt a generálás során.');
     } finally {
       setIsGeneratingTextReport(false);
+    }
+  };
+
+  const handleTogglePlayerDetail = (playerId: string) => {
+    setExpandedPlayerImpactId(current => (current === playerId ? null : playerId));
+  };
+
+  const handleGeneratePlayerNarrative = async (playerId: string) => {
+    if (!postgameReport?.playerReport) return;
+    const targetPlayer = postgameReport.playerReport.players.find(player => player.playerId === playerId);
+    if (!targetPlayer) return;
+
+    setPlayerNarratives(prev => ({
+      ...prev,
+      [playerId]: { status: 'loading' },
+    }));
+
+    try {
+      const response = await fetch('/api/generate-player-postgame-text', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          gameId: selectedGame?.id ?? selectedGameId ?? null,
+          playerId: targetPlayer.playerId,
+          playerName: targetPlayer.name,
+          teamName: postgameReport.teamName,
+          opponentName: postgameReport.opponentName,
+          result: postgameReport.result,
+          report: targetPlayer,
+        }),
+      });
+
+      const payload = (await response.json().catch(() => ({}))) as {
+        ok?: boolean;
+        narrative?: string;
+        generatedAt?: string;
+        error?: string;
+      };
+
+      if (!response.ok || !payload.ok || !payload.narrative) {
+        throw new Error(payload.error ?? 'A játékos posztmeccses értékelés generálása nem sikerült.');
+      }
+
+      setPlayerNarratives(prev => ({
+        ...prev,
+        [playerId]: {
+          status: 'success',
+          text: payload.narrative,
+          generatedAt: payload.generatedAt,
+        },
+      }));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Ismeretlen hiba történt.';
+      setPlayerNarratives(prev => ({
+        ...prev,
+        [playerId]: {
+          status: 'error',
+          error: message,
+        },
+      }));
     }
   };
 
@@ -3161,15 +3622,35 @@ export function SeasonComparison({
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <div className="text-sm text-slate-300 font-medium mb-2">Döntő tényezők</div>
-                  {postgameReport.decisiveFactorMeta.length > 0 ? (
-                    postgameReport.decisiveFactorMeta.map((item, index) => (
-                      <div key={`${item.axis}-${item.label}-${index}`} className="flex items-center justify-between text-sm text-slate-200">
-                        <span>• {item.label}</span>
-                        <span className={`text-xs ${item.axis === 'offense' ? 'text-emerald-300' : 'text-sky-300'}`}>
-                          {item.axis === 'offense' ? 'Támadás' : 'Védekezés'} • {item.type}
-                        </span>
-                      </div>
-                    ))
+                  {decisiveFactorGroups.length > 0 ? (
+                    <div className="space-y-3">
+                      {decisiveFactorGroups.map(group => (
+                        <div
+                          key={group.key}
+                          className="rounded-lg border border-slate-800 bg-gradient-to-r from-slate-900/60 to-slate-800/30 p-3"
+                        >
+                          <div className="flex items-center justify-between text-[11px] uppercase tracking-wide text-slate-400">
+                            <span>{group.label}</span>
+                            <span className={group.axis === 'offense' ? 'text-orange-300' : 'text-cyan-300'}>
+                              {group.axis === 'offense' ? '⚡' : '🛡️'}
+                            </span>
+                          </div>
+                          <ul className="mt-2 space-y-1">
+                            {group.items.map(label => {
+                              const isNegative = /(-|hiány|gyenge|vissza|limit)/i.test(label);
+                              const toneClass = isNegative ? 'text-rose-300' : 'text-emerald-300';
+                              const icon = isNegative ? '🔻' : '▲';
+                              return (
+                                <li key={label} className="flex items-start gap-2 text-sm text-slate-100">
+                                  <span className={`${toneClass} text-xs mt-0.5`}>{icon}</span>
+                                  <span>{label}</span>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        </div>
+                      ))}
+                    </div>
                   ) : (
                     <div className="text-sm text-slate-400">Nincs kiemelt faktor.</div>
                   )}
@@ -3180,6 +3661,138 @@ export function SeasonComparison({
                   <div className="text-sm text-slate-200">Negatív: {postgameReport.playerImpact.negative.join(', ') || '-'}</div>
                 </div>
               </div>
+
+              {postgameReport.playerReport && (
+                <div className="space-y-3 rounded-lg border border-slate-800 bg-slate-900/40 p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="text-sm text-slate-300 font-medium">Játékos post-game elemzés</div>
+                    <div className="text-xs text-slate-500">Usage% és TS% perc-normalizált • kattints a sorokra a részletekért</div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    {(() => {
+                      const highlightCards = [
+                        {
+                          key: 'mvp',
+                          title: 'Meccs motor',
+                          player: postgameReport.playerReport.highlights.mvp,
+                          classes: 'bg-emerald-950/30 border border-emerald-800/40',
+                          fallback: 'Nincs kiemelt motor ezen a meccsen.',
+                        },
+                        {
+                          key: 'engines',
+                          title: 'Stabil alappillérek',
+                          player: postgameReport.playerReport.highlights.engines[0],
+                          classes: 'bg-sky-950/30 border border-sky-800/40',
+                          fallback: 'Nincs stabil másodlagos motor.',
+                        },
+                        {
+                          key: 'spark',
+                          title: 'Padlóról érkező szikra',
+                          player: postgameReport.playerReport.highlights.sparkPlugs[0],
+                          classes: 'bg-amber-950/30 border border-amber-800/40',
+                          fallback: 'Nem volt kiugró spark plug.',
+                        },
+                      ];
+                      return highlightCards.map(card => (
+                        <div key={card.key} className={`rounded-lg p-3 text-sm text-slate-200 ${card.classes}`}>
+                          <div className="text-[11px] uppercase tracking-wide text-slate-500">{card.title}</div>
+                          {card.player ? (
+                            <>
+                              <div className="text-base font-semibold text-slate-50">{card.player.name}</div>
+                              <div className="text-xs text-slate-300">{card.player.summaryLine}</div>
+                              <div className="text-[11px] text-slate-400 mt-1">{card.player.impactLabel}</div>
+                            </>
+                          ) : (
+                            <div className="text-xs text-slate-500">{card.fallback}</div>
+                          )}
+                        </div>
+                      ));
+                    })()}
+                  </div>
+                  <div className="space-y-2">
+                    {postgameReport.playerReport.players.map(player => {
+                      const isExpanded = expandedPlayerImpactId === player.playerId;
+                      const narrativeState = playerNarratives[player.playerId];
+                      return (
+                        <div key={player.playerId} className="rounded-lg border border-slate-800 bg-slate-900/30">
+                          <button
+                            type="button"
+                            onClick={() => handleTogglePlayerDetail(player.playerId)}
+                            className="w-full px-3 py-2 flex flex-wrap items-center justify-between gap-2 text-left"
+                          >
+                            <div>
+                              <div className="text-sm text-slate-200 font-medium">{player.name}</div>
+                              <div className="text-xs text-slate-400">{player.summaryLine}</div>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2 text-xs">
+                              <span className="px-2 py-1 rounded-full bg-slate-800 text-slate-200">{player.impactLabel}</span>
+                              <span className="px-2 py-1 rounded-full bg-slate-800 text-slate-200">{player.usageLabel}</span>
+                              <span className="text-slate-500">TS {player.tsPct.toFixed(1)}%</span>
+                              <span className="text-slate-500">VAL {player.val}</span>
+                              <span className="text-slate-500">VAL/36 {player.valPer36.toFixed(1)}</span>
+                            </div>
+                          </button>
+                          {isExpanded && (
+                            <div className="border-t border-slate-800 px-3 py-3 space-y-3">
+                              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs text-slate-300">
+                                <div>
+                                  <div className="text-[11px] uppercase tracking-wide text-slate-500">Erősségek</div>
+                                  {player.strengths.length > 0 ? (
+                                    player.strengths.map(item => <div key={item}>• {item}</div>)
+                                  ) : (
+                                    <div className="text-slate-500">Nincs kiemelt erősség.</div>
+                                  )}
+                                </div>
+                                <div>
+                                  <div className="text-[11px] uppercase tracking-wide text-slate-500">Limitációk</div>
+                                  {player.issues.length > 0 ? (
+                                    player.issues.map(item => <div key={item}>• {item}</div>)
+                                  ) : (
+                                    <div className="text-slate-500">Stabil végrehajtás.</div>
+                                  )}
+                                </div>
+                                <div>
+                                  <div className="text-[11px] uppercase tracking-wide text-slate-500">Fókusz</div>
+                                  {player.focus.length > 0 ? (
+                                    player.focus.map(item => <div key={item}>• {item}</div>)
+                                  ) : (
+                                    <div className="text-slate-500">Fenntartandó teljesítmény.</div>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => handleGeneratePlayerNarrative(player.playerId)}
+                                  disabled={narrativeState?.status === 'loading'}
+                                  className="bg-slate-800 text-slate-100 border-slate-700 hover:bg-slate-700"
+                                >
+                                  {narrativeState?.status === 'loading'
+                                    ? 'LLM értékelés készül…'
+                                    : 'LLM szöveges értékelés'}
+                                </Button>
+                                {narrativeState?.generatedAt && (
+                                  <span>Mentve: {formatGeneratedAt(narrativeState.generatedAt) ?? 'friss'}</span>
+                                )}
+                                {narrativeState?.status === 'error' && (
+                                  <span className="text-rose-300">{narrativeState.error}</span>
+                                )}
+                              </div>
+                              {narrativeState?.text && (
+                                <div className="text-sm text-slate-100 whitespace-pre-line bg-slate-900/60 border border-slate-800 rounded-md px-3 py-2">
+                                  {narrativeState.text}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>

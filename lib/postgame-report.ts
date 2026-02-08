@@ -1,4 +1,6 @@
 import type { PreGameXFactorContext } from './pregame-scouting';
+import { buildPlayerPostGameReport, computePlayerUsage } from './player-postgame';
+import type { PlayerPostGameReport } from './player-postgame';
 
 export type Position = 'PG' | 'SG' | 'SF' | 'PF' | 'C';
 
@@ -131,6 +133,7 @@ export type PostGameReport = {
     overperformers: string[];
     underperformers: string[];
   };
+  playerReport: PlayerPostGameReport;
   strengths: string[];
   problems: string[];
   nextFocus: string[];
@@ -437,17 +440,29 @@ const buildDecisiveFactors = (
   const turnoverRateDelta = toPct(game.turnoverRate - season.turnoverRate, 1);
   const orebRateDelta = toPct(game.orebRate - season.orebRate, 1);
 
-  if (threePctDelta >= 4) offense.push(`Periméterdobás hatékonyabb (+${threePctDelta} pp)`);
+  if (threePctDelta >= 4) {
+    offense.push(`Periméterdobás hatékonyabb (+${threePctDelta} pp)`);
+  } else if (threePctDelta <= -4) {
+    offense.push(`Gyenge 3P-hatékonyság (${threePctDelta} pp)`);
+  }
+
   if (twoRateDelta >= 6) offense.push(`Festékfókusz erősebb (+${twoRateDelta} pp)`);
 
   if (ftRateDelta >= 8) {
     offense.unshift(`FT rate dominancia (+${ftRateDelta} pp)`);
   } else if (ftRateDelta >= 5) {
     offense.push(`Aggresszív támadás (FT rate +${ftRateDelta} pp)`);
+  } else if (ftRateDelta <= -6) {
+    offense.push(`Kevés büntető (FT rate ${ftRateDelta} pp)`);
   }
   if (assistRateDelta >= 5) offense.push(`Jobb labdajáratás (+${assistRateDelta} pp)`);
+  if (assistRateDelta <= -5) offense.push(`Labdajáratás akadozott (${assistRateDelta} pp)`);
   if (turnoverRateDelta >= 5) offense.push(`Támadás szétesett (TO rate +${turnoverRateDelta} pp)`);
-  if (orebRateDelta >= 6) offense.push(`Második esély dominancia (OREB +${orebRateDelta} pp)`);
+  if (orebRateDelta >= 6) {
+    offense.push(`Második esély dominancia (OREB +${orebRateDelta} pp)`);
+  } else if (orebRateDelta <= -6) {
+    offense.push(`Második esély hiány (OREB ${orebRateDelta} pp)`);
+  }
 
   if (opponent) {
     const oppEfg = opponent.efg;
@@ -646,11 +661,6 @@ const buildXFactorReflection = (
   };
 };
 
-const computePlayerUsage = (player: PlayerGameStat) => {
-  const fga = player.fga2 + player.fga3;
-  return fga + 0.44 * player.fta + player.tov;
-};
-
 const analyzePlayerImpact = (players: PlayerGameStat[]) => {
   const positive: string[] = [];
   const negative: string[] = [];
@@ -686,11 +696,11 @@ const buildStrengths = (
   const threePctDelta = round(game.threePct - season.threePct, 1);
   const twoRateDelta = toPct(game.twoRate - season.twoRate, 1);
 
-  if (efgDelta >= 3) strengths.push(`Dobáshatékonyság a szezonátlag felett (+${efgDelta} pp)`);
-  if (assistRateDelta >= 5) strengths.push(`Labdajáratás javult (+${assistRateDelta} pp)`);
-  if (orebRateDelta >= 5) strengths.push(`Támadólepattanózás erős (+${orebRateDelta} pp)`);
-  if (threePctDelta >= 4) strengths.push(`Erős 3P-hatékonyság (+${threePctDelta} pp)`);
-  if (twoRateDelta >= 6) strengths.push(`Festékből több befejezés (+${twoRateDelta} pp)`);
+  if (efgDelta >= 3) strengths.push(`Dobáshatékonyság a szezonátlag felett (+${efgDelta} százalékpont)`);
+  if (assistRateDelta >= 5) strengths.push(`Labdajáratás javult (+${assistRateDelta} százalékpont)`);
+  if (orebRateDelta >= 5) strengths.push(`Támadólepattanózás erős (+${orebRateDelta} százalékpont)`);
+  if (threePctDelta >= 4) strengths.push(`Erős 3P-hatékonyság (+${threePctDelta} százalékpont)`);
+  if (twoRateDelta >= 6) strengths.push(`Festékből több befejezés (+${twoRateDelta} százalékpont)`);
 
   if (scoreAbove(benchmarks, season, 'efg', game.efg, 60)
     && !strengths.includes('Dobáshatékonyság a szezonátlag felett')) {
@@ -717,12 +727,16 @@ const buildProblems = (
   const assistRateDelta = toPct(game.assistRate - season.assistRate, 1);
   const threePctDelta = round(game.threePct - season.threePct, 1);
   const twoRateDelta = toPct(game.twoRate - season.twoRate, 1);
+  const orebRateDelta = toPct(game.orebRate - season.orebRate, 1);
+  const ftRateDelta = toPct(game.ftRate - season.ftRate, 1);
 
-  if (turnoverRateDelta >= 5) problems.push(`Sok labdaeladás (+${turnoverRateDelta} pp TO rate)`);
-  if (efgDelta <= -3) problems.push(`Dobáshatékonyság visszaesett (${efgDelta} pp)`);
-  if (assistRateDelta <= -5) problems.push(`Labdajáratás akadozott (${assistRateDelta} pp)`);
-  if (threePctDelta <= -4) problems.push(`Gyenge 3P-hatékonyság (${threePctDelta} pp)`);
-  if (twoRateDelta <= -6) problems.push(`Festékbefejezések visszaestek (${twoRateDelta} pp)`);
+  if (turnoverRateDelta >= 5) problems.push(`Sok labdaeladás (+${turnoverRateDelta} százalékpont TO rate)`);
+  if (efgDelta <= -3) problems.push(`Dobáshatékonyság visszaesett (${efgDelta} százalékpont)`);
+  if (assistRateDelta <= -5) problems.push(`Labdajáratás akadozott (${assistRateDelta} százalékpont)`);
+  if (threePctDelta <= -4) problems.push(`Gyenge 3P-hatékonyság (${threePctDelta} százalékpont)`);
+  if (twoRateDelta <= -6) problems.push(`Festékbefejezések visszaestek (${twoRateDelta} százalékpont)`);
+  if (orebRateDelta <= -6) problems.push(`Második esély volumen visszaesett (${orebRateDelta} százalékpont OREB)`);
+  if (ftRateDelta <= -8) problems.push(`Alacsony FT rate (${ftRateDelta} százalékpont)`);
 
   if (scoreAbove(benchmarks, season, 'turnover_rate', game.turnoverRate, 60)) {
     problems.push('TO arány a liga felett');
@@ -733,22 +747,145 @@ const buildProblems = (
   if (scoreBelow(benchmarks, season, 'three_pct', game.threePct, 40)) {
     problems.push('Periméter-hatékonyság a liga alatt');
   }
+  if (scoreBelow(benchmarks, season, 'oreb_rate', game.orebRate, 40)) {
+    problems.push('OREB volumen a liga alatt');
+  }
+  if (scoreBelow(benchmarks, season, 'ft_rate', game.ftRate, 40)) {
+    problems.push('FT rate a liga alatt');
+  }
 
   return problems.slice(0, 3);
 };
 
-const buildNextFocus = (problems: string[], strengths: string[]) => {
+const buildNextFocus = (
+  game: NormalizedGameStats,
+  season: NormalizedTeamStats,
+  problems: string[],
+  strengths: string[]
+) => {
   const focus: string[] = [];
+
+  const addFocus = (message: string) => {
+    if (!focus.includes(message)) focus.push(message);
+  };
+
+  const formatFocusPlan = (title: string, goal: string, how: string) =>
+    `${title}: Cél ${goal}. Hogyan: ${how}.`;
+
   const hasTurnoverProblem = problems.some(item =>
     item.includes('Sok labdaeladás') || item.includes('TO arány a liga felett')
   );
-  if (hasTurnoverProblem) focus.push('TO-k csökkentése, egyszerűsített döntések');
-  if (problems.includes('Dobáshatékonyság visszaesett')) focus.push('Dobásminőség javítása, festékből érkező pontok');
-  if (problems.includes('Labdajáratás akadozott')) focus.push('Spacing és passzsávok javítása');
-  if (problems.includes('Gyenge 3P-hatékonyság')) focus.push('3P dobásminőség, extra pass');
-  if (problems.includes('Festékbefejezések visszaestek')) focus.push('Festékből befejezések tisztítása');
-  if (strengths.includes('Támadólepattanózás erős')) focus.push('OREB agresszivitás fenntartása');
+  if (hasTurnoverProblem) {
+    addFocus(
+      formatFocusPlan(
+        'Labdabiztonság stabilizálása',
+        `TO-rate ${toPct(game.turnoverRate, 1)}% → ${toPct(season.turnoverRate, 1)}%`,
+        'egyszerűsített első passzok és korai döntések'
+      )
+    );
+  }
+
+  if (problems.includes('Dobáshatékonyság visszaesett')) {
+    addFocus(
+      formatFocusPlan(
+        'Dobásminőség újrakalibrálása',
+        `eFG ${game.efg.toFixed(1)}% vs ${season.efg.toFixed(1)}%`,
+        'több festékből érkező befejezés és extra pass'
+      )
+    );
+  }
+
+  if (problems.includes('Labdajáratás akadozott')) {
+    addFocus(
+      formatFocusPlan(
+        'Playmaking ritmus',
+        `Assist-rate ${toPct(game.assistRate, 1)}% → ${toPct(season.assistRate, 1)}%`,
+        'short roll és skip-pass visszahozása'
+      )
+    );
+  }
+
+  if (problems.includes('Gyenge 3P-hatékonyság')) {
+    addFocus(
+      formatFocusPlan(
+        'Periméter fegyelem',
+        `3P% ${game.threePct.toFixed(1)}% vs ${season.threePct.toFixed(1)}%`,
+        'saroktriplák kialakítása, kevesebb erőltetett pull-up'
+      )
+    );
+  }
+
+  if (problems.includes('Festékbefejezések visszaestek')) {
+    addFocus(
+      formatFocusPlan(
+        'Festék kontroll',
+        'deep catch és rim run volumen visszaépítése',
+        'nagyobb hangsúly a deep catch befejezéseken és rim run-okon'
+      )
+    );
+  }
+
+  const hasOrebProblem = problems.some(item => item.includes('második esély') || item.includes('OREB'));
+  if (hasOrebProblem) {
+    addFocus(
+      formatFocusPlan(
+        'Második esélyek visszaépítése',
+        `OREB% ${toPct(game.orebRate, 1)}% → ${toPct(season.orebRate, 1)}%`,
+        '4-5-ös posztok agresszívabb weakside crash-e'
+      )
+    );
+  }
+
+  const hasFtProblem = problems.some(item => item.includes('FT rate') || item.includes('büntető')); 
+  if (hasFtProblem) {
+    addFocus(
+      formatFocusPlan(
+        'Büntetők növelése',
+        `FT-rate ${toPct(game.ftRate, 1)}% → ${toPct(season.ftRate, 1)}%`,
+        'több kontaktkeresés az 1-3-asoktól és wedge setek'
+      )
+    );
+  }
+
+  if (strengths.includes('Támadólepattanózás erős')) {
+    addFocus(
+      formatFocusPlan(
+        'OREB agresszivitás fenntartása',
+        `jelenlegi OREB% ${toPct(game.orebRate, 1)}%`,
+        'azonos intenzitás a támadóüvegen'
+      )
+    );
+  }
+
+  if (focus.length === 0) {
+    addFocus('Végrehajtás stabilizálása a meglévő erősségek fenntartásával.');
+  }
+
   return focus.slice(0, 2);
+};
+
+const buildOpponentProfileSection = (
+  opponentName: string,
+  game: NormalizedGameStats,
+  season: NormalizedTeamStats
+) => {
+  const descriptors: string[] = [];
+  const threeDelta = round(game.threePct - season.threePct, 1);
+  if (threeDelta <= -4) descriptors.push(`periméter-limit (${game.threePct.toFixed(1)}% 3P vs ${season.threePct.toFixed(1)}%)`);
+  const ftDelta = toPct(game.ftRate - season.ftRate, 1);
+  if (ftDelta <= -6) descriptors.push(`kontaktus-limit (${toPct(game.ftRate, 1)}% FT-rate vs ${toPct(season.ftRate, 1)}%)`);
+  const orebDelta = toPct(game.orebRate - season.orebRate, 1);
+  if (orebDelta <= -6) descriptors.push(`lepattanó kontroll (${toPct(game.orebRate, 1)}% OREB vs ${toPct(season.orebRate, 1)}%)`);
+  const assistDelta = toPct(game.assistRate - season.assistRate, 1);
+  if (assistDelta <= -5) descriptors.push(`passzútvonal zavarás (Assist-rate ${toPct(game.assistRate, 1)}% vs ${toPct(season.assistRate, 1)}%)`);
+
+  const lines = ['**Ellenfél profil**'];
+  if (descriptors.length === 0) {
+    lines.push(`• ${opponentName} kiegyensúlyozott védekezést mutatott, nem torzította jelentősen a statisztikákat.`);
+  } else {
+    lines.push(`• ${opponentName} védekezése ${descriptors.join('; ')}.`);
+  }
+  return lines;
 };
 
 const buildSummary = (
@@ -760,6 +897,9 @@ const buildSummary = (
   playerImpact: PostGameReport['playerImpact'],
   nextFocus: string[],
   dataNotes: string[],
+  metrics: PostGameReport['metrics'],
+  season: NormalizedTeamStats,
+  game: NormalizedGameStats,
   reflectionLine?: string
 ) => {
   const tempoText = context.paceDelta === 'Higher'
@@ -774,43 +914,83 @@ const buildSummary = (
       ? 'hatékonyságban visszaesett'
       : 'átlagos hatékonyságot hozott';
 
-  const defenseText = context.defenseEfficiencyDelta === 'Higher'
-    ? 'védekezésben jobb hatékonyságot mutatott'
+  const defenseSummaryText = context.defenseEfficiencyDelta === 'Higher'
+    ? 'jobb hatékonyságot mutatott'
     : context.defenseEfficiencyDelta === 'Lower'
-      ? 'védekezésben romlott a hatékonyság'
-      : 'védekezésben átlagos volt';
+      ? 'romlott a hatékonyság'
+      : 'átlagos teljesítményt nyújtott';
 
   const decisiveText = [...decisive.offense, ...decisive.defense].slice(0, 3).join('; ');
-  const positiveImpact = playerImpact.positive.length > 0
-    ? `Pozitív impact: ${playerImpact.positive.join(', ')}.`
-    : 'Pozitív impact: nincs kiemelt szereplő.';
-  const negativeImpact = playerImpact.negative.length > 0
-    ? `Negatív impact: ${playerImpact.negative.join(', ')}.`
-    : '';
-  const overUnderText = [
-    playerImpact.overperformers.length > 0 ? `Kiugró teljesítmény: ${playerImpact.overperformers.join(', ')}.` : '',
-    playerImpact.underperformers.length > 0 ? `Visszaesés: ${playerImpact.underperformers.join(', ')}.` : '',
-  ].filter(Boolean).join(' ');
 
-  const focusText = nextFocus.length > 0
-    ? `Következő fókusz: ${nextFocus.join(' • ')}.`
-    : 'Következő fókusz: végrehajtás stabilizálása.';
+  const marginAbs = Math.abs(metrics.margin);
+  const marginLabel = marginAbs >= 12
+    ? 'nagy különbség'
+    : marginAbs >= 5
+      ? 'közepes különbség'
+      : marginAbs >= 1
+        ? 'szoros végjáték'
+        : 'minimális különbség';
+  const efgDelta = round(metrics.efg - season.efg, 1);
+  const efgLine = `${metrics.efg.toFixed(1)}% vs szezon ${season.efg.toFixed(1)}% (${efgDelta >= 0 ? '+' : ''}${efgDelta} százalékpont).`;
 
-  const noteText = dataNotes.length > 0 ? `Megjegyzés: ${dataNotes.join(' ')}.` : '';
-  const reflectionText = reflectionLine ? `Reflexió: ${reflectionLine}` : '';
+  const playerHighlightLines = (() => {
+    const lines: string[] = [];
+    if (
+      playerImpact.positive.length === 0 &&
+      playerImpact.overperformers.length === 0 &&
+      playerImpact.negative.length === 0 &&
+      playerImpact.underperformers.length === 0
+    ) {
+      lines.push('**Játékos kiemelések**');
+      lines.push('• Pozitív hatás: nincs kiemelt szereplő.');
+      return lines;
+    }
+    lines.push('**Játékos kiemelések**');
+    if (playerImpact.positive.length > 0) {
+      lines.push(`• Pozitív hatás: ${playerImpact.positive.join(', ')}.`);
+    }
+    if (playerImpact.overperformers.length > 0) {
+      lines.push(`• Kiugró teljesítmény: ${playerImpact.overperformers.join(', ')}.`);
+    }
+    if (playerImpact.negative.length > 0) {
+      lines.push(`• Limitált hatás: ${playerImpact.negative.join(', ')}.`);
+    }
+    if (playerImpact.underperformers.length > 0) {
+      lines.push(`• Visszaesés: ${playerImpact.underperformers.join(', ')}.`);
+    }
+    return lines;
+  })();
 
-  const sections = [
-    `${teamName} ${result === 'win' ? 'győzelemmel' : 'vereséggel'} zárt ${opponentName} ellen.`,
-    `Tempó és hatékonyság: ${tempoText} mérkőzés, a csapat ${offenseText}, védekezésben ${defenseText}.`,
-    decisiveText ? `Döntő tényezők: ${decisiveText}.` : '',
-    `Játékos hatások: ${[positiveImpact, negativeImpact, overUnderText].filter(Boolean).join(' ')}`.trim(),
-    focusText,
-    [noteText, reflectionText].filter(Boolean).join(' '),
-  ]
-    .map(line => line.trim())
-    .filter(line => line.length > 0);
+  const focusLines = nextFocus.length > 0
+    ? ['**Következő fókusz**', ...nextFocus.map(item => `• ${item}`)]
+    : ['**Következő fókusz**', '• Végrehajtás stabilizálása.'];
 
-  return sections.join('\n');
+  const opponentLines = dataNotes.some(note => note.includes('Ellenfél statisztikák nem elérhetők'))
+    ? []
+    : buildOpponentProfileSection(opponentName, game, season);
+
+  const bulletLines = [
+    '**Mérkőzés összefoglalója**',
+    `• Eredmény: ${teamName} ${result === 'win' ? 'legyőzte' : 'alulmaradt'} ${opponentName} ellen (${metrics.pointsFor}-${metrics.pointsAgainst}).`,
+    `• Tempó: ${tempoText} (${metrics.pace.toFixed(1)} támadás).`,
+    `• Hatékonyság: támadás ${offenseText}; védekezésben ${defenseSummaryText}.`,
+    `• eFG: ${efgLine}`,
+    `• Margin: ${metrics.margin > 0 ? '+' : ''}${metrics.margin.toFixed(1)} (${marginLabel}).`,
+    decisiveText ? `• Kulcsmomentumok: ${decisiveText}.` : '',
+    ...playerHighlightLines,
+    ...opponentLines,
+    ...focusLines,
+  ].filter(Boolean);
+
+  if (dataNotes.length > 0) {
+    bulletLines.push(`• Megjegyzés: ${dataNotes.join(' ')}`);
+  }
+
+  if (reflectionLine) {
+    bulletLines.push(`• Reflexió: ${reflectionLine}`);
+  }
+
+  return bulletLines.join('\n');
 };
 
 const interpretGameContext = (context: PostGameReport['context']) => {
@@ -898,6 +1078,8 @@ const interpretProblems = (problems: string[]) => {
     if (item.includes('3P')) return 'spacing és periméter-hatékonysági limitáció';
     if (item.includes('Festék')) return 'festékből érkező befejezések minősége';
     if (item.includes('assziszt')) return 'labdajáratás folyamatossága';
+    if (item.includes('második esély') || item.includes('OREB')) return 'második esély volumen és lepattanó kontroll';
+    if (item.includes('FT rate') || item.includes('büntető')) return 'büntető kiharcolási volumen és kontaktusmenedzsment';
     return 'strukturális végrehajtási limitáció';
   });
   const unique = Array.from(new Set(mapped)).slice(0, 2);
@@ -1071,9 +1253,10 @@ export const analyzePostGameReport = (
   const decisive = buildDecisiveFactors(game, opponent, season);
   const decisiveAnnotations = annotateDecisiveFactors(decisive);
   const playerImpact = analyzePlayerImpact(players);
+  const playerReport = buildPlayerPostGameReport(players);
   const strengths = buildStrengths(game, season, leagueBenchmarks);
   const problems = buildProblems(game, season, leagueBenchmarks);
-  const nextFocus = buildNextFocus(problems, strengths);
+  const nextFocus = buildNextFocus(game, season, problems, strengths);
   const xFactorReflection = buildXFactorReflection(preGameContext, game, season, opponent, decisiveAnnotations.meta);
   const combinedReflection = [xFactorReflection.line, xFactorReflection.riskLine].filter(Boolean).join(' ');
 
@@ -1110,6 +1293,7 @@ export const analyzePostGameReport = (
     decisiveFactorAnnotations: decisiveAnnotations.annotated,
     decisiveFactorMeta: decisiveAnnotations.meta,
     playerImpact,
+    playerReport,
     strengths,
     problems,
     nextFocus,
@@ -1130,6 +1314,9 @@ export const analyzePostGameReport = (
       playerImpact,
       nextFocus,
       dataNotes,
+      metricsSummary,
+      season,
+      game,
       combinedReflection
     ),
   };

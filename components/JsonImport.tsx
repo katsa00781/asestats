@@ -95,12 +95,6 @@ export function JsonImport({ onImportComplete, lastImportedGame, selectedSeasonI
   const [showPreview, setShowPreview] = useState(false);
   const [previewData, setPreviewData] = useState<ParsedPlayerData[]>([]);
 
-  useEffect(() => {
-    if (preferredSeasonId && preferredSeasonId !== selectedSeasonId) {
-      setSelectedSeasonId(preferredSeasonId);
-    }
-  }, [preferredSeasonId, selectedSeasonId]);
-
   // Szezonok és csapatok betöltése
   useEffect(() => {
     async function fetchData() {
@@ -146,6 +140,14 @@ export function JsonImport({ onImportComplete, lastImportedGame, selectedSeasonI
     }
     fetchData();
   }, [preferredSeasonId]);
+
+  useEffect(() => {
+    if (!preferredSeasonId || seasons.length === 0) return;
+    const seasonExists = seasons.some(season => season.id === preferredSeasonId);
+    if (seasonExists && preferredSeasonId !== selectedSeasonId) {
+      setSelectedSeasonId(preferredSeasonId);
+    }
+  }, [preferredSeasonId, seasons, selectedSeasonId]);
 
   const loadExistingGames = useCallback(async () => {
     if (!selectedSeasonId) return;
@@ -922,7 +924,7 @@ export function JsonImport({ onImportComplete, lastImportedGame, selectedSeasonI
               <Label htmlFor="season" className="text-slate-300">
                 Szezon *
               </Label>
-              <Select value={selectedSeasonId} onValueChange={setSelectedSeasonId}>
+              <Select value={selectedSeasonId || ''} onValueChange={setSelectedSeasonId}>
                 <SelectTrigger className="bg-slate-800 border-slate-700">
                   <SelectValue placeholder="Válassz szezont..." />
                 </SelectTrigger>
@@ -946,7 +948,7 @@ export function JsonImport({ onImportComplete, lastImportedGame, selectedSeasonI
                 <Label htmlFor="existingGame" className="text-slate-300">
                   Válassz meccset *
                 </Label>
-                <Select value={selectedGameId} onValueChange={handleSelectExistingGame}>
+                <Select value={selectedGameId || ''} onValueChange={handleSelectExistingGame}>
                   <SelectTrigger className="bg-slate-800 border-slate-700">
                     <SelectValue placeholder="Válassz meccset..." />
                   </SelectTrigger>
@@ -1004,7 +1006,7 @@ export function JsonImport({ onImportComplete, lastImportedGame, selectedSeasonI
                 <Label htmlFor="homeTeam" className="text-slate-300">
                   Hazai csapat *
                 </Label>
-                <Select value={homeTeamId} onValueChange={setHomeTeamId}>
+                <Select value={homeTeamId || ''} onValueChange={setHomeTeamId}>
                   <SelectTrigger className="bg-slate-800 border-slate-700">
                     <SelectValue placeholder="Válassz hazai csapatot..." />
                   </SelectTrigger>
@@ -1043,7 +1045,7 @@ export function JsonImport({ onImportComplete, lastImportedGame, selectedSeasonI
                 <Label htmlFor="awayTeam" className="text-slate-300">
                   Vendég csapat *
                 </Label>
-                <Select value={awayTeamId} onValueChange={setAwayTeamId}>
+                <Select value={awayTeamId || ''} onValueChange={setAwayTeamId}>
                   <SelectTrigger className="bg-slate-800 border-slate-700">
                     <SelectValue placeholder="Válassz vendég csapatot..." />
                   </SelectTrigger>
