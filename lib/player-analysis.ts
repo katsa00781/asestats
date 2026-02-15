@@ -1,4 +1,4 @@
-import type { Position } from './positions';
+import { parsePositionBuckets, type Position } from './positions';
 export type { Position };
 
 export type RawPlayerSeasonStat = {
@@ -7,6 +7,8 @@ export type RawPlayerSeasonStat = {
   league: string;
   season: string;
   position: Position;
+  positionLabel?: string | null;
+  positionBuckets?: Position[];
   games: number;
   minutes: number; // total minutes
   points: number;
@@ -141,6 +143,91 @@ export type PlayerTrendReport = {
   roleContext: string;
   badge: VisualTrendBadge;
   takeaway: string;
+};
+
+const POSITION_PRIORITY: Position[] = ['PG', 'SG', 'SF', 'PF', 'C'];
+const DEFAULT_POSITION: Position = 'C';
+
+type PositionBucketMeta = {
+  buckets: Position[];
+  trustOrder: boolean;
+};
+
+const dedupePositions = (positions: Position[]): Position[] => {
+  const seen = new Set<Position>();
+  const ordered: Position[] = [];
+  positions.forEach(position => {
+    if (position && !seen.has(position)) {
+      seen.add(position);
+      ordered.push(position);
+    }
+  });
+  return ordered;
+};
+
+const derivePositionBuckets = (raw: RawPlayerSeasonStat): PositionBucketMeta => {
+  if (raw.positionBuckets?.length) {
+    return { buckets: dedupePositions(raw.positionBuckets), trustOrder: true };
+  }
+
+  const fromLabel = parsePositionBuckets(raw.positionLabel ?? undefined);
+  if (fromLabel.length) {
+    return { buckets: dedupePositions(fromLabel), trustOrder: true };
+  }
+
+  const fromValue = parsePositionBuckets(raw.position ?? undefined);
+  if (fromValue.length) {
+    return { buckets: dedupePositions(fromValue), trustOrder: true };
+  }
+
+  return { buckets: POSITION_PRIORITY.slice(), trustOrder: false };
+};
+
+const computePositionFitScore = (player: NormalizedStats, position: Position) => {
+  const {
+    astPer36,
+    usageProxyPer36,
+    rebPer36,
+    defRebPer36,
+    blkPer36,
+    stlPer36,
+    threePAPer36,
+    ptsPer36,
+  } = player;
+
+  switch (position) {
+    case 'PG':
+      return astPer36 * 2 + usageProxyPer36 * 0.4 + stlPer36 * 0.3 - rebPer36 * 0.3 - blkPer36 * 0.6;
+    case 'SG':
+      return ptsPer36 * 0.6 + threePAPer36 * 0.8 + usageProxyPer36 * 0.3 + astPer36 * 0.2 - rebPer36 * 0.1 - blkPer36 * 0.4;
+    case 'SF':
+      return ptsPer36 * 0.5 + rebPer36 * 0.5 + threePAPer36 * 0.4 + stlPer36 * 0.2;
+    case 'PF':
+      return rebPer36 * 0.9 + defRebPer36 * 0.5 + blkPer36 * 0.7 + ptsPer36 * 0.3 - threePAPer36 * 0.15;
+    case 'C':
+      return rebPer36 * 1.1 + defRebPer36 * 0.6 + blkPer36 * 0.9 - threePAPer36 * 0.4 - astPer36 * 0.2;
+    default:
+      return 0;
+  }
+};
+
+const resolvePositionMetadata = (player: NormalizedStats, raw: RawPlayerSeasonStat) => {
+  const { buckets, trustOrder } = derivePositionBuckets(raw);
+  if (buckets.length === 0) return { position: DEFAULT_POSITION, buckets: [DEFAULT_POSITION] };
+  if (trustOrder || buckets.length === 1) return { position: buckets[0], buckets };
+
+  let bestPosition = buckets[0];
+  let bestScore = -Infinity;
+
+  buckets.forEach((candidate, index) => {
+    const score = computePositionFitScore(player, candidate) - index * 0.05;
+    if (score > bestScore) {
+      bestScore = score;
+      bestPosition = candidate;
+    }
+  });
+
+  return { position: bestPosition, buckets };
 };
 
 const REQUIRED_MIN_GAMES = 10;
@@ -279,7 +366,7 @@ export const normalizePlayerStats = (raw: RawPlayerSeasonStat): NormalizedStats 
   const usageProxyPer36 = fgaPer36 + 0.44 * ftaPer36 + tovPer36;
   const astTo = tovPer36 > 0.1 ? astPer36 / tovPer36 : astPer36 / 0.1;
 
-  return {
+  const normalized: NormalizedStats = {
     ...raw,
     minutesPerGame,
     fga,
@@ -301,6 +388,14 @@ export const normalizePlayerStats = (raw: RawPlayerSeasonStat): NormalizedStats 
     astTo: round(clamp(astTo, 0, 20), 2),
     valPer36: round(valPer36),
     usageProxyPer36: round(usageProxyPer36),
+  };
+
+  const { position, buckets } = resolvePositionMetadata(normalized, raw);
+
+  return {
+    ...normalized,
+    position,
+    positionBuckets: buckets,
   };
 };
 
@@ -850,7 +945,7 @@ const buildValidatedAnalysis = (
   const cappedConfidence = clampRoleConfidence(roleConfidence, raw.games);
 
   return {
-    position: raw.position,
+    position: normalized.position,
     roleKeys,
     roles: roleKeys.map(translateRoleLabel),
     skillScores: skills,
@@ -878,12 +973,20 @@ const buildDetailedLimitations = (
     ? (player.mid.attempted + player.three.attempted) / player.fga
     : 0;
   const paintHeavy = outsidePaintShare <= 0.35;
+  const isGuard = player.position === 'PG' || player.position === 'SG';
+  const isWing = player.position === 'SF';
+  const isFrontcourt = player.position === 'PF' || player.position === 'C';
 
   if (lowAst && skills.playmaking <= 40) {
     limitations.push('Játéképítés: nem másodlagos szervező, rövid lefordulásokból nehezen hoz döntést.');
   }
-  if (low3PA && (roleNames.includes('Stretch 5') === false && roleNames.includes('Stretch 4') === false)) {
-    limitations.push('Térnyitási limit: nem térnyitó center, a festékben extra védőt vonzhat.');
+  if (low3PA && !roleNames.includes('Stretch 5') && !roleNames.includes('Stretch 4')) {
+    const spacingLabel = isFrontcourt
+      ? 'Térnyitási limit: nem térnyitó magas, a festékben extra védőt vonzhat.'
+      : isGuard
+        ? 'Periméter térnyitás hiánya: irányítóként/dobóhátvédként kevés triplakísérlet miatt leválhatnak róla.'
+        : 'Periméter térnyitás hiánya: wing szerepben kevés külső dobás miatt segíteni tudnak róla.';
+    limitations.push(spacingLabel);
   }
   if (highUsage && paintHeavy && low3PA) {
     limitations.push('Festékfókusz: támadásban plusz segítő védekezést hív, emiatt szűkül a tér.');

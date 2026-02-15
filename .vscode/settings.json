@@ -1,0 +1,8 @@
+{
+    "chat.tools.terminal.autoApprove": {
+        "/^python3 - <<'PY'\nfrom pathlib import Path\npath = Path\\('components/SeasonComparison\\.tsx'\\)\ntext = path\\.read_text\\(\\)\nold = \"    team\\.roster\\.push\\(\\{\\\\n      playerId: player\\.id,\\\\n      name: player\\.name,\\\\n      position: positionInfo\\.position,\\\\n      positionBuckets: positionInfo\\.positionBuckets,\\\\n      positionLabel: player\\.position \\?\\? null,\\\\n      rawPosition: player\\.position \\?\\? null,\\\\n      minutes: player\\.minutes \\|\\| 0,\\\\n      usageProxy,\\\\n      heightCm: player\\.height \\|\\| undefined,\\\\n      roles: rolesByPlayerId\\.get\\(player\\.id\\) \\?\\? \\[\\],\\\\n    \\}\\);\\\\n\"\nnew = \"    team\\.roster\\.push\\(\\{\\\\n      playerId: player\\.id,\\\\n      name: player\\.name,\\\\n      position: positionInfo\\.position,\\\\n      positionBuckets: positionInfo\\.positionBuckets,\\\\n      positionLabel: player\\.position \\?\\? null,\\\\n      rawPosition: player\\.position \\?\\? null,\\\\n      isActive: player\\.isActive !== false,\\\\n      minutes: player\\.minutes \\|\\| 0,\\\\n      usageProxy,\\\\n      heightCm: player\\.height \\|\\| undefined,\\\\n      roles: rolesByPlayerId\\.get\\(player\\.id\\) \\?\\? \\[\\],\\\\n    \\}\\);\\\\n\"\nif old not in text:\n    raise SystemExit\\('team roster push pattern missing'\\)\ntext = text\\.replace\\(old, new, 1\\)\npath\\.write_text\\(text\\)\nPY$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
+    }
+}

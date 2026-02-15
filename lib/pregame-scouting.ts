@@ -575,10 +575,11 @@ const identifyKeyPlayers = (players: PlayerSeasonStat[], teamUsageShare: number)
   const mismatchCandidates: Array<{ name: string; score: number }> = [];
 
   const heightByPos = players.reduce((acc, player) => {
-    if (player.heightCm && Number.isFinite(player.heightCm)) {
+    const height = player.heightCm;
+    if (typeof height === 'number' && Number.isFinite(height)) {
       getPlayerPositionBuckets(player).forEach(pos => {
         acc[pos] = acc[pos] || { sum: 0, count: 0 };
-        acc[pos].sum += player.heightCm;
+        acc[pos].sum += height;
         acc[pos].count += 1;
       });
     }
@@ -596,6 +597,7 @@ const identifyKeyPlayers = (players: PlayerSeasonStat[], teamUsageShare: number)
     const usage = computePlayerUsage(player);
     const primaryPos = getPlayerPositionBuckets(player)[0] ?? player.position;
     const posAvgHeight = avgHeight(primaryPos);
+    const height = player.heightCm;
 
     if (usage > mean + sd) primaryScorers.push({ name: player.name, score: usage + player.val * 1.2 });
     if (player.ast >= 3 && astTo >= 1.6) {
@@ -607,7 +609,7 @@ const identifyKeyPlayers = (players: PlayerSeasonStat[], teamUsageShare: number)
     if (usage >= mean && player.val >= 10) {
       mismatchCandidates.push({ name: player.name, score: player.val + usage * 0.4 });
     }
-    if (posAvgHeight && player.heightCm && player.heightCm >= posAvgHeight + 5) {
+    if (posAvgHeight != null && typeof height === 'number' && Number.isFinite(height) && height >= posAvgHeight + 5) {
       mismatchCandidates.push({ name: `${player.name} (magassági előny)`, score: player.val + 8 });
     }
   });
@@ -1080,10 +1082,11 @@ export const analyzePreGameScouting = (
   const keyPlayers = identifyKeyPlayers(opponentPlayers, usageShare);
 
   const ownHeightByPos = ownPlayers.reduce((acc, player) => {
-    if (player.heightCm && Number.isFinite(player.heightCm)) {
+    const height = player.heightCm;
+    if (typeof height === 'number' && Number.isFinite(height)) {
       getPlayerPositionBuckets(player).forEach(pos => {
         acc[pos] = acc[pos] || { sum: 0, count: 0 };
-        acc[pos].sum += player.heightCm;
+        acc[pos].sum += height;
         acc[pos].count += 1;
       });
     }
@@ -1091,10 +1094,11 @@ export const analyzePreGameScouting = (
   }, {} as Record<Position, { sum: number; count: number }>);
 
   const opponentHeightByPos = opponentPlayers.reduce((acc, player) => {
-    if (player.heightCm && Number.isFinite(player.heightCm)) {
+    const height = player.heightCm;
+    if (typeof height === 'number' && Number.isFinite(height)) {
       getPlayerPositionBuckets(player).forEach(pos => {
         acc[pos] = acc[pos] || { sum: 0, count: 0 };
-        acc[pos].sum += player.heightCm;
+        acc[pos].sum += height;
         acc[pos].count += 1;
       });
     }

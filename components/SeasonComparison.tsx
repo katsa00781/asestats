@@ -407,12 +407,15 @@ const toRawStat = (player: PlayerStats, league: string, season: string): RawPlay
   const totalValuation = (player.valuation || 0) * gamesPlayed;
   const fallbackValuation = computeTotalValuation(player);
   const valuation = totalValuation > 0 ? totalValuation : fallbackValuation;
+  const positionInfo = mapPositionInfo(player.position);
   return {
     playerId: player.id,
     name: player.name,
     league,
     season,
-    position: mapPosition(player.position),
+    position: positionInfo.position,
+    positionLabel: positionInfo.positionLabel,
+    positionBuckets: positionInfo.positionBuckets,
     games: gamesPlayed,
     minutes: player.minutes || 0,
     points: player.points || 0,
@@ -524,10 +527,16 @@ const buildTeamSeasonStats = (
       (player.shooting?.three?.attempted || 0);
     const usageProxy = fga + 0.44 * (player.shooting?.freeThrow?.attempted || 0) + (player.turnovers || 0);
 
+    const positionInfo = mapPositionInfo(player.position);
+
     team.roster.push({
       playerId: player.id,
       name: player.name,
-      position: mapPosition(player.position),
+      position: positionInfo.position,
+      positionBuckets: positionInfo.positionBuckets,
+      positionLabel: player.position ?? null,
+      rawPosition: player.position ?? null,
+      isActive: player.isActive !== false,
       minutes: player.minutes || 0,
       usageProxy,
       heightCm: player.height || undefined,
@@ -804,6 +813,8 @@ export function SeasonComparison({
       league,
       season: resolvedSeasonId,
       position: incomingPlayer.position,
+      positionLabel: incomingPlayer.position,
+      positionBuckets: [incomingPlayer.position],
       games: gamesCount,
       minutes: (incomingPlayer.minutesPerGame || 0) * gamesCount,
       points: (incomingPlayer.pointsPerGame || 0) * gamesCount,
@@ -2655,6 +2666,50 @@ export function SeasonComparison({
                 )}
               </CardContent>
             </Card>
+
+            <Card className="bg-slate-900 border-slate-800">
+              <CardHeader>
+                <CardTitle className="text-slate-50">Összegzett értékelés</CardTitle>
+              </CardHeader>
+              <CardContent className="grid grid-cols-1 gap-4 text-sm sm:grid-cols-2 lg:grid-cols-3">
+                <div className="space-y-2 text-slate-200">
+                  <div className="text-slate-300 font-medium">Erősségek</div>
+                  {analysis.strengths.length > 0 ? (
+                    <ul className="list-disc list-inside space-y-1 text-pretty leading-relaxed">
+                      {analysis.strengths.map(item => (
+                        <li key={item}>{item}</li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <div className="text-slate-400">Nincs kiemelt erősség.</div>
+                  )}
+                </div>
+                <div className="space-y-2 text-slate-200">
+                  <div className="text-slate-300 font-medium">Limitációk</div>
+                  {analysis.limitations.length > 0 ? (
+                    <ul className="list-disc list-inside space-y-1 text-pretty leading-relaxed">
+                      {analysis.limitations.map(item => (
+                        <li key={item}>{item}</li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <div className="text-slate-400">Nincs kiemelt limitáció.</div>
+                  )}
+                </div>
+                <div className="space-y-2 text-slate-200">
+                  <div className="text-slate-300 font-medium">Javítandó pontok</div>
+                  {analysis.improvements.length > 0 ? (
+                    <ul className="list-disc list-inside space-y-1 text-pretty leading-relaxed">
+                      {analysis.improvements.map(item => (
+                        <li key={item}>{item}</li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <div className="text-slate-400">Nincs kiemelt javítandó pont.</div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
           </div>
 
           <div className="space-y-6">
@@ -2685,38 +2740,6 @@ export function SeasonComparison({
                 ) : (
                   <div className="text-slate-400">Nincs elérhető meccs adat az utolsó 5 mérkőzéshez.</div>
                 )}
-              </CardContent>
-            </Card>
-
-            <Card className="bg-slate-900 border-slate-800">
-              <CardHeader>
-                <CardTitle className="text-slate-50">Összegzett értékelés</CardTitle>
-              </CardHeader>
-              <CardContent className="grid grid-cols-1 gap-4 text-sm sm:grid-cols-2 lg:grid-cols-3">
-                <div className="space-y-2 text-slate-200">
-                  <div className="text-slate-300 font-medium">Erősségek</div>
-                  {analysis.strengths.length > 0 ? (
-                    analysis.strengths.map(item => <div key={item}>• {item}</div>)
-                  ) : (
-                    <div className="text-slate-400">Nincs kiemelt erősség.</div>
-                  )}
-                </div>
-                <div className="space-y-2 text-slate-200">
-                  <div className="text-slate-300 font-medium">Limitációk</div>
-                  {analysis.limitations.length > 0 ? (
-                    analysis.limitations.map(item => <div key={item}>• {item}</div>)
-                  ) : (
-                    <div className="text-slate-400">Nincs kiemelt limitáció.</div>
-                  )}
-                </div>
-                <div className="space-y-2 text-slate-200">
-                  <div className="text-slate-300 font-medium">Javítandó pontok</div>
-                  {analysis.improvements.length > 0 ? (
-                    analysis.improvements.map(item => <div key={item}>• {item}</div>)
-                  ) : (
-                    <div className="text-slate-400">Nincs kiemelt javítandó pont.</div>
-                  )}
-                </div>
               </CardContent>
             </Card>
 
@@ -2872,7 +2895,11 @@ export function SeasonComparison({
                 <div className="space-y-2">
                   <div className="text-sm text-slate-300 font-medium">Erősségek</div>
                   {displayTeamAnalysis.strengths.length > 0 ? (
-                    displayTeamAnalysis.strengths.map(item => <div key={item} className="text-sm text-slate-200">• {item}</div>)
+                    <ul className="list-disc list-inside space-y-1 text-sm text-slate-200 text-pretty leading-relaxed">
+                      {displayTeamAnalysis.strengths.map(item => (
+                        <li key={item}>{item}</li>
+                      ))}
+                    </ul>
                   ) : (
                     <div className="text-sm text-slate-400">Nincs kiemelt erősség.</div>
                   )}
@@ -2880,7 +2907,11 @@ export function SeasonComparison({
                 <div className="space-y-2">
                   <div className="text-sm text-slate-300 font-medium">Limitációk</div>
                   {displayTeamAnalysis.limitations.length > 0 ? (
-                    displayTeamAnalysis.limitations.map(item => <div key={item} className="text-sm text-slate-200">• {item}</div>)
+                    <ul className="list-disc list-inside space-y-1 text-sm text-slate-200 text-pretty leading-relaxed">
+                      {displayTeamAnalysis.limitations.map(item => (
+                        <li key={item}>{item}</li>
+                      ))}
+                    </ul>
                   ) : (
                     <div className="text-sm text-slate-400">Nincs kiemelt limitáció.</div>
                   )}
@@ -4450,9 +4481,13 @@ export function SeasonComparison({
                       <CardHeader>
                         <CardTitle className="text-slate-50">Erősségek</CardTitle>
                       </CardHeader>
-                      <CardContent className="space-y-2 text-sm text-slate-200">
+                      <CardContent className="text-sm text-slate-200">
                         {incomingAnalysis.strengths.length > 0 ? (
-                          incomingAnalysis.strengths.map(item => <div key={item}>• {item}</div>)
+                          <ul className="list-disc list-inside space-y-1 text-pretty leading-relaxed">
+                            {incomingAnalysis.strengths.map(item => (
+                              <li key={item}>{item}</li>
+                            ))}
+                          </ul>
                         ) : (
                           <div className="text-slate-400">Nincs kiemelt erősség.</div>
                         )}
@@ -4463,9 +4498,13 @@ export function SeasonComparison({
                       <CardHeader>
                         <CardTitle className="text-slate-50">Limitációk</CardTitle>
                       </CardHeader>
-                      <CardContent className="space-y-2 text-sm text-slate-200">
+                      <CardContent className="text-sm text-slate-200">
                         {incomingAnalysis.limitations.length > 0 ? (
-                          incomingAnalysis.limitations.map(item => <div key={item}>• {item}</div>)
+                          <ul className="list-disc list-inside space-y-1 text-pretty leading-relaxed">
+                            {incomingAnalysis.limitations.map(item => (
+                              <li key={item}>{item}</li>
+                            ))}
+                          </ul>
                         ) : (
                           <div className="text-slate-400">Nincs kiemelt limitáció.</div>
                         )}
@@ -4476,9 +4515,13 @@ export function SeasonComparison({
                       <CardHeader>
                         <CardTitle className="text-slate-50">Javítandó pontok</CardTitle>
                       </CardHeader>
-                      <CardContent className="space-y-2 text-sm text-slate-200">
+                      <CardContent className="text-sm text-slate-200">
                         {incomingAnalysis.improvements.length > 0 ? (
-                          incomingAnalysis.improvements.map(item => <div key={item}>• {item}</div>)
+                          <ul className="list-disc list-inside space-y-1 text-pretty leading-relaxed">
+                            {incomingAnalysis.improvements.map(item => (
+                              <li key={item}>{item}</li>
+                            ))}
+                          </ul>
                         ) : (
                           <div className="text-slate-400">Nincs kiemelt javítandó pont.</div>
                         )}

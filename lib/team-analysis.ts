@@ -1,4 +1,4 @@
-import { normalizeRoleKeys } from './player-analysis';
+import { normalizeRoleKeys, type RoleKey } from './player-analysis';
 
 import type { Position } from './positions';
 export type { Position };
@@ -40,6 +40,10 @@ export type TeamSeasonStat = {
     playerId: string;
     name: string;
     position: Position;
+    positionBuckets?: Position[];
+    positionLabel?: string | null;
+    rawPosition?: string | null;
+    isActive?: boolean;
     minutes: number;
     usageProxy: number;
     heightCm?: number;
@@ -174,6 +178,181 @@ const ROLE_CATALOG = [
   'Stretch 5',
   'Energy Big',
 ];
+
+const POSITION_ORDER: Position[] = ['PG', 'SG', 'SF', 'PF', 'C'];
+
+type RosterPlayer = TeamSeasonStat['roster'][number];
+
+const normalizePositionLabel = (label?: string | null) => label?.toString().trim().toUpperCase() ?? '';
+
+const buildPositionSignature = (player: RosterPlayer) => {
+  const raw = normalizePositionLabel(player.rawPosition ?? player.positionLabel);
+  if (raw) return raw;
+  if (player.positionBuckets?.length) return player.positionBuckets.join('-');
+  return player.position;
+};
+
+type AggregatedRosterEntry = {
+  playerId: string;
+  name: string;
+  minutes: number;
+  usageProxy: number;
+  heightCm?: number;
+  roleKeys: RoleKey[];
+  positionBuckets: Position[];
+  basePosition: Position;
+};
+
+type NormalizedRosterEntry = AggregatedRosterEntry & { position: Position };
+
+const dedupePositions = (positions: Array<Position | undefined>): Position[] => {
+  const seen = new Set<Position>();
+  const ordered: Position[] = [];
+  positions.forEach(pos => {
+    if (!pos) return;
+    if (seen.has(pos)) return;
+    seen.add(pos);
+    ordered.push(pos);
+  });
+  return ordered;
+};
+
+const mergeRoleKeys = (base: RoleKey[], incoming: RoleKey[]) => {
+  const seen = new Set(base);
+  incoming.forEach(role => {
+    if (!seen.has(role)) {
+      seen.add(role);
+      base.push(role);
+    }
+  });
+  return base;
+};
+
+const buildRosterKey = (player: RosterPlayer) => {
+  const signature = buildPositionSignature(player) || 'GEN';
+  if (player.playerId) return `${player.playerId}::${signature}`;
+  const normalizedName = player.name?.trim().toLowerCase() || 'unknown-player';
+  const heightKey = player.heightCm ? Math.round(player.heightCm) : 'na';
+  return `${normalizedName}::${heightKey}::${signature}`;
+};
+
+const POSITION_BASE_SCORES: Record<Position, number> = {
+  PG: -0.15,
+  SG: -0.05,
+  SF: 0,
+  PF: 0.1,
+  C: 0.2,
+};
+
+const ROLE_POSITION_HINTS: Record<RoleKey, Partial<Record<Position, number>>> = {
+  'Primary Ball Handler': { PG: 0.9 },
+  'Secondary Creator': { PG: 0.5, SG: 0.4 },
+  'Defensive Guard': { PG: 0.4, SG: 0.6 },
+  'Offensive Hub': { SF: 0.4, PF: 0.3 },
+  '3&D Wing': { SG: 0.3, SF: 0.6 },
+  'Scoring Wing': { SG: 0.4, SF: 0.5 },
+  'Secondary Playmaker': { PG: 0.4, SG: 0.3, SF: 0.2 },
+  'Glue Guy': { SF: 0.4, PF: 0.2 },
+  'Slasher': { SG: 0.5, SF: 0.4 },
+  'Floor Spacer': { SG: 0.3, SF: 0.3, PF: 0.2 },
+  'Stretch 4': { PF: 0.9, SF: 0.2 },
+  'Physical 4': { PF: 0.9, C: 0.3 },
+  'Rim Protector': { C: 1 },
+  'Roll Man': { C: 0.7, PF: 0.4 },
+  'Stretch 5': { C: 0.9, PF: 0.4 },
+  'Energy Big': { PF: 0.6, C: 0.5 },
+};
+
+const getRoleBias = (roles: RoleKey[], position: Position) =>
+  roles.reduce((score, role) => score + (ROLE_POSITION_HINTS[role]?.[position] ?? 0), 0);
+
+const getHeightBias = (height: number | undefined, position: Position) => {
+  if (typeof height !== 'number' || !Number.isFinite(height)) return 0;
+  if (position === 'C') {
+    if (height >= 208) return 1;
+    if (height >= 203) return 0.6;
+    if (height <= 198) return -0.5;
+  }
+  if (position === 'PF') {
+    if (height >= 204) return 0.5;
+    if (height <= 196) return -0.3;
+  }
+  if (position === 'SF') {
+    if (height >= 202) return 0.2;
+    if (height <= 194) return -0.2;
+  }
+  if (position === 'SG') {
+    if (height <= 192) return 0.4;
+    if (height >= 202) return -0.3;
+  }
+  if (position === 'PG') {
+    if (height <= 188) return 0.6;
+    if (height >= 198) return -0.4;
+  }
+  return 0;
+};
+
+const resolveRosterPosition = (player: AggregatedRosterEntry): Position => {
+  const buckets = player.positionBuckets.length > 0 ? player.positionBuckets : [player.basePosition];
+  let bestPosition = player.basePosition;
+  let bestScore = -Infinity;
+
+  buckets.forEach((candidate, index) => {
+    let score = POSITION_BASE_SCORES[candidate] ?? 0;
+    score -= index * 0.1;
+    score += getHeightBias(player.heightCm, candidate);
+    score += getRoleBias(player.roleKeys, candidate);
+    if (candidate === player.basePosition) score += 0.15;
+    if (score > bestScore) {
+      bestScore = score;
+      bestPosition = candidate;
+    }
+  });
+
+  return bestPosition;
+};
+
+const aggregateRoster = (roster: RosterPlayer[]): NormalizedRosterEntry[] => {
+  const map = new Map<string, AggregatedRosterEntry>();
+
+  roster.forEach(player => {
+    if (player.isActive === false) return;
+    const key = buildRosterKey(player);
+    const normalizedRoles = normalizeRoleKeys(player.roles ?? []);
+    const positionBuckets = dedupePositions([
+      ...(player.positionBuckets ?? []),
+      player.position,
+    ]);
+    const existing = map.get(key);
+    if (!existing) {
+      map.set(key, {
+        playerId: player.playerId,
+        name: player.name,
+        minutes: player.minutes || 0,
+        usageProxy: player.usageProxy || 0,
+        heightCm: player.heightCm,
+        roleKeys: normalizedRoles,
+        positionBuckets: positionBuckets.length > 0 ? positionBuckets : ['C'],
+        basePosition: player.position,
+      });
+      return;
+    }
+
+    existing.minutes += player.minutes || 0;
+    existing.usageProxy += player.usageProxy || 0;
+    if (!existing.heightCm && player.heightCm) existing.heightCm = player.heightCm;
+    existing.roleKeys = mergeRoleKeys(existing.roleKeys, normalizedRoles);
+    existing.positionBuckets = dedupePositions([
+      ...existing.positionBuckets,
+      ...positionBuckets,
+    ]);
+  });
+
+  return Array.from(map.values()).map(entry => ({
+    ...entry,
+    position: resolveRosterPosition(entry),
+  }));
+};
 
 const toAverage = (values: Array<number | null | undefined>, digits = 1) => {
   const filtered = values.filter((value): value is number => Number.isFinite(value));
@@ -542,7 +721,9 @@ const detectTeamStyle = (team: NormalizedTeamStats, benchmarks: LeagueTeamBenchm
 };
 
 const buildRosterSummary = (team: NormalizedTeamStats) => {
-  const totalMinutes = team.roster.reduce((sum, p) => sum + p.minutes, 0) || 1;
+  const normalizedRoster = aggregateRoster(team.roster);
+  const totalMinutes = normalizedRoster.reduce((sum, player) => sum + (player.minutes || 0), 0) || 1;
+
   const positionMinutesShare: Record<Position, number> = {
     PG: 0,
     SG: 0,
@@ -577,40 +758,39 @@ const buildRosterSummary = (team: NormalizedTeamStats) => {
     acc[role] = [];
     return acc;
   }, {} as Record<string, string[]>);
-  team.roster.forEach(player => {
+
+  normalizedRoster.forEach(player => {
     positionMinutesShare[player.position] += player.minutes;
     positionPlayers[player.position].push({ name: player.name, minutes: player.minutes || 0 });
+
     if (player.heightCm && Number.isFinite(player.heightCm)) {
       heightTotals[player.position].sum += player.heightCm;
       heightTotals[player.position].count += 1;
       heightSum += player.heightCm;
       heightCount += 1;
     }
-    const normalizedRoles = normalizeRoleKeys(player.roles);
-    normalizedRoles.forEach(role => {
+
+    player.roleKeys.forEach(role => {
       roleCounts[role] = (roleCounts[role] ?? 0) + 1;
       if (!rolePlayers[role]) rolePlayers[role] = [];
       rolePlayers[role].push(player.name);
     });
   });
 
-  (Object.keys(positionMinutesShare) as Position[]).forEach(pos => {
+  POSITION_ORDER.forEach(pos => {
     positionMinutesShare[pos] = round((positionMinutesShare[pos] / totalMinutes) * 100, 1);
   });
 
-  const sortedUsage = [...team.roster]
-    .map(p => p.usageProxy)
-    .filter(v => Number.isFinite(v))
+  const sortedUsage = normalizedRoster
+    .map(player => player.usageProxy)
+    .filter(value => Number.isFinite(value))
     .sort((a, b) => b - a);
-  const totalUsage = sortedUsage.reduce((sum, v) => sum + v, 0) || 1;
-  const top2Usage = sortedUsage.slice(0, 2).reduce((sum, v) => sum + v, 0);
+  const totalUsage = sortedUsage.reduce((sum, value) => sum + value, 0) || 1;
+  const top2Usage = sortedUsage.slice(0, 2).reduce((sum, value) => sum + value, 0);
   const top2UsageShare = round(top2Usage / totalUsage, 3);
 
-  const creatorRoles = ['Primary Ball Handler', 'Secondary Creator', 'Secondary Playmaker'];
-  const creators = team.roster.filter(player => {
-    const playerRoles = normalizeRoleKeys(player.roles);
-    return playerRoles.some(role => creatorRoles.includes(role));
-  }).length;
+  const creatorRoles: RoleKey[] = ['Primary Ball Handler', 'Secondary Creator', 'Secondary Playmaker'];
+  const creators = normalizedRoster.filter(player => player.roleKeys.some(role => creatorRoles.includes(role))).length;
 
   const bigShare = (positionMinutesShare.PF + positionMinutesShare.C) / 100;
 
