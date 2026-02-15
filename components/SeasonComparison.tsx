@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { supabase, type Database } from '@/lib/supabase';
+import { buildPositionMetadata } from '@/lib/positions';
 import type { PlayerStats, TeamGame } from '@/app/page';
 import {
   analyzePlayerSeason,
@@ -92,41 +93,9 @@ type PlayerNarrativeStatus = {
 
 type GameTextReportRow = Database['public']['Tables']['game_text_reports']['Row'];
 
-const mapPosition = (pos: string): Position => {
-  const normalized = pos?.toUpperCase?.() || '';
-  const normalizedAscii = normalized
-    .normalize('NFD')
-    .replace(/\p{Diacritic}/gu, '')
-    .replace(/[^A-Z0-9]/g, '');
+const mapPositionInfo = (pos?: string | null) => buildPositionMetadata(pos, 'C');
 
-  const digits = normalized.match(/[1-5]/g) || [];
-  if (digits.length > 0) {
-    const primary = digits.sort()[0];
-    if (primary === '1') return 'PG';
-    if (primary === '2') return 'SG';
-    if (primary === '3') return 'SF';
-    if (primary === '4') return 'PF';
-    if (primary === '5') return 'C';
-  }
-
-  if (normalized.includes('PG')) return 'PG';
-  if (normalized.includes('SG')) return 'SG';
-  if (normalized.includes('SF')) return 'SF';
-  if (normalized.includes('PF')) return 'PF';
-  if (normalized.includes('G')) return 'SG';
-  if (normalized.includes('F')) return 'SF';
-  if (normalized.includes('C')) return 'C';
-
-  if (normalizedAscii.includes('IRANYITO')) return 'PG';
-  if (normalizedAscii.includes('DOBOHATVED')) return 'SG';
-  if (normalizedAscii.includes('HATVED')) return 'SG';
-  if (normalizedAscii.includes('BEDOBO')) return 'SF';
-  if (normalizedAscii.includes('EROCSATAR')) return 'PF';
-  if (normalizedAscii.includes('CSATAR')) return 'PF';
-  if (normalizedAscii.includes('CENTER')) return 'C';
-  if (normalizedAscii.includes('CENT')) return 'C';
-  return 'C';
-};
+const mapPosition = (pos: string): Position => mapPositionInfo(pos).position;
 
 const POSITION_LABELS: Record<Position, string> = {
   PG: 'Irányító',
@@ -1595,32 +1564,35 @@ export function SeasonComparison({
         activeSeasonPlayers
         .filter(player => player.teamId === selectedOpponentTeamId)
         .filter(player => hasSampleForPregame(player.gamesPlayed || 0, MIN_PREGAME_GAMES, MIN_PREGAME_GAMES_FLOOR))
-        .map(player => ({
-          playerId: player.id,
-          name: player.name,
-          position: mapPosition(player.position),
-          heightCm: player.height || undefined,
-          games: player.gamesPlayed || 0,
-          minutes: player.minutes || 0,
-          points: player.points || 0,
-          fga2: (player.shooting?.close?.attempted || 0) + (player.shooting?.mid?.attempted || 0),
-          fgm2: (player.shooting?.close?.made || 0) + (player.shooting?.mid?.made || 0),
-          fga3: player.shooting?.three?.attempted || 0,
-          fgm3: player.shooting?.three?.made || 0,
-          fta: player.shooting?.freeThrow?.attempted || 0,
-          ftm: player.shooting?.freeThrow?.made || 0,
-          oreb: player.rebounds?.offensive || 0,
-          dreb: player.rebounds?.defensive || 0,
-          ast: player.assists || 0,
-          tov: player.turnovers || 0,
-          stl: player.steals || 0,
-          blk: player.blocks || 0,
-          val: (() => {
-            const totalValuation = (player.valuation || 0) * (player.gamesPlayed || 0);
-            return totalValuation > 0 ? totalValuation : computeTotalValuation(player);
-          })(),
-          roles: rolesByPlayerId.get(player.id) ?? [],
-        })),
+        .map(player => {
+          const positionInfo = mapPositionInfo(player.position);
+          return {
+            playerId: player.id,
+            name: player.name,
+            ...positionInfo,
+            heightCm: player.height || undefined,
+            games: player.gamesPlayed || 0,
+            minutes: player.minutes || 0,
+            points: player.points || 0,
+            fga2: (player.shooting?.close?.attempted || 0) + (player.shooting?.mid?.attempted || 0),
+            fgm2: (player.shooting?.close?.made || 0) + (player.shooting?.mid?.made || 0),
+            fga3: player.shooting?.three?.attempted || 0,
+            fgm3: player.shooting?.three?.made || 0,
+            fta: player.shooting?.freeThrow?.attempted || 0,
+            ftm: player.shooting?.freeThrow?.made || 0,
+            oreb: player.rebounds?.offensive || 0,
+            dreb: player.rebounds?.defensive || 0,
+            ast: player.assists || 0,
+            tov: player.turnovers || 0,
+            stl: player.steals || 0,
+            blk: player.blocks || 0,
+            val: (() => {
+              const totalValuation = (player.valuation || 0) * (player.gamesPlayed || 0);
+              return totalValuation > 0 ? totalValuation : computeTotalValuation(player);
+            })(),
+            roles: rolesByPlayerId.get(player.id) ?? [],
+          };
+        }),
         selectedOpponentTeamId,
         excludeGameId,
         teamGamePlayerRows
@@ -1645,10 +1617,11 @@ export function SeasonComparison({
       if (teamId !== selectedOpponentTeamId) return;
       if (seasonPlayerMap.get(row.player_id)?.isActive === false) return;
 
+      const positionInfo = mapPositionInfo(seasonPlayerMap.get(row.player_id)?.position ?? undefined);
       const base = statsMap.get(row.player_id) ?? {
         playerId: row.player_id,
         name: seasonPlayerMap.get(row.player_id)?.name ?? row.player_id,
-        position: mapPosition(seasonPlayerMap.get(row.player_id)?.position ?? 'C'),
+        ...positionInfo,
         heightCm: seasonPlayerMap.get(row.player_id)?.height || undefined,
         games: 0,
         minutes: 0,
@@ -1727,32 +1700,35 @@ export function SeasonComparison({
         activeSeasonPlayers
         .filter(player => player.teamId === resolvedTeamId)
         .filter(player => hasSampleForPregame(player.gamesPlayed || 0, MIN_PREGAME_GAMES, MIN_PREGAME_GAMES_FLOOR))
-        .map(player => ({
-          playerId: player.id,
-          name: player.name,
-          position: mapPosition(player.position),
-          heightCm: player.height || undefined,
-          games: player.gamesPlayed || 0,
-          minutes: player.minutes || 0,
-          points: player.points || 0,
-          fga2: (player.shooting?.close?.attempted || 0) + (player.shooting?.mid?.attempted || 0),
-          fgm2: (player.shooting?.close?.made || 0) + (player.shooting?.mid?.made || 0),
-          fga3: player.shooting?.three?.attempted || 0,
-          fgm3: player.shooting?.three?.made || 0,
-          fta: player.shooting?.freeThrow?.attempted || 0,
-          ftm: player.shooting?.freeThrow?.made || 0,
-          oreb: player.rebounds?.offensive || 0,
-          dreb: player.rebounds?.defensive || 0,
-          ast: player.assists || 0,
-          tov: player.turnovers || 0,
-          stl: player.steals || 0,
-          blk: player.blocks || 0,
-          val: (() => {
-            const totalValuation = (player.valuation || 0) * (player.gamesPlayed || 0);
-            return totalValuation > 0 ? totalValuation : computeTotalValuation(player);
-          })(),
-          roles: rolesByPlayerId.get(player.id) ?? [],
-        })),
+        .map(player => {
+          const positionInfo = mapPositionInfo(player.position);
+          return {
+            playerId: player.id,
+            name: player.name,
+            ...positionInfo,
+            heightCm: player.height || undefined,
+            games: player.gamesPlayed || 0,
+            minutes: player.minutes || 0,
+            points: player.points || 0,
+            fga2: (player.shooting?.close?.attempted || 0) + (player.shooting?.mid?.attempted || 0),
+            fgm2: (player.shooting?.close?.made || 0) + (player.shooting?.mid?.made || 0),
+            fga3: player.shooting?.three?.attempted || 0,
+            fgm3: player.shooting?.three?.made || 0,
+            fta: player.shooting?.freeThrow?.attempted || 0,
+            ftm: player.shooting?.freeThrow?.made || 0,
+            oreb: player.rebounds?.offensive || 0,
+            dreb: player.rebounds?.defensive || 0,
+            ast: player.assists || 0,
+            tov: player.turnovers || 0,
+            stl: player.steals || 0,
+            blk: player.blocks || 0,
+            val: (() => {
+              const totalValuation = (player.valuation || 0) * (player.gamesPlayed || 0);
+              return totalValuation > 0 ? totalValuation : computeTotalValuation(player);
+            })(),
+            roles: rolesByPlayerId.get(player.id) ?? [],
+          };
+        }),
         resolvedTeamId,
         excludeGameId,
         teamGamePlayerRows
@@ -1777,10 +1753,11 @@ export function SeasonComparison({
       if (teamId !== resolvedTeamId) return;
       if (seasonPlayerMap.get(row.player_id)?.isActive === false) return;
 
+      const positionInfo = mapPositionInfo(seasonPlayerMap.get(row.player_id)?.position ?? undefined);
       const base = statsMap.get(row.player_id) ?? {
         playerId: row.player_id,
         name: seasonPlayerMap.get(row.player_id)?.name ?? row.player_id,
-        position: mapPosition(seasonPlayerMap.get(row.player_id)?.position ?? 'C'),
+        ...positionInfo,
         heightCm: seasonPlayerMap.get(row.player_id)?.height || undefined,
         games: 0,
         minutes: 0,

@@ -1,4 +1,5 @@
-export type Position = 'PG' | 'SG' | 'SF' | 'PF' | 'C';
+import type { Position } from './positions';
+export type { Position };
 
 export type RawPlayerSeasonStat = {
   playerId: string;

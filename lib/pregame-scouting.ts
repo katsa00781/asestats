@@ -1,4 +1,5 @@
-export type Position = 'PG' | 'SG' | 'SF' | 'PF' | 'C';
+import { parsePositionBuckets, type Position } from './positions';
+export type { Position };
 
 export type TeamSeasonStat = {
   teamId: string;
@@ -28,6 +29,8 @@ export type PlayerSeasonStat = {
   playerId: string;
   name: string;
   position: Position;
+  positionLabel?: string;
+  positionBuckets?: Position[];
   heightCm?: number;
   games: number;
   minutes: number;
@@ -180,20 +183,35 @@ const BALL_HANDLER_ROLE_HINTS = new Set<string>([
   'Offensive Hub',
 ]);
 
+const getPlayerPositionBuckets = (player: PlayerSeasonStat): Position[] => {
+  if (player.positionBuckets?.length) return player.positionBuckets;
+  const parsedLabel = parsePositionBuckets(player.positionLabel);
+  if (parsedLabel.length > 0) return parsedLabel;
+  const fallback = parsePositionBuckets(player.position);
+  if (fallback.length > 0) return fallback;
+  return player.position ? [player.position] : [];
+};
+
+const playerMatchesPosition = (player: PlayerSeasonStat, position: Position) =>
+  getPlayerPositionBuckets(player).includes(position);
+
+const playerMatchesAnyPosition = (player: PlayerSeasonStat, positions: Position[]) =>
+  positions.some(pos => playerMatchesPosition(player, pos));
+
 // Ensures PG slot stats fall back to combo guards if no natural point guard logged minutes.
 const selectPlayersForPosition = (players: PlayerSeasonStat[], position: Position) => {
-  const primaryMatches = players.filter(player => player.position === position);
+  const primaryMatches = players.filter(player => playerMatchesPosition(player, position));
   if (position !== 'PG') return primaryMatches;
   if (primaryMatches.length > 0) return primaryMatches;
 
   const comboGuards = players.filter(player => {
-    const guardSlot = player.position === 'PG' || player.position === 'SG';
+    const guardSlot = playerMatchesAnyPosition(player, ['PG', 'SG']);
     const handlesBall = (player.roles ?? []).some(role => BALL_HANDLER_ROLE_HINTS.has(role));
     return guardSlot && handlesBall;
   });
   if (comboGuards.length > 0) return comboGuards;
 
-  return players.filter(player => player.position === 'SG');
+  return players.filter(player => playerMatchesPosition(player, 'SG'));
 };
 
 const CRITICAL_MATCHUP_DELTA = -20;
@@ -321,7 +339,9 @@ export const normalizeTeamStats = (raw: TeamSeasonStat): NormalizedTeamStats => 
   const games = raw.games || 1;
   const fga = raw.fga2 + raw.fga3;
   const fgm = raw.fgm2 + raw.fgm3;
-  const pace = (fga + 0.44 * raw.fta + raw.tov) / games;
+  const possessionsTotal = fga + 0.44 * raw.fta + raw.tov - raw.oreb;
+  const possessionsPerGame = games > 0 ? possessionsTotal / games : 0;
+  const pace = Math.max(possessionsPerGame, 0);
   const assistRate = fga > 0 ? raw.ast / fga : 0;
   const turnoverRate = pace > 0 ? (raw.tov / games) / pace : 0;
   const orebRate = (raw.oreb + raw.dreb) > 0 ? raw.oreb / (raw.oreb + raw.dreb) : 0;
@@ -556,9 +576,11 @@ const identifyKeyPlayers = (players: PlayerSeasonStat[], teamUsageShare: number)
 
   const heightByPos = players.reduce((acc, player) => {
     if (player.heightCm && Number.isFinite(player.heightCm)) {
-      acc[player.position] = acc[player.position] || { sum: 0, count: 0 };
-      acc[player.position].sum += player.heightCm;
-      acc[player.position].count += 1;
+      getPlayerPositionBuckets(player).forEach(pos => {
+        acc[pos] = acc[pos] || { sum: 0, count: 0 };
+        acc[pos].sum += player.heightCm;
+        acc[pos].count += 1;
+      });
     }
     return acc;
   }, {} as Record<Position, { sum: number; count: number }>);
@@ -572,7 +594,8 @@ const identifyKeyPlayers = (players: PlayerSeasonStat[], teamUsageShare: number)
     const threePct = player.fga3 > 0 ? (player.fgm3 / player.fga3) * 100 : 0;
     const astTo = player.tov > 0 ? player.ast / player.tov : player.ast;
     const usage = computePlayerUsage(player);
-    const posAvgHeight = avgHeight(player.position);
+    const primaryPos = getPlayerPositionBuckets(player)[0] ?? player.position;
+    const posAvgHeight = avgHeight(primaryPos);
 
     if (usage > mean + sd) primaryScorers.push({ name: player.name, score: usage + player.val * 1.2 });
     if (player.ast >= 3 && astTo >= 1.6) {
@@ -1058,18 +1081,22 @@ export const analyzePreGameScouting = (
 
   const ownHeightByPos = ownPlayers.reduce((acc, player) => {
     if (player.heightCm && Number.isFinite(player.heightCm)) {
-      acc[player.position] = acc[player.position] || { sum: 0, count: 0 };
-      acc[player.position].sum += player.heightCm;
-      acc[player.position].count += 1;
+      getPlayerPositionBuckets(player).forEach(pos => {
+        acc[pos] = acc[pos] || { sum: 0, count: 0 };
+        acc[pos].sum += player.heightCm;
+        acc[pos].count += 1;
+      });
     }
     return acc;
   }, {} as Record<Position, { sum: number; count: number }>);
 
   const opponentHeightByPos = opponentPlayers.reduce((acc, player) => {
     if (player.heightCm && Number.isFinite(player.heightCm)) {
-      acc[player.position] = acc[player.position] || { sum: 0, count: 0 };
-      acc[player.position].sum += player.heightCm;
-      acc[player.position].count += 1;
+      getPlayerPositionBuckets(player).forEach(pos => {
+        acc[pos] = acc[pos] || { sum: 0, count: 0 };
+        acc[pos].sum += player.heightCm;
+        acc[pos].count += 1;
+      });
     }
     return acc;
   }, {} as Record<Position, { sum: number; count: number }>);

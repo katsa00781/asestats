@@ -1,6 +1,7 @@
 import { normalizeRoleKeys } from './player-analysis';
 
-export type Position = 'PG' | 'SG' | 'SF' | 'PF' | 'C';
+import type { Position } from './positions';
+export type { Position };
 
 export type TeamSeasonStat = {
   teamId: string;
@@ -253,9 +254,32 @@ export const normalizeTeamStats = (raw: TeamSeasonStat): NormalizedTeamStats => 
   const hasOpponentShooting = raw.opponent.fga2 + raw.opponent.fga3 > 0;
   const hasOpponentReb = raw.opponent.dreb + raw.opponent.oreb > 0;
   const hasOpponentTo = raw.opponent.tov > 0;
-  const pace = (fga + 0.44 * raw.fta + raw.tov) / games;
+  const computePossessions = (
+    fga2: number,
+    fga3: number,
+    fta: number,
+    oreb: number,
+    tov: number
+  ) => {
+    const totalFga = fga2 + fga3;
+    const attempts = totalFga + 0.44 * fta + tov;
+    const possessions = attempts - oreb;
+    return Math.max(possessions, 0);
+  };
+
+  const teamPossessions = computePossessions(raw.fga2, raw.fga3, raw.fta, raw.oreb, raw.tov);
+  const opponentPossessions = computePossessions(
+    raw.opponent.fga2,
+    raw.opponent.fga3,
+    raw.opponent.fta,
+    raw.opponent.oreb,
+    raw.opponent.tov
+  );
+  const teamPossessionsPerGame = games > 0 ? teamPossessions / games : 0;
+  const opponentPossessionsPerGame = games > 0 ? opponentPossessions / games : 0;
+  const pace = (teamPossessionsPerGame + opponentPossessionsPerGame) / 2;
   const assistRate = fga > 0 ? raw.ast / fga : 0;
-  const turnoverRate = pace > 0 ? (raw.tov / games) / pace : 0;
+  const turnoverRate = teamPossessionsPerGame > 0 ? (raw.tov / games) / teamPossessionsPerGame : 0;
   const orebDenominator = raw.oreb + raw.opponent.dreb;
   const orebRate = orebDenominator > 0 ? raw.oreb / orebDenominator : 0;
   const twoRate = fga > 0 ? raw.fga2 / fga : 0;
@@ -266,8 +290,9 @@ export const normalizeTeamStats = (raw: TeamSeasonStat): NormalizedTeamStats => 
   const valPerGame = raw.val / games;
   const opp2Pct = raw.opponent.fga2 > 0 ? (raw.opponent.fgm2 / raw.opponent.fga2) * 100 : 0;
   const opp3Pct = raw.opponent.fga3 > 0 ? (raw.opponent.fgm3 / raw.opponent.fga3) * 100 : 0;
-  const oppPace = (raw.opponent.fga2 + raw.opponent.fga3 + 0.44 * raw.opponent.fta + raw.opponent.tov) / games;
-  const oppTurnoverRate = oppPace > 0 ? (raw.opponent.tov / games) / oppPace : 0;
+  const oppTurnoverRate = opponentPossessionsPerGame > 0
+    ? (raw.opponent.tov / games) / opponentPossessionsPerGame
+    : 0;
 
   return {
     ...raw,
