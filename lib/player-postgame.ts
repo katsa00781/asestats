@@ -8,6 +8,7 @@ export type PlayerPostGameBreakdown = {
   playerId: string;
   name: string;
   position: Position;
+  isStarter: boolean;
   minutes: number;
   minutesBucket: PlayerMinutesBucket;
   roles: string[];
@@ -35,6 +36,7 @@ export type PlayerPostGameBreakdown = {
 };
 
 export type PlayerPostGameLLMContext = {
+  isStarter: boolean;
   minutesBucket: PlayerMinutesBucket;
   usageTier: PlayerUsageTier;
   usageSharePct: number;
@@ -113,6 +115,16 @@ const mapImpactLabel = (impactClass: PlayerImpactClass) => {
   }
 };
 
+const mapContextualImpactLabel = (impactClass: PlayerImpactClass, context: DerivedPlayerContext) => {
+  if (impactClass === 'engine' && !context.isStarter) {
+    return 'Rotációs hozzájárulás';
+  }
+  if (impactClass === 'support' && context.isStarter && context.minutesBucket === 'heavy') {
+    return 'Stabil alappillér';
+  }
+  return mapImpactLabel(impactClass);
+};
+
 const getFouls = (player: PlayerGameStat) => {
   const candidate = (player as PlayerGameStat & { fouls?: number }).fouls;
   return typeof candidate === 'number' ? candidate : 0;
@@ -126,7 +138,9 @@ const buildStrengths = (player: PlayerGameStat, context: DerivedPlayerContext) =
   if (context.reboundShare >= 0.24 || player.oreb >= 4) strengths.push('Lepattanó fölény, második esélyek');
   if (player.stl + player.blk >= 4) strengths.push('Védekezési playmaker (lopások/blokkok)');
   if (context.valPer36 >= 18) strengths.push('VAL/36 dominancia, meccsszintű impact');
-  if (context.minutesBucket === 'micro' && context.valPer36 >= 16) strengths.push('Padlóról érkező szikra rövid idő alatt');
+  if (!context.isStarter && context.minutesBucket !== 'heavy' && context.valPer36 >= 16) {
+    strengths.push('Padlóról érkező szikra rövid idő alatt');
+  }
   return strengths;
 };
 
@@ -153,6 +167,7 @@ const buildFocus = (issues: string[]) => {
 };
 
 type DerivedPlayerContext = {
+  isStarter: boolean;
   minutesBucket: PlayerMinutesBucket;
   usageTier: PlayerUsageTier;
   usageShare: number;
@@ -171,7 +186,7 @@ const buildImpactTags = (player: PlayerGameStat, context: DerivedPlayerContext) 
   if (player.stl + player.blk >= 4) tags.push('defense');
   if (player.tov >= 4 || context.turnoverShare >= 0.25) tags.push('sloppy');
   if (getFouls(player) >= 4) tags.push('foul_trouble');
-  if (context.minutesBucket === 'micro' && context.valPer36 >= 16) tags.push('spark');
+  if (!context.isStarter && context.minutesBucket !== 'heavy' && context.valPer36 >= 16) tags.push('spark');
   return tags;
 };
 
@@ -209,6 +224,14 @@ const buildSummaryLine = (player: PlayerGameStat, context: DerivedPlayerContext,
 };
 
 export const buildPlayerPostGameReport = (players: PlayerGameStat[]): PlayerPostGameReport => {
+  const starterIds = new Set(
+    [...players]
+      .filter(player => player.minutes > 0)
+      .sort((a, b) => b.minutes - a.minutes)
+      .slice(0, 5)
+      .map(player => player.playerId)
+  );
+
   const totals = players.reduce(
     (acc, player) => {
       const usage = computePlayerUsage(player);
@@ -223,6 +246,7 @@ export const buildPlayerPostGameReport = (players: PlayerGameStat[]): PlayerPost
   );
 
   const breakdowns: PlayerPostGameBreakdown[] = players.map(player => {
+    const isStarter = starterIds.has(player.playerId);
     const minutesBucket = classifyMinutesBucket(player.minutes);
     const usage = computePlayerUsage(player);
     const usageShare = totals.usage > 0 ? usage / totals.usage : 0;
@@ -234,6 +258,7 @@ export const buildPlayerPostGameReport = (players: PlayerGameStat[]): PlayerPost
     const turnoverShare = totals.turnovers > 0 ? player.tov / totals.turnovers : 0;
 
     const context: DerivedPlayerContext = {
+      isStarter,
       minutesBucket,
       usageTier,
       usageShare,
@@ -250,12 +275,13 @@ export const buildPlayerPostGameReport = (players: PlayerGameStat[]): PlayerPost
     const impactTags = buildImpactTags(player, context);
     const impactScore = computeImpactScore(player, context);
     const impactClass = classifyImpact(impactScore, minutesBucket);
-    const impactLabel = mapImpactLabel(impactClass);
+    const impactLabel = mapContextualImpactLabel(impactClass, context);
 
     return {
       playerId: player.playerId,
       name: player.name,
       position: player.position,
+      isStarter,
       minutes: player.minutes,
       minutesBucket,
       roles: player.roles,
@@ -280,6 +306,7 @@ export const buildPlayerPostGameReport = (players: PlayerGameStat[]): PlayerPost
       issues,
       focus,
       llmContext: {
+        isStarter,
         minutesBucket,
         usageTier,
         usageSharePct: round(usageShare * 100, 1),
@@ -314,7 +341,7 @@ export const buildPlayerPostGameReport = (players: PlayerGameStat[]): PlayerPost
   engines.forEach(player => claimed.add(player.playerId));
 
   const sparkPlugs = sortedBreakdowns
-    .filter(player => player.minutesBucket !== 'heavy' && player.impactScore >= 60 && !claimed.has(player.playerId))
+    .filter(player => !player.isStarter && player.minutesBucket !== 'heavy' && player.impactScore >= 60 && !claimed.has(player.playerId))
     .slice(0, 2);
   sparkPlugs.forEach(player => claimed.add(player.playerId));
 

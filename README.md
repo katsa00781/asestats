@@ -1,3 +1,5 @@
+# ASE Stats
+
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
 ## Getting Started
@@ -50,3 +52,27 @@ Fejlesztés közben elérhető az **Import** fülön egy új „Forduló alapú 
 3. Kattints az „Import indítása” gombra – a felület mutatja a futás naplóját és a hibákat is.
 
 Szerveroldalon ugyanaz a Playwright-alapú szkript fut le, így minden extra adat (statisztika táblák, játékos hozzárendelések) ugyanúgy bekerül, mint a teljes szezonos futtatásnál, csak gyorsabban.
+
+## Hunbasket keretfrissítés
+
+A `scrape-hunbasket-rosters.ts` szkript a tabella oldalról indulva minden csapat játékoslistáját beolvassa, majd a Supabase-ben lévő `players` rekordokat szinkronban tartja. Futatás:
+
+```bash
+npx playwright install chromium   # egyszer szükséges
+npm run hunbasket:rosters
+```
+
+### Változók és működés
+
+- `HUNBASKET_SEASON_SLUG`, `HUNBASKET_SEASON_NAME`, `HUNBASKET_SEASON_ID`: ugyanaz mint a meccs importnál, ezek alapján épül fel a csapat-oldalak URL-je és a Supabase szezon azonosító.
+- `HUNBASKET_TEAM_FILTER`: opcionális, vesszővel elválasztva. Csak a megadott csapatok kerülnek feldolgozásra (kis- és nagybetű érzéketlen, ékezetek nélkül is működik).
+- `HUNBASKET_HEADLESS=false`: ha futás közben látni akarod a böngészőt.
+
+### Mit csinál a szkript?
+
+1. A tabella oldalról kiolvassa a csapat neveket és a hozzájuk tartozó `https://hunbasket.hu/csapat/...` linkeket.
+2. Minden csapatnál beolvassa a játékos táblázatot (mezszám, születési év, poszt, magasság, súly).
+3. Supabase-ben a meglévő rekordokat frissíti (név, mezszám, poszt, születési év, magasság, súly, `is_active`), új játékosokat felvesz, a rosterből kihagyottakat pedig inaktiválja.
+4. A szkript az `npm run hunbasket:rosters` parancson keresztül futtatható, és ugyanazokat a Supabase kulcsokat használja, mint a teljes meccs import.
+
+Fejlesztés közben az **Import** fülön egy külön „Hunbasket keret frissítés” kártya is elérhető, amely ugyanezt a Playwright folyamatot futtatja le (csak kiválasztod a szezont, opcionálisan megadsz csapat szűrőt/slugot, majd indítod a folyamatot és élőben látod a naplót).

@@ -182,7 +182,7 @@ export function PlayersImport({
     try {
       let newPlayers = 0;
       let updatedPlayers = 0;
-      let movedPlayers = 0;
+      let duplicateInOtherTeams = 0;
       let deactivatedPlayers = 0;
 
       const buildPlayerKey = (number?: number | null, name?: string | null) => {
@@ -191,6 +191,12 @@ export function PlayersImport({
         const normalizedNumber = typeof number === 'number' ? number : 'unknown';
         return `${normalizedName}::${normalizedNumber}`;
       };
+
+      const normalizePlayerName = (value?: string | null) =>
+        value
+          ?.trim()
+          .toLowerCase()
+          .replace(/\s+/g, ' ') ?? '';
 
       const importedPlayerKeys = new Set<string>();
       const importedNameKeys = new Set<string>();
@@ -204,54 +210,24 @@ export function PlayersImport({
       });
 
       for (const player of parsedPlayers) {
-        // Először keressük meg MINDEN rekordot (név + mezszám + szezon)
-        const { data: allMatchingPlayers } = await supabase
+        // Csak a kiválasztott csapat rekordjait frissítjük, más csapat rekordjait nem mozgatjuk.
+        const { data: allMatchingPlayers, error: matchingError } = await supabase
           .from('players')
-          .select('id, team_id')
+          .select('id, team_id, name')
           .eq('number', player.number)
-          .eq('name', player.name)
           .eq('season_id', targetSeasonId);
 
-        const existingInCurrentTeam = allMatchingPlayers?.find(p => p.team_id === targetTeamId);
-        const existingInOtherTeams = allMatchingPlayers?.filter(p => p.team_id !== targetTeamId) || [];
+        if (matchingError) throw matchingError;
 
-        // Ha van más csapatban - áthelyezzük ide (NEM töröljük, hogy megmaradjanak a statisztikák!)
-        if (existingInOtherTeams.length > 0) {
-          // Csak az elsőt mozgatjuk, a többit töröljük
-          const playerToMove = existingInOtherTeams[0];
-          
-          const { error: moveError } = await supabase
-            .from('players')
-            .update({
-              team_id: targetTeamId,
-              position: player.position,
-              birth_year: player.birthYear,
-              height: player.height,
-              weight: player.weight,
-              is_active: true,
-            })
-            .eq('id', playerToMove.id);
+        const normalizedImportedName = normalizePlayerName(player.name);
+        const nameMatchedPlayers = (allMatchingPlayers || []).filter(
+          p => normalizePlayerName(p.name) === normalizedImportedName
+        );
 
-          if (moveError) throw moveError;
-          movedPlayers++;
+        const existingInCurrentTeam = nameMatchedPlayers.find(p => p.team_id === targetTeamId);
+        const existingInOtherTeams = nameMatchedPlayers.filter(p => p.team_id !== targetTeamId);
 
-          // Ha több duplikátum is van, azokat töröljük
-          for (let i = 1; i < existingInOtherTeams.length; i++) {
-            const duplicate = existingInOtherTeams[i];
-            
-            // Statisztikák átmozgatása az első játékoshoz
-            await supabase
-              .from('player_game_stats')
-              .update({ player_id: playerToMove.id })
-              .eq('player_id', duplicate.id);
-
-            // Duplikátum törlése
-            await supabase
-              .from('players')
-              .delete()
-              .eq('id', duplicate.id);
-          }
-        } else if (existingInCurrentTeam) {
+        if (existingInCurrentTeam) {
           // Frissítjük a jelenlegi csapatban lévő rekordot
           const { error } = await supabase
             .from('players')
@@ -267,6 +243,10 @@ export function PlayersImport({
           if (error) throw error;
           updatedPlayers++;
         } else {
+          if (existingInOtherTeams.length > 0) {
+            duplicateInOtherTeams += existingInOtherTeams.length;
+          }
+
           // Nincs még ilyen játékos - új létrehozása
           const { error } = await supabase
             .from('players')
@@ -305,7 +285,9 @@ export function PlayersImport({
           return !(keepByKey || keepByName);
         }) ?? [];
 
-      if (playersToDeactivate.length > 0) {
+      const isLikelyFullRoster = parsedPlayers.length >= 8;
+
+      if (isLikelyFullRoster && playersToDeactivate.length > 0) {
         const { error: deactivateError } = await supabase
           .from('players')
           .update({ is_active: false })
@@ -321,8 +303,9 @@ export function PlayersImport({
       const messageParts = [];
       if (newPlayers > 0) messageParts.push(`${newPlayers} új játékos`);
       if (updatedPlayers > 0) messageParts.push(`${updatedPlayers} frissítve`);
-      if (movedPlayers > 0) messageParts.push(`${movedPlayers} áthelyezve más csapatból`);
+      if (duplicateInOtherTeams > 0) messageParts.push(`${duplicateInOtherTeams} egyező rekord más csapatban érintetlenül hagyva`);
       if (deactivatedPlayers > 0) messageParts.push(`${deactivatedPlayers} inaktiválva`);
+      if (!isLikelyFullRoster) messageParts.push('inaktiválás kihagyva (részleges lista)');
 
       setMessage({
         type: 'success',
@@ -494,7 +477,8 @@ export function PlayersImport({
 0	player avatar DARTHARD Calvashawn Letre	2000	2	193 cm	86 kg
 3	player avatar PALLAI Tamás Ottó	2001	2	195 cm	88 kg
 4	player avatar BARNES Auston Willis	1991	3-4	202 cm	102 kg`}
-              className="min-h-[200px] bg-slate-800 border-slate-700 text-slate-300 font-mono text-sm"
+              className="bg-slate-800 border-slate-700 text-slate-300 font-mono text-sm"
+              style={{ minHeight: 200 }}
             />
           </div>
 

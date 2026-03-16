@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "hunbasket:import": "tsx scrape-hunbasket.ts"
+    "hunbasket:import": "tsx scrape-hunbasket.ts",
+    "hunbasket:rosters": "tsx scrape-hunbasket-rosters.ts"
   },
   "dependencies": {
     "@radix-ui/react-label": "^2.1.8",

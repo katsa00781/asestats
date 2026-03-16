@@ -121,6 +121,23 @@ const TEAM_FORM_EFG_THRESHOLD = 3;
 const TEAM_FORM_MARGIN_THRESHOLD = 4;
 const HEAD_TO_HEAD_MATCH_WINDOW_MS = 36 * 60 * 60 * 1000; // 36 hours tolerance when pairing mirrored game IDs
 
+const isNegativeDecisiveLabel = (label: string, axis: 'offense' | 'defense') => {
+  const lower = label.toLowerCase();
+  const hasNegativeDelta = /-\d+(?:[.,]\d+)?\s*pp/.test(lower);
+  const hasPositiveDelta = /\+\d+(?:[.,]\d+)?\s*pp/.test(lower);
+
+  if (axis === 'defense') {
+    if (/limit[aá]lt|kontroll|megfog|zavar/.test(lower)) return false;
+    if (/probl[eé]ma|gyenge|romlott|engedett|visszaesett|hi[aá]ny/.test(lower)) return true;
+    if (hasNegativeDelta && !hasPositiveDelta) return true;
+    return false;
+  }
+
+  if (/hi[aá]ny|gyenge|vissza|akadozott|sz[eé]tesett|alacsony|probl[eé]ma/.test(lower)) return true;
+  if (hasNegativeDelta && !hasPositiveDelta) return true;
+  return false;
+};
+
 const roundValue = (value: number, digits = 1) => {
   const factor = Math.pow(10, digits);
   return Math.round(value * factor) / factor;
@@ -3169,7 +3186,7 @@ export function SeasonComparison({
                     })}
                   </div>
                   <div className="text-xs text-slate-500 mt-1">
-                    Válassz ki minden hiányzót, majd zárd a panelt a "Kész" gombbal.
+                    Válassz ki minden hiányzót, majd zárd a panelt a &quot;Kész&quot; gombbal.
                   </div>
                 </>
               )}
@@ -3223,7 +3240,7 @@ export function SeasonComparison({
                     })}
                   </div>
                   <div className="text-xs text-slate-500 mt-1">
-                    A jelöltek nem kerülnek bele a matchup elemzésbe és a GPT jelentésbe; zárd vissza a panelt a "Kész" gombbal.
+                    A jelöltek nem kerülnek bele a matchup elemzésbe és a GPT jelentésbe; zárd vissza a panelt a &quot;Kész&quot; gombbal.
                   </div>
                 </>
               )}
@@ -3859,7 +3876,7 @@ export function SeasonComparison({
                       {decisiveFactorGroups.map(group => (
                         <div
                           key={group.key}
-                          className="rounded-lg border border-slate-800 bg-gradient-to-r from-slate-900/60 to-slate-800/30 p-3"
+                          className="rounded-lg border border-slate-800 bg-linear-to-r from-slate-900/60 to-slate-800/30 p-3"
                         >
                           <div className="flex items-center justify-between text-[11px] uppercase tracking-wide text-slate-400">
                             <span>{group.label}</span>
@@ -3869,7 +3886,7 @@ export function SeasonComparison({
                           </div>
                           <ul className="mt-2 space-y-1">
                             {group.items.map(label => {
-                              const isNegative = /(-|hiány|gyenge|vissza|limit)/i.test(label);
+                              const isNegative = isNegativeDecisiveLabel(label, group.axis);
                               const toneClass = isNegative ? 'text-rose-300' : 'text-emerald-300';
                               const icon = isNegative ? '🔻' : '▲';
                               return (
@@ -4420,7 +4437,7 @@ export function SeasonComparison({
 
               {!incomingEligibility && (
                 <div className="text-xs text-slate-400">
-                  Az elemzéshez legalább 10 meccs és 15 perc/meccs szükséges.
+                  Az elemzéshez legalább 8 meccs és 15 perc/meccs szükséges.
                 </div>
               )}
 

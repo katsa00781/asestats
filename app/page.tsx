@@ -26,6 +26,7 @@ import { Updates } from '@/components/Updates';
 import { GameQuickImport } from '@/components/GameQuickImport';
 import { PlayersImport } from '@/components/PlayersImport';
 import { RoundImport } from '@/components/RoundImport';
+import { RosterImport } from '@/components/RosterImport';
 import type { PlayerTrend } from '@/lib/player-analysis';
 
 export type ShootingStats = {
@@ -947,6 +948,11 @@ export default function Home() {
 
           <TabsContent value="import">
             <div className="space-y-6">
+              <RosterImport
+                onImportComplete={loadData}
+                selectedSeasonId={selectedSeasonId}
+                selectedSeasonName={allSeasons.find(s => s.id === selectedSeasonId)?.name}
+              />
               <RoundImport
                 onImportComplete={loadData}
                 selectedSeasonId={selectedSeasonId}

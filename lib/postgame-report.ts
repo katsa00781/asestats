@@ -680,23 +680,52 @@ const formatPositiveContributorLabel = (player: PlayerGameStat) => {
 const analyzePlayerImpact = (players: PlayerGameStat[]) => {
   const positive: string[] = [];
   const negative: string[] = [];
-  const overperformers: string[] = [];
-  const underperformers: string[] = [];
+  const overperformers: Array<{ name: string; score: number }> = [];
+  const underperformers: Array<{ name: string; score: number }> = [];
+
+  const totalUsage = players.reduce((sum, player) => sum + computePlayerUsage(player), 0);
 
   players.forEach(player => {
     const usage = computePlayerUsage(player);
+    const usageShare = totalUsage > 0 ? usage / totalUsage : 0;
+    const ts = computePlayerTrueShooting(player);
+    const valPer36 = player.minutes > 0 ? (player.val / player.minutes) * 36 : 0;
+
     if (usage >= 10 && player.val <= 5) negative.push(player.name);
     if (usage <= 6 && player.val >= 10) positive.push(formatPositiveContributorLabel(player));
 
-    if (player.val >= 15) overperformers.push(player.name);
-    if (player.val <= 4) underperformers.push(player.name);
+    const qualifiesOverperformer =
+      player.minutes >= 18
+      && (player.val >= 18 || valPer36 >= 20)
+      && (ts >= 0.55 || usageShare >= 0.12);
+
+    if (qualifiesOverperformer) {
+      const score = player.val * 0.5 + valPer36 * 0.35 + ts * 100 * 0.15 + usageShare * 100 * 0.1;
+      overperformers.push({ name: player.name, score });
+    }
+
+    const qualifiesUnderperformer =
+      player.minutes >= 14
+      && player.val <= 3
+      && (ts <= 0.47 || usageShare >= 0.1);
+
+    if (qualifiesUnderperformer) {
+      const score = (4 - player.val) * 2 + Math.max((0.5 - ts) * 100, 0) + usageShare * 100;
+      underperformers.push({ name: player.name, score });
+    }
   });
 
   return {
     positive: positive.slice(0, 3),
     negative: negative.slice(0, 3),
-    overperformers: overperformers.slice(0, 3),
-    underperformers: underperformers.slice(0, 3),
+    overperformers: overperformers
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 3)
+      .map(entry => entry.name),
+    underperformers: underperformers
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 3)
+      .map(entry => entry.name),
   };
 };
 

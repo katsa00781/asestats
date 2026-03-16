@@ -230,7 +230,7 @@ const resolvePositionMetadata = (player: NormalizedStats, raw: RawPlayerSeasonSt
   return { position: bestPosition, buckets };
 };
 
-const REQUIRED_MIN_GAMES = 10;
+const REQUIRED_MIN_GAMES = 8;
 const REQUIRED_MIN_MINUTES_PER_GAME = 15;
 
 const SKILL_LABELS: Record<keyof SkillScores, string> = {
@@ -974,7 +974,6 @@ const buildDetailedLimitations = (
     : 0;
   const paintHeavy = outsidePaintShare <= 0.35;
   const isGuard = player.position === 'PG' || player.position === 'SG';
-  const isWing = player.position === 'SF';
   const isFrontcourt = player.position === 'PF' || player.position === 'C';
 
   if (lowAst && skills.playmaking <= 40) {
