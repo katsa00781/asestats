@@ -24,6 +24,8 @@ const POSITION_TOKEN_MAP: Record<string, Position[]> = {
   KISCSATAR: ['SF'],
   FORWARD: ['SF', 'PF'],
   FORWARDS: ['SF', 'PF'],
+  FORWARDCENTER: ['C', 'PF'],
+  CENTERFORWARD: ['C', 'PF'],
   CSATAR: ['SF', 'PF'],
   F: ['SF', 'PF'],
   GF: ['SG', 'SF'],
@@ -32,7 +34,7 @@ const POSITION_TOKEN_MAP: Record<string, Position[]> = {
   EROCSATAR: ['PF'],
   PF4: ['PF'],
   FC: ['PF', 'C'],
-  CF: ['SF', 'PF'],
+  CF: ['C', 'PF'],
   BIG: ['PF', 'C'],
   BIGMAN: ['PF', 'C'],
   FRONTCOURT: ['PF', 'C'],
@@ -105,6 +107,12 @@ export const parsePositionBuckets = (raw?: string | null): Position[] => {
     if (descriptor.includes('C')) addUniquePositions(buckets, ['C']);
     if (descriptor.includes('G')) addUniquePositions(buckets, ['PG', 'SG']);
     if (descriptor.includes('F')) addUniquePositions(buckets, ['SF', 'PF']);
+  }
+
+  // If descriptor explicitly mentions center (CENTER, C/F, C-F), keep C as primary bucket.
+  const mentionsCenter = descriptor.includes('CENTER') || /(^|[^A-Z])C([^A-Z]|$)/.test(descriptor);
+  if (buckets.includes('C') && mentionsCenter) {
+    return ['C', ...buckets.filter(pos => pos !== 'C')];
   }
 
   return buckets;

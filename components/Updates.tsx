@@ -16,6 +16,15 @@ type UpdateItem = {
 const updates: UpdateItem[] = [
   {
     date: '2026. március 22.',
+    version: '1.7.1',
+    category: 'feature',
+    icon: <Sparkles className="w-5 h-5" />,
+    title: 'Eurobasket auto import: jeloltvalasztas, csapatelozmeny, zaszlok',
+    description:
+      'Az erkezo jatekos import most nev alapjan keres, tobb azonos talalatnal fotoval segitett valasztast ad, majd behuzza a statokat. Megjelenik a jelenlegi es elozo csapat/orszag, orszagzaszloval; javitottuk a pozicio normalizalast (center prioritas) es az import mezok 1 tizedesre kerekitett megjeleniteset.',
+  },
+  {
+    date: '2026. március 22.',
     version: '1.7.0',
     category: 'feature',
     icon: <Calendar className="w-5 h-5" />,

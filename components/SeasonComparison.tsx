@@ -1,6 +1,7 @@
 'use client';
 
 import { TerminologyGlossary } from './TerminologyGlossary';
+import Image from 'next/image';
 
 import { useEffect, useMemo, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
@@ -709,6 +710,57 @@ type IncomingPlayerInput = {
 
 type IncomingField = keyof IncomingPlayerInput | 'rebTotal';
 
+type IncomingEurobasketPayload = {
+  name: string;
+  position?: string;
+  currentTeam?: string;
+  currentCountry?: string;
+  currentCountryFlagUrl?: string;
+  previousTeam?: string;
+  previousCountry?: string;
+  previousCountryFlagUrl?: string;
+  games: number;
+  minutesPerGame: number;
+  pointsPerGame: number;
+  assistsPerGame: number;
+  orebPerGame: number;
+  drebPerGame: number;
+  valuationPerGame: number;
+  twoPct: number;
+  twoAttemptedPerGame: number;
+  threePct: number;
+  threeAttemptedPerGame: number;
+  ftPct: number;
+  ftAttemptedPerGame: number;
+  turnoversPerGame: number;
+  stealsPerGame: number;
+  blocksPerGame: number;
+  foulsCommittedPerGame: number;
+  foulsReceivedPerGame: number;
+  sourceUrl: string;
+  seasonYearUsed: number;
+  usedFallbackSeason: boolean;
+  gamesSampled: number;
+};
+
+type IncomingEurobasketCandidate = {
+  name: string;
+  profileUrl: string;
+  height?: string;
+  position?: string;
+  born?: string;
+  nationality?: string;
+  team?: string;
+  currentTeam?: string;
+  currentCountry?: string;
+  currentCountryFlagUrl?: string;
+  previousTeam?: string;
+  previousCountry?: string;
+  previousCountryFlagUrl?: string;
+  flagUrl?: string;
+  photoUrl?: string;
+};
+
 const DEFAULT_INCOMING_PLAYER: IncomingPlayerInput = {
   name: '',
   position: 'SG',
@@ -732,6 +784,13 @@ const DEFAULT_INCOMING_PLAYER: IncomingPlayerInput = {
   foulsReceivedPerGame: 0,
 };
 
+const INCOMING_PLAYER_PLACEHOLDER = '/player-placeholder.svg';
+
+const isUnavailableIncomingPhoto = (photoUrl?: string) => {
+  if (!photoUrl) return true;
+  return /Not_Available\.jpg|images\/logom1\.jpg/i.test(photoUrl);
+};
+
 export function SeasonComparison({
   allPlayers,
   allSeasons,
@@ -744,11 +803,26 @@ export function SeasonComparison({
 }: SeasonComparisonProps) {
   const [selectedSeasonId, setSelectedSeasonId] = useState(currentSeasonId ?? '');
   const [selectedTeamId, setSelectedTeamId] = useState(currentTeamId ?? 'all');
+  const [activeSection, setActiveSection] = useState<'player' | 'team' | 'pregame' | 'postgame' | 'projection'>('player');
   const [selectedPlayerId, setSelectedPlayerId] = useState('');
   const [selectedOpponentTeamId, setSelectedOpponentTeamId] = useState('');
   const [selectedGameId, setSelectedGameId] = useState('');
   const [incomingPlayer, setIncomingPlayer] = useState<IncomingPlayerInput>(DEFAULT_INCOMING_PLAYER);
   const [focusedIncomingField, setFocusedIncomingField] = useState<IncomingField | null>(null);
+  const [isImportingIncomingPlayer, setIsImportingIncomingPlayer] = useState(false);
+  const [incomingImportError, setIncomingImportError] = useState<string | null>(null);
+  const [incomingImportInfo, setIncomingImportInfo] = useState<string | null>(null);
+  const [incomingImportSource, setIncomingImportSource] = useState<{ url: string; seasonYear: number } | null>(null);
+  const [incomingImportCareer, setIncomingImportCareer] = useState<{
+    currentTeam?: string;
+    currentCountry?: string;
+    currentCountryFlagUrl?: string;
+    previousTeam?: string;
+    previousCountry?: string;
+    previousCountryFlagUrl?: string;
+  } | null>(null);
+  const [incomingCandidates, setIncomingCandidates] = useState<IncomingEurobasketCandidate[]>([]);
+  const [incomingPhotoLoadFailed, setIncomingPhotoLoadFailed] = useState<Record<string, boolean>>({});
   const [useRecentFormPregame, setUseRecentFormPregame] = useState(false);
   const [pregameOwnInjuries, setPregameOwnInjuries] = useState<string[]>([]);
   const [pregameOpponentInjuries, setPregameOpponentInjuries] = useState<string[]>([]);
@@ -1003,15 +1077,151 @@ export function SeasonComparison({
 
   const displayIncomingValue = (field: IncomingField, value: number) => {
     if (focusedIncomingField !== field && (!Number.isFinite(value) || value === 0)) return '';
-    return Number.isFinite(value) ? value : '';
+    if (!Number.isFinite(value)) return '';
+    if (field === 'games') return Math.round(value);
+    return round(value, 1).toFixed(1);
   };
 
   const handleIncomingNumberChange = (field: keyof IncomingPlayerInput, value: string) => {
     const numeric = Number(value);
+    const normalized = Number.isFinite(numeric)
+      ? field === 'games'
+        ? Math.max(0, Math.round(numeric))
+        : Math.max(0, round(numeric, 1))
+      : 0;
+
     setIncomingPlayer(prev => ({
       ...prev,
-      [field]: Number.isFinite(numeric) ? numeric : 0,
+      [field]: normalized,
     }));
+  };
+
+  const applyImportedIncomingPlayer = (imported: IncomingEurobasketPayload) => {
+    setIncomingPlayer(prev => ({
+      ...prev,
+      name: imported.name || prev.name,
+      position: imported.position ? mapPosition(imported.position) : prev.position,
+      games: Math.max(0, Math.round(imported.games || 0)),
+      minutesPerGame: imported.minutesPerGame || 0,
+      pointsPerGame: imported.pointsPerGame || 0,
+      assistsPerGame: imported.assistsPerGame || 0,
+      orebPerGame: imported.orebPerGame || 0,
+      drebPerGame: imported.drebPerGame || 0,
+      valuationPerGame: imported.valuationPerGame || 0,
+      twoPct: imported.twoPct || 0,
+      twoAttemptedPerGame: imported.twoAttemptedPerGame || 0,
+      threePct: imported.threePct || 0,
+      threeAttemptedPerGame: imported.threeAttemptedPerGame || 0,
+      ftPct: imported.ftPct || 0,
+      ftAttemptedPerGame: imported.ftAttemptedPerGame || 0,
+      turnoversPerGame: imported.turnoversPerGame || 0,
+      stealsPerGame: imported.stealsPerGame || 0,
+      blocksPerGame: imported.blocksPerGame || 0,
+      foulsCommittedPerGame: imported.foulsCommittedPerGame || 0,
+      foulsReceivedPerGame: imported.foulsReceivedPerGame || 0,
+    }));
+
+    setIncomingImportSource({ url: imported.sourceUrl, seasonYear: imported.seasonYearUsed });
+    setIncomingImportCareer({
+      currentTeam: imported.currentTeam,
+      currentCountry: imported.currentCountry,
+      currentCountryFlagUrl: imported.currentCountryFlagUrl,
+      previousTeam: imported.previousTeam,
+      previousCountry: imported.previousCountry,
+      previousCountryFlagUrl: imported.previousCountryFlagUrl,
+    });
+
+    const fallbackNote = imported.usedFallbackSeason
+      ? `Nem volt elérhető ${new Date().getFullYear() - 1}-es minta, ezért a profil legfrissebb publikus meccslogját használtam (${imported.gamesSampled} meccs).`
+      : `${imported.seasonYearUsed}-es publikus meccslog alapján importálva (${imported.gamesSampled} meccs).`;
+
+    setIncomingImportInfo(fallbackNote);
+    setIncomingCandidates([]);
+    setIncomingPhotoLoadFailed({});
+  };
+
+  const getCandidatePhotoSrc = (candidate: IncomingEurobasketCandidate) => {
+    if (incomingPhotoLoadFailed[candidate.profileUrl]) return INCOMING_PLAYER_PLACEHOLDER;
+    if (isUnavailableIncomingPhoto(candidate.photoUrl)) return INCOMING_PLAYER_PLACEHOLDER;
+    return candidate.photoUrl as string;
+  };
+
+  const importIncomingPlayerFromEurobasket = async (forcedProfileUrl?: string) => {
+    const name = incomingPlayer.name.trim();
+    if (!name) {
+      setIncomingImportError('Adj meg egy játékosnevet az Eurobasket importhoz.');
+      setIncomingImportInfo(null);
+      setIncomingImportCareer(null);
+      return;
+    }
+
+    setIsImportingIncomingPlayer(true);
+    setIncomingImportError(null);
+    setIncomingImportInfo(null);
+    setIncomingImportCareer(null);
+
+    try {
+      let selectedProfileUrl = forcedProfileUrl;
+
+      if (!selectedProfileUrl) {
+        const searchResponse = await fetch('/api/eurobasket-player-import', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mode: 'search', playerName: name, maxCandidates: 12 }),
+        });
+
+        const searchPayload = await searchResponse.json().catch(() => null) as
+          | { ok: true; candidates: IncomingEurobasketCandidate[]; multiple: boolean }
+          | { ok: false; error?: string }
+          | null;
+
+        if (!searchResponse.ok || !searchPayload || !('ok' in searchPayload) || !searchPayload.ok) {
+          throw new Error((searchPayload && 'error' in searchPayload && searchPayload.error) || 'Nem sikerült játékost keresni Eurobasketen.');
+        }
+
+        if (!searchPayload.candidates || searchPayload.candidates.length === 0) {
+          throw new Error('Nem találtam játékost erre a névre Eurobasketen.');
+        }
+
+        if (searchPayload.candidates.length > 1) {
+          setIncomingCandidates(searchPayload.candidates);
+          setIncomingPhotoLoadFailed({});
+          setIncomingImportInfo('Több azonos nevű játékos található. Válaszd ki a megfelelőt a fotó alapján.');
+          return;
+        }
+
+        selectedProfileUrl = searchPayload.candidates[0].profileUrl;
+      }
+
+      const response = await fetch('/api/eurobasket-player-import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: 'import', playerName: name, profileUrl: selectedProfileUrl }),
+      });
+
+      const payload = await response.json().catch(() => null) as
+        | { ok: true; player: IncomingEurobasketPayload }
+        | { ok: false; error?: string; code?: string; candidates?: IncomingEurobasketCandidate[] }
+        | null;
+
+      if (!response.ok || !payload || !('ok' in payload) || !payload.ok) {
+        if (payload && 'code' in payload && payload.code === 'MULTIPLE_MATCHES' && Array.isArray(payload.candidates)) {
+          setIncomingCandidates(payload.candidates);
+          setIncomingPhotoLoadFailed({});
+          setIncomingImportInfo('Több azonos nevű játékos található. Válaszd ki a megfelelőt a fotó alapján.');
+          return;
+        }
+        throw new Error((payload && 'error' in payload && payload.error) || 'Nem sikerült importálni a játékos statisztikát.');
+      }
+
+      applyImportedIncomingPlayer(payload.player);
+    } catch (error) {
+      setIncomingImportError(error instanceof Error ? error.message : 'Ismeretlen hiba történt az import során.');
+      setIncomingImportSource(null);
+      setIncomingImportCareer(null);
+    } finally {
+      setIsImportingIncomingPlayer(false);
+    }
   };
 
   const incomingRaw = useMemo<RawPlayerSeasonStat | null>(() => {
@@ -2866,6 +3076,12 @@ export function SeasonComparison({
       .filter(isEligibleSample).length;
   }, [league, seasonPlayers, resolvedSeasonId]);
 
+  const showPlayerSection = activeSection === 'player';
+  const showTeamSection = activeSection === 'team';
+  const showPregameSection = activeSection === 'pregame';
+  const showPostgameSection = activeSection === 'postgame';
+  const showProjectionSection = activeSection === 'projection';
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center gap-3">
@@ -2895,7 +3111,7 @@ export function SeasonComparison({
                 <SelectTrigger className="bg-slate-800 border-slate-700 w-full">
                   <SelectValue placeholder="Válassz szezont..." className="truncate" />
                 </SelectTrigger>
-                <SelectContent className="bg-slate-800 border-slate-700">
+                <SelectContent className="bg-slate-800 border-slate-700 text-slate-100 placeholder:text-slate-400">
                   {allSeasons.map(season => (
                     <SelectItem key={season.id} value={String(season.id)}>
                       {season.name}
@@ -2923,7 +3139,7 @@ export function SeasonComparison({
                 <SelectTrigger className="bg-slate-800 border-slate-700 w-full">
                   <SelectValue placeholder="Válassz csapatot..." className="truncate" />
                 </SelectTrigger>
-                <SelectContent className="bg-slate-800 border-slate-700">
+                <SelectContent className="bg-slate-800 border-slate-700 text-slate-100 placeholder:text-slate-400">
                   <SelectItem value="all">Összes csapat</SelectItem>
                   {allTeams.map(team => (
                     <SelectItem key={team.id} value={team.id}>
@@ -2944,7 +3160,7 @@ export function SeasonComparison({
                 <SelectTrigger className="bg-slate-800 border-slate-700 w-full">
                   <SelectValue placeholder="Válassz játékost..." className="truncate" />
                 </SelectTrigger>
-                <SelectContent className="bg-slate-800 border-slate-700">
+                <SelectContent className="bg-slate-800 border-slate-700 text-slate-100 placeholder:text-slate-400">
                   {filteredPlayers.map(player => (
                     <SelectItem key={`${player.id}-${player.seasonId}`} value={player.id}>
                       #{player.number} {player.name} ({player.teamName})
@@ -2963,7 +3179,36 @@ export function SeasonComparison({
       </Card>
       <TerminologyGlossary />
 
-      {selectedPlayer && !analysis && (
+      <Card className="bg-slate-900 border-slate-800">
+        <CardContent className="p-3">
+          <div className="flex flex-wrap gap-2">
+            {[
+              { key: 'player', label: 'Játékos' },
+              { key: 'team', label: 'Csapat' },
+              { key: 'pregame', label: 'Pre-game' },
+              { key: 'postgame', label: 'Post-game' },
+              { key: 'projection', label: 'Előrejelzés' },
+            ].map(item => (
+              <Button
+                key={item.key}
+                type="button"
+                size="sm"
+                variant={activeSection === item.key ? 'default' : 'outline'}
+                className={
+                  activeSection === item.key
+                    ? 'bg-cyan-600 hover:bg-cyan-500 text-white'
+                    : 'border-slate-700 text-slate-300 hover:bg-slate-800'
+                }
+                onClick={() => setActiveSection(item.key as typeof activeSection)}
+              >
+                {item.label}
+              </Button>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      {showPlayerSection && selectedPlayer && !analysis && (
         <Card className="bg-slate-900 border-slate-800">
           <CardContent className="p-6 text-sm text-slate-300">
             A kiválasztott játékos nem felel meg a minimum mintaszűrésnek.
@@ -2971,7 +3216,7 @@ export function SeasonComparison({
         </Card>
       )}
 
-      {analysis && selectedPlayer && (
+      {showPlayerSection && analysis && selectedPlayer && (
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
           <div className="xl:col-span-2 space-y-6">
             <Card className="bg-slate-900 border-slate-800">
@@ -3155,7 +3400,7 @@ export function SeasonComparison({
         </div>
       )}
 
-      <Card className="bg-slate-900 border-slate-800">
+      {showTeamSection && <Card className="bg-slate-900 border-slate-800">
         <CardHeader>
           <CardTitle className="text-slate-50">Csapat elemzés</CardTitle>
         </CardHeader>
@@ -3470,9 +3715,9 @@ export function SeasonComparison({
             </div>
           )}
         </CardContent>
-      </Card>
+      </Card>}
 
-      <Card className="bg-slate-900 border-slate-800">
+      {showProjectionSection && <Card className="bg-slate-900 border-slate-800">
         <CardHeader>
           <CardTitle className="text-slate-50">Várható alapszakasz végeredmény (modell)</CardTitle>
         </CardHeader>
@@ -3573,9 +3818,9 @@ export function SeasonComparison({
             </>
           )}
         </CardContent>
-      </Card>
+      </Card>}
 
-      <Card className="bg-slate-900 border-slate-800">
+      {showPregameSection && <Card className="bg-slate-900 border-slate-800">
         <CardHeader>
           <CardTitle className="text-slate-50">Pre-game elemzés</CardTitle>
         </CardHeader>
@@ -3587,7 +3832,7 @@ export function SeasonComparison({
                 <SelectTrigger className="bg-slate-800 border-slate-700 w-full">
                   <SelectValue placeholder="Válassz ellenfelet..." className="truncate" />
                 </SelectTrigger>
-                <SelectContent className="bg-slate-800 border-slate-700">
+                <SelectContent className="bg-slate-800 border-slate-700 text-slate-100 placeholder:text-slate-400">
                   {allTeams
                     .filter(team => team.id !== resolvedTeamId)
                     .map(team => (
@@ -4192,9 +4437,9 @@ export function SeasonComparison({
             )}
           </div>
         </CardContent>
-      </Card>
+      </Card>}
 
-      <Card className="bg-slate-900 border-slate-800">
+      {showPostgameSection && <Card className="bg-slate-900 border-slate-800">
         <CardHeader>
           <CardTitle className="text-slate-50">Post-game jelentés</CardTitle>
         </CardHeader>
@@ -4206,7 +4451,7 @@ export function SeasonComparison({
                 <SelectTrigger className="bg-slate-800 border-slate-700 w-full">
                   <SelectValue placeholder="Válassz meccset..." className="truncate" />
                 </SelectTrigger>
-                <SelectContent className="bg-slate-800 border-slate-700">
+                <SelectContent className="bg-slate-800 border-slate-700 text-slate-100 placeholder:text-slate-400">
                   {games.map(game => (
                     <SelectItem key={game.id} value={game.id}>
                       {game.date} • {game.opponent}
@@ -4550,9 +4795,9 @@ export function SeasonComparison({
             </div>
           )}
         </CardContent>
-      </Card>
+      </Card>}
 
-      <Card className="bg-slate-900 border-slate-800">
+      {showPostgameSection && <Card className="bg-slate-900 border-slate-800">
         <CardHeader>
           <CardTitle className="text-slate-50">Szöveges mérkőzés-elemzés (GPT)</CardTitle>
         </CardHeader>
@@ -4612,9 +4857,9 @@ export function SeasonComparison({
             </div>
           )}
         </CardContent>
-      </Card>
+      </Card>}
 
-      {!selectedPlayer && (
+      {showPlayerSection && !selectedPlayer && (
         <Card className="bg-slate-900 border-slate-800">
           <CardContent className="p-6 text-sm text-slate-300">
             Válassz szezont, csapatot és játékost a scouting szintű elemzéshez.
@@ -4622,25 +4867,23 @@ export function SeasonComparison({
         </Card>
       )}
 
-      <Card className="bg-slate-900 border-slate-800">
-        <CardHeader>
-          <CardTitle className="text-slate-50">Fogalmak (röviden)</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2 text-sm text-slate-300">
-          <div><span className="text-slate-200 font-medium">Pace (tempó):</span> dobáskísérlet + 0.44×büntető + labdaeladás, meccsenként.</div>
-          <div><span className="text-slate-200 font-medium">eFG%:</span> dobáshatékonyság, ahol a tripla 1.5-nek számít.</div>
-          <div><span className="text-slate-200 font-medium">Assist rate:</span> gólpassz / dobáskísérlet arány.</div>
-          <div><span className="text-slate-200 font-medium">TO rate:</span> labdaeladás arány a tempóhoz viszonyítva.</div>
-          <div><span className="text-slate-200 font-medium">3P/FT rate:</span> triplák/büntetők aránya az összes dobáskísérlethez.</div>
-          <div><span className="text-slate-200 font-medium">Usage proxy:</span> FGA + 0.44×FTA + TO – támadó terheltség becslése.</div>
-        </CardContent>
-      </Card>
+      {showPlayerSection && (
+        <details className="rounded-lg border border-slate-800 bg-slate-900 px-4 py-3">
+          <summary className="cursor-pointer text-slate-100 font-medium">Fogalmak (röviden)</summary>
+          <div className="mt-3 space-y-2 text-sm text-slate-300">
+            <div><span className="text-slate-200 font-medium">Pace (tempó):</span> dobáskísérlet + 0.44×büntető + labdaeladás, meccsenként.</div>
+            <div><span className="text-slate-200 font-medium">eFG%:</span> dobáshatékonyság, ahol a tripla 1.5-nek számít.</div>
+            <div><span className="text-slate-200 font-medium">Assist rate:</span> gólpassz / dobáskísérlet arány.</div>
+            <div><span className="text-slate-200 font-medium">TO rate:</span> labdaeladás arány a tempóhoz viszonyítva.</div>
+            <div><span className="text-slate-200 font-medium">3P/FT rate:</span> triplák/büntetők aránya az összes dobáskísérlethez.</div>
+            <div><span className="text-slate-200 font-medium">Usage proxy:</span> FGA + 0.44×FTA + TO – támadó terheltség becslése.</div>
+          </div>
+        </details>
+      )}
 
-      <Card className="bg-slate-900 border-slate-800">
-        <CardHeader>
-          <CardTitle className="text-slate-50">Érkező játékos előzetes elemzése</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
+      {showPlayerSection && <details className="rounded-lg border border-slate-800 bg-slate-900 px-4 py-3" open>
+        <summary className="cursor-pointer text-slate-100 font-medium">Érkező játékos előzetes elemzése</summary>
+        <div className="mt-3 space-y-4">
           {!benchmarks && (
             <div className="text-sm text-slate-300">Válassz szezont az előzetes elemzéshez.</div>
           )}
@@ -4654,8 +4897,19 @@ export function SeasonComparison({
                     value={incomingPlayer.name}
                     onChange={(e) => setIncomingPlayer(prev => ({ ...prev, name: e.target.value }))}
                     placeholder="Játékos neve"
-                    className="bg-slate-800 border-slate-700"
+                    className="bg-slate-800 border-slate-700 text-slate-100 placeholder:text-slate-400"
                   />
+                  <div className="mt-2 flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      className="bg-slate-800 text-slate-200 hover:bg-slate-700"
+                      onClick={() => importIncomingPlayerFromEurobasket()}
+                      disabled={isImportingIncomingPlayer || !incomingPlayer.name.trim()}
+                    >
+                      {isImportingIncomingPlayer ? 'Eurobasket import...' : 'Eurobasket auto import'}
+                    </Button>
+                  </div>
                 </div>
                 <div>
                   <label className="text-xs text-slate-400 mb-1 block">Poszt</label>
@@ -4666,7 +4920,7 @@ export function SeasonComparison({
                     <SelectTrigger className="bg-slate-800 border-slate-700 w-full">
                       <SelectValue placeholder="Válassz posztot" />
                     </SelectTrigger>
-                    <SelectContent className="bg-slate-800 border-slate-700">
+                    <SelectContent className="bg-slate-800 border-slate-700 text-slate-100 placeholder:text-slate-400">
                       <SelectItem value="PG">Irányító</SelectItem>
                       <SelectItem value="SG">Dobóhátvéd</SelectItem>
                       <SelectItem value="SF">Bedobó</SelectItem>
@@ -4685,7 +4939,7 @@ export function SeasonComparison({
                     onFocus={() => setFocusedIncomingField('games')}
                     onBlur={() => setFocusedIncomingField(null)}
                     onChange={(e) => handleIncomingNumberChange('games', e.target.value)}
-                    className="bg-slate-800 border-slate-700"
+                    className="bg-slate-800 border-slate-700 text-slate-100 placeholder:text-slate-400"
                   />
                 </div>
                 <div>
@@ -4698,7 +4952,7 @@ export function SeasonComparison({
                     onFocus={() => setFocusedIncomingField('minutesPerGame')}
                     onBlur={() => setFocusedIncomingField(null)}
                     onChange={(e) => handleIncomingNumberChange('minutesPerGame', e.target.value)}
-                    className="bg-slate-800 border-slate-700"
+                    className="bg-slate-800 border-slate-700 text-slate-100 placeholder:text-slate-400"
                   />
                 </div>
               </div>
@@ -4714,7 +4968,7 @@ export function SeasonComparison({
                     onFocus={() => setFocusedIncomingField('pointsPerGame')}
                     onBlur={() => setFocusedIncomingField(null)}
                     onChange={(e) => handleIncomingNumberChange('pointsPerGame', e.target.value)}
-                    className="bg-slate-800 border-slate-700"
+                    className="bg-slate-800 border-slate-700 text-slate-100 placeholder:text-slate-400"
                   />
                 </div>
                 <div>
@@ -4727,7 +4981,7 @@ export function SeasonComparison({
                     onFocus={() => setFocusedIncomingField('assistsPerGame')}
                     onBlur={() => setFocusedIncomingField(null)}
                     onChange={(e) => handleIncomingNumberChange('assistsPerGame', e.target.value)}
-                    className="bg-slate-800 border-slate-700"
+                    className="bg-slate-800 border-slate-700 text-slate-100 placeholder:text-slate-400"
                   />
                 </div>
                 <div>
@@ -4748,7 +5002,7 @@ export function SeasonComparison({
                       const dreb = total - oreb;
                       setIncomingPlayer(prev => ({ ...prev, orebPerGame: round(oreb, 1), drebPerGame: round(dreb, 1) }));
                     }}
-                    className="bg-slate-800 border-slate-700"
+                    className="bg-slate-800 border-slate-700 text-slate-100 placeholder:text-slate-400"
                   />
                   <div className="text-[10px] text-slate-500">OREB/DREB arány automatikusan megtartva.</div>
                 </div>
@@ -4762,7 +5016,7 @@ export function SeasonComparison({
                     onFocus={() => setFocusedIncomingField('valuationPerGame')}
                     onBlur={() => setFocusedIncomingField(null)}
                     onChange={(e) => handleIncomingNumberChange('valuationPerGame', e.target.value)}
-                    className="bg-slate-800 border-slate-700"
+                    className="bg-slate-800 border-slate-700 text-slate-100 placeholder:text-slate-400"
                   />
                 </div>
               </div>
@@ -4779,7 +5033,7 @@ export function SeasonComparison({
                       onFocus={() => setFocusedIncomingField('twoPct')}
                       onBlur={() => setFocusedIncomingField(null)}
                       onChange={(e) => handleIncomingNumberChange('twoPct', e.target.value)}
-                      className="bg-slate-800 border-slate-700"
+                      className="bg-slate-800 border-slate-700 text-slate-100 placeholder:text-slate-400"
                     />
                     <Input
                       type="number"
@@ -4789,7 +5043,7 @@ export function SeasonComparison({
                       onFocus={() => setFocusedIncomingField('twoAttemptedPerGame')}
                       onBlur={() => setFocusedIncomingField(null)}
                       onChange={(e) => handleIncomingNumberChange('twoAttemptedPerGame', e.target.value)}
-                      className="bg-slate-800 border-slate-700"
+                      className="bg-slate-800 border-slate-700 text-slate-100 placeholder:text-slate-400"
                     />
                   </div>
                 </div>
@@ -4804,7 +5058,7 @@ export function SeasonComparison({
                       onFocus={() => setFocusedIncomingField('threePct')}
                       onBlur={() => setFocusedIncomingField(null)}
                       onChange={(e) => handleIncomingNumberChange('threePct', e.target.value)}
-                      className="bg-slate-800 border-slate-700"
+                      className="bg-slate-800 border-slate-700 text-slate-100 placeholder:text-slate-400"
                     />
                     <Input
                       type="number"
@@ -4814,7 +5068,7 @@ export function SeasonComparison({
                       onFocus={() => setFocusedIncomingField('threeAttemptedPerGame')}
                       onBlur={() => setFocusedIncomingField(null)}
                       onChange={(e) => handleIncomingNumberChange('threeAttemptedPerGame', e.target.value)}
-                      className="bg-slate-800 border-slate-700"
+                      className="bg-slate-800 border-slate-700 text-slate-100 placeholder:text-slate-400"
                     />
                   </div>
                 </div>
@@ -4829,7 +5083,7 @@ export function SeasonComparison({
                       onFocus={() => setFocusedIncomingField('ftPct')}
                       onBlur={() => setFocusedIncomingField(null)}
                       onChange={(e) => handleIncomingNumberChange('ftPct', e.target.value)}
-                      className="bg-slate-800 border-slate-700"
+                      className="bg-slate-800 border-slate-700 text-slate-100 placeholder:text-slate-400"
                     />
                     <Input
                       type="number"
@@ -4839,7 +5093,7 @@ export function SeasonComparison({
                       onFocus={() => setFocusedIncomingField('ftAttemptedPerGame')}
                       onBlur={() => setFocusedIncomingField(null)}
                       onChange={(e) => handleIncomingNumberChange('ftAttemptedPerGame', e.target.value)}
-                      className="bg-slate-800 border-slate-700"
+                      className="bg-slate-800 border-slate-700 text-slate-100 placeholder:text-slate-400"
                     />
                   </div>
                 </div>
@@ -4856,7 +5110,7 @@ export function SeasonComparison({
                     onFocus={() => setFocusedIncomingField('turnoversPerGame')}
                     onBlur={() => setFocusedIncomingField(null)}
                     onChange={(e) => handleIncomingNumberChange('turnoversPerGame', e.target.value)}
-                    className="bg-slate-800 border-slate-700"
+                    className="bg-slate-800 border-slate-700 text-slate-100 placeholder:text-slate-400"
                   />
                 </div>
                 <div>
@@ -4869,7 +5123,7 @@ export function SeasonComparison({
                     onFocus={() => setFocusedIncomingField('stealsPerGame')}
                     onBlur={() => setFocusedIncomingField(null)}
                     onChange={(e) => handleIncomingNumberChange('stealsPerGame', e.target.value)}
-                    className="bg-slate-800 border-slate-700"
+                    className="bg-slate-800 border-slate-700 text-slate-100 placeholder:text-slate-400"
                   />
                 </div>
                 <div>
@@ -4882,7 +5136,7 @@ export function SeasonComparison({
                     onFocus={() => setFocusedIncomingField('blocksPerGame')}
                     onBlur={() => setFocusedIncomingField(null)}
                     onChange={(e) => handleIncomingNumberChange('blocksPerGame', e.target.value)}
-                    className="bg-slate-800 border-slate-700"
+                    className="bg-slate-800 border-slate-700 text-slate-100 placeholder:text-slate-400"
                   />
                 </div>
                 <div>
@@ -4896,7 +5150,7 @@ export function SeasonComparison({
                       onFocus={() => setFocusedIncomingField('foulsCommittedPerGame')}
                       onBlur={() => setFocusedIncomingField(null)}
                       onChange={(e) => handleIncomingNumberChange('foulsCommittedPerGame', e.target.value)}
-                      className="bg-slate-800 border-slate-700"
+                      className="bg-slate-800 border-slate-700 text-slate-100 placeholder:text-slate-400"
                     />
                     <Input
                       type="number"
@@ -4906,11 +5160,164 @@ export function SeasonComparison({
                       onFocus={() => setFocusedIncomingField('foulsReceivedPerGame')}
                       onBlur={() => setFocusedIncomingField(null)}
                       onChange={(e) => handleIncomingNumberChange('foulsReceivedPerGame', e.target.value)}
-                      className="bg-slate-800 border-slate-700"
+                      className="bg-slate-800 border-slate-700 text-slate-100 placeholder:text-slate-400"
                     />
                   </div>
                 </div>
               </div>
+
+              {incomingImportError && (
+                <div className="text-xs text-rose-300 bg-rose-950/30 border border-rose-800 rounded-md px-3 py-2">
+                  {incomingImportError}
+                </div>
+              )}
+
+              {incomingImportInfo && (
+                <div className="text-xs text-emerald-300 bg-emerald-950/30 border border-emerald-800 rounded-md px-3 py-2 space-y-1">
+                  <div>{incomingImportInfo}</div>
+                  {incomingImportCareer && (
+                    <div className="text-emerald-200/90 space-y-1">
+                      <div>
+                        Jelenlegi: {incomingImportCareer.currentTeam || '-'}
+                        {incomingImportCareer.currentCountry ? (
+                          <span className="inline-flex items-center gap-1 ml-1">
+                            {incomingImportCareer.currentCountryFlagUrl && (
+                              <Image
+                                src={incomingImportCareer.currentCountryFlagUrl}
+                                alt={incomingImportCareer.currentCountry}
+                                width={14}
+                                height={10}
+                                className="h-2.5 w-3.5 rounded-[2px] object-cover"
+                                unoptimized
+                              />
+                            )}
+                            <span>({incomingImportCareer.currentCountry})</span>
+                          </span>
+                        ) : ''}
+                      </div>
+                      <div>
+                        Elozo: {incomingImportCareer.previousTeam || '-'}
+                        {incomingImportCareer.previousCountry ? (
+                          <span className="inline-flex items-center gap-1 ml-1">
+                            {incomingImportCareer.previousCountryFlagUrl && (
+                              <Image
+                                src={incomingImportCareer.previousCountryFlagUrl}
+                                alt={incomingImportCareer.previousCountry}
+                                width={14}
+                                height={10}
+                                className="h-2.5 w-3.5 rounded-[2px] object-cover"
+                                unoptimized
+                              />
+                            )}
+                            <span>({incomingImportCareer.previousCountry})</span>
+                          </span>
+                        ) : ''}
+                      </div>
+                    </div>
+                  )}
+                  {incomingImportSource && (
+                    <a
+                      href={incomingImportSource.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="underline text-emerald-200"
+                    >
+                      Forras profil ({incomingImportSource.seasonYear})
+                    </a>
+                  )}
+                </div>
+              )}
+
+              {incomingCandidates.length > 1 && (
+                <div className="rounded-md border border-slate-700 bg-slate-950/40 p-3 space-y-3">
+                  <div className="text-xs text-slate-300">Valaszd ki a megfelelo jatekost:</div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                    {incomingCandidates.map(candidate => (
+                      <div
+                        key={candidate.profileUrl}
+                        className="rounded-md border border-slate-700 bg-slate-900/70 p-3 space-y-2"
+                      >
+                        <div className="flex items-start gap-3">
+                          <Image
+                            src={getCandidatePhotoSrc(candidate)}
+                            alt={candidate.name}
+                            width={64}
+                            height={64}
+                            className="h-16 w-16 rounded object-cover border border-slate-700 bg-slate-800"
+                            loading="lazy"
+                            unoptimized
+                            onError={() => {
+                              setIncomingPhotoLoadFailed(prev => {
+                                if (prev[candidate.profileUrl]) return prev;
+                                return { ...prev, [candidate.profileUrl]: true };
+                              });
+                            }}
+                          />
+                          <div className="text-xs text-slate-200 space-y-1">
+                            <div className="font-semibold text-slate-100">{candidate.name}</div>
+                            <div>{candidate.position || '-'} {candidate.height ? `• ${candidate.height} cm` : ''}</div>
+                            <div>Szuletett: {candidate.born || '-'}</div>
+                            <div className="text-slate-300">{candidate.nationality || '-'}</div>
+                            <div className="text-slate-400">Jelenlegi: {candidate.currentTeam || candidate.team || '-'}</div>
+                            <div className="text-slate-400 inline-flex items-center gap-1">
+                              <span>Orszag:</span>
+                              {(candidate.currentCountryFlagUrl || candidate.flagUrl) && (
+                                <Image
+                                  src={candidate.currentCountryFlagUrl || candidate.flagUrl || INCOMING_PLAYER_PLACEHOLDER}
+                                  alt={candidate.currentCountry || candidate.nationality || 'Orszag zaszlo'}
+                                  width={14}
+                                  height={10}
+                                  className="h-2.5 w-3.5 rounded-[2px] object-cover"
+                                  unoptimized
+                                />
+                              )}
+                              <span>{candidate.currentCountry || candidate.nationality || '-'}</span>
+                            </div>
+                            <div className="text-slate-500">
+                              Elozo: {candidate.previousTeam || '-'}
+                              {candidate.previousCountry ? (
+                                <span className="inline-flex items-center gap-1 ml-1">
+                                  {candidate.previousCountryFlagUrl && (
+                                    <Image
+                                      src={candidate.previousCountryFlagUrl}
+                                      alt={candidate.previousCountry}
+                                      width={14}
+                                      height={10}
+                                      className="h-2.5 w-3.5 rounded-[2px] object-cover"
+                                      unoptimized
+                                    />
+                                  )}
+                                  <span>({candidate.previousCountry})</span>
+                                </span>
+                              ) : ''}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="secondary"
+                            className="bg-slate-800 text-slate-200 hover:bg-slate-700"
+                            onClick={() => importIncomingPlayerFromEurobasket(candidate.profileUrl)}
+                            disabled={isImportingIncomingPlayer}
+                          >
+                            Ezt importalom
+                          </Button>
+                          <a
+                            href={candidate.profileUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-xs text-slate-300 underline"
+                          >
+                            Profil
+                          </a>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {!incomingEligibility && (
                 <div className="text-xs text-slate-400">
@@ -5026,8 +5433,8 @@ export function SeasonComparison({
               )}
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </details>}
 
       <div className="flex justify-end">
         <Button variant="secondary" className="bg-slate-800 text-slate-200" disabled>
