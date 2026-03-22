@@ -1,13 +1,4 @@
 -- Duplikátum javítás - 2. passz (ugyanarra a meccsre duplikált stat sorok merge)
---
--- Cél:
--- 1) Ugyanazon csapat+szezon+mezszám+név_key duplikátumoknál
---    a canonical + duplicate player_game_stats sorokat game_id szerint összeolvasztani.
--- 2) A duplicate player_game_stats sorokat törölni, majd a maradék nem ütköző sorokat átmozgatni.
--- 3) Stat nélküli duplikátum players sorokat inaktiválni.
---
--- Fontos: a merge GREATEST logikát használ a szám mezőknél,
--- így nem csökkenhet adat, csak a nagyobb érték marad.
 
 BEGIN;
 

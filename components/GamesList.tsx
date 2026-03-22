@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { Calendar, Users, Trophy, TrendingDown, Trash2, Loader2, Edit, Save, X, Eye } from 'lucide-react';
-import { TeamGame } from '@/app/page';
+import { TeamGame, UpcomingFixture } from '@/app/page';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { Input } from './ui/input';
@@ -12,10 +12,11 @@ import { GameDetails } from './GameDetails';
 
 type GamesListProps = {
   games: TeamGame[];
+  upcomingFixtures?: UpcomingFixture[];
   onGameDeleted?: () => void;
 };
 
-export function GamesList({ games, onGameDeleted }: GamesListProps) {
+export function GamesList({ games, upcomingFixtures = [], onGameDeleted }: GamesListProps) {
   const [deletingGameId, setDeletingGameId] = useState<string | null>(null);
   const [editingGameId, setEditingGameId] = useState<string | null>(null);
   const [viewingGameId, setViewingGameId] = useState<string | null>(null);
@@ -115,7 +116,7 @@ export function GamesList({ games, onGameDeleted }: GamesListProps) {
     }
   };
 
-  if (games.length === 0) {
+  if (games.length === 0 && upcomingFixtures.length === 0) {
     return (
       <Card className="bg-slate-900 border-slate-800">
         <CardContent className="py-12">
@@ -140,7 +141,56 @@ export function GamesList({ games, onGameDeleted }: GamesListProps) {
         <p className="text-sm sm:text-base text-slate-400">Összesen {games.length} meccs</p>
       </div>
 
-      <div className="grid gap-3 sm:gap-4">
+      {upcomingFixtures.length > 0 && (
+        <Card className="bg-slate-900 border-slate-800">
+          <CardHeader>
+            <CardTitle className="text-slate-50 text-lg">Következő mérkőzések</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {upcomingFixtures.map(fixture => {
+              const date = fixture.gameDate
+                ? new Date(fixture.gameDate).toLocaleDateString('hu-HU', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric',
+                  })
+                : 'Ismeretlen dátum';
+
+              return (
+                <div
+                  key={fixture.id}
+                  className="rounded-md border border-cyan-700/40 bg-cyan-950/20 px-4 py-3 text-sm"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="font-medium text-slate-100">
+                      {fixture.homeTeamName} vs {fixture.awayTeamName}
+                    </div>
+                    <Badge variant="secondary" className="bg-slate-800 text-cyan-200">
+                      {fixture.round ? `${fixture.round}. forduló` : 'Forduló n.a.'}
+                    </Badge>
+                  </div>
+                  <div className="mt-1 text-slate-300">{date}</div>
+                  {fixture.status === 'postponed' && (
+                    <div className="mt-1 text-xs text-amber-300">Halasztott mérkőzés</div>
+                  )}
+                </div>
+              );
+            })}
+          </CardContent>
+        </Card>
+      )}
+
+      {games.length === 0 && (
+        <Card className="bg-slate-900 border-slate-800">
+          <CardContent className="py-8">
+            <div className="text-center text-slate-400">
+              Nincs még lejátszott meccs a kiválasztott szűrőre.
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {games.length > 0 && <div className="grid gap-3 sm:gap-4">
         {games.map((game) => {
           const isWin = game.result === 'win';
           const date = new Date(game.date).toLocaleDateString('hu-HU', {
@@ -347,8 +397,9 @@ export function GamesList({ games, onGameDeleted }: GamesListProps) {
           );
         })}
       </div>
+            }
 
-      {/* Összefoglaló */}
+      {/* Összefoglaló  */}
       <Card className="bg-slate-900 border-slate-800 mt-4 sm:mt-6">
         <CardHeader>
           <CardTitle className="text-slate-50 text-base sm:text-lg">Összefoglaló</CardTitle>

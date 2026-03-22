@@ -24,12 +24,19 @@ type StandingRow = {
 
 type StandingData = {
   id: string;
+  season_id?: string;
   matchday: number;
   date: string;
   data: StandingRow[];
 };
 
-export function StandingsView({ onRefresh }: { onRefresh?: number }) {
+type StandingsViewProps = {
+  onRefresh?: number;
+  selectedSeasonId?: string | null;
+  selectedSeasonName?: string;
+};
+
+export function StandingsView({ onRefresh, selectedSeasonId, selectedSeasonName }: StandingsViewProps) {
   const [standings, setStandings] = useState<StandingData[]>([]);
   const [selectedMatchday, setSelectedMatchday] = useState<string>('');
   const [currentStanding, setCurrentStanding] = useState<StandingRow[]>([]);
@@ -37,10 +44,20 @@ export function StandingsView({ onRefresh }: { onRefresh?: number }) {
 
   const loadStandings = async () => {
     setIsLoading(true);
+
+    if (!selectedSeasonId) {
+      setStandings([]);
+      setSelectedMatchday('');
+      setCurrentStanding([]);
+      setIsLoading(false);
+      return;
+    }
+
     try {
       const { data, error } = await supabase
         .from('standings')
         .select('*')
+        .eq('season_id', selectedSeasonId)
         .order('matchday', { ascending: false });
 
       if (error) throw error;
@@ -61,7 +78,7 @@ export function StandingsView({ onRefresh }: { onRefresh?: number }) {
 
   useEffect(() => {
     loadStandings();
-  }, [onRefresh]);
+  }, [onRefresh, selectedSeasonId]);
 
   useEffect(() => {
     if (selectedMatchday) {
@@ -103,7 +120,9 @@ export function StandingsView({ onRefresh }: { onRefresh?: number }) {
         <CardContent className="py-12">
           <p className="text-center text-slate-400">Még nincs mentett tabella.</p>
           <p className="text-center text-slate-500 text-sm mt-2">
-            Importálj egy tabellát a kezdéshez.
+            {selectedSeasonId
+              ? 'Importálj egy tabellát a kezdéshez.'
+              : 'Előbb válassz szezont a tabella megjelenítéséhez.'}
           </p>
         </CardContent>
       </Card>
@@ -117,11 +136,11 @@ export function StandingsView({ onRefresh }: { onRefresh?: number }) {
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <CardTitle className="flex items-center gap-2">
               <Trophy className="h-5 w-5" />
-              Bajnokság Tabella
+              Bajnokság Tabella{selectedSeasonName ? ` - ${selectedSeasonName}` : ''}
             </CardTitle>
             <div className="flex items-center gap-2">
               <Select value={selectedMatchday} onValueChange={setSelectedMatchday}>
-                <SelectTrigger className="w-full sm:w-[180px] bg-slate-800 border-slate-700 text-slate-300">
+                <SelectTrigger className="w-full sm:w-45 bg-slate-800 border-slate-700 text-slate-300">
                   <SelectValue placeholder="Válassz fordulót" />
                 </SelectTrigger>
                 <SelectContent className="bg-slate-800 border-slate-700">
@@ -142,7 +161,7 @@ export function StandingsView({ onRefresh }: { onRefresh?: number }) {
                 <thead>
                   <tr className="border-b-2 border-slate-300">
                     <th className="text-left p-2 sm:p-3 font-semibold sticky left-0 bg-slate-900 z-10">H.</th>
-                    <th className="text-left p-2 sm:p-3 font-semibold sticky left-8 sm:left-12 bg-slate-900 z-10 min-w-[150px] sm:min-w-[200px]">Csapat</th>
+                    <th className="text-left p-2 sm:p-3 font-semibold sticky left-8 sm:left-12 bg-slate-900 z-10 min-w-37.5 sm:min-w-50">Csapat</th>
                     <th className="text-center p-2 sm:p-3 font-semibold">M</th>
                     <th className="text-center p-2 sm:p-3 font-semibold hidden sm:table-cell">%</th>
                     <th className="text-center p-2 sm:p-3 font-semibold">PT</th>

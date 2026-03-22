@@ -25,7 +25,13 @@ type StandingRow = {
   last5: string;
 };
 
-export function StandingsImport({ onImportComplete }: { onImportComplete?: () => void }) {
+type StandingsImportProps = {
+  onImportComplete?: () => void;
+  selectedSeasonId?: string | null;
+  selectedSeasonName?: string;
+};
+
+export function StandingsImport({ onImportComplete, selectedSeasonId, selectedSeasonName }: StandingsImportProps) {
   const [textData, setTextData] = useState('');
   const [matchday, setMatchday] = useState('');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
@@ -81,6 +87,11 @@ export function StandingsImport({ onImportComplete }: { onImportComplete?: () =>
   };
 
   const handleImport = async () => {
+    if (!selectedSeasonId) {
+      toast.error('Válassz szezont a tabella importálásához!');
+      return;
+    }
+
     if (!textData.trim()) {
       toast.error('Nincs beillesztett adat!');
       return;
@@ -106,6 +117,7 @@ export function StandingsImport({ onImportComplete }: { onImportComplete?: () =>
       const { data: existing } = await supabase
         .from('standings')
         .select('id')
+        .eq('season_id', selectedSeasonId)
         .eq('matchday', parseInt(matchday))
         .single();
 
@@ -118,6 +130,7 @@ export function StandingsImport({ onImportComplete }: { onImportComplete?: () =>
             data: standings,
             updated_at: new Date().toISOString(),
           })
+          .eq('season_id', selectedSeasonId)
           .eq('matchday', parseInt(matchday));
 
         if (updateError) throw updateError;
@@ -127,6 +140,7 @@ export function StandingsImport({ onImportComplete }: { onImportComplete?: () =>
         const { error: insertError } = await supabase
           .from('standings')
           .insert({
+            season_id: selectedSeasonId,
             matchday: parseInt(matchday),
             date,
             data: standings,
@@ -163,6 +177,10 @@ export function StandingsImport({ onImportComplete }: { onImportComplete?: () =>
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
+          <p className="text-xs text-slate-500">
+            Aktív szezon: {selectedSeasonName || 'nincs kiválasztva'}
+          </p>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="matchday">Forduló</Label>
@@ -202,7 +220,7 @@ export function StandingsImport({ onImportComplete }: { onImportComplete?: () =>
 
           <Button 
             onClick={handleImport} 
-            disabled={isImporting || !textData.trim() || !matchday.trim()}
+            disabled={isImporting || !selectedSeasonId || !textData.trim() || !matchday.trim()}
             className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-600 disabled:opacity-50"
           >
             {isImporting ? 'Importálás...' : 'Importálás'}
@@ -226,7 +244,7 @@ export function StandingsImport({ onImportComplete }: { onImportComplete?: () =>
                 <thead>
                   <tr className="border-b">
                     <th className="text-left p-2 sm:p-2">H.</th>
-                    <th className="text-left p-2 sm:p-2 min-w-[120px]">Csapat</th>
+                    <th className="text-left p-2 sm:p-2 min-w-30">Csapat</th>
                     <th className="text-center p-2 sm:p-2">M</th>
                     <th className="text-center p-2 sm:p-2 hidden sm:table-cell">%</th>
                     <th className="text-center p-2 sm:p-2">PT</th>

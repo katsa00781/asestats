@@ -15,6 +15,51 @@ type UpdateItem = {
 
 const updates: UpdateItem[] = [
   {
+    date: '2026. március 22.',
+    version: '1.7.0',
+    category: 'feature',
+    icon: <Calendar className="w-5 h-5" />,
+    title: 'Menetrend import + következő meccsek',
+    description:
+      'Az Import fül új "Menetrend import" panelt kapott, ami a Hunbasket teljes menetrendből betölti a közelgő meccseket is. A Meccsek fülön külön blokkban jelennek meg a következő mérkőzések (forduló, párosítás, dátum).',
+  },
+  {
+    date: '2026. március 22.',
+    version: '1.7.0',
+    category: 'feature',
+    icon: <Trophy className="w-5 h-5" />,
+    title: 'Várható alapszakasz végeredmény előrejelzés',
+    description:
+      'Az Elemzések oldalon új projektált tabella kártya készült. A rendszer a legfrissebb állásból és a hátralévő menetrendből becsli a várható helyezéseket, plusz győzelmeket és a lehetséges playoff párosítást.',
+  },
+  {
+    date: '2026. március 22.',
+    version: '1.6.6',
+    category: 'fix',
+    icon: <Users className="w-5 h-5" />,
+    title: 'Post-game pozitív hatás: névfeloldás javítás',
+    description:
+      'Javítva lett egy hiba, ahol a pozitív hatás listában játékosnév helyett belső azonosító jelent meg. A névfeloldás most több forrásból fallbackel, így stabilan a játékosnév látszik.',
+  },
+  {
+    date: '2026. március 22.',
+    version: '1.6.6',
+    category: 'fix',
+    icon: <BarChart3 className="w-5 h-5" />,
+    title: 'Last 5 játékos trend: hiányzó utolsó meccs javítása',
+    description:
+      'A játékos elemzés Last 5 kártyája és trendje most közvetlen game-row adatokból épül, így nem marad ki a legutóbbi mérkőzés és pontosabb lett a teljesítménygörbe.',
+  },
+  {
+    date: '2026. március 22.',
+    version: '1.6.6',
+    category: 'improvement',
+    icon: <TrendingUp className="w-5 h-5" />,
+    title: 'Import megbízhatóság: játékos párosítás finomhangolás',
+    description:
+      'A JSON/Hunbasket importnál a játékos-egyeztetés mezszám + normalizált név alapon erősítve lett, csökkentve a hibás csapat/játékos hozzárendelések esélyét. A szezonon belüli duplikátum-kezelési folyamat is finomodott.',
+  },
+  {
     date: '2026. február 8.',
     version: '1.6.3',
     category: 'feature',
@@ -247,7 +292,7 @@ export function Updates() {
             <span className="text-slate-100 font-medium">Vizualizációk:</span> radarok, trendek, oszlopdiagramok (dobásprofil, hatékonyság, kulcsmutatók), összehasonlítások.
           </div>
           <div>
-            <span className="text-slate-100 font-medium">Importok:</span> Hunbasket forduló alapú import, gyors meccs import, JSON import, játékos- és tabella-import.
+            <span className="text-slate-100 font-medium">Importok:</span> Hunbasket forduló alapú import, menetrend import (következő meccsekkel), gyors meccs import, JSON import, játékos- és tabella-import.
           </div>
           <div>
             <span className="text-slate-100 font-medium">Menedszment:</span> játékos- és meccskezelés, törlések, szezon- és csapatválasztás.
@@ -258,7 +303,7 @@ export function Updates() {
         </CardContent>
       </Card>
 
-      <Card className="bg-gradient-to-br from-emerald-900/20 to-blue-900/20 border-emerald-500/30">
+      <Card className="bg-linear-to-br from-emerald-900/20 to-blue-900/20 border-emerald-500/30">
         <CardHeader>
           <CardTitle className="text-slate-50 flex items-center gap-2">
             <TrendingUp className="text-emerald-400" size={20} />

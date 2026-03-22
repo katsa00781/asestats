@@ -496,19 +496,40 @@ const scrapeGameDetails = async (page: Page, link: GameLink): Promise<ScrapedGam
 
 const ensurePlayerRecord = async (player: PlayerStats, teamId: string, seasonId: string): Promise<string> => {
   const playerName = cleanPlayerName(player.name);
+  const normalizedIncomingName = normalizeName(playerName);
 
-  const { data: existingPlayers, error } = await supabase
+  const { data: sameNumberPlayers, error: sameNumberError } = await supabase
     .from('players')
-    .select('id')
-    .eq('name', playerName)
+    .select('id, name, number')
+    .eq('number', player.number)
     .eq('season_id', seasonId)
     .eq('team_id', teamId);
 
-  if (error) {
-    throw new Error(`Játékos lekérdezési hiba (${playerName}): ${error.message}`);
+  if (sameNumberError) {
+    throw new Error(`Játékos lekérdezési hiba (${playerName}): ${sameNumberError.message}`);
   }
 
-  const exact = existingPlayers?.[0];
+  const exactByNumberAndName = (sameNumberPlayers || []).find(
+    candidate => normalizeName(candidate.name) === normalizedIncomingName
+  );
+  if (exactByNumberAndName) {
+    return exactByNumberAndName.id;
+  }
+
+  const { data: sameNamePlayers, error: sameNameError } = await supabase
+    .from('players')
+    .select('id, name, number')
+    .eq('season_id', seasonId)
+    .eq('team_id', teamId)
+    .ilike('name', playerName);
+
+  if (sameNameError) {
+    throw new Error(`Játékos név szerinti lekérdezési hiba (${playerName}): ${sameNameError.message}`);
+  }
+
+  const exact = (sameNamePlayers || []).find(
+    candidate => normalizeName(candidate.name) === normalizedIncomingName
+  );
   if (exact) {
     return exact.id;
   }

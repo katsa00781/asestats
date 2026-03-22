@@ -14,7 +14,7 @@ BEGIN;
 
 CREATE TEMP TABLE IF NOT EXISTS _dup_fix_params (
   target_season_name text NOT NULL
-) ON COMMIT DROP;
+) ON COMMIT PRESERVE ROWS;
 
 TRUNCATE TABLE _dup_fix_params;
 INSERT INTO _dup_fix_params (target_season_name)

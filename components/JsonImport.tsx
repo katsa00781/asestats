@@ -95,6 +95,14 @@ export function JsonImport({ onImportComplete, lastImportedGame, selectedSeasonI
   const [showPreview, setShowPreview] = useState(false);
   const [previewData, setPreviewData] = useState<ParsedPlayerData[]>([]);
 
+  const normalizePlayerNameForMatch = (value?: string | null) =>
+    value
+      ?.toLowerCase()
+      .normalize('NFD')
+      .replace(/\p{Diacritic}/gu, '')
+      .replace(/\s+/g, ' ')
+      .trim() ?? '';
+
   // Szezonok és csapatok betöltése
   useEffect(() => {
     async function fetchData() {
@@ -633,13 +641,11 @@ export function JsonImport({ onImportComplete, lastImportedGame, selectedSeasonI
 
       // Ha létező meccset használunk
       if (useExistingGame && selectedGameId) {
-        gameId = selectedGameId;
-        
         // Betöltjük a meccs adatait
         const { data: gameData, error: gameError } = await supabase
           .from('games')
           .select('*')
-          .eq('id', gameId)
+          .eq('id', selectedGameId)
           .single();
 
         if (gameError || !gameData) {
@@ -648,7 +654,68 @@ export function JsonImport({ onImportComplete, lastImportedGame, selectedSeasonI
           return;
         }
 
-        importingTeamId = gameData.our_team_id;
+        const resolvedHomeTeamId = homeTeamId || (gameData.home_away === 'home' ? gameData.our_team_id : '');
+        const resolvedAwayTeamId = awayTeamId || (gameData.home_away === 'away' ? gameData.our_team_id : '');
+        importingTeamId = currentImportTeam === 'home' ? resolvedHomeTeamId : resolvedAwayTeamId;
+
+        if (!importingTeamId) {
+          toast.error('Nem sikerült meghatározni az importálandó csapatot. Ellenőrizd a hazai/vendég csapat kiválasztását!');
+          setIsLoading(false);
+          return;
+        }
+
+        const opponentTeamId = currentImportTeam === 'home' ? resolvedAwayTeamId : resolvedHomeTeamId;
+        const opponentTeamName = teams.find(team => team.id === opponentTeamId)?.name || gameData.opponent;
+
+        const homeScoreNum = parseInt(homeScore || '0', 10);
+        const awayScoreNum = parseInt(awayScore || '0', 10);
+        const importingTeamIsHome = currentImportTeam === 'home';
+        const ourScoreNum = importingTeamIsHome ? homeScoreNum : awayScoreNum;
+        const oppScoreNum = importingTeamIsHome ? awayScoreNum : homeScoreNum;
+        const result = ourScoreNum > oppScoreNum ? 'win' : 'loss';
+
+        const { data: targetGame, error: targetGameError } = await supabase
+          .from('games')
+          .select('id')
+          .eq('date', gameData.date)
+          .eq('season_id', gameData.season_id)
+          .eq('our_team_id', importingTeamId)
+          .eq('opponent', opponentTeamName)
+          .maybeSingle();
+
+        if (targetGameError) {
+          toast.error(`Hiba a cél meccs azonosításakor: ${targetGameError.message}`);
+          setIsLoading(false);
+          return;
+        }
+
+        if (targetGame) {
+          gameId = targetGame.id;
+        } else {
+          const { data: createdGame, error: createGameError } = await supabase
+            .from('games')
+            .insert({
+              date: gameData.date,
+              opponent: opponentTeamName,
+              home_away: importingTeamIsHome ? 'home' : 'away',
+              our_score: ourScoreNum,
+              opp_score: oppScoreNum,
+              result,
+              round: gameData.round,
+              season_id: gameData.season_id,
+              our_team_id: importingTeamId,
+            })
+            .select('id')
+            .single();
+
+          if (createGameError || !createdGame) {
+            toast.error(`Hiba a cél meccs létrehozásakor: ${createGameError?.message || 'ismeretlen hiba'}`);
+            setIsLoading(false);
+            return;
+          }
+
+          gameId = createdGame.id;
+        }
         
         // Ellenőrizzük, van-e már statisztika ehhez a meccshez
         const { count } = await supabase
@@ -755,20 +822,59 @@ export function JsonImport({ onImportComplete, lastImportedGame, selectedSeasonI
 
       // 3. Játékosok ellenőrzése és beszúrása - SZEZON ÉS CSAPAT SZERINT!
       for (const player of players) {
-        // Ellenőrizzük, létezik-e már a játékos EBBEN A SZEZONBAN ÉS CSAPATBAN
-        const { data: existingPlayer } = await supabase
+        const normalizedIncomingName = normalizePlayerNameForMatch(player.name);
+
+        // Első kör: mezszám szerinti találatok a csapatban/szezonban.
+        const { data: sameNumberPlayers, error: sameNumberError } = await supabase
           .from('players')
-          .select('id')
+          .select('id, name, number')
           .eq('number', player.number)
           .eq('season_id', selectedSeasonId)
-          .eq('team_id', importingTeamId)
-          .single();
+          .eq('team_id', importingTeamId);
+
+        if (sameNumberError) {
+          console.error(`Hiba a játékos lekérdezésekor (${player.name}):`, sameNumberError);
+          continue;
+        }
+
+        let matchedPlayer: { id: string; name: string; number: number | null } | null = (sameNumberPlayers || []).find(
+          candidate => normalizePlayerNameForMatch(candidate.name) === normalizedIncomingName
+        ) || sameNumberPlayers?.[0] || null;
+
+        // Második kör: ha nincs mezszámos találat, név szerinti egyezés.
+        if (!matchedPlayer) {
+          const { data: sameNamePlayers, error: sameNameError } = await supabase
+            .from('players')
+            .select('id, name, number')
+            .eq('season_id', selectedSeasonId)
+            .eq('team_id', importingTeamId)
+            .ilike('name', player.name);
+
+          if (sameNameError) {
+            console.error(`Hiba a név szerinti játékos lekérdezésekor (${player.name}):`, sameNameError);
+          } else {
+            matchedPlayer = (sameNamePlayers || []).find(
+              candidate => normalizePlayerNameForMatch(candidate.name) === normalizedIncomingName
+            ) || null;
+          }
+        }
 
         let playerId: string;
 
-        if (existingPlayer) {
-          playerId = existingPlayer.id;
+        if (matchedPlayer) {
+          playerId = matchedPlayer.id;
           console.log(`Játékos már létezik: #${player.number} - ${player.name}`);
+
+          if (normalizePlayerNameForMatch(matchedPlayer.name) !== normalizedIncomingName) {
+            const { error: renameError } = await supabase
+              .from('players')
+              .update({ name: player.name })
+              .eq('id', playerId);
+
+            if (renameError) {
+              console.warn(`Névformátum frissítés nem sikerült (${player.name}):`, renameError.message);
+            }
+          }
         } else {
           // Megpróbáljuk meghatározni a pozíciót a mezo alapján (alapértelmezett: G)
           let position: 'G' | 'F' | 'C' = 'G';
@@ -804,7 +910,7 @@ export function JsonImport({ onImportComplete, lastImportedGame, selectedSeasonI
           .select('id')
           .eq('game_id', gameId)
           .eq('player_id', playerId)
-          .single();
+          .maybeSingle();
 
         if (existingStat) {
           console.log(`Statisztika már létezik ehhez a játékoshoz ebben a meccsen: ${player.name}`);

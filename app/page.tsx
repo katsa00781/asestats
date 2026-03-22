@@ -27,6 +27,7 @@ import { GameQuickImport } from '@/components/GameQuickImport';
 import { PlayersImport } from '@/components/PlayersImport';
 import { RoundImport } from '@/components/RoundImport';
 import { RosterImport } from '@/components/RosterImport';
+import { FixturesImport } from '@/components/FixturesImport';
 import type { PlayerTrend } from '@/lib/player-analysis';
 
 export type ShootingStats = {
@@ -138,6 +139,19 @@ export type GameAggregate = {
   avgValuation: number;
 };
 
+export type UpcomingFixture = {
+  id: string;
+  gameDate: string;
+  round: number | null;
+  homeTeamId: string;
+  awayTeamId: string;
+  homeTeamName: string;
+  awayTeamName: string;
+  status: 'scheduled' | 'played' | 'postponed' | 'cancelled';
+  homeScore: number | null;
+  awayScore: number | null;
+};
+
 // Supabase típusok
 type SupabasePlayerStat = {
   player_id: string;
@@ -217,6 +231,10 @@ type SupabasePlayerGameStat = {
     date: string;
     opponent: string;
   };
+  players?: {
+    team_id?: string | null;
+    name?: string | null;
+  } | null;
 };
 
 type SupabasePlayerSeasonGameStat = {
@@ -252,7 +270,8 @@ export default function Home() {
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
   const [allSeasons, setAllSeasons] = useState<{id: string; name: string}[]>([]);
   const [allTeams, setAllTeams] = useState<{id: string; name: string}[]>([]);
-    const [playerGameStats, setPlayerGameStats] = useState<SupabasePlayerGameStat[]>([]);
+  const [playerGameStats, setPlayerGameStats] = useState<SupabasePlayerGameStat[]>([]);
+  const [upcomingFixtures, setUpcomingFixtures] = useState<UpcomingFixture[]>([]);
   const [lastImportedGame, setLastImportedGame] = useState<{
     date: string;
     homeTeamName: string;
@@ -467,6 +486,42 @@ export default function Home() {
         if (gamesError) throw gamesError;
         console.log('✅ Games loaded:', gamesData?.length, 'games');
 
+        const today = new Date().toISOString().split('T')[0];
+        const { data: fixturesData, error: fixturesError } = await supabase
+          .from('league_fixtures')
+          .select('id, game_date, round, home_team_id, away_team_id, status, home_score, away_score')
+          .eq('season_id', selectedSeasonId)
+          .or(`home_team_id.eq.${selectedTeamId},away_team_id.eq.${selectedTeamId}`)
+          .in('status', ['scheduled', 'postponed'])
+          .gte('game_date', today)
+          .order('game_date', { ascending: true })
+          .limit(12);
+
+        if (fixturesError) throw fixturesError;
+
+        const teamNameMap = new Map(allTeams.map(team => [team.id, team.name]));
+        const mappedFixtures: UpcomingFixture[] = (fixturesData || []).map((fixture: {
+          id: string;
+          game_date: string;
+          round: number | null;
+          home_team_id: string;
+          away_team_id: string;
+          status: 'scheduled' | 'played' | 'postponed' | 'cancelled';
+          home_score: number | null;
+          away_score: number | null;
+        }) => ({
+          id: fixture.id,
+          gameDate: fixture.game_date,
+          round: fixture.round,
+          homeTeamId: fixture.home_team_id,
+          awayTeamId: fixture.away_team_id,
+          homeTeamName: teamNameMap.get(fixture.home_team_id) || 'Ismeretlen csapat',
+          awayTeamName: teamNameMap.get(fixture.away_team_id) || 'Ismeretlen csapat',
+          status: fixture.status,
+          homeScore: fixture.home_score,
+          awayScore: fixture.away_score,
+        }));
+
         // 2. Játékosok aggregált statisztikáinak betöltése a view-ból - szűrés szezon és csapat szerint
         const { data: playerStatsData, error: statsError } = await supabase
           .from('player_season_stats_by_season')
@@ -520,7 +575,7 @@ export default function Home() {
           .select(`
             *,
             games:game_id (date, opponent, season_id),
-            players:player_id (team_id)
+            players:player_id (team_id, name)
           `)
           .in('game_id', allGameIds.length > 0 ? allGameIds : ['00000000-0000-0000-0000-000000000000']); // Ha nincs meccs, üres eredmény
 
@@ -748,6 +803,7 @@ export default function Home() {
 
         setPlayers(playersConverted);
         setGames(gamesConverted);
+        setUpcomingFixtures(mappedFixtures);
       } catch (error) {
         console.error('Hiba az adatok betöltésekor:', error);
       }
@@ -906,14 +962,23 @@ export default function Home() {
 
           <TabsContent value="standings">
             <div className="space-y-6">
-              <StandingsView onRefresh={standingsRefresh} />
-              <StandingsImport onImportComplete={() => setStandingsRefresh(prev => prev + 1)} />
+              <StandingsView
+                onRefresh={standingsRefresh}
+                selectedSeasonId={selectedSeasonId}
+                selectedSeasonName={allSeasons.find(s => s.id === selectedSeasonId)?.name}
+              />
+              <StandingsImport
+                onImportComplete={() => setStandingsRefresh(prev => prev + 1)}
+                selectedSeasonId={selectedSeasonId}
+                selectedSeasonName={allSeasons.find(s => s.id === selectedSeasonId)?.name}
+              />
             </div>
           </TabsContent>
 
           <TabsContent value="games">
             <GamesList 
               games={games} 
+              upcomingFixtures={upcomingFixtures}
               onGameDeleted={loadData}
             />
           </TabsContent>
@@ -948,6 +1013,11 @@ export default function Home() {
 
           <TabsContent value="import">
             <div className="space-y-6">
+              <FixturesImport
+                onImportComplete={loadData}
+                selectedSeasonId={selectedSeasonId}
+                selectedSeasonName={allSeasons.find(s => s.id === selectedSeasonId)?.name}
+              />
               <RosterImport
                 onImportComplete={loadData}
                 selectedSeasonId={selectedSeasonId}
