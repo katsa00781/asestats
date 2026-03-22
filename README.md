@@ -76,3 +76,5 @@ npm run hunbasket:rosters
 4. A szkript az `npm run hunbasket:rosters` parancson keresztül futtatható, és ugyanazokat a Supabase kulcsokat használja, mint a teljes meccs import.
 
 Fejlesztés közben az **Import** fülön egy külön „Hunbasket keret frissítés” kártya is elérhető, amely ugyanezt a Playwright folyamatot futtatja le (csak kiválasztod a szezont, opcionálisan megadsz csapat szűrőt/slugot, majd indítod a folyamatot és élőben látod a naplót).
+
+build
