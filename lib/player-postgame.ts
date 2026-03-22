@@ -67,6 +67,21 @@ export type PlayerPostGameReport = {
   };
 };
 
+export type PlayerShotMapStats = {
+  attempts: number;
+  made: number;
+  rimAttempts: number;
+  rimMade: number;
+  midAttempts: number;
+  midMade: number;
+  threeAttempts: number;
+  threeMade: number;
+  corner3Attempts: number;
+  corner3Made: number;
+};
+
+export type PlayerShotMapContext = Record<string, PlayerShotMapStats>;
+
 const round = (value: number, digits = 1) => {
   const factor = Math.pow(10, digits);
   return Math.round(value * factor) / factor;
@@ -166,6 +181,41 @@ const buildFocus = (issues: string[]) => {
   return Array.from(new Set(mapped));
 };
 
+const appendShotMapSignals = (
+  strengths: string[],
+  issues: string[],
+  focus: string[],
+  shotMap: PlayerShotMapStats | undefined
+) => {
+  if (!shotMap || shotMap.attempts < 4) return;
+
+  const rimRate = shotMap.rimAttempts / shotMap.attempts;
+  const rimPct = shotMap.rimAttempts > 0 ? (shotMap.rimMade / shotMap.rimAttempts) * 100 : 0;
+  const midRate = shotMap.midAttempts / shotMap.attempts;
+  const midPct = shotMap.midAttempts > 0 ? (shotMap.midMade / shotMap.midAttempts) * 100 : 0;
+  const threeRate = shotMap.threeAttempts / shotMap.attempts;
+  const threePct = shotMap.threeAttempts > 0 ? (shotMap.threeMade / shotMap.threeAttempts) * 100 : 0;
+  const corner3Pct = shotMap.corner3Attempts > 0 ? (shotMap.corner3Made / shotMap.corner3Attempts) * 100 : 0;
+
+  if (rimRate >= 0.45 && rimPct >= 58) {
+    strengths.push('Dobastérkép szerint gyűrűtámadásból magas hatékonyság');
+  }
+
+  if (shotMap.corner3Attempts >= 2 && corner3Pct >= 38) {
+    strengths.push('Saroktriplákból stabil hatékonyság');
+  }
+
+  if (midRate >= 0.45 && shotMap.midAttempts >= 4 && midPct <= 38) {
+    issues.push('Középtávoli dobásszelekció túl magas, alacsony hatékonysággal');
+    focus.push('Kevesebb korai középtávoli, több festék- vagy kick-out alapú döntés.');
+  }
+
+  if (threeRate >= 0.5 && shotMap.threeAttempts >= 5 && threePct <= 30) {
+    issues.push('Magas periméter volumen, de gyenge tripla-hatékonyság');
+    focus.push('Periméter minőségjavítás: ritmushelyzetek és labda nélküli előny teremtése.');
+  }
+};
+
 type DerivedPlayerContext = {
   isStarter: boolean;
   minutesBucket: PlayerMinutesBucket;
@@ -223,7 +273,10 @@ const buildSummaryLine = (player: PlayerGameStat, context: DerivedPlayerContext,
   return `${parts.join(' • ')} | TS ${round(context.tsPct, 1)}% • Usage ${(usageShare * 100).toFixed(1)}%`;
 };
 
-export const buildPlayerPostGameReport = (players: PlayerGameStat[]): PlayerPostGameReport => {
+export const buildPlayerPostGameReport = (
+  players: PlayerGameStat[],
+  shotMapContext?: PlayerShotMapContext
+): PlayerPostGameReport => {
   const starterIds = new Set(
     [...players]
       .filter(player => player.minutes > 0)
@@ -272,6 +325,7 @@ export const buildPlayerPostGameReport = (players: PlayerGameStat[]): PlayerPost
     const strengths = buildStrengths(player, context);
     const issues = buildIssues(player, context);
     const focus = buildFocus(issues);
+    appendShotMapSignals(strengths, issues, focus, shotMapContext?.[player.playerId]);
     const impactTags = buildImpactTags(player, context);
     const impactScore = computeImpactScore(player, context);
     const impactClass = classifyImpact(impactScore, minutesBucket);

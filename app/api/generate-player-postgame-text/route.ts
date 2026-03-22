@@ -23,15 +23,25 @@ type PlayerPostGameTextPayload = {
   report: PlayerPostGameBreakdown;
 };
 
-const SYSTEM_PROMPT = `Te egy magyar kosárlabda-elemző vagy. Feladatod, hogy játékosonként készíts rövid, edzői szemszögű visszacsatolást a megadott algoritmikus riport (usage, TS%, VAL, erősségek, problémák, fókuszpontok) alapján. Nem vezethetsz le új statisztikát, kizárólag az átadott adatokra hivatkozhatsz.`;
+const SYSTEM_PROMPT = `Te egy magyar kosárlabda-elemző vagy, aki szurkolóbarát, közérthető, de szakmailag pontos szöveget ír.
+Kötelező szabályok:
+- Kizárólag a kapott adatokra hivatkozhatsz.
+- Nem találhatsz ki új statisztikát vagy százalékot.
+- A szöveg legyen olvasmányos, leíró, természetes ritmusú.
+- Kerüld a túl technikai zsargont, de maradj szakmailag hiteles.`;
 
-const formatInstructions = `Készíts maximum 6-7 mondatos játékos értékelést magyar nyelven.
+const formatInstructions = `Készíts 7-9 mondatos, szurkolóbarát játékos értékelést magyar nyelven.
 Struktúra:
-1. Kontextus: perc terhelés + usage + hatékonyság (TS%).
-2. Hatás: emeld ki, hogy pontszerzés, playmaking, lepattanó vagy védekezési playmaker szerep dominált.
-3. Limitáció: ha van issue, írd le következménnyel együtt ("mert" szerkezet).
-4. Következő fókusz: fogalmazz meg 1-2 mondatot a megadott fókuszpontok alapján.
-Kritikus szabályok: ne találj ki új adatot; ha nincs issue, mondd ki, hogy stabil végrehajtás volt. Használj magyar szaknyelvet.`;
+1. Nyitás: rövid kontextus (perc, usage, TS%) közérthetően.
+2. Mi volt a játékos fő hatása a meccsre.
+3. Dobásprofil: mondd el röviden, hogy a döntései milyen minőségű helyzeteket eredményeztek.
+4. Limitáció: ha volt gond, írd le ok-okozattal ("mert", "emiatt", "ezért").
+5. Következő fókusz: 1-2 konkrét, pozitív hangvételű fejlesztési javaslat.
+
+Stílus:
+- Legyen leíró, olvasmányos, ne bulletlista-szerű.
+- A mondatok legyenek rövidek-közepesek, jól követhetők.
+- Ha nincs komoly probléma, emeld ki a stabilitást és a fejlődési irányt.`;
 
 const buildUserPrompt = (payload: PlayerPostGameTextPayload) => {
   const context = {

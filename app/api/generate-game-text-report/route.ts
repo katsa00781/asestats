@@ -26,7 +26,13 @@ const MAX_RESPONSE_MS = 50_000;
 const OPENAI_URL = process.env.OPENAI_API_URL ?? 'https://api.openai.com/v1/chat/completions';
 const OPENAI_MODEL = process.env.OPENAI_MODEL ?? 'gpt-4.1-mini';
 
-const SYSTEM_PROMPT = `Te egy magyar kosárlabda-szakértő elemző vagy. Feladatod, hogy az edzői stáb számára készíts taktikai összefoglalót a megadott pre-game és post-game algoritmikus riportok alapján. Mindig tartsd a kért struktúrát, csak a megadott adatokból dolgozz, ne vezesd le újra a statisztikákat, és ne vezess be új fogalmakat. Kerüld az angol zsargont: a "run" vagy "transition" helyett mindig használj magyar megfelelőket (pl. "átmeneti játék", "rendezetlen visszarendeződés").`;
+const SYSTEM_PROMPT = `Te egy magyar kosárlabda-szakértő elemző vagy.
+Feladatod: szurkolóbarát, olvasmányos, mégis szakmailag pontos mérkőzésértékelést írni a kapott pre-game és post-game riport alapján.
+Kritikus szabályok:
+- Csak a megadott adatokból dolgozhatsz.
+- Nem számolhatsz új statisztikát és nem találhatsz ki új tényt.
+- Tartsd a kért szerkezetet, de a megfogalmazás legyen természetes, narratív.
+- Magyar szaknyelvet használj, angol zsargont kerüld.`;
 
 type GeneratePayload = {
   gameId: string;
@@ -75,7 +81,7 @@ const extractPostgameContext = (report: PostGameReport) => ({
   playerImpact: report.playerImpact,
 });
 
-const formatInstructions = `Feladatod egy SZÖVEGES MÉRKŐZÉS-ELEMZÉS generálása a meglévő pre-game és post-game algoritmusok összefoglalói alapján.
+const formatInstructions = `Feladatod egy szurkolóbarát, jól olvasható szöveges mérkőzés-elemzés készítése a pre-game és post-game riportok alapján.
 
 Kritikus szabályok:
 - Ne számolj új statisztikát és ne becsülj új esélyeket.
@@ -83,7 +89,7 @@ Kritikus szabályok:
 - Ne adj hozzá új adatot, csak értelmezd a meglévőt.
 - Ha bizonytalanság szerepel a pre-game elemzésben, azt kontextusként kezeld, nem hibaként.
 - Az X-faktor kontextust csak egyszer említsd meg, ne duplikáld sem a pre-, sem a post-game blokkból.
-- Narratív, leíró hangnemben fogalmazz; minden blokk legyen legalább 2 összefüggő mondat.
+- Narratív, leíró, olvasmányos hangnemben fogalmazz; minden blokk legyen legalább 2 összefüggő mondat.
 - A post-game értékelés során mindig köss össze adatot és következményt ("mert" szerkezet vagy ok-okozati fordulat).
 - Adj konkrét edzői javaslatot arra, hogyan használható fel a tapasztalat a következő meccsen / visszavágón.
 
@@ -103,8 +109,13 @@ Kötelező szerkezet (alcímeket is írd ki):
 Plusz elvárások:
 - Adj rövid indoklást arra, hogy melyik előzetes fókuszpont miért NEM vált döntővé (ha releváns).
 - Emeld ki, ha valamely kockázati jelző nem materializálódott, és miért.
-- A záró tanulság mindig mutasson előre (edzésfókusz, rotáció, taktikai döntés).
+- A záró tanulság mindig mutasson előre (edzésfókusz, rotáció, taktikai döntés), pozitív és érthető stílusban.
 - Használj kötőszavakat, amelyek segítik a logikus átmenetet ("emiatt", "ezért", "mivel").
+
+Stíluselvárás:
+- A szöveg legyen olyan, amit egy szurkoló is szívesen végigolvas.
+- Kerüld a túl tömör, táblázatszagú mondatokat.
+- Rövidebb bekezdésekben, tiszta logikával írd le az összefüggéseket.
 
 Terjedelem: 14–20 mondat. Alkoss összefüggő, UI-ba illeszthető szöveget.`;
 

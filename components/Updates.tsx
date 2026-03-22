@@ -16,6 +16,15 @@ type UpdateItem = {
 const updates: UpdateItem[] = [
   {
     date: '2026. március 22.',
+    version: '1.7.2',
+    category: 'fix',
+    icon: <BarChart3 className="w-5 h-5" />,
+    title: 'Post-game dobástérkép: geometriakorrekció és játékos szűrő',
+    description:
+      'A post-game shot map félpályás nézete pontosabb pályageometriát kapott (3P periméter, palánk/gyűrű pozíció, restricted area irány), javult a kártya-kihasználás, és bekerült a játékos alapú szűrés. A lenyíló szűrő sötét témában is olvasható.',
+  },
+  {
+    date: '2026. március 22.',
     version: '1.7.1',
     category: 'feature',
     icon: <Sparkles className="w-5 h-5" />,

@@ -1,6 +1,6 @@
 import type { PreGameXFactorContext } from './pregame-scouting';
 import { buildPlayerPostGameReport, computePlayerUsage } from './player-postgame';
-import type { PlayerPostGameReport } from './player-postgame';
+import type { PlayerPostGameReport, PlayerShotMapContext } from './player-postgame';
 
 export type Position = 'PG' | 'SG' | 'SF' | 'PF' | 'C';
 
@@ -112,6 +112,12 @@ export type PostGameReport = {
     efficiency: PostGameChartDatum[];
     shotProfile: PostGameShotProfileDatum[];
   };
+  shotMap?: {
+    available: boolean;
+    team: TeamShotMapSummary | null;
+    season: TeamShotMapSummary | null;
+    comparison: ShotMapComparison | null;
+  };
   context: {
     paceDelta: 'Higher' | 'Lower' | 'Similar';
     offenseEfficiencyDelta: 'Higher' | 'Lower' | 'Similar';
@@ -177,6 +183,53 @@ export type PostGameShotProfileDatum = {
   season: number;
 };
 
+export type ShotMapEventInput = {
+  playerId: string | null;
+  x: number;
+  y: number;
+  isSuccessful: boolean;
+  shotSide: 'home' | 'away';
+};
+
+export type PostGameShotMapContext = {
+  gameShots: ShotMapEventInput[];
+  seasonShots?: ShotMapEventInput[];
+};
+
+type ShotZone = 'rim' | 'paint' | 'mid' | 'corner3' | 'aboveBreak3';
+
+type ShotZoneSummary = {
+  attempts: number;
+  made: number;
+  pct: number;
+};
+
+type TeamShotMapSummary = {
+  attempts: number;
+  made: number;
+  fgPct: number;
+  rimRate: number;
+  rimPct: number;
+  midRate: number;
+  midPct: number;
+  threeRate: number;
+  threePct: number;
+  corner3Rate: number;
+  corner3Pct: number;
+  shotQualityIndex: number;
+  zones: Record<ShotZone, ShotZoneSummary>;
+};
+
+type ShotMapComparison = {
+  rimRateDelta: number;
+  midRateDelta: number;
+  threeRateDelta: number;
+  corner3RateDelta: number;
+  rimPctDelta: number;
+  threePctDelta: number;
+  shotQualityDelta: number;
+};
+
 type FactorType = 'Hatékonyság' | 'Volumen' | 'Kontroll';
 
 type FactorMeta = {
@@ -212,6 +265,148 @@ const quantile = (sorted: number[], percentile: number) => {
     return sorted[base] + rest * (sorted[base + 1] - sorted[base]);
   }
   return sorted[base];
+};
+
+const normalizeOffenseX = (event: ShotMapEventInput) =>
+  event.shotSide === 'away' ? 100 - event.x : event.x;
+
+const classifyShotZone = (event: ShotMapEventInput): ShotZone => {
+  const x = normalizeOffenseX(event);
+  const y = event.y;
+  const dx = x - 6;
+  const dy = y - 50;
+  const distance = Math.sqrt(dx * dx + dy * dy);
+
+  if (distance <= 9) return 'rim';
+  if (distance <= 18) return 'paint';
+
+  const corner3 = x >= 25 && (y <= 14 || y >= 86);
+  if (corner3) return 'corner3';
+
+  if (distance >= 29) return 'aboveBreak3';
+  return 'mid';
+};
+
+const emptyZoneSummary = (): Record<ShotZone, ShotZoneSummary> => ({
+  rim: { attempts: 0, made: 0, pct: 0 },
+  paint: { attempts: 0, made: 0, pct: 0 },
+  mid: { attempts: 0, made: 0, pct: 0 },
+  corner3: { attempts: 0, made: 0, pct: 0 },
+  aboveBreak3: { attempts: 0, made: 0, pct: 0 },
+});
+
+const buildTeamShotMapSummary = (events: ShotMapEventInput[]): TeamShotMapSummary => {
+  const zones = emptyZoneSummary();
+  let attempts = 0;
+  let made = 0;
+
+  events.forEach(event => {
+    const zone = classifyShotZone(event);
+    attempts += 1;
+    zones[zone].attempts += 1;
+    if (event.isSuccessful) {
+      made += 1;
+      zones[zone].made += 1;
+    }
+  });
+
+  (Object.keys(zones) as ShotZone[]).forEach(zone => {
+    zones[zone].pct = zones[zone].attempts > 0
+      ? round((zones[zone].made / zones[zone].attempts) * 100, 1)
+      : 0;
+  });
+
+  const threeAttempts = zones.corner3.attempts + zones.aboveBreak3.attempts;
+  const threeMade = zones.corner3.made + zones.aboveBreak3.made;
+
+  const rimRate = attempts > 0 ? zones.rim.attempts / attempts : 0;
+  const midRate = attempts > 0 ? zones.mid.attempts / attempts : 0;
+  const threeRate = attempts > 0 ? threeAttempts / attempts : 0;
+  const corner3Rate = attempts > 0 ? zones.corner3.attempts / attempts : 0;
+
+  const rimPct = zones.rim.attempts > 0 ? (zones.rim.made / zones.rim.attempts) * 100 : 0;
+  const midPct = zones.mid.attempts > 0 ? (zones.mid.made / zones.mid.attempts) * 100 : 0;
+  const threePct = threeAttempts > 0 ? (threeMade / threeAttempts) * 100 : 0;
+  const corner3Pct = zones.corner3.attempts > 0 ? (zones.corner3.made / zones.corner3.attempts) * 100 : 0;
+
+  const shotQualityIndex = round(((rimRate * 1.25) + (corner3Rate * 1.2) + (threeRate * 0.7) - (midRate * 0.9)) * 100, 1);
+
+  return {
+    attempts,
+    made,
+    fgPct: attempts > 0 ? round((made / attempts) * 100, 1) : 0,
+    rimRate: round(rimRate * 100, 1),
+    rimPct: round(rimPct, 1),
+    midRate: round(midRate * 100, 1),
+    midPct: round(midPct, 1),
+    threeRate: round(threeRate * 100, 1),
+    threePct: round(threePct, 1),
+    corner3Rate: round(corner3Rate * 100, 1),
+    corner3Pct: round(corner3Pct, 1),
+    shotQualityIndex,
+    zones,
+  };
+};
+
+const buildShotMapComparison = (
+  game: TeamShotMapSummary,
+  season: TeamShotMapSummary
+): ShotMapComparison => ({
+  rimRateDelta: round(game.rimRate - season.rimRate, 1),
+  midRateDelta: round(game.midRate - season.midRate, 1),
+  threeRateDelta: round(game.threeRate - season.threeRate, 1),
+  corner3RateDelta: round(game.corner3Rate - season.corner3Rate, 1),
+  rimPctDelta: round(game.rimPct - season.rimPct, 1),
+  threePctDelta: round(game.threePct - season.threePct, 1),
+  shotQualityDelta: round(game.shotQualityIndex - season.shotQualityIndex, 1),
+});
+
+const buildPlayerShotMapContext = (events: ShotMapEventInput[]): PlayerShotMapContext => {
+  const map: PlayerShotMapContext = {};
+
+  events.forEach(event => {
+    if (!event.playerId) return;
+    if (!map[event.playerId]) {
+      map[event.playerId] = {
+        attempts: 0,
+        made: 0,
+        rimAttempts: 0,
+        rimMade: 0,
+        midAttempts: 0,
+        midMade: 0,
+        threeAttempts: 0,
+        threeMade: 0,
+        corner3Attempts: 0,
+        corner3Made: 0,
+      };
+    }
+
+    const row = map[event.playerId];
+    const zone = classifyShotZone(event);
+    row.attempts += 1;
+    if (event.isSuccessful) row.made += 1;
+
+    if (zone === 'rim' || zone === 'paint') {
+      row.rimAttempts += 1;
+      if (event.isSuccessful) row.rimMade += 1;
+      return;
+    }
+
+    if (zone === 'mid') {
+      row.midAttempts += 1;
+      if (event.isSuccessful) row.midMade += 1;
+      return;
+    }
+
+    row.threeAttempts += 1;
+    if (event.isSuccessful) row.threeMade += 1;
+    if (zone === 'corner3') {
+      row.corner3Attempts += 1;
+      if (event.isSuccessful) row.corner3Made += 1;
+    }
+  });
+
+  return map;
 };
 
 export type NormalizedTeamStats = TeamSeasonStat & {
@@ -732,7 +927,8 @@ const analyzePlayerImpact = (players: PlayerGameStat[]) => {
 const buildStrengths = (
   game: NormalizedGameStats,
   season: NormalizedTeamStats,
-  benchmarks: LeagueTeamBenchmarks
+  benchmarks: LeagueTeamBenchmarks,
+  shotMapComparison?: ShotMapComparison | null
 ) => {
   const strengths: string[] = [];
   const efgDelta = round(game.efg - season.efg, 1);
@@ -758,13 +954,26 @@ const buildStrengths = (
     strengths.push('Periméter-hatékonyság a liga felett');
   }
 
+  if (shotMapComparison) {
+    if (shotMapComparison.rimRateDelta >= 6 && shotMapComparison.rimPctDelta >= 4) {
+      strengths.push('Dobástérkép: gyűrűnyomás és befejezési hatékonyság javult');
+    }
+    if (shotMapComparison.corner3RateDelta >= 3 && shotMapComparison.threePctDelta >= 3) {
+      strengths.push('Dobástérkép: saroktripla-volumen és hatékonyság liga-szintű trendet mutat');
+    }
+    if (shotMapComparison.shotQualityDelta >= 5) {
+      strengths.push('Dobásszelekció javult (shot quality index emelkedés)');
+    }
+  }
+
   return strengths.slice(0, 3);
 };
 
 const buildProblems = (
   game: NormalizedGameStats,
   season: NormalizedTeamStats,
-  benchmarks: LeagueTeamBenchmarks
+  benchmarks: LeagueTeamBenchmarks,
+  shotMapComparison?: ShotMapComparison | null
 ) => {
   const problems: string[] = [];
   const turnoverRateDelta = toPct(game.turnoverRate - season.turnoverRate, 1);
@@ -797,6 +1006,18 @@ const buildProblems = (
   }
   if (scoreBelow(benchmarks, season, 'ft_rate', game.ftRate, 40)) {
     problems.push('FT rate a liga alatt');
+  }
+
+  if (shotMapComparison) {
+    if (shotMapComparison.midRateDelta >= 6 && shotMapComparison.shotQualityDelta <= -4) {
+      problems.push('Dobástérkép: túl magas középtávoli arány, romló shot quality');
+    }
+    if (shotMapComparison.rimRateDelta <= -5 && shotMapComparison.rimPctDelta <= -4) {
+      problems.push('Dobástérkép: gyengült gyűrűtámadás és festékbeli befejezés');
+    }
+    if (shotMapComparison.threeRateDelta >= 6 && shotMapComparison.threePctDelta <= -5) {
+      problems.push('Dobástérkép: magas tripla-volumen alacsony hatékonysággal');
+    }
   }
 
   return problems.slice(0, 3);
@@ -1246,7 +1467,8 @@ export const analyzePostGameReport = (
   teamSeason: TeamSeasonStat,
   leagueBenchmarks: LeagueTeamBenchmarks,
   players: PlayerGameStat[],
-  preGameContext?: PreGameXFactorContext
+  preGameContext?: PreGameXFactorContext,
+  shotMapContext?: PostGameShotMapContext
 ): PostGameReport => {
   const actualPointsFor = teamGame.actualPointsFor ?? teamGame.pointsFor;
   const actualPointsAgainst = teamGame.actualPointsAgainst ?? teamGame.pointsAgainst;
@@ -1298,9 +1520,23 @@ export const analyzePostGameReport = (
   const decisive = buildDecisiveFactors(game, opponent, season);
   const decisiveAnnotations = annotateDecisiveFactors(decisive);
   const playerImpact = analyzePlayerImpact(players);
-  const playerReport = buildPlayerPostGameReport(players);
-  const strengths = buildStrengths(game, season, leagueBenchmarks);
-  const problems = buildProblems(game, season, leagueBenchmarks);
+  const gameShotSummary = shotMapContext?.gameShots?.length
+    ? buildTeamShotMapSummary(shotMapContext.gameShots)
+    : null;
+  const seasonShotSummary = shotMapContext?.seasonShots?.length
+    ? buildTeamShotMapSummary(shotMapContext.seasonShots)
+    : null;
+  const shotMapComparison = gameShotSummary && seasonShotSummary
+    ? buildShotMapComparison(gameShotSummary, seasonShotSummary)
+    : null;
+
+  const playerShotMapContext = shotMapContext?.gameShots?.length
+    ? buildPlayerShotMapContext(shotMapContext.gameShots)
+    : undefined;
+
+  const playerReport = buildPlayerPostGameReport(players, playerShotMapContext);
+  const strengths = buildStrengths(game, season, leagueBenchmarks, shotMapComparison);
+  const problems = buildProblems(game, season, leagueBenchmarks, shotMapComparison);
   const nextFocus = buildNextFocus(game, season, problems, strengths);
   const xFactorReflection = buildXFactorReflection(preGameContext, game, season, opponent, decisiveAnnotations.meta);
   const combinedReflection = [xFactorReflection.line, xFactorReflection.riskLine].filter(Boolean).join(' ');
@@ -1328,6 +1564,12 @@ export const analyzePostGameReport = (
       keyStats: metricsSummary.keyStats,
     },
     charts: metricsSummary.charts,
+    shotMap: {
+      available: Boolean(gameShotSummary),
+      team: gameShotSummary,
+      season: seasonShotSummary,
+      comparison: shotMapComparison,
+    },
     context: {
       paceDelta,
       offenseEfficiencyDelta: offenseDelta,

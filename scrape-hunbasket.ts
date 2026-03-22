@@ -35,6 +35,8 @@ const SUPABASE_KEY = SUPABASE_SERVICE_ROLE_KEY || SUPABASE_ANON_KEY;
 const HUNBASKET_SEASON_SLUG = process.env.HUNBASKET_SEASON_SLUG || 'x2526';
 const HUNBASKET_SEASON_NAME = process.env.HUNBASKET_SEASON_NAME || '2025/2026';
 const HUNBASKET_SEASON_ID = process.env.HUNBASKET_SEASON_ID;
+const HUNBASKET_LEAGUE_CODE = process.env.HUNBASKET_LEAGUE_CODE || 'hun';
+const HUNBASKET_FILM_API_URL = 'https://hunbasket.hu/ajax/film.php';
 const TEAM_FILTER = (process.env.HUNBASKET_TEAM_FILTER || '')
   .split(',')
   .map(team => team.trim())
@@ -114,6 +116,7 @@ type TeamGameImport = {
 type GameLink = {
   date: string;
   url: string;
+  gameCode: string;
   homeTeam: string;
   awayTeam: string;
   score: string;
@@ -123,7 +126,33 @@ type GameLink = {
 type ScrapedGame = {
   date: string;
   round: number | null;
+  gameCode: string;
+  sourceUrl: string;
+  homeTeam: string;
+  awayTeam: string;
+  homeScore: number;
+  awayScore: number;
   teams: TeamGameImport[];
+};
+
+type ShotChartEvent = {
+  playercode?: string;
+  playercode2?: string;
+  side?: string;
+  period?: string;
+  event_order?: string;
+  x?: number;
+  y?: number;
+  wbname?: string;
+  firstname?: string;
+  lastname?: string;
+  is_successfull?: boolean;
+};
+
+type ShotChartPlayerRow = {
+  id: string;
+  team_id: string;
+  name: string;
 };
 
 type TeamRecord = {
@@ -160,6 +189,39 @@ const cleanPlayerName = (value: string) =>
     .replace(/\*/g, '')
     .replace(/\s+/g, ' ')
     .trim();
+
+const shotEventPlayerName = (event: ShotChartEvent) => {
+  if (event.wbname && event.wbname.trim().length > 0) return event.wbname.trim();
+  return `${event.firstname || ''} ${event.lastname || ''}`.trim();
+};
+
+const parseNullableInt = (value: unknown): number | null => {
+  if (value === null || value === undefined || value === '') return null;
+  const parsed = parseInt(String(value), 10);
+  return Number.isNaN(parsed) ? null : parsed;
+};
+
+const parseNullableNumber = (value: unknown): number | null => {
+  if (value === null || value === undefined || value === '') return null;
+  const parsed = Number(value);
+  return Number.isNaN(parsed) ? null : parsed;
+};
+
+const resolveShotEventPlayerId = (
+  teamPlayers: Array<{ id: string; nameNorm: string }>,
+  playerNameRaw: string
+): string | null => {
+  const target = normalizeName(playerNameRaw || '');
+  if (!target) return null;
+
+  const exact = teamPlayers.filter(player => player.nameNorm === target);
+  if (exact.length === 1) return exact[0].id;
+
+  const includes = teamPlayers.filter(player => player.nameNorm.includes(target) || target.includes(player.nameNorm));
+  if (includes.length === 1) return includes[0].id;
+
+  return null;
+};
 
 const parseScore = (score: string) => {
   const cleaned = score.replace(/[^0-9–-]/g, '').replace(/–/g, '-');
@@ -286,7 +348,7 @@ const getGameLinks = async (page: Page): Promise<GameLink[]> => {
   await page.waitForTimeout(3000);
 
   const games = await page.$$eval('table tbody tr', rows => {
-    const entries: { date: string; url: string; homeTeam: string; awayTeam: string; score: string; round: number | null }[] = [];
+    const entries: { date: string; url: string; gameCode: string; homeTeam: string; awayTeam: string; score: string; round: number | null }[] = [];
 
     rows.forEach(row => {
       const cells = row.querySelectorAll('td');
@@ -303,6 +365,8 @@ const getGameLinks = async (page: Page): Promise<GameLink[]> => {
 
       if (!summaryLink) return;
       if (!scoreText.match(/\d+\s*[–-]\s*\d+/)) return;
+      const gameCodeMatch = summaryLink.href.match(/\/merkozes\/[^/]+\/[^/]+\/(hun_\d+)/i);
+      if (!gameCodeMatch) return;
 
       const dateMatch = dateText.match(/(\d{4})\.\s*(\d{1,2})\.\s*(\d{1,2})/);
       const isoDate = dateMatch
@@ -312,6 +376,7 @@ const getGameLinks = async (page: Page): Promise<GameLink[]> => {
       entries.push({
         date: isoDate,
         url: summaryLink.href,
+        gameCode: gameCodeMatch[1],
         homeTeam,
         awayTeam,
         score: scoreText,
@@ -487,11 +552,196 @@ const scrapeGameDetails = async (page: Page, link: GameLink): Promise<ScrapedGam
       },
     ];
 
-    return { date, round, teams };
+    return {
+      date,
+      round,
+      gameCode: link.gameCode,
+      sourceUrl: link.url,
+      homeTeam,
+      awayTeam,
+      homeScore,
+      awayScore,
+      teams,
+    };
   } catch (error) {
     console.error('  ❌ Hiba a meccs részleteinek feldolgozásakor:', error);
     return null;
   }
+};
+
+const fetchShotChart = async (gameCode: string): Promise<ShotChartEvent[]> => {
+  const body = new URLSearchParams({
+    gamecode: gameCode,
+    lea: HUNBASKET_LEAGUE_CODE,
+    year: HUNBASKET_SEASON_SLUG,
+    f: 'getShootchart',
+  });
+
+  const response = await fetch(HUNBASKET_FILM_API_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+    },
+    body: body.toString(),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Shotchart HTTP hiba: ${response.status}`);
+  }
+
+  const data = (await response.json()) as unknown;
+  if (!Array.isArray(data)) return [];
+  return data as ShotChartEvent[];
+};
+
+const importShotChartForGame = async (seasonId: string, game: ScrapedGame) => {
+  const homeTeam = await ensureTeam(game.homeTeam);
+  const awayTeam = await ensureTeam(game.awayTeam);
+  const shotEvents = await fetchShotChart(game.gameCode);
+
+  const { data: rawRecord, error: rawError } = await supabase
+    .from('hunbasket_shotchart_raw')
+    .upsert(
+      {
+        season_id: seasonId,
+        game_code: game.gameCode,
+        league_code: HUNBASKET_LEAGUE_CODE,
+        season_slug: HUNBASKET_SEASON_SLUG,
+        match_url: game.sourceUrl,
+        game_date: game.date,
+        round: game.round,
+        home_team_id: homeTeam.id,
+        away_team_id: awayTeam.id,
+        home_team: game.homeTeam,
+        away_team: game.awayTeam,
+        home_score: game.homeScore,
+        away_score: game.awayScore,
+        shotchart_data: shotEvents,
+        event_count: shotEvents.length,
+        imported_at: new Date().toISOString(),
+      },
+      { onConflict: 'season_id,game_code' }
+    )
+    .select('id')
+    .single();
+
+  if (rawError || !rawRecord) {
+    throw new Error(`Shotchart raw mentesi hiba: ${rawError?.message}`);
+  }
+
+  const { error: deleteEventsError } = await supabase
+    .from('hunbasket_shot_events')
+    .delete()
+    .eq('raw_game_id', rawRecord.id);
+
+  if (deleteEventsError) {
+    throw new Error(`Shot event torlesi hiba: ${deleteEventsError.message}`);
+  }
+
+  if (shotEvents.length === 0) {
+    console.log('    ℹ️ Dobasterkep: nincs event');
+    return;
+  }
+
+  const { data: playersData, error: playersError } = await supabase
+    .from('players')
+    .select('id, team_id, name')
+    .eq('season_id', seasonId)
+    .in('team_id', [homeTeam.id, awayTeam.id]);
+
+  if (playersError) {
+    throw new Error(`Shot player beolvasasi hiba: ${playersError.message}`);
+  }
+
+  const playersByTeam = new Map<string, Array<{ id: string; nameNorm: string }>>();
+  for (const row of (playersData || []) as ShotChartPlayerRow[]) {
+    const list = playersByTeam.get(row.team_id) || [];
+    list.push({ id: row.id, nameNorm: normalizeName(row.name) });
+    playersByTeam.set(row.team_id, list);
+  }
+
+  const { data: linksData, error: linksError } = await supabase
+    .from('hunbasket_player_links')
+    .select('team_id, hunbasket_player_code, player_id')
+    .eq('season_id', seasonId)
+    .in('team_id', [homeTeam.id, awayTeam.id]);
+
+  if (linksError) {
+    throw new Error(`Shot player link beolvasasi hiba: ${linksError.message}`);
+  }
+
+  const playerLinkMap = new Map<string, string | null>();
+  for (const row of linksData || []) {
+    playerLinkMap.set(`${row.team_id}|${row.hunbasket_player_code}`, row.player_id || null);
+  }
+
+  const insertRows: Array<Record<string, unknown>> = [];
+  for (const event of shotEvents) {
+    const shotSide = event.side === '0' ? 'away' : 'home';
+    const teamId = shotSide === 'home' ? homeTeam.id : awayTeam.id;
+    const playerCode = (event.playercode || event.playercode2 || '').trim();
+    const playerNameRaw = shotEventPlayerName(event);
+
+    let playerId: string | null = null;
+    if (playerCode) {
+      const key = `${teamId}|${playerCode}`;
+      if (playerLinkMap.has(key)) {
+        playerId = playerLinkMap.get(key) || null;
+      } else {
+        playerId = resolveShotEventPlayerId(playersByTeam.get(teamId) || [], playerNameRaw);
+
+        const { error: linkUpsertError } = await supabase
+          .from('hunbasket_player_links')
+          .upsert(
+            {
+              season_id: seasonId,
+              team_id: teamId,
+              hunbasket_player_code: playerCode,
+              player_id: playerId,
+              player_name_raw: playerNameRaw || null,
+              last_seen_at: new Date().toISOString(),
+            },
+            { onConflict: 'season_id,team_id,hunbasket_player_code' }
+          );
+
+        if (linkUpsertError) {
+          throw new Error(`Shot player link mentesi hiba: ${linkUpsertError.message}`);
+        }
+
+        playerLinkMap.set(key, playerId);
+      }
+    }
+
+    insertRows.push({
+      raw_game_id: rawRecord.id,
+      season_id: seasonId,
+      game_code: game.gameCode,
+      period: parseNullableInt(event.period),
+      event_order: parseNullableInt(event.event_order),
+      x: parseNullableNumber(event.x),
+      y: parseNullableNumber(event.y),
+      is_successful: typeof event.is_successfull === 'boolean' ? event.is_successfull : null,
+      shot_side: shotSide,
+      team_id: teamId,
+      player_id: playerId,
+      hunbasket_player_code: playerCode || null,
+      player_name_raw: playerNameRaw || null,
+      source_event: event,
+      imported_at: new Date().toISOString(),
+    });
+  }
+
+  if (insertRows.length > 0) {
+    const { error: insertError } = await supabase
+      .from('hunbasket_shot_events')
+      .insert(insertRows);
+
+    if (insertError) {
+      throw new Error(`Shot event mentesi hiba: ${insertError.message}`);
+    }
+  }
+
+  console.log(`    🎯 Dobasterkep mentve: ${insertRows.length} event`);
 };
 
 const ensurePlayerRecord = async (player: PlayerStats, teamId: string, seasonId: string): Promise<string> => {
@@ -712,6 +962,12 @@ const main = async () => {
           continue;
         }
         await importGame(scraped.date, seasonId, teamGame);
+      }
+
+      try {
+        await importShotChartForGame(seasonId, scraped);
+      } catch (shotError) {
+        console.warn(`    ⚠️ Dobasterkep import hiba (${scraped.gameCode}):`, shotError);
       }
 
       await page.waitForTimeout(1500);

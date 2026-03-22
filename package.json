@@ -9,7 +9,9 @@
     "lint": "eslint",
     "hunbasket:import": "tsx scrape-hunbasket.ts",
     "hunbasket:rosters": "tsx scrape-hunbasket-rosters.ts",
-    "hunbasket:fixtures": "tsx scrape-hunbasket-fixtures.ts"
+    "hunbasket:fixtures": "tsx scrape-hunbasket-fixtures.ts",
+    "hunbasket:shotchart": "tsx scrape-hunbasket-shotchart.ts",
+    "hunbasket:shotchart:assign": "tsx process-hunbasket-shotchart-events.ts"
   },
   "dependencies": {
     "@radix-ui/react-label": "^2.1.8",

@@ -45,6 +45,7 @@ import {
   type TeamGameStat,
   type TeamSeasonStat as PostgameTeamSeasonStat,
   type PostGameReport,
+  type PostGameShotMapContext,
 } from '@/lib/postgame-report';
 
 type SeasonComparisonProps = {
@@ -90,6 +91,7 @@ type PlayerNarrativeStatus = {
   text?: string;
   error?: string;
   generatedAt?: string;
+  generatedBy?: string;
 };
 
 type GameTextReportRow = Database['public']['Tables']['game_text_reports']['Row'];
@@ -103,6 +105,45 @@ type StandingsSnapshotRow = {
   scored: number;
   conceded: number;
   points: number;
+};
+
+type ShotRawRow = {
+  id: string;
+  home_team_id: string | null;
+  away_team_id: string | null;
+  home_score: number | null;
+  away_score: number | null;
+};
+
+type ShotEventRow = {
+  player_id: string | null;
+  x: number | null;
+  y: number | null;
+  is_successful: boolean | null;
+  shot_side: 'home' | 'away' | null;
+};
+
+type ShotZoneKey = 'rim' | 'paint' | 'mid' | 'corner3' | 'aboveBreak3';
+
+type ShotPoint = {
+  playerId: string | null;
+  x: number;
+  y: number;
+  isSuccessful: boolean;
+  shotSide: 'home' | 'away';
+};
+
+type ShotZoneStats = {
+  attempts: number;
+  made: number;
+  pct: number;
+};
+
+type ShotProfileSummary = {
+  attempts: number;
+  made: number;
+  fgPct: number;
+  zoneStats: Record<ShotZoneKey, ShotZoneStats>;
 };
 
 type ProjectionRow = {
@@ -432,6 +473,92 @@ const formatPostgameDelta = (value: number, unit: 'pct' | 'count') => {
   const sign = value > 0 ? '+' : '';
   if (unit === 'pct') return `${sign}${value.toFixed(1)}%`;
   return `${sign}${value.toFixed(1)}`;
+};
+
+const formatShotPct = (value: number) => {
+  if (!Number.isFinite(value)) return '-';
+  return `${value.toFixed(1)}%`;
+};
+
+const formatShotDeltaPp = (value: number) => {
+  if (!Number.isFinite(value)) return '-';
+  const sign = value > 0 ? '+' : '';
+  return `${sign}${value.toFixed(1)} pp`;
+};
+
+const shotDeltaTone = (value: number) => {
+  if (!Number.isFinite(value) || Math.abs(value) < 0.2) return 'text-slate-400';
+  return value > 0 ? 'text-emerald-400' : 'text-rose-400';
+};
+
+const normalizeShotX = (point: ShotPoint) => (point.shotSide === 'away' ? 100 - point.x : point.x);
+
+const classifyShotZone = (point: ShotPoint): ShotZoneKey => {
+  const x = normalizeShotX(point);
+  const y = point.y;
+  const dx = x - 6;
+  const dy = y - 50;
+  const distance = Math.sqrt(dx * dx + dy * dy);
+
+  if (distance <= 9) return 'rim';
+  if (distance <= 18) return 'paint';
+
+  const isCorner3 = x >= 25 && (y <= 14 || y >= 86);
+  if (isCorner3) return 'corner3';
+
+  if (distance >= 29) return 'aboveBreak3';
+  return 'mid';
+};
+
+const toShotPoints = (rows: ShotEventRow[]): ShotPoint[] => {
+  return rows
+    .map(row => {
+      if (!Number.isFinite(row.x) || !Number.isFinite(row.y)) return null;
+      if (row.shot_side !== 'home' && row.shot_side !== 'away') return null;
+      return {
+        playerId: row.player_id,
+        x: Number(row.x),
+        y: Number(row.y),
+        isSuccessful: Boolean(row.is_successful),
+        shotSide: row.shot_side,
+      };
+    })
+    .filter((item): item is ShotPoint => Boolean(item));
+};
+
+const buildShotProfileSummary = (points: ShotPoint[]): ShotProfileSummary => {
+  const zoneStats: Record<ShotZoneKey, ShotZoneStats> = {
+    rim: { attempts: 0, made: 0, pct: 0 },
+    paint: { attempts: 0, made: 0, pct: 0 },
+    mid: { attempts: 0, made: 0, pct: 0 },
+    corner3: { attempts: 0, made: 0, pct: 0 },
+    aboveBreak3: { attempts: 0, made: 0, pct: 0 },
+  };
+
+  let attempts = 0;
+  let made = 0;
+
+  points.forEach(point => {
+    attempts += 1;
+    const zone = classifyShotZone(point);
+    zoneStats[zone].attempts += 1;
+    if (point.isSuccessful) {
+      made += 1;
+      zoneStats[zone].made += 1;
+    }
+  });
+
+  (Object.keys(zoneStats) as ShotZoneKey[]).forEach(zone => {
+    const attemptsInZone = zoneStats[zone].attempts;
+    zoneStats[zone].pct = attemptsInZone > 0 ? roundValue((zoneStats[zone].made / attemptsInZone) * 100, 1) : 0;
+  });
+
+  return {
+    attempts,
+    made,
+    fgPct: attempts > 0 ? roundValue((made / attempts) * 100, 1) : 0,
+    zoneStats,
+  };
 };
 
 const computeTotalValuation = (player: PlayerStats) => {
@@ -842,6 +969,15 @@ export function SeasonComparison({
   const [isGeneratingTextReport, setIsGeneratingTextReport] = useState(false);
   const [expandedPlayerImpactId, setExpandedPlayerImpactId] = useState<string | null>(null);
   const [playerNarratives, setPlayerNarratives] = useState<Record<string, PlayerNarrativeStatus>>({});
+  const [isGeneratingPlayerSeasonText, setIsGeneratingPlayerSeasonText] = useState(false);
+  const [isSavingPlayerSeasonText, setIsSavingPlayerSeasonText] = useState(false);
+  const [playerSeasonSaveStatus, setPlayerSeasonSaveStatus] = useState<
+    { type: 'success' | 'error'; message: string } | null
+  >(null);
+  const [postgameShotContext, setPostgameShotContext] = useState<PostGameShotMapContext | null>(null);
+  const [selectedPostgameShotPlayerId, setSelectedPostgameShotPlayerId] = useState('all');
+  const [teamSeasonShotRows, setTeamSeasonShotRows] = useState<ShotEventRow[]>([]);
+  const [playerSeasonShotRows, setPlayerSeasonShotRows] = useState<ShotEventRow[]>([]);
   const [standingsSnapshot, setStandingsSnapshot] = useState<StandingsSnapshotRow[]>([]);
   const [seasonFixtures, setSeasonFixtures] = useState<
     Array<{ home_team_id: string; away_team_id: string; game_date: string; status: string }>
@@ -868,6 +1004,42 @@ export function SeasonComparison({
 
   const resolvedSeasonId = selectedSeasonId || currentSeasonId || allSeasons[0]?.id || '';
   const resolvedTeamId = selectedTeamId || currentTeamId || 'all';
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadTeamSeasonShots = async () => {
+      if (!resolvedSeasonId || !resolvedTeamId || resolvedTeamId === 'all') {
+        if (!cancelled) setTeamSeasonShotRows([]);
+        return;
+      }
+
+      try {
+        const { data, error } = await supabase
+          .from('hunbasket_shot_events' as never)
+          .select('player_id, x, y, is_successful, shot_side')
+          .eq('season_id', resolvedSeasonId)
+          .eq('team_id', resolvedTeamId);
+
+        if (error || !Array.isArray(data)) {
+          if (!cancelled) setTeamSeasonShotRows([]);
+          return;
+        }
+
+        if (!cancelled) {
+          setTeamSeasonShotRows(data as ShotEventRow[]);
+        }
+      } catch {
+        if (!cancelled) setTeamSeasonShotRows([]);
+      }
+    };
+
+    loadTeamSeasonShots();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [resolvedSeasonId, resolvedTeamId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1021,6 +1193,189 @@ export function SeasonComparison({
         return bDate - aDate;
       });
   }, [playerGameStats, resolvedSeasonId, selectedPlayer]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadPlayerSeasonShots = async () => {
+      if (!resolvedSeasonId || !selectedPlayerId) {
+        if (!cancelled) setPlayerSeasonShotRows([]);
+        return;
+      }
+
+      try {
+        const { data, error } = await supabase
+          .from('hunbasket_shot_events' as never)
+          .select('player_id, x, y, is_successful, shot_side')
+          .eq('season_id', resolvedSeasonId)
+          .eq('player_id', selectedPlayerId);
+
+        if (error || !Array.isArray(data)) {
+          if (!cancelled) setPlayerSeasonShotRows([]);
+          return;
+        }
+
+        if (!cancelled) {
+          setPlayerSeasonShotRows(data as ShotEventRow[]);
+        }
+      } catch {
+        if (!cancelled) setPlayerSeasonShotRows([]);
+      }
+    };
+
+    loadPlayerSeasonShots();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [resolvedSeasonId, selectedPlayerId]);
+
+  const teamSeasonShotPoints = useMemo(() => toShotPoints(teamSeasonShotRows), [teamSeasonShotRows]);
+
+  const teamSeasonShotSummary = useMemo(() => {
+    if (teamSeasonShotPoints.length === 0) return null;
+    return buildShotProfileSummary(teamSeasonShotPoints);
+  }, [teamSeasonShotPoints]);
+
+  const teamSeasonShotZoneRows = useMemo(() => {
+    if (!teamSeasonShotSummary) return [] as Array<{ label: string; rate: number; pct: number; attempts: number }>;
+    const total = Math.max(1, teamSeasonShotSummary.attempts);
+    return [
+      { label: 'Gyűrű', rate: (teamSeasonShotSummary.zoneStats.rim.attempts / total) * 100, pct: teamSeasonShotSummary.zoneStats.rim.pct, attempts: teamSeasonShotSummary.zoneStats.rim.attempts },
+      { label: 'Festék', rate: (teamSeasonShotSummary.zoneStats.paint.attempts / total) * 100, pct: teamSeasonShotSummary.zoneStats.paint.pct, attempts: teamSeasonShotSummary.zoneStats.paint.attempts },
+      { label: 'Középtáv', rate: (teamSeasonShotSummary.zoneStats.mid.attempts / total) * 100, pct: teamSeasonShotSummary.zoneStats.mid.pct, attempts: teamSeasonShotSummary.zoneStats.mid.attempts },
+      { label: 'Sarok tripla', rate: (teamSeasonShotSummary.zoneStats.corner3.attempts / total) * 100, pct: teamSeasonShotSummary.zoneStats.corner3.pct, attempts: teamSeasonShotSummary.zoneStats.corner3.attempts },
+      { label: 'Egyéb tripla', rate: (teamSeasonShotSummary.zoneStats.aboveBreak3.attempts / total) * 100, pct: teamSeasonShotSummary.zoneStats.aboveBreak3.pct, attempts: teamSeasonShotSummary.zoneStats.aboveBreak3.attempts },
+    ].map(item => ({
+      ...item,
+      rate: roundValue(item.rate, 1),
+      pct: roundValue(item.pct, 1),
+    }));
+  }, [teamSeasonShotSummary]);
+
+  const playerSeasonShotPoints = useMemo(() => toShotPoints(playerSeasonShotRows), [playerSeasonShotRows]);
+
+  const playerSeasonShotSummary = useMemo(() => {
+    if (playerSeasonShotPoints.length === 0) return null;
+    return buildShotProfileSummary(playerSeasonShotPoints);
+  }, [playerSeasonShotPoints]);
+
+  const playerShotZoneRows = useMemo(() => {
+    if (!playerSeasonShotSummary) return [] as Array<{ label: string; attempts: number; pct: number }>;
+    return [
+      { label: 'Gyűrű', attempts: playerSeasonShotSummary.zoneStats.rim.attempts, pct: playerSeasonShotSummary.zoneStats.rim.pct },
+      { label: 'Festék', attempts: playerSeasonShotSummary.zoneStats.paint.attempts, pct: playerSeasonShotSummary.zoneStats.paint.pct },
+      { label: 'Középtáv', attempts: playerSeasonShotSummary.zoneStats.mid.attempts, pct: playerSeasonShotSummary.zoneStats.mid.pct },
+      { label: 'Sarok tripla', attempts: playerSeasonShotSummary.zoneStats.corner3.attempts, pct: playerSeasonShotSummary.zoneStats.corner3.pct },
+      { label: 'Egyéb tripla', attempts: playerSeasonShotSummary.zoneStats.aboveBreak3.attempts, pct: playerSeasonShotSummary.zoneStats.aboveBreak3.pct },
+    ];
+  }, [playerSeasonShotSummary]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadPlayerSeasonNarrative = async () => {
+      if (!resolvedSeasonId || !selectedPlayerId) {
+        if (!cancelled) setPlayerNarratives({});
+        return;
+      }
+
+      try {
+        const { data, error } = (await supabase
+          .from('player_text_reports' as never)
+          .select('narrative, generated_at, generated_by')
+          .eq('season_id', resolvedSeasonId)
+          .eq('player_id', selectedPlayerId)
+          .eq('report_type', 'season')
+          .order('generated_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()) as {
+            data: { narrative: string | null; generated_at: string | null; generated_by: string | null } | null;
+            error: { message?: string } | null;
+          };
+
+        if (cancelled) return;
+
+        if (error || !data) {
+          setPlayerNarratives({});
+          return;
+        }
+
+        setPlayerNarratives({
+          [selectedPlayerId]: {
+            status: 'success',
+            text: data.narrative ?? '',
+            generatedAt: data.generated_at ?? undefined,
+            generatedBy: data.generated_by ?? undefined,
+          },
+        });
+      } catch {
+        if (!cancelled) setPlayerNarratives({});
+      }
+    };
+
+    loadPlayerSeasonNarrative();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [resolvedSeasonId, selectedPlayerId]);
+
+  const postgameShotScatterData = useMemo(() => {
+    if (!postgameShotContext?.gameShots?.length) {
+      return [] as Array<{ x: number; y: number; result: string; player: string; playerId: string | null }>;
+    }
+    const playerNameById = new Map(seasonPlayers.map(player => [player.id, player.name]));
+    return postgameShotContext.gameShots.map(shot => ({
+      x: shot.shotSide === 'away' ? 100 - shot.x : shot.x,
+      y: shot.y,
+      result: shot.isSuccessful ? 'Bement' : 'Kimaradt',
+      player: shot.playerId ? (playerNameById.get(shot.playerId) ?? 'Ismeretlen') : 'Ismeretlen',
+      playerId: shot.playerId,
+    }));
+  }, [postgameShotContext, seasonPlayers]);
+
+  const postgameShotPlayerOptions = useMemo(() => {
+    const byPlayer = new Map<string, string>();
+    let unknownShotCount = 0;
+
+    postgameShotScatterData.forEach(shot => {
+      if (shot.playerId) {
+        if (!byPlayer.has(shot.playerId)) byPlayer.set(shot.playerId, shot.player);
+      } else {
+        unknownShotCount += 1;
+      }
+    });
+
+    const players = Array.from(byPlayer.entries())
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name, 'hu'));
+
+    return {
+      players,
+      unknownShotCount,
+    };
+  }, [postgameShotScatterData]);
+
+  const filteredPostgameShotScatterData = useMemo(() => {
+    if (selectedPostgameShotPlayerId === 'all') return postgameShotScatterData;
+    if (selectedPostgameShotPlayerId === '__unknown__') {
+      return postgameShotScatterData.filter(shot => !shot.playerId);
+    }
+    return postgameShotScatterData.filter(shot => shot.playerId === selectedPostgameShotPlayerId);
+  }, [postgameShotScatterData, selectedPostgameShotPlayerId]);
+
+  useEffect(() => {
+    if (selectedPostgameShotPlayerId === 'all') return;
+    if (selectedPostgameShotPlayerId === '__unknown__') {
+      if (postgameShotPlayerOptions.unknownShotCount > 0) return;
+      setSelectedPostgameShotPlayerId('all');
+      return;
+    }
+
+    const stillExists = postgameShotPlayerOptions.players.some(player => player.id === selectedPostgameShotPlayerId);
+    if (!stillExists) setSelectedPostgameShotPlayerId('all');
+  }, [postgameShotPlayerOptions, selectedPostgameShotPlayerId]);
 
   useEffect(() => {
     if (!selectedPlayerId) return;
@@ -1431,6 +1786,98 @@ export function SeasonComparison({
     if (!selectedGameId) return null;
     return games.find(game => game.id === selectedGameId) || null;
   }, [games, selectedGameId]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadPostgameShotContext = async () => {
+      if (!selectedGame || !resolvedSeasonId || !resolvedTeamId || resolvedTeamId === 'all') {
+        if (!cancelled) setPostgameShotContext(null);
+        return;
+      }
+
+      try {
+        const { data: rawData, error: rawError } = await supabase
+          .from('hunbasket_shotchart_raw' as never)
+          .select('id, home_team_id, away_team_id, home_score, away_score')
+          .eq('season_id', resolvedSeasonId)
+          .eq('game_date', selectedGame.date)
+          .or(`home_team_id.eq.${resolvedTeamId},away_team_id.eq.${resolvedTeamId}`);
+
+        if (rawError || !Array.isArray(rawData) || rawData.length === 0) {
+          if (!cancelled) setPostgameShotContext(null);
+          return;
+        }
+
+        const candidates = (rawData as ShotRawRow[]).filter(row => {
+          const scoreMatch = (
+            (row.home_score === selectedGame.ourScore && row.away_score === selectedGame.oppScore)
+            || (row.home_score === selectedGame.oppScore && row.away_score === selectedGame.ourScore)
+          );
+          if (!scoreMatch) return false;
+
+          if (!selectedOpponentTeamId) return true;
+
+          const teams = [row.home_team_id, row.away_team_id];
+          return teams.includes(resolvedTeamId) && teams.includes(selectedOpponentTeamId);
+        });
+
+        const selectedRaw = candidates[0] || (rawData as ShotRawRow[])[0];
+        if (!selectedRaw?.id) {
+          if (!cancelled) setPostgameShotContext(null);
+          return;
+        }
+
+        const [{ data: gameEventsData }, { data: seasonEventsData }] = await Promise.all([
+          supabase
+            .from('hunbasket_shot_events' as never)
+            .select('player_id, x, y, is_successful, shot_side')
+            .eq('raw_game_id', selectedRaw.id)
+            .eq('team_id', resolvedTeamId),
+          supabase
+            .from('hunbasket_shot_events' as never)
+            .select('player_id, x, y, is_successful, shot_side')
+            .eq('season_id', resolvedSeasonId)
+            .eq('team_id', resolvedTeamId),
+        ]);
+
+        if (cancelled) return;
+
+        const mapEvent = (row: ShotEventRow) => {
+          if (!Number.isFinite(row.x) || !Number.isFinite(row.y)) return null;
+          if (row.shot_side !== 'home' && row.shot_side !== 'away') return null;
+          return {
+            playerId: row.player_id,
+            x: Number(row.x),
+            y: Number(row.y),
+            isSuccessful: Boolean(row.is_successful),
+            shotSide: row.shot_side,
+          };
+        };
+
+        const gameShots = ((gameEventsData || []) as ShotEventRow[])
+          .map(mapEvent)
+          .filter((item): item is NonNullable<ReturnType<typeof mapEvent>> => Boolean(item));
+
+        const seasonShots = ((seasonEventsData || []) as ShotEventRow[])
+          .map(mapEvent)
+          .filter((item): item is NonNullable<ReturnType<typeof mapEvent>> => Boolean(item));
+
+        setPostgameShotContext({
+          gameShots,
+          seasonShots,
+        });
+      } catch {
+        if (!cancelled) setPostgameShotContext(null);
+      }
+    };
+
+    loadPostgameShotContext();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [resolvedSeasonId, resolvedTeamId, selectedGame, selectedOpponentTeamId]);
 
   type HeadToHeadGame = { ownGameId: string; opponentGameId: string | null; timestamp: number };
 
@@ -2628,8 +3075,16 @@ export function SeasonComparison({
         ? pregameReport.xFactorContext
         : undefined;
 
-    return analyzePostGameReport(teamGame, opponentGame, seasonStats, postgameBenchmarks, players, alignedXFactorContext);
-  }, [currentTeamPlayerIds, league, playerGameStats, playerTeamMap, postgameBenchmarks, pregameReport, rolesByPlayerId, seasonPlayers, selectedGame, resolvedTeamId, selectedTeamStats]);
+    return analyzePostGameReport(
+      teamGame,
+      opponentGame,
+      seasonStats,
+      postgameBenchmarks,
+      players,
+      alignedXFactorContext,
+      postgameShotContext ?? undefined
+    );
+  }, [currentTeamPlayerIds, league, playerGameStats, playerTeamMap, postgameBenchmarks, postgameShotContext, pregameReport, rolesByPlayerId, seasonPlayers, selectedGame, resolvedTeamId, selectedTeamStats]);
 
   const decisiveFactorGroups = useMemo(() => {
     if (!postgameReport) return [] as Array<{ key: string; axis: 'offense' | 'defense'; type: string; label: string; items: string[] }>;
@@ -2841,6 +3296,7 @@ export function SeasonComparison({
   useEffect(() => {
     setExpandedPlayerImpactId(null);
     setPlayerNarratives({});
+    setPlayerSeasonSaveStatus(null);
   }, [selectedGameId]);
 
   const handleGeneratePregameText = async () => {
@@ -2971,6 +3427,156 @@ export function SeasonComparison({
 
   const handleTogglePlayerDetail = (playerId: string) => {
     setExpandedPlayerImpactId(current => (current === playerId ? null : playerId));
+  };
+
+  const handleGeneratePlayerSeasonNarrative = async () => {
+    if (!analysis || !selectedPlayer || !resolvedSeasonId) return;
+
+    setIsGeneratingPlayerSeasonText(true);
+    setPlayerSeasonSaveStatus(null);
+    setPlayerNarratives(prev => ({
+      ...prev,
+      [selectedPlayer.id]: { status: 'loading' },
+    }));
+
+    try {
+      const response = await fetch('/api/generate-player-season-text', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          seasonId: resolvedSeasonId,
+          teamId: selectedPlayer.teamId ?? null,
+          teamName: selectedPlayer.teamName ?? null,
+          playerId: selectedPlayer.id,
+          playerName: selectedPlayer.name,
+          generatedBy: 'season-comparison-ui',
+          analysis,
+          shotProfile: playerSeasonShotSummary
+            ? {
+                attempts: playerSeasonShotSummary.attempts,
+                made: playerSeasonShotSummary.made,
+                fgPct: playerSeasonShotSummary.fgPct,
+                zones: playerShotZoneRows,
+              }
+            : null,
+          recentGames: lastFiveGames.map(game => ({
+            date: game.games?.date ?? null,
+            opponent: game.games?.opponent ?? null,
+            points: game.points,
+            minutes: game.minutes,
+            valuation: game.valuation,
+            assists: game.assists,
+            rebounds: game.total_rebounds,
+            turnovers: game.turnovers,
+          })),
+        }),
+      });
+
+      const payload = (await response.json().catch(() => ({}))) as {
+        ok?: boolean;
+        narrative?: string;
+        report?: { generated_at?: string | null; generated_by?: string | null };
+        error?: string;
+      };
+
+      if (!response.ok || !payload.ok || !payload.narrative) {
+        throw new Error(payload.error ?? 'A játékos szezonértékelés generálása nem sikerült.');
+      }
+
+      setPlayerNarratives(prev => ({
+        ...prev,
+        [selectedPlayer.id]: {
+          status: 'success',
+          text: payload.narrative,
+          generatedAt: payload.report?.generated_at ?? new Date().toISOString(),
+          generatedBy: payload.report?.generated_by ?? 'gpt-automata',
+        },
+      }));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Ismeretlen hiba történt.';
+      setPlayerNarratives(prev => ({
+        ...prev,
+        [selectedPlayer.id]: {
+          status: 'error',
+          error: message,
+        },
+      }));
+    } finally {
+      setIsGeneratingPlayerSeasonText(false);
+    }
+  };
+
+  const handleSavePlayerSeasonNarrative = async () => {
+    if (!analysis || !selectedPlayer || !resolvedSeasonId) return;
+    const current = playerNarratives[selectedPlayer.id];
+    const narrative = current?.text?.trim();
+    if (!narrative) return;
+
+    setIsSavingPlayerSeasonText(true);
+    setPlayerSeasonSaveStatus(null);
+
+    try {
+      const response = await fetch('/api/player-text-report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          seasonId: resolvedSeasonId,
+          teamId: selectedPlayer.teamId ?? null,
+          playerId: selectedPlayer.id,
+          reportType: 'season',
+          narrative,
+          generatedBy: 'season-comparison-ui',
+          analysisSnapshot: {
+            analysis,
+            shotProfile: playerSeasonShotSummary
+              ? {
+                  attempts: playerSeasonShotSummary.attempts,
+                  made: playerSeasonShotSummary.made,
+                  fgPct: playerSeasonShotSummary.fgPct,
+                  zones: playerShotZoneRows,
+                }
+              : null,
+            recentGames: lastFiveGames.map(game => ({
+              date: game.games?.date ?? null,
+              opponent: game.games?.opponent ?? null,
+              points: game.points,
+              minutes: game.minutes,
+              valuation: game.valuation,
+              assists: game.assists,
+              rebounds: game.total_rebounds,
+              turnovers: game.turnovers,
+            })),
+          },
+        }),
+      });
+
+      const payload = (await response.json().catch(() => ({}))) as {
+        ok?: boolean;
+        report?: { generated_at?: string | null; generated_by?: string | null; narrative?: string | null };
+        error?: string;
+      };
+
+      if (!response.ok || !payload.ok) {
+        throw new Error(payload.error ?? 'A játékos szezonértékelés mentése nem sikerült.');
+      }
+
+      setPlayerNarratives(prev => ({
+        ...prev,
+        [selectedPlayer.id]: {
+          status: 'success',
+          text: payload.report?.narrative ?? narrative,
+          generatedAt: payload.report?.generated_at ?? new Date().toISOString(),
+          generatedBy: payload.report?.generated_by ?? 'season-comparison-ui',
+        },
+      }));
+
+      setPlayerSeasonSaveStatus({ type: 'success', message: 'Játékos szezonértékelés elmentve.' });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Ismeretlen hiba történt a mentés során.';
+      setPlayerSeasonSaveStatus({ type: 'error', message });
+    } finally {
+      setIsSavingPlayerSeasonText(false);
+    }
   };
 
   const handleGeneratePlayerNarrative = async (playerId: string) => {
@@ -3243,6 +3849,63 @@ export function SeasonComparison({
                 <div className="text-sm text-slate-200 leading-relaxed">{analysis.summary}</div>
                 <div className="text-sm text-slate-300">{buildCoachSummary(analysis)}</div>
 
+                <div className="rounded-lg border border-slate-800 bg-slate-900/40 p-3 space-y-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="text-sm text-slate-300 font-medium">GPT szezonértékelés</div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={handleGeneratePlayerSeasonNarrative}
+                        disabled={isGeneratingPlayerSeasonText}
+                        className="bg-emerald-600 hover:bg-emerald-500 text-white"
+                      >
+                        {isGeneratingPlayerSeasonText ? 'Generálás...' : 'Komplex játékos elemzés'}
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={handleSavePlayerSeasonNarrative}
+                        disabled={
+                          isSavingPlayerSeasonText
+                          || !playerNarratives[selectedPlayer.id]?.text
+                        }
+                        className="border-slate-700 text-slate-200 hover:bg-slate-800"
+                      >
+                        {isSavingPlayerSeasonText ? 'Mentés...' : 'Mentés'}
+                      </Button>
+                    </div>
+                  </div>
+
+                  {playerSeasonSaveStatus && (
+                    <div className={`text-xs ${playerSeasonSaveStatus.type === 'success' ? 'text-emerald-300' : 'text-rose-300'}`}>
+                      {playerSeasonSaveStatus.message}
+                    </div>
+                  )}
+
+                  {playerNarratives[selectedPlayer.id]?.status === 'loading' && (
+                    <div className="text-sm text-slate-400">Játékos szezonértékelés generálása folyamatban...</div>
+                  )}
+
+                  {playerNarratives[selectedPlayer.id]?.status === 'error' && (
+                    <div className="text-sm text-rose-300">{playerNarratives[selectedPlayer.id]?.error ?? 'Hiba történt.'}</div>
+                  )}
+
+                  {playerNarratives[selectedPlayer.id]?.status === 'success' && playerNarratives[selectedPlayer.id]?.text && (
+                    <>
+                      <div className="text-xs text-slate-500">
+                        {playerNarratives[selectedPlayer.id]?.generatedAt
+                          ? `Mentve: ${formatGeneratedAt(playerNarratives[selectedPlayer.id]?.generatedAt) ?? 'ismeretlen'}${playerNarratives[selectedPlayer.id]?.generatedBy ? ` • Forrás: ${playerNarratives[selectedPlayer.id]?.generatedBy}` : ''}`
+                          : 'Mentett játékos szezonértékelés'}
+                      </div>
+                      <div className="text-sm text-slate-100 whitespace-pre-line leading-relaxed">
+                        {playerNarratives[selectedPlayer.id]?.text}
+                      </div>
+                    </>
+                  )}
+                </div>
+
                 <div className="flex flex-wrap items-center gap-3 text-xs">
                   <span className={`font-semibold ${getConfidenceTone(analysis.confidence)}`}>
                     Bizonyosság: {analysis.confidence}
@@ -3299,6 +3962,103 @@ export function SeasonComparison({
                   </ResponsiveContainer>
                 ) : (
                   <div className="text-sm text-slate-400">Nincs elérhető meccs adat.</div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card className="bg-slate-900 border-slate-800">
+              <CardHeader>
+                <CardTitle className="text-slate-50">Személyes dobásprofil (szezon)</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {playerSeasonShotSummary ? (
+                  <>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                      <div className="p-3 bg-slate-800/50 rounded-lg">
+                        <div className="text-xs text-slate-400">Kísérlet</div>
+                        <div className="text-slate-50 text-lg font-medium">{playerSeasonShotSummary.attempts}</div>
+                      </div>
+                      <div className="p-3 bg-slate-800/50 rounded-lg">
+                        <div className="text-xs text-slate-400">Bedobott</div>
+                        <div className="text-slate-50 text-lg font-medium">{playerSeasonShotSummary.made}</div>
+                      </div>
+                      <div className="p-3 bg-slate-800/50 rounded-lg">
+                        <div className="text-xs text-slate-400">FG%</div>
+                        <div className="text-slate-50 text-lg font-medium">{formatShotPct(playerSeasonShotSummary.fgPct)}</div>
+                      </div>
+                      <div className="p-3 bg-slate-800/50 rounded-lg">
+                        <div className="text-xs text-slate-400">Mintanagyság</div>
+                        <div className="text-slate-50 text-lg font-medium">Hunbasket</div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                      <div className="p-3 bg-slate-800/40 rounded-lg">
+                        <div className="text-sm text-slate-300 font-medium mb-2">Zónavolumen (kísérlet)</div>
+                        <ResponsiveContainer width="100%" height={220}>
+                          <BarChart data={playerShotZoneRows} margin={{ left: 8, right: 8 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                            <XAxis
+                              dataKey="label"
+                              stroke="#94a3b8"
+                              tick={{ fontSize: 10 }}
+                              interval={0}
+                              angle={-18}
+                              textAnchor="end"
+                              tickMargin={10}
+                              height={52}
+                
+                            />
+                            <YAxis stroke="#94a3b8" tick={{ fontSize: 10 }} allowDecimals={false} />
+                            <Tooltip
+                              contentStyle={{
+                                backgroundColor: '#0f172a',
+                                border: '1px solid #475569',
+                                borderRadius: '8px',
+                                color: '#f1f5f9',
+                              }}
+                              labelStyle={{ color: '#f1f5f9', fontWeight: 'bold' }}
+                              itemStyle={{ color: '#e2e8f0' }}
+                            />
+                            <Bar dataKey="attempts" name="Kísérlet" fill="#38bdf8" radius={[6, 6, 0, 0]} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                      <div className="p-3 bg-slate-800/40 rounded-lg">
+                        <div className="text-sm text-slate-300 font-medium mb-2">Zónahatékonyság (FG%)</div>
+                        <ResponsiveContainer width="100%" height={220}>
+                          <BarChart data={playerShotZoneRows} margin={{ left: 8, right: 8 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                            <XAxis
+                              dataKey="label"
+                              stroke="#94a3b8"
+                              tick={{ fontSize: 10 }}
+                              interval={0}
+                              angle={-18}
+                              textAnchor="end"
+                              tickMargin={10}
+                              height={52}
+                            />
+                            <YAxis stroke="#94a3b8" tick={{ fontSize: 10 }} domain={[0, 100]} />
+                            <Tooltip
+                              formatter={(value: number | string | undefined) => `${Number(value ?? 0).toFixed(1)}%`}
+                              contentStyle={{
+                                backgroundColor: '#0f172a',
+                                border: '1px solid #475569',
+                                borderRadius: '8px',
+                                color: '#f1f5f9',
+                              }}
+                              labelStyle={{ color: '#f1f5f9', fontWeight: 'bold' }}
+                              itemStyle={{ color: '#e2e8f0' }}
+                            />
+                            <Bar dataKey="pct" name="FG%" fill="#22c55e" radius={[6, 6, 0, 0]} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div className="text-sm text-slate-400">Ehhez a játékoshoz még nincs elég Hunbasket dobástérkép adat.</div>
                 )}
               </CardContent>
             </Card>
@@ -3526,6 +4286,79 @@ export function SeasonComparison({
                   </div>
                 </div>
               )}
+
+              <div className="space-y-2">
+                <div className="text-sm text-slate-300 font-medium">Szezon dobásprofil (Hunbasket)</div>
+                {teamSeasonShotSummary ? (
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-3 gap-2 text-sm">
+                      <div className="rounded-md bg-slate-900/50 border border-slate-800 px-3 py-2">
+                        <div className="text-xs text-slate-400">Kísérlet</div>
+                        <div className="text-slate-100 font-medium">{teamSeasonShotSummary.attempts}</div>
+                      </div>
+                      <div className="rounded-md bg-slate-900/50 border border-slate-800 px-3 py-2">
+                        <div className="text-xs text-slate-400">Bedobott</div>
+                        <div className="text-slate-100 font-medium">{teamSeasonShotSummary.made}</div>
+                      </div>
+                      <div className="rounded-md bg-slate-900/50 border border-slate-800 px-3 py-2">
+                        <div className="text-xs text-slate-400">FG%</div>
+                        <div className="text-slate-100 font-medium">{formatShotPct(teamSeasonShotSummary.fgPct)}</div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                      <div className="p-3 bg-slate-800/40 rounded-lg">
+                        <div className="text-sm text-slate-300 font-medium mb-2">Zónaeloszlás (%)</div>
+                        <ResponsiveContainer width="100%" height={280}>
+                          <BarChart data={teamSeasonShotZoneRows} margin={{ left: 8, right: 8 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                            <XAxis dataKey="label" stroke="#94a3b8" tick={{ fontSize: 10 }} />
+                            <YAxis stroke="#94a3b8" tick={{ fontSize: 10 }} domain={[0, 60]} />
+                            <Tooltip
+                              formatter={(value: number | string | undefined) => `${Number(value ?? 0).toFixed(1)}%`}
+                              contentStyle={{
+                                backgroundColor: '#0f172a',
+                                border: '1px solid #475569',
+                                borderRadius: '8px',
+                                color: '#f1f5f9',
+                              }}
+                              labelStyle={{ color: '#f1f5f9', fontWeight: 'bold' }}
+                              itemStyle={{ color: '#e2e8f0' }}
+                            />
+                            <Legend wrapperStyle={{ color: '#94a3b8' }} verticalAlign="top" height={24} />
+                            <Bar dataKey="rate" name="Zónaarány" fill="#38bdf8" radius={[6, 6, 0, 0]} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                      <div className="p-3 bg-slate-800/40 rounded-lg">
+                        <div className="text-sm text-slate-300 font-medium mb-2">Zónahatékonyság (FG%)</div>
+                        <ResponsiveContainer width="100%" height={280}>
+                          <BarChart data={teamSeasonShotZoneRows} margin={{ left: 8, right: 8 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                            <XAxis dataKey="label" stroke="#94a3b8" tick={{ fontSize: 10 }} />
+                            <YAxis stroke="#94a3b8" tick={{ fontSize: 10 }} domain={[0, 100]} />
+                            <Tooltip
+                              formatter={(value: number | string | undefined) => `${Number(value ?? 0).toFixed(1)}%`}
+                              contentStyle={{
+                                backgroundColor: '#0f172a',
+                                border: '1px solid #475569',
+                                borderRadius: '8px',
+                                color: '#f1f5f9',
+                              }}
+                              labelStyle={{ color: '#f1f5f9', fontWeight: 'bold' }}
+                              itemStyle={{ color: '#e2e8f0' }}
+                            />
+                            <Legend wrapperStyle={{ color: '#94a3b8' }} verticalAlign="top" height={24} />
+                            <Bar dataKey="pct" name="FG%" fill="#22c55e" radius={[6, 6, 0, 0]} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-sm text-slate-400">Nincs elérhető szezon dobástérkép adat ehhez a csapathoz.</div>
+                )}
+              </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
@@ -4589,6 +5422,346 @@ export function SeasonComparison({
                   </ResponsiveContainer>
                 </div>
               </div>
+
+              {postgameReport.shotMap?.available && postgameReport.shotMap.team && postgameReport.shotMap.comparison && (
+                <div className="rounded-lg border border-slate-800 bg-slate-900/40 p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="text-sm text-slate-200 font-medium">Dobástérkép kontextus (meccs vs. szezon)</div>
+                    <div className="text-xs text-slate-500">
+                      Kísérletek: {postgameReport.shotMap.team.attempts} • FG%: {formatShotPct(postgameReport.shotMap.team.fgPct)}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                    <div className="p-3 bg-slate-800/50 rounded-lg">
+                      <div className="text-xs text-slate-400">Gyűrű arány</div>
+                      <div className="text-slate-50 text-lg font-medium">{formatShotPct(postgameReport.shotMap.team.rimRate)}</div>
+                      <div className={`text-xs ${shotDeltaTone(postgameReport.shotMap.comparison.rimRateDelta)}`}>
+                        Delta: {formatShotDeltaPp(postgameReport.shotMap.comparison.rimRateDelta)}
+                      </div>
+                    </div>
+                    <div className="p-3 bg-slate-800/50 rounded-lg">
+                      <div className="text-xs text-slate-400">Középtáv arány</div>
+                      <div className="text-slate-50 text-lg font-medium">{formatShotPct(postgameReport.shotMap.team.midRate)}</div>
+                      <div className={`text-xs ${shotDeltaTone(postgameReport.shotMap.comparison.midRateDelta)}`}>
+                        Delta: {formatShotDeltaPp(postgameReport.shotMap.comparison.midRateDelta)}
+                      </div>
+                    </div>
+                    <div className="p-3 bg-slate-800/50 rounded-lg">
+                      <div className="text-xs text-slate-400">Tripla arány</div>
+                      <div className="text-slate-50 text-lg font-medium">{formatShotPct(postgameReport.shotMap.team.threeRate)}</div>
+                      <div className={`text-xs ${shotDeltaTone(postgameReport.shotMap.comparison.threeRateDelta)}`}>
+                        Delta: {formatShotDeltaPp(postgameReport.shotMap.comparison.threeRateDelta)}
+                      </div>
+                    </div>
+                    <div className="p-3 bg-slate-800/50 rounded-lg">
+                      <div className="text-xs text-slate-400">Sarok tripla arány</div>
+                      <div className="text-slate-50 text-lg font-medium">{formatShotPct(postgameReport.shotMap.team.corner3Rate)}</div>
+                      <div className={`text-xs ${shotDeltaTone(postgameReport.shotMap.comparison.corner3RateDelta)}`}>
+                        Delta: {formatShotDeltaPp(postgameReport.shotMap.comparison.corner3RateDelta)}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div className="p-3 bg-slate-800/40 rounded-lg">
+                      <div className="text-xs text-slate-400">Gyűrű FG%</div>
+                      <div className="text-sm text-slate-100">
+                        {formatShotPct(postgameReport.shotMap.team.rimPct)}
+                        <span className={`ml-2 ${shotDeltaTone(postgameReport.shotMap.comparison.rimPctDelta)}`}>
+                          ({formatShotDeltaPp(postgameReport.shotMap.comparison.rimPctDelta)})
+                        </span>
+                      </div>
+                    </div>
+                    <div className="p-3 bg-slate-800/40 rounded-lg">
+                      <div className="text-xs text-slate-400">Tripla FG%</div>
+                      <div className="text-sm text-slate-100">
+                        {formatShotPct(postgameReport.shotMap.team.threePct)}
+                        <span className={`ml-2 ${shotDeltaTone(postgameReport.shotMap.comparison.threePctDelta)}`}>
+                          ({formatShotDeltaPp(postgameReport.shotMap.comparison.threePctDelta)})
+                        </span>
+                      </div>
+                    </div>
+                    <div className="p-3 bg-slate-800/40 rounded-lg">
+                      <div className="text-xs text-slate-400">Shot quality index</div>
+                      <div className="text-sm text-slate-100">
+                        {postgameReport.shotMap.team.shotQualityIndex.toFixed(2)}
+                        <span className={`ml-2 ${shotDeltaTone(postgameReport.shotMap.comparison.shotQualityDelta)}`}>
+                          ({postgameReport.shotMap.comparison.shotQualityDelta > 0 ? '+' : ''}{postgameReport.shotMap.comparison.shotQualityDelta.toFixed(2)})
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {postgameReport.shotMap.season && (() => {
+                    const team = postgameReport.shotMap!.team!;
+                    const season = postgameReport.shotMap!.season!;
+
+                    const zoneRows = [
+                      {
+                        label: 'Gyűrű',
+                        gameRate: team.attempts > 0 ? (team.zones.rim.attempts / team.attempts) * 100 : 0,
+                        seasonRate: season.attempts > 0 ? (season.zones.rim.attempts / season.attempts) * 100 : 0,
+                        gamePct: team.zones.rim.pct,
+                        seasonPct: season.zones.rim.pct,
+                      },
+                      {
+                        label: 'Festék',
+                        gameRate: team.attempts > 0 ? (team.zones.paint.attempts / team.attempts) * 100 : 0,
+                        seasonRate: season.attempts > 0 ? (season.zones.paint.attempts / season.attempts) * 100 : 0,
+                        gamePct: team.zones.paint.pct,
+                        seasonPct: season.zones.paint.pct,
+                      },
+                      {
+                        label: 'Középtáv',
+                        gameRate: team.attempts > 0 ? (team.zones.mid.attempts / team.attempts) * 100 : 0,
+                        seasonRate: season.attempts > 0 ? (season.zones.mid.attempts / season.attempts) * 100 : 0,
+                        gamePct: team.zones.mid.pct,
+                        seasonPct: season.zones.mid.pct,
+                      },
+                      {
+                        label: 'Sarok tripla',
+                        gameRate: team.attempts > 0 ? (team.zones.corner3.attempts / team.attempts) * 100 : 0,
+                        seasonRate: season.attempts > 0 ? (season.zones.corner3.attempts / season.attempts) * 100 : 0,
+                        gamePct: team.zones.corner3.pct,
+                        seasonPct: season.zones.corner3.pct,
+                      },
+                      {
+                        label: 'Egyéb tripla',
+                        gameRate: team.attempts > 0 ? (team.zones.aboveBreak3.attempts / team.attempts) * 100 : 0,
+                        seasonRate: season.attempts > 0 ? (season.zones.aboveBreak3.attempts / season.attempts) * 100 : 0,
+                        gamePct: team.zones.aboveBreak3.pct,
+                        seasonPct: season.zones.aboveBreak3.pct,
+                      },
+                    ];
+
+                    return (
+                      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                        <div className="p-3 bg-slate-800/50 rounded-lg">
+                          <div className="text-sm text-slate-300 font-medium mb-2">Zónaeloszlás (%)</div>
+                          <ResponsiveContainer width="100%" height={260}>
+                            <BarChart data={zoneRows} margin={{ left: 8, right: 8 }}>
+                              <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                              <XAxis dataKey="label" stroke="#94a3b8" tick={{ fontSize: 10 }} />
+                              <YAxis stroke="#94a3b8" tick={{ fontSize: 10 }} domain={[0, 60]} />
+                              <Tooltip
+                                formatter={(value: number | string | undefined) => `${Number(value ?? 0).toFixed(1)}%`}
+                                contentStyle={{
+                                  backgroundColor: '#0f172a',
+                                  border: '1px solid #475569',
+                                  borderRadius: '8px',
+                                  color: '#f1f5f9',
+                                }}
+                                labelStyle={{ color: '#f1f5f9', fontWeight: 'bold' }}
+                                itemStyle={{ color: '#e2e8f0' }}
+                              />
+                              <Legend wrapperStyle={{ color: '#94a3b8' }} />
+                              <Bar dataKey="gameRate" name="Meccs" fill="#f97316" radius={[6, 6, 0, 0]} />
+                              <Bar dataKey="seasonRate" name="Szezon" fill="#22c55e" radius={[6, 6, 0, 0]} />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </div>
+                        <div className="p-3 bg-slate-800/50 rounded-lg">
+                          <div className="text-sm text-slate-300 font-medium mb-2">Zónahatékonyság (FG%)</div>
+                          <ResponsiveContainer width="100%" height={260}>
+                            <LineChart data={zoneRows} margin={{ left: 8, right: 8 }}>
+                              <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                              <XAxis dataKey="label" stroke="#94a3b8" tick={{ fontSize: 10 }} />
+                              <YAxis stroke="#94a3b8" tick={{ fontSize: 10 }} domain={[0, 100]} />
+                              <Tooltip
+                                formatter={(value: number | string | undefined) => `${Number(value ?? 0).toFixed(1)}%`}
+                                contentStyle={{
+                                  backgroundColor: '#0f172a',
+                                  border: '1px solid #475569',
+                                  borderRadius: '8px',
+                                  color: '#f1f5f9',
+                                }}
+                                labelStyle={{ color: '#f1f5f9', fontWeight: 'bold' }}
+                                itemStyle={{ color: '#e2e8f0' }}
+                              />
+                              <Legend wrapperStyle={{ color: '#94a3b8' }} />
+                              <Line type="monotone" dataKey="gamePct" name="Meccs FG%" stroke="#f97316" strokeWidth={2.5} dot={{ r: 3 }} />
+                              <Line type="monotone" dataKey="seasonPct" name="Szezon FG%" stroke="#22c55e" strokeWidth={2.5} dot={{ r: 3 }} />
+                            </LineChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {postgameShotScatterData.length > 0 && (
+                    <div className="p-3 bg-slate-800/40 rounded-lg">
+                      <div className="text-sm text-slate-300 font-medium mb-2">Dobástérkép pontnézet (aktuális meccs, félpálya)</div>
+                      {(() => {
+                        const courtXMin = 0;
+                        const courtXMax = 36;
+                        const viewWidth = 760;
+                        const viewHeight = 560;
+                        const paddingX = 18;
+                        const paddingTop = 24;
+                        const paddingBottom = 24;
+                        const sideUnitToMeters = 0.15;
+                        const depthUnitToMeters = 0.28;
+                        const courtWidthMeters = 100 * sideUnitToMeters;
+                        const courtDepthMeters = (courtXMax - courtXMin) * depthUnitToMeters;
+                        const pxPerMeter = Math.min(
+                          (viewWidth - paddingX * 2) / courtWidthMeters,
+                          (viewHeight - paddingTop - paddingBottom) / courtDepthMeters
+                        );
+                        const courtWidth = courtWidthMeters * pxPerMeter;
+                        const courtHeight = courtDepthMeters * pxPerMeter;
+                        const courtLeft = (viewWidth - courtWidth) / 2;
+                        const courtRight = courtLeft + courtWidth;
+                        const baselineY = viewHeight - paddingBottom;
+                        const courtTop = baselineY - courtHeight;
+
+                        const toSvgXFromSide = (y: number) => courtLeft + y * sideUnitToMeters * pxPerMeter;
+                        const toSvgYFromDepth = (x: number) => baselineY - (x - courtXMin) * depthUnitToMeters * pxPerMeter;
+                        const sideUnitsToPx = (value: number) => value * sideUnitToMeters * pxPerMeter;
+                        const depthUnitsToPx = (value: number) => value * depthUnitToMeters * pxPerMeter;
+
+                        const halfCourtShots = filteredPostgameShotScatterData.filter(
+                          shot => shot.x >= courtXMin && shot.x <= courtXMax && shot.y >= 0 && shot.y <= 100
+                        );
+
+                        const hoopDepth = 6;
+                        const backboardDepth = 4.8;
+                        const hoopX = toSvgXFromSide(50);
+                        const hoopY = toSvgYFromDepth(hoopDepth);
+                        const restrictedRx = sideUnitsToPx(9);
+                        const restrictedRy = depthUnitsToPx(9);
+                        const keyLeft = toSvgXFromSide(32);
+                        const keyRight = toSvgXFromSide(68);
+                        const keyTop = toSvgYFromDepth(18);
+                        const cornerSideLow = 14;
+                        const cornerSideHigh = 86;
+                        const cornerLeftX = toSvgXFromSide(cornerSideLow);
+                        const cornerRightX = toSvgXFromSide(cornerSideHigh);
+                        const cornerLineDepth = 25;
+                        const cornerLineTopY = toSvgYFromDepth(cornerLineDepth);
+                        const arcPeakDepth = 32;
+                        const backboardY = toSvgYFromDepth(backboardDepth);
+                        const backboardHalfWidth = sideUnitsToPx(6);
+                        const freeThrowCenterX = toSvgXFromSide(50);
+                        const freeThrowCenterY = toSvgYFromDepth(18);
+                        const freeThrowRx = sideUnitsToPx(6);
+                        const freeThrowRy = depthUnitsToPx(6);
+
+                        const arcPoints: string[] = [];
+                        for (let side = cornerSideLow; side <= cornerSideHigh; side += 1.1) {
+                          const sideNorm = Math.abs(side - 50) / (50 - cornerSideLow);
+                          const modeledDepth = cornerLineDepth + (arcPeakDepth - cornerLineDepth) * (1 - sideNorm * sideNorm);
+                          arcPoints.push(`${toSvgXFromSide(side).toFixed(2)},${toSvgYFromDepth(modeledDepth).toFixed(2)}`);
+                        }
+                        const threePointArcPath = arcPoints.length > 1 ? `M ${arcPoints.join(' L ')}` : '';
+
+                        return (
+                          <div className="rounded-lg border border-slate-700 bg-slate-950/40 overflow-hidden">
+                            <svg viewBox={`0 0 ${viewWidth} ${viewHeight}`} className="w-full h-[520px]" role="img" aria-label="Félpályás dobástérkép">
+                              <rect x="0" y="0" width={viewWidth} height={viewHeight} fill="rgba(15, 23, 42, 0.55)" />
+                              <rect x={courtLeft} y={courtTop} width={courtRight - courtLeft} height={baselineY - courtTop} fill="rgba(217, 119, 6, 0.06)" />
+
+                              <line x1={courtLeft} y1={baselineY} x2={courtRight} y2={baselineY} stroke="#e2e8f0" strokeOpacity="0.75" strokeWidth="2.2" />
+                              <line x1={courtLeft} y1={baselineY} x2={courtLeft} y2={courtTop} stroke="#94a3b8" strokeOpacity="0.45" strokeWidth="1.6" />
+                              <line x1={courtRight} y1={baselineY} x2={courtRight} y2={courtTop} stroke="#94a3b8" strokeOpacity="0.45" strokeWidth="1.6" />
+
+                              <rect
+                                x={keyLeft}
+                                y={keyTop}
+                                width={keyRight - keyLeft}
+                                height={baselineY - keyTop}
+                                fill="rgba(14, 165, 233, 0.08)"
+                                stroke="#cbd5e1"
+                                strokeOpacity="0.65"
+                                strokeWidth="1.4"
+                              />
+                              <ellipse
+                                cx={freeThrowCenterX}
+                                cy={freeThrowCenterY}
+                                rx={freeThrowRx}
+                                ry={freeThrowRy}
+                                fill="none"
+                                stroke="#cbd5e1"
+                                strokeOpacity="0.55"
+                                strokeDasharray="4 4"
+                              />
+
+                              <path
+                                d={`M ${hoopX - restrictedRx} ${hoopY} Q ${hoopX} ${hoopY - restrictedRy} ${hoopX + restrictedRx} ${hoopY}`}
+                                fill="rgba(34, 197, 94, 0.08)"
+                                stroke="#86efac"
+                                strokeOpacity="0.65"
+                                strokeWidth="1.2"
+                              />
+
+                              <line x1={cornerLeftX} y1={baselineY} x2={cornerLeftX} y2={cornerLineTopY} stroke="#60a5fa" strokeOpacity="0.95" strokeWidth="2.2" />
+                              <line x1={cornerRightX} y1={baselineY} x2={cornerRightX} y2={cornerLineTopY} stroke="#60a5fa" strokeOpacity="0.95" strokeWidth="2.2" />
+
+                              {threePointArcPath && (
+                                <path
+                                  d={threePointArcPath}
+                                  fill="none"
+                                  stroke="#60a5fa"
+                                  strokeOpacity="0.95"
+                                  strokeWidth="2.2"
+                                  strokeLinejoin="round"
+                                />
+                              )}
+
+                              <ellipse cx={hoopX} cy={hoopY} rx={sideUnitsToPx(2.2)} ry={depthUnitsToPx(2.2)} fill="rgba(248, 250, 252, 0.12)" />
+                              <ellipse cx={hoopX} cy={hoopY} rx={sideUnitsToPx(1.3)} ry={depthUnitsToPx(1.3)} fill="none" stroke="#f8fafc" strokeOpacity="0.95" strokeWidth="2.8" />
+                              <ellipse cx={hoopX} cy={hoopY} rx={sideUnitsToPx(0.85)} ry={depthUnitsToPx(0.85)} fill="#f8fafc" />
+                              <line x1={hoopX - backboardHalfWidth} y1={backboardY} x2={hoopX + backboardHalfWidth} y2={backboardY} stroke="#f8fafc" strokeWidth="3.4" strokeLinecap="round" />
+
+                              {halfCourtShots.map((shot, index) => (
+                                <circle
+                                  key={`${shot.player}-${shot.result}-${index}`}
+                                  cx={toSvgXFromSide(shot.y)}
+                                  cy={toSvgYFromDepth(shot.x)}
+                                  r="5"
+                                  fill={shot.result === 'Bement' ? '#22c55e' : '#ef4444'}
+                                  fillOpacity="0.92"
+                                  stroke="#0f172a"
+                                  strokeWidth="1"
+                                >
+                                  <title>{`${shot.player} • ${shot.result} • x:${shot.x.toFixed(1)} y:${shot.y.toFixed(1)}`}</title>
+                                </circle>
+                              ))}
+                            </svg>
+                          </div>
+                        );
+                      })()}
+                      <div className="mt-3 rounded-md border border-slate-700/80 bg-slate-900/50 p-2.5">
+                        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-slate-400">Játékos:</span>
+                            <Select value={selectedPostgameShotPlayerId} onValueChange={setSelectedPostgameShotPlayerId}>
+                              <SelectTrigger className="h-8 w-[230px] border-slate-600 bg-slate-900/80 text-xs text-slate-100">
+                                <SelectValue placeholder="Minden játékos" />
+                              </SelectTrigger>
+                              <SelectContent className="border-slate-700 bg-slate-900 text-slate-100">
+                                <SelectItem className="text-slate-100 focus:bg-slate-800 focus:text-slate-100" value="all">Minden játékos</SelectItem>
+                                {postgameShotPlayerOptions.players.map(player => (
+                                  <SelectItem className="text-slate-100 focus:bg-slate-800 focus:text-slate-100" key={player.id} value={player.id}>{player.name}</SelectItem>
+                                ))}
+                                {postgameShotPlayerOptions.unknownShotCount > 0 && (
+                                  <SelectItem className="text-slate-100 focus:bg-slate-800 focus:text-slate-100" value="__unknown__">Ismeretlen játékos ({postgameShotPlayerOptions.unknownShotCount})</SelectItem>
+                                )}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <span className="text-xs text-slate-400">Szűrt dobások: {filteredPostgameShotScatterData.length}</span>
+                        </div>
+                        <div className="mt-2 flex flex-wrap items-center gap-4 text-xs text-slate-500">
+                          <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-full bg-emerald-500" />Bement</span>
+                          <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-full bg-rose-500" />Kimaradt</span>
+                          <span>Kék vonal: hárompontos ív és sarokhatár, fehér vonal: alapvonal/palánk</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>

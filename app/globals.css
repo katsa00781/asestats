@@ -120,3 +120,12 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Keep chart hover cursors dark-friendly in dark mode. */
+.dark .recharts-tooltip-cursor {
+  fill: rgba(71, 85, 105, 0.28) !important;
+}
+
+.dark .recharts-tooltip-cursor[stroke] {
+  stroke: rgba(148, 163, 184, 0.35) !important;
+}
