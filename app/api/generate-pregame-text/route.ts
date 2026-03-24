@@ -31,7 +31,9 @@ Kötelező szabályok:
 - Kizárólag a kapott, algoritmus által számolt adatokból dolgozhatsz.
 - Nem találhatsz ki új mutatót, százalékot, előnyt vagy kockázatot.
 - Magyar kosárlabda-szaknyelvet használj, angol zsargont kerüld.
-- A szöveg legyen leíró, olvasmányos, logikusan felépített.`;
+- A szöveg legyen leíró, olvasmányos, logikusan felépített.
+- Folyamatos, értelmes magyar mondatokban írj, ne kulcsszó-listákkal.
+- Ha új mezők vannak (scenarioOutcomes, xFactorImpact, riskScenarios, calibrationDiagnostics, advancedPlayers), azokat természetes nyelven építsd be.`;
 
 const USER_PROMPT_TEMPLATE = `KONTEXTUS:
 - Elemzés nézőpontja: [CSAPAT_NEVE] (esélyük: X%)
@@ -70,15 +72,28 @@ SZERKEZET:
    - IF [feltétel alapján strukturált adatokból] THEN [következmény]
    - Példa: "Ha Atomerőmű >45% lepattanót szerez → 62% esély növekedés"
 
+7. Kalibrációs diagnosztika (kötelező, ha van calibrationDiagnostics)
+  - Nevesíts legalább 2 magasabb intenzitású dimenziót (pl. periméter nyomás, tempó-eltérés).
+  - Magyarázd el 1-2 mondatban, ez taktikai értelemben mit jelent.
+
+8. Haladó játékosmutatók (kötelező, ha van advancedPlayers)
+  - Nevesíts 1-1 saját és ellenfél játékost PER*/WS* alapon.
+  - Röviden jelezd, hogy perc-küszöb szűrés után kerültek be (marginális percek kizárva).
+
 STÍLUS ELVÁRÁS:
 - Írj 12-16 mondatot, rövid bekezdésekben.
 - Legyen olvasmányos, szurkolóbarát, de ne bulváros.
 - Adj rövid, közérthető magyarázatot arra, miért fontos egy-egy statisztikai jel.
+- Mondatszintű, összefüggő elemzést adj: legyen bevezetés, közép és lezárás.
+- Használj magyar szaknyelvet: tempó, labdanyomás, visszarendeződés, festékvédekezés, faultterhelés, lepattanóharc.
+- Kerüld a gépies felsorolást és a sablonos ismétlést.
 
 TILOS:
 - Általános kijelentések játékstílus nélkül ("gyors csapat" – miből derül ki?)
 - Névtelen X-faktorok ("a periméterjátékos" – ki?)
 - Ellentmondás a strukturált adatokkal (ellenőrizd irányító-matchup előjelét!)
+- Olyan következtetés, ami nincs alátámasztva a strukturált mezőkben.
+- Nyers JSON-részletek visszamásolása a válaszba.
 
 STRUKTURÁLT ADATOK (változtatás nélkül dolgozz velük):
 {{PRE_GAME_ANALYSIS_OBJECT}}`;

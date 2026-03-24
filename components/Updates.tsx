@@ -15,6 +15,15 @@ type UpdateItem = {
 
 const updates: UpdateItem[] = [
   {
+    date: '2026. március 24.',
+    version: '1.7.3',
+    category: 'improvement',
+    icon: <BarChart3 className="w-5 h-5" />,
+    title: 'Csapatelemzés: presetelt LLM riport, liga-relatív heatmap és stabil mentés',
+    description:
+      'Az Elemzések oldalon a csapatértékelés új stílus preseteket kapott (szurkolóbarát, edzői, scouting), és a generált LLM szöveg preset szerint külön menthető/visszatölthető. Bekerült a szezon zóna heatmap és a ligaátlaghoz viszonyított relatív zónadelta overlay, valamint adatalapú taktikai gyengepont-jelzések. A háttérben elkészült a team_text_reports tábla és a kapcsolódó API mentési folyamat; a legacy season -> season_fan migráció ütközéskezelése javítva lett, így a duplikált kulcs hibák elkerülhetők.',
+  },
+  {
     date: '2026. március 22.',
     version: '1.7.2',
     category: 'fix',

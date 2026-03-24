@@ -759,13 +759,38 @@ const buildRosterSummary = (team: NormalizedTeamStats) => {
     return acc;
   }, {} as Record<string, string[]>);
 
+  const getPositionAllocation = (player: NormalizedRosterEntry): Array<{ position: Position; share: number }> => {
+    const candidates = dedupePositions([player.position, ...(player.positionBuckets ?? [])]);
+    if (candidates.length <= 1) {
+      return [{ position: player.position, share: 1 }];
+    }
+
+    const secondary = candidates.find(pos => pos !== player.position);
+    if (!secondary) {
+      return [{ position: player.position, share: 1 }];
+    }
+
+    // Hybrid allocation for 1-2 positional players (e.g. PG/SG, SG/SF).
+    return [
+      { position: player.position, share: 0.65 },
+      { position: secondary, share: 0.35 },
+    ];
+  };
+
   normalizedRoster.forEach(player => {
-    positionMinutesShare[player.position] += player.minutes;
-    positionPlayers[player.position].push({ name: player.name, minutes: player.minutes || 0 });
+    const allocations = getPositionAllocation(player);
+    allocations.forEach(allocation => {
+      const weightedMinutes = (player.minutes || 0) * allocation.share;
+      positionMinutesShare[allocation.position] += weightedMinutes;
+      positionPlayers[allocation.position].push({ name: player.name, minutes: weightedMinutes });
+
+      if (player.heightCm && Number.isFinite(player.heightCm)) {
+        heightTotals[allocation.position].sum += player.heightCm * allocation.share;
+        heightTotals[allocation.position].count += allocation.share;
+      }
+    });
 
     if (player.heightCm && Number.isFinite(player.heightCm)) {
-      heightTotals[player.position].sum += player.heightCm;
-      heightTotals[player.position].count += 1;
       heightSum += player.heightCm;
       heightCount += 1;
     }
@@ -994,6 +1019,14 @@ const buildRiskPriorities = (
 ) => {
   const risks: Array<{ label: string; weight: number }> = [];
 
+  const positionMinuteRiskThresholds: Record<Position, { critical: number; warning: number; baseWeight: number }> = {
+    PG: { critical: 11, warning: 16, baseWeight: 3 },
+    SG: { critical: 9, warning: 14, baseWeight: 3 },
+    SF: { critical: 10, warning: 15, baseWeight: 2 },
+    PF: { critical: 8, warning: 13, baseWeight: 2 },
+    C: { critical: 8, warning: 12, baseWeight: 2 },
+  };
+
   const positionRiskDetails: Record<Position, string> = {
     PG: 'szervezés és tempó menedzsment',
     SG: 'periméter scoring',
@@ -1003,10 +1036,17 @@ const buildRiskPriorities = (
   };
 
   (Object.keys(roster.positionMinutesShare) as Position[]).forEach(pos => {
-    if (roster.positionMinutesShare[pos] < 8) {
+    const share = roster.positionMinutesShare[pos];
+    const threshold = positionMinuteRiskThresholds[pos];
+    if (share < threshold.critical) {
       risks.push({
         label: `${pos === 'C' ? 'Center' : pos} hiány → ${positionRiskDetails[pos]}`,
-        weight: 3,
+        weight: threshold.baseWeight + 1,
+      });
+    } else if (share < threshold.warning) {
+      risks.push({
+        label: `${pos === 'C' ? 'Center' : pos} szűk rotáció → ${positionRiskDetails[pos]}`,
+        weight: threshold.baseWeight,
       });
     }
   });

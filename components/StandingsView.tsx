@@ -1,5 +1,5 @@
 'use client';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
@@ -41,44 +41,92 @@ export function StandingsView({ onRefresh, selectedSeasonId, selectedSeasonName 
   const [selectedMatchday, setSelectedMatchday] = useState<string>('');
   const [currentStanding, setCurrentStanding] = useState<StandingRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [usedFallback, setUsedFallback] = useState(false);
 
-  const loadStandings = async () => {
+  const normalizeRows = (rows: StandingData[] | null | undefined): StandingData[] => {
+    if (!Array.isArray(rows)) return [];
+
+    return rows
+      .map(row => ({
+        ...row,
+        data: Array.isArray(row.data) ? row.data : [],
+      }))
+      .filter(row => row.data.length > 0);
+  };
+
+  const loadStandings = useCallback(async () => {
     setIsLoading(true);
-
-    if (!selectedSeasonId) {
-      setStandings([]);
-      setSelectedMatchday('');
-      setCurrentStanding([]);
-      setIsLoading(false);
-      return;
-    }
+    setUsedFallback(false);
 
     try {
-      const { data, error } = await supabase
-        .from('standings')
-        .select('*')
-        .eq('season_id', selectedSeasonId)
-        .order('matchday', { ascending: false });
+      let data: StandingData[] | null = null;
+      let error: Error | null = null;
+
+      if (selectedSeasonId) {
+        const seasonQuery = await supabase
+          .from('standings')
+          .select('*')
+          .eq('season_id', selectedSeasonId)
+          .order('matchday', { ascending: false });
+
+        data = seasonQuery.data as StandingData[] | null;
+        error = seasonQuery.error as Error | null;
+      } else {
+        const latestQuery = await supabase
+          .from('standings')
+          .select('*')
+          .order('date', { ascending: false })
+          .order('matchday', { ascending: false });
+
+        data = latestQuery.data as StandingData[] | null;
+        error = latestQuery.error as Error | null;
+      }
 
       if (error) throw error;
 
-      if (data && data.length > 0) {
-        setStandings(data);
+      let normalized = normalizeRows(data);
+      let fallbackUsed = false;
+
+      if (normalized.length === 0 && selectedSeasonId) {
+        const { data: legacyData, error: legacyError } = await supabase
+          .from('standings')
+          .select('*')
+          .is('season_id', null)
+          .order('date', { ascending: false })
+          .order('matchday', { ascending: false });
+
+        if (legacyError) throw legacyError;
+        normalized = normalizeRows(legacyData as StandingData[] | null);
+        fallbackUsed = normalized.length > 0;
+      }
+
+      if (normalized.length > 0) {
+        setStandings(normalized);
         // Legfrissebb forduló kiválasztása
-        const latest = data[0];
+        const latest = normalized[0];
         setSelectedMatchday(latest.matchday.toString());
         setCurrentStanding(latest.data);
+        setUsedFallback(fallbackUsed);
+      } else {
+        setStandings([]);
+        setSelectedMatchday('');
+        setCurrentStanding([]);
+        setUsedFallback(false);
       }
     } catch (error) {
       console.error('Tabella betöltési hiba:', error);
+      setStandings([]);
+      setSelectedMatchday('');
+      setCurrentStanding([]);
+      setUsedFallback(false);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [selectedSeasonId]);
 
   useEffect(() => {
     loadStandings();
-  }, [onRefresh, selectedSeasonId]);
+  }, [loadStandings, onRefresh]);
 
   useEffect(() => {
     if (selectedMatchday) {
@@ -118,11 +166,11 @@ export function StandingsView({ onRefresh, selectedSeasonId, selectedSeasonName 
     return (
       <Card>
         <CardContent className="py-12">
-          <p className="text-center text-slate-400">Még nincs mentett tabella.</p>
+          <p className="text-center text-slate-400">Nincs elérhető tabella adat.</p>
           <p className="text-center text-slate-500 text-sm mt-2">
             {selectedSeasonId
               ? 'Importálj egy tabellát a kezdéshez.'
-              : 'Előbb válassz szezont a tabella megjelenítéséhez.'}
+              : 'Válassz szezont, vagy importálj tabellát a Tabella fülön.'}
           </p>
         </CardContent>
       </Card>
@@ -252,6 +300,14 @@ export function StandingsView({ onRefresh, selectedSeasonId, selectedSeasonName 
           </div>
         </CardContent>
       </Card>
+
+      {usedFallback && (
+        <Card>
+          <CardContent className="py-3 text-sm text-amber-300">
+            A kiválasztott szezonhoz nem volt közvetlen tabella, ezért legacy (szezon nélküli) snapshot került betöltésre.
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

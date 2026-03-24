@@ -115,6 +115,32 @@ export type Database = {
         }
         Update: Partial<Database['public']['Tables']['game_text_reports']['Insert']>
       }
+      team_text_reports: {
+        Row: {
+          id: string
+          season_id: string
+          team_id: string
+          report_type: 'season' | 'season_fan' | 'season_coach' | 'season_scouting'
+          narrative: string
+          analysis_snapshot: Json | null
+          generated_by: string | null
+          generated_at: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          season_id: string
+          team_id: string
+          report_type?: 'season' | 'season_fan' | 'season_coach' | 'season_scouting'
+          narrative: string
+          analysis_snapshot?: Json | null
+          generated_by?: string | null
+          generated_at?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: Partial<Database['public']['Tables']['team_text_reports']['Insert']>
+      }
     }
     Views: {
       player_season_stats: {
