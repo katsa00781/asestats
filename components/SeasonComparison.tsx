@@ -173,6 +173,29 @@ type ProjectionRow = {
   certaintyScore: number;
 };
 
+type PlayoffSeriesProjection = {
+  round: 'Negyeddöntő' | 'Elődöntő' | 'Döntő' | 'Bronz';
+  homeSeed: number;
+  awaySeed: number;
+  homeTeam: string;
+  awayTeam: string;
+  homeWinProbability: number;
+  awayWinProbability: number;
+  winner: string;
+  loser: string;
+  mostLikelyScore: string;
+  certaintyLabel: 'Magas' | 'Közepes' | 'Alacsony';
+};
+
+type PlayoffProjectionResult = {
+  champion: string;
+  runnerUp: string;
+  third: string;
+  fourth: string;
+  finalRanking: Array<{ position: number; team: string; note?: string }>;
+  series: PlayoffSeriesProjection[];
+};
+
 const normalizeTeamKey = (value: string) =>
   value
     .toLowerCase()
@@ -237,6 +260,62 @@ const stdDev = (values: number[]) => {
   const mean = values.reduce((sum, value) => sum + value, 0) / values.length;
   const variance = values.reduce((sum, value) => sum + Math.pow(value - mean, 2), 0) / values.length;
   return Math.sqrt(variance);
+};
+
+const clamp01 = (value: number) => Math.max(0, Math.min(1, value));
+
+const probabilityLabel = (value: number): 'Magas' | 'Közepes' | 'Alacsony' => {
+  if (value >= 0.68 || value <= 0.32) return 'Magas';
+  if (value >= 0.58 || value <= 0.42) return 'Közepes';
+  return 'Alacsony';
+};
+
+const bestOfSeriesOutcome = (gameProbabilities: number[], winsNeeded: number) => {
+  const scoreProbabilities = new Map<string, number>();
+
+  const walk = (gameIndex: number, homeWins: number, awayWins: number, probability: number) => {
+    if (homeWins >= winsNeeded || awayWins >= winsNeeded || gameIndex >= gameProbabilities.length) {
+      if (homeWins >= winsNeeded || awayWins >= winsNeeded) {
+        const key = `${homeWins}-${awayWins}`;
+        scoreProbabilities.set(key, (scoreProbabilities.get(key) || 0) + probability);
+      }
+      return;
+    }
+
+    const pHome = clamp01(gameProbabilities[gameIndex] ?? 0.5);
+    walk(gameIndex + 1, homeWins + 1, awayWins, probability * pHome);
+    walk(gameIndex + 1, homeWins, awayWins + 1, probability * (1 - pHome));
+  };
+
+  walk(0, 0, 0, 1);
+
+  let homeSeriesWinProbability = 0;
+  let mostLikelyHomeWinScore: string | null = null;
+  let mostLikelyAwayWinScore: string | null = null;
+  let mostLikelyHomeWinProbability = -1;
+  let mostLikelyAwayWinProbability = -1;
+
+  scoreProbabilities.forEach((probability, score) => {
+    const [home, away] = score.split('-').map(value => Number(value));
+    if (home > away) {
+      homeSeriesWinProbability += probability;
+      if (probability > mostLikelyHomeWinProbability) {
+        mostLikelyHomeWinProbability = probability;
+        mostLikelyHomeWinScore = score;
+      }
+    } else {
+      if (probability > mostLikelyAwayWinProbability) {
+        mostLikelyAwayWinProbability = probability;
+        mostLikelyAwayWinScore = score;
+      }
+    }
+  });
+
+  return {
+    homeSeriesWinProbability: clamp01(homeSeriesWinProbability),
+    mostLikelyHomeWinScore,
+    mostLikelyAwayWinScore,
+  };
 };
 
 const average = (values: number[]) => {
@@ -1090,7 +1169,23 @@ export function SeasonComparison({
   const [seasonFixtures, setSeasonFixtures] = useState<
     Array<{ home_team_id: string; away_team_id: string; game_date: string; status: string }>
   >([]);
+  const [seasonPlayedFixtures, setSeasonPlayedFixtures] = useState<
+    Array<{
+      home_team_id: string;
+      away_team_id: string;
+      game_date: string;
+      home_score: number | null;
+      away_score: number | null;
+      status: string;
+    }>
+  >([]);
   const [usedLegacyStandingsFallback, setUsedLegacyStandingsFallback] = useState(false);
+  const [projectionScenario, setProjectionScenario] = useState<'baseline' | 'form' | 'upset'>('baseline');
+  const [whatIfHomeAdvantageDelta, setWhatIfHomeAdvantageDelta] = useState(0);
+  const [whatIfLogisticDelta, setWhatIfLogisticDelta] = useState(0);
+  const [whatIfTeamAdjustments, setWhatIfTeamAdjustments] = useState<Record<string, number>>({});
+  const [whatIfTeamKey, setWhatIfTeamKey] = useState<string>('');
+  const [whatIfTeamDeltaInput, setWhatIfTeamDeltaInput] = useState<string>('0');
   const handleToggleOwnInjury = (playerId: string) => {
     setPregameOwnInjuries(prev => (prev.includes(playerId) ? prev.filter(id => id !== playerId) : [...prev, playerId]));
   };
@@ -1192,12 +1287,13 @@ export function SeasonComparison({
         if (!cancelled) {
           setStandingsSnapshot([]);
           setSeasonFixtures([]);
+          setSeasonPlayedFixtures([]);
         }
         return;
       }
 
       try {
-        const [{ data: standingsData }, { data: fixturesData }] = await Promise.all([
+        const [{ data: standingsData }, { data: fixturesData }, { data: playedFixturesData }] = await Promise.all([
           supabase
             .from('standings')
             .select('data')
@@ -1210,6 +1306,12 @@ export function SeasonComparison({
             .select('home_team_id, away_team_id, game_date, status')
             .eq('season_id', resolvedSeasonId)
             .in('status', ['scheduled', 'postponed']),
+          supabase
+            .from('league_fixtures')
+            .select('home_team_id, away_team_id, game_date, home_score, away_score, status')
+            .eq('season_id', resolvedSeasonId)
+            .eq('status', 'played')
+            .order('game_date', { ascending: false }),
         ]);
 
         if (cancelled) return;
@@ -1240,20 +1342,31 @@ export function SeasonComparison({
 
         setStandingsSnapshot(rows);
         setSeasonFixtures((fixturesData || []) as Array<{ home_team_id: string; away_team_id: string; game_date: string; status: string }>);
+        setSeasonPlayedFixtures((playedFixturesData || []) as Array<{
+          home_team_id: string;
+          away_team_id: string;
+          game_date: string;
+          home_score: number | null;
+          away_score: number | null;
+          status: string;
+        }>);
         setUsedLegacyStandingsFallback(usedLegacyFallback);
       } catch {
         if (!cancelled) {
           setStandingsSnapshot([]);
           setSeasonFixtures([]);
+          setSeasonPlayedFixtures([]);
           setUsedLegacyStandingsFallback(false);
         }
       }
     };
 
     loadProjectionInputs();
+    const refreshHandle = window.setInterval(loadProjectionInputs, 120000);
 
     return () => {
       cancelled = true;
+      window.clearInterval(refreshHandle);
     };
   }, [resolvedSeasonId]);
 
@@ -2494,11 +2607,265 @@ export function SeasonComparison({
     };
   }, [resolvedSeasonId, resolvedTeamId, teamNarrativeReportType]);
 
-  const projectedStandings = useMemo(() => {
-    if (standingsSnapshot.length === 0) return [] as ProjectionRow[];
+  const projectionScenarioSettings = useMemo(() => {
+    if (projectionScenario === 'form') {
+      return {
+        label: 'Forma-követő',
+        recentWeightMultiplier: 1.2,
+        homeAdvantage: 0.22,
+        logisticDivisor: 0.9,
+      };
+    }
+
+    if (projectionScenario === 'upset') {
+      return {
+        label: 'Upset-figyelő',
+        recentWeightMultiplier: 1.35,
+        homeAdvantage: 0.18,
+        logisticDivisor: 1.02,
+      };
+    }
+
+    return {
+      label: 'Alap',
+      recentWeightMultiplier: 1,
+      homeAdvantage: 0.22,
+      logisticDivisor: 0.85,
+    };
+  }, [projectionScenario]);
+
+  const projectionHomeAdvantage = useMemo(
+    () => projectionScenarioSettings.homeAdvantage + whatIfHomeAdvantageDelta,
+    [projectionScenarioSettings.homeAdvantage, whatIfHomeAdvantageDelta]
+  );
+
+  const projectionLogisticDivisor = useMemo(
+    () => Math.max(0.55, projectionScenarioSettings.logisticDivisor + whatIfLogisticDelta),
+    [projectionScenarioSettings.logisticDivisor, whatIfLogisticDelta]
+  );
+
+  const recentFormByTeamKey = useMemo(() => {
+    const teamNameById = new Map(allTeams.map(team => [team.id, team.name]));
+    const result = new Map<string, { team: string; games: number; wins: number; losses: number; winRate: number; netPerGame: number }>();
+
+    const fixturesByTeamId = new Map<string, typeof seasonPlayedFixtures>();
+    seasonPlayedFixtures.forEach(fixture => {
+      if (!fixturesByTeamId.has(fixture.home_team_id)) fixturesByTeamId.set(fixture.home_team_id, []);
+      if (!fixturesByTeamId.has(fixture.away_team_id)) fixturesByTeamId.set(fixture.away_team_id, []);
+      fixturesByTeamId.get(fixture.home_team_id)!.push(fixture);
+      fixturesByTeamId.get(fixture.away_team_id)!.push(fixture);
+    });
+
+    fixturesByTeamId.forEach((fixtures, teamId) => {
+      const relevant = [...fixtures]
+        .sort((a, b) => new Date(b.game_date).getTime() - new Date(a.game_date).getTime())
+        .slice(0, 5);
+      let games = 0;
+      let wins = 0;
+      let losses = 0;
+      let totalNet = 0;
+
+      relevant.forEach(fixture => {
+        if (fixture.home_score == null || fixture.away_score == null) return;
+        const isHome = fixture.home_team_id === teamId;
+        const ownPoints = isHome ? fixture.home_score : fixture.away_score;
+        const oppPoints = isHome ? fixture.away_score : fixture.home_score;
+        games += 1;
+        totalNet += ownPoints - oppPoints;
+        if (ownPoints > oppPoints) wins += 1;
+        else losses += 1;
+      });
+
+      if (games === 0) return;
+      const teamName = teamNameById.get(teamId) ?? 'Ismeretlen csapat';
+      result.set(normalizeTeamKey(teamName), {
+        team: teamName,
+        games,
+        wins,
+        losses,
+        winRate: wins / games,
+        netPerGame: totalNet / games,
+      });
+    });
+
+    return result;
+  }, [allTeams, seasonPlayedFixtures]);
+
+  const opponentQualityByTeamKey = useMemo(() => {
+    const rows = standingsSnapshot
+      .map(row => {
+        const matches = Math.max(1, row.matches || 0);
+        const key = normalizeTeamKey(row.team);
+        const winRate = (row.wins || 0) / Math.max(1, (row.wins || 0) + (row.losses || 0));
+        const netPerGame = ((row.scored || 0) - (row.conceded || 0)) / matches;
+        const recent = recentFormByTeamKey.get(key);
+        const recentAdj = recent
+          ? ((recent.winRate - 0.5) * 0.8) + Math.max(-1, Math.min(1, recent.netPerGame / 12)) * 0.2
+          : 0;
+
+        return {
+          key,
+          winRate,
+          netPerGame,
+          recentAdj,
+        };
+      })
+      .filter(item => item.key.length > 0);
+
+    const zScore = (value: number, values: number[]) => {
+      if (values.length === 0) return 0;
+      const mean = average(values);
+      const sd = stdDev(values);
+      if (!Number.isFinite(sd) || sd === 0) return 0;
+      return (value - mean) / sd;
+    };
+
+    const winValues = rows.map(item => item.winRate);
+    const netValues = rows.map(item => item.netPerGame);
+    const recentValues = rows.map(item => item.recentAdj);
+
+    return new Map(
+      rows.map(item => {
+        const score =
+          0.55 * zScore(item.winRate, winValues)
+          + 0.3 * zScore(item.netPerGame, netValues)
+          + 0.15 * zScore(item.recentAdj, recentValues);
+        return [item.key, score] as const;
+      })
+    );
+  }, [recentFormByTeamKey, standingsSnapshot]);
+
+  const scheduleStrengthByTeamKey = useMemo(() => {
+    const teamKeyById = new Map(allTeams.map(team => [team.id, normalizeTeamKey(team.name)]));
+    const gamesByTeamKey = new Map<string, Array<{ opponentKey: string; dateValue: number }>>();
+
+    seasonPlayedFixtures.forEach(fixture => {
+      const homeKey = teamKeyById.get(fixture.home_team_id);
+      const awayKey = teamKeyById.get(fixture.away_team_id);
+      if (!homeKey || !awayKey || homeKey === awayKey) return;
+
+      const dateValue = fixture.game_date ? new Date(fixture.game_date).getTime() : 0;
+      if (!gamesByTeamKey.has(homeKey)) gamesByTeamKey.set(homeKey, []);
+      if (!gamesByTeamKey.has(awayKey)) gamesByTeamKey.set(awayKey, []);
+      gamesByTeamKey.get(homeKey)!.push({ opponentKey: awayKey, dateValue });
+      gamesByTeamKey.get(awayKey)!.push({ opponentKey: homeKey, dateValue });
+    });
+
+    const seasonRaw = new Map<string, number>();
+    const recentRaw = new Map<string, number>();
+
+    gamesByTeamKey.forEach((games, teamKey) => {
+      const validSeasonValues = games
+        .map(game => opponentQualityByTeamKey.get(game.opponentKey))
+        .filter((value): value is number => Number.isFinite(value));
+      if (validSeasonValues.length === 0) return;
+
+      const seasonAvg = average(validSeasonValues);
+      seasonRaw.set(teamKey, seasonAvg);
+
+      const validRecentValues = [...games]
+        .sort((a, b) => b.dateValue - a.dateValue)
+        .slice(0, 5)
+        .map(game => opponentQualityByTeamKey.get(game.opponentKey))
+        .filter((value): value is number => Number.isFinite(value));
+
+      if (validRecentValues.length > 0) {
+        recentRaw.set(teamKey, average(validRecentValues));
+      }
+    });
+
+    const zMap = (source: Map<string, number>) => {
+      const values = Array.from(source.values());
+      const mean = average(values);
+      const sd = stdDev(values);
+      const map = new Map<string, number>();
+      source.forEach((value, key) => {
+        if (!Number.isFinite(sd) || sd === 0) {
+          map.set(key, 0);
+          return;
+        }
+        map.set(key, (value - mean) / sd);
+      });
+      return map;
+    };
+
+    const seasonZ = zMap(seasonRaw);
+    const recentZ = zMap(recentRaw);
+    const keys = new Set<string>([...seasonZ.keys(), ...recentZ.keys()]);
+    const result = new Map<string, { season: number; recent: number; combined: number }>();
+
+    keys.forEach(key => {
+      const season = seasonZ.get(key) ?? 0;
+      const recent = recentZ.get(key) ?? 0;
+      result.set(key, {
+        season,
+        recent,
+        combined: season * 0.55 + recent * 0.45,
+      });
+    });
+
+    return result;
+  }, [allTeams, seasonPlayedFixtures, opponentQualityByTeamKey]);
+
+  const headToHeadByPair = useMemo(() => {
+    type HeadToHead = {
+      teamAKey: string;
+      teamBKey: string;
+      teamAName: string;
+      teamBName: string;
+      games: number;
+      teamAWins: number;
+      teamBWins: number;
+      teamAPoints: number;
+      teamBPoints: number;
+    };
 
     const teamNameById = new Map(allTeams.map(team => [team.id, team.name]));
+    const map = new Map<string, HeadToHead>();
 
+    seasonPlayedFixtures.forEach(fixture => {
+      if (fixture.home_score == null || fixture.away_score == null) return;
+      const homeName = teamNameById.get(fixture.home_team_id);
+      const awayName = teamNameById.get(fixture.away_team_id);
+      if (!homeName || !awayName) return;
+
+      const homeKey = normalizeTeamKey(homeName);
+      const awayKey = normalizeTeamKey(awayName);
+      if (homeKey === awayKey) return;
+
+      const [teamAKey, teamBKey] = [homeKey, awayKey].sort((a, b) => a.localeCompare(b));
+      const teamAIsHome = teamAKey === homeKey;
+      const teamAName = teamAIsHome ? homeName : awayName;
+      const teamBName = teamAIsHome ? awayName : homeName;
+      const teamAScore = teamAIsHome ? fixture.home_score : fixture.away_score;
+      const teamBScore = teamAIsHome ? fixture.away_score : fixture.home_score;
+      const pairKey = `${teamAKey}__${teamBKey}`;
+
+      const base = map.get(pairKey) ?? {
+        teamAKey,
+        teamBKey,
+        teamAName,
+        teamBName,
+        games: 0,
+        teamAWins: 0,
+        teamBWins: 0,
+        teamAPoints: 0,
+        teamBPoints: 0,
+      };
+
+      base.games += 1;
+      base.teamAPoints += teamAScore;
+      base.teamBPoints += teamBScore;
+      if (teamAScore > teamBScore) base.teamAWins += 1;
+      else if (teamBScore > teamAScore) base.teamBWins += 1;
+
+      map.set(pairKey, base);
+    });
+
+    return map;
+  }, [allTeams, seasonPlayedFixtures]);
+
+  const projectionStrengthByTeamKey = useMemo(() => {
     const recentSnapshotByTeamId = new Map<string, PregameTeamSeasonStat>();
     teamSeasonStats.forEach(team => {
       const recentGameIds = recentGameIdsByTeam.get(team.teamId) ?? [];
@@ -2612,9 +2979,13 @@ export function SeasonComparison({
       const recentSnapshot = recentSnapshotByTeamId.get(team.teamId);
       const blended = (() => {
         if (!recentSnapshot) return seasonBase;
-        const recentWeight = computeRecentBlendWeight(recentSnapshot.games || 0, seasonBase.games || 0);
-        if (recentWeight <= 0) return seasonBase;
-        return blendPregameTeamStats(seasonBase, recentSnapshot, recentWeight);
+        const baseRecentWeight = computeRecentBlendWeight(recentSnapshot.games || 0, seasonBase.games || 0);
+        const adjustedRecentWeight = Math.min(
+          0.9,
+          Math.max(0, baseRecentWeight * projectionScenarioSettings.recentWeightMultiplier)
+        );
+        if (adjustedRecentWeight <= 0) return seasonBase;
+        return blendPregameTeamStats(seasonBase, recentSnapshot, adjustedRecentWeight);
       })();
 
       const gamesPlayed = Math.max(1, blended.games || 0);
@@ -2648,7 +3019,7 @@ export function SeasonComparison({
     const defActValues = teamMetrics.map(item => item.defensiveActivityPerGame);
     const tovRateValues = teamMetrics.map(item => item.turnoverRate);
 
-    const statsByTeamKey = new Map(
+    const statsStrength = new Map(
       teamMetrics.map(metric => {
         const score =
           0.4 * z(metric.netRatingPerGame, netValues)
@@ -2662,6 +3033,63 @@ export function SeasonComparison({
       })
     );
 
+    const standingsBase = standingsSnapshot
+      .map(row => {
+        const matches = Math.max(1, row.matches || 0);
+        return {
+          key: normalizeTeamKey(row.team),
+          netPerGame: ((row.scored || 0) - (row.conceded || 0)) / matches,
+          winRate: (row.wins || 0) / Math.max(1, (row.wins || 0) + (row.losses || 0)),
+        };
+      })
+      .filter(item => item.key.length > 0);
+
+    const standingNetValues = standingsBase.map(item => item.netPerGame);
+    const standingWinValues = standingsBase.map(item => item.winRate);
+    const standingsStrength = new Map(
+      standingsBase.map(item => {
+        const score = 0.6 * z(item.netPerGame, standingNetValues) + 0.4 * z(item.winRate, standingWinValues);
+        return [item.key, score] as const;
+      })
+    );
+
+    const merged = new Map<string, number>();
+    const keys = new Set<string>([...standingsStrength.keys(), ...statsStrength.keys()]);
+    keys.forEach(key => {
+      const standing = standingsStrength.get(key);
+      const stats = statsStrength.get(key);
+      const blendedCore = standing !== undefined && stats !== undefined
+        ? stats * 0.65 + standing * 0.35
+        : stats ?? standing ?? 0;
+      const form = recentFormByTeamKey.get(key);
+      const formAdjustment = form
+        ? ((form.winRate - 0.5) * 0.9) + Math.max(-1, Math.min(1, form.netPerGame / 10)) * 0.35
+        : 0;
+      const scheduleStrength = scheduleStrengthByTeamKey.get(key)?.combined ?? 0;
+      const blended = blendedCore + formAdjustment * 0.35 + scheduleStrength * 0.22;
+      const manualAdjustment = whatIfTeamAdjustments[key] ?? 0;
+      merged.set(key, blended + manualAdjustment);
+    });
+
+    return merged;
+  }, [
+    MIN_RECENT_GAMES_TEAM,
+    gameTeamPoints,
+    playerGameStats,
+    playerTeamMap,
+    projectionScenarioSettings.recentWeightMultiplier,
+    recentGameIdsByTeam,
+    recentFormByTeamKey,
+    scheduleStrengthByTeamKey,
+    standingsSnapshot,
+    teamSeasonStats,
+    whatIfTeamAdjustments,
+  ]);
+
+  const projectedStandings = useMemo(() => {
+    if (standingsSnapshot.length === 0) return [] as ProjectionRow[];
+
+    const teamNameById = new Map(allTeams.map(team => [team.id, team.name]));
     const projectionMap = new Map(
       standingsSnapshot.map(row => [
         normalizeTeamKey(row.team),
@@ -2683,7 +3111,6 @@ export function SeasonComparison({
     );
 
     const today = new Date().toISOString().split('T')[0];
-    const homeAdvantage = 0.22;
 
     seasonFixtures
       .filter(fixture => fixture.game_date >= today)
@@ -2698,8 +3125,8 @@ export function SeasonComparison({
         const awayProjection = projectionMap.get(awayKey);
         if (!homeProjection || !awayProjection) return;
 
-        const homeStrengthBase = statsByTeamKey.get(homeKey) ?? 0;
-        const awayStrengthBase = statsByTeamKey.get(awayKey) ?? 0;
+        const homeStrengthBase = projectionStrengthByTeamKey.get(homeKey) ?? 0;
+        const awayStrengthBase = projectionStrengthByTeamKey.get(awayKey) ?? 0;
         const homeStanding = (homeProjection.currentWins + homeProjection.currentLosses) > 0
           ? homeProjection.currentWins / (homeProjection.currentWins + homeProjection.currentLosses)
           : 0.5;
@@ -2709,8 +3136,31 @@ export function SeasonComparison({
 
         const homeStrength = homeStrengthBase + (homeStanding - 0.5) * 0.8;
         const awayStrength = awayStrengthBase + (awayStanding - 0.5) * 0.8;
-        const expectedStrengthDelta = (homeStrength - awayStrength) + homeAdvantage;
-        const homeWinProbability = 1 / (1 + Math.exp(-expectedStrengthDelta / 0.85));
+        const homeRecent = recentFormByTeamKey.get(homeKey);
+        const awayRecent = recentFormByTeamKey.get(awayKey);
+        const homeRecentAdj = homeRecent
+          ? ((homeRecent.winRate - 0.5) * 0.75) + Math.max(-1, Math.min(1, homeRecent.netPerGame / 12)) * 0.25
+          : 0;
+        const awayRecentAdj = awayRecent
+          ? ((awayRecent.winRate - 0.5) * 0.75) + Math.max(-1, Math.min(1, awayRecent.netPerGame / 12)) * 0.25
+          : 0;
+
+        const [teamAKey, teamBKey] = [homeKey, awayKey].sort((a, b) => a.localeCompare(b));
+        const h2h = headToHeadByPair.get(`${teamAKey}__${teamBKey}`);
+        const homeH2hAdj = (() => {
+          if (!h2h || h2h.games < 1) return 0;
+          const homeIsTeamA = h2h.teamAKey === homeKey;
+          const homeWins = homeIsTeamA ? h2h.teamAWins : h2h.teamBWins;
+          const awayWins = homeIsTeamA ? h2h.teamBWins : h2h.teamAWins;
+          const homePts = homeIsTeamA ? h2h.teamAPoints : h2h.teamBPoints;
+          const awayPts = homeIsTeamA ? h2h.teamBPoints : h2h.teamAPoints;
+          const winEdge = (homeWins - awayWins) / Math.max(1, h2h.games);
+          const netEdge = (homePts - awayPts) / Math.max(1, h2h.games);
+          return winEdge * 0.24 + Math.max(-1, Math.min(1, netEdge / 12)) * 0.1;
+        })();
+
+        const expectedStrengthDelta = (homeStrength + homeRecentAdj + homeH2hAdj - awayStrength - awayRecentAdj) + projectionHomeAdvantage;
+        const homeWinProbability = 1 / (1 + Math.exp(-expectedStrengthDelta / projectionLogisticDivisor));
         const awayWinProbability = 1 - homeWinProbability;
         const certainty = Math.abs(homeWinProbability - 0.5) * 2;
 
@@ -2754,16 +3204,142 @@ export function SeasonComparison({
         expectedFinalPoints: item.expectedFinalPoints,
       }));
   }, [
-    MIN_RECENT_GAMES_TEAM,
     allTeams,
-    gameTeamPoints,
-    playerGameStats,
-    playerTeamMap,
-    recentGameIdsByTeam,
+    projectionHomeAdvantage,
+    projectionLogisticDivisor,
+    projectionStrengthByTeamKey,
+    headToHeadByPair,
+    recentFormByTeamKey,
     seasonFixtures,
     standingsSnapshot,
-    teamSeasonStats,
   ]);
+
+  const playoffProjection = useMemo<PlayoffProjectionResult | null>(() => {
+    if (projectedStandings.length < 8) return null;
+
+    const topEight = projectedStandings.slice(0, 8).map((row, index) => ({
+      ...row,
+      seed: index + 1,
+      key: normalizeTeamKey(row.team),
+      standing: row.projectedWins / Math.max(1, row.projectedWins + row.projectedLosses),
+    }));
+
+    const bySeed = new Map(topEight.map(row => [row.seed, row]));
+    const teamStrength = (seed: number) => {
+      const row = bySeed.get(seed);
+      if (!row) return 0;
+      const base = projectionStrengthByTeamKey.get(row.key) ?? 0;
+      const recent = recentFormByTeamKey.get(row.key);
+      const recentAdj = recent
+        ? ((recent.winRate - 0.5) * 0.85) + Math.max(-1, Math.min(1, recent.netPerGame / 10)) * 0.3
+        : 0;
+      return base + (row.standing - 0.5) * 0.8 + recentAdj * 0.4;
+    };
+
+    const singleGameHomeWinProbability = (homeSeed: number, awaySeed: number, homeAdvantageSign: 1 | -1) => {
+      const home = bySeed.get(homeSeed);
+      const away = bySeed.get(awaySeed);
+      if (!home || !away) return 0.5;
+      const [teamAKey, teamBKey] = [home.key, away.key].sort((a, b) => a.localeCompare(b));
+      const h2h = headToHeadByPair.get(`${teamAKey}__${teamBKey}`);
+      const h2hAdj = (() => {
+        if (!h2h || h2h.games < 1) return 0;
+        const homeIsTeamA = h2h.teamAKey === home.key;
+        const homeWins = homeIsTeamA ? h2h.teamAWins : h2h.teamBWins;
+        const awayWins = homeIsTeamA ? h2h.teamBWins : h2h.teamAWins;
+        const homePts = homeIsTeamA ? h2h.teamAPoints : h2h.teamBPoints;
+        const awayPts = homeIsTeamA ? h2h.teamBPoints : h2h.teamAPoints;
+        const winEdge = (homeWins - awayWins) / Math.max(1, h2h.games);
+        const netEdge = (homePts - awayPts) / Math.max(1, h2h.games);
+        return winEdge * 0.28 + Math.max(-1, Math.min(1, netEdge / 12)) * 0.12;
+      })();
+
+      const delta = teamStrength(homeSeed) - teamStrength(awaySeed) + h2hAdj + projectionHomeAdvantage * homeAdvantageSign;
+      return clamp01(1 / (1 + Math.exp(-delta / projectionLogisticDivisor)));
+    };
+
+    const simulateSeries = (
+      round: PlayoffSeriesProjection['round'],
+      homeSeed: number,
+      awaySeed: number
+    ): PlayoffSeriesProjection => {
+      const home = bySeed.get(homeSeed);
+      const away = bySeed.get(awaySeed);
+      if (!home || !away) {
+        throw new Error('Playoff széria számításhoz hiányzó seed.');
+      }
+
+      const homeCourtPattern: Array<1 | -1> = [1, -1, 1, -1, 1];
+      const gameProbabilities = homeCourtPattern.map(sign => singleGameHomeWinProbability(homeSeed, awaySeed, sign));
+      const seriesOutcome = bestOfSeriesOutcome(gameProbabilities, 3);
+      const homeSeriesWinProbability = seriesOutcome.homeSeriesWinProbability;
+      const awaySeriesWinProbability = 1 - homeSeriesWinProbability;
+      const homeWinsSeries = homeSeriesWinProbability >= awaySeriesWinProbability;
+      const mostLikelyScore = homeWinsSeries
+        ? (seriesOutcome.mostLikelyHomeWinScore ?? '3-2')
+        : (seriesOutcome.mostLikelyAwayWinScore ?? '2-3');
+
+      return {
+        round,
+        homeSeed,
+        awaySeed,
+        homeTeam: home.team,
+        awayTeam: away.team,
+        homeWinProbability: homeSeriesWinProbability,
+        awayWinProbability: awaySeriesWinProbability,
+        winner: homeWinsSeries ? home.team : away.team,
+        loser: homeWinsSeries ? away.team : home.team,
+        mostLikelyScore,
+        certaintyLabel: probabilityLabel(Math.max(homeSeriesWinProbability, awaySeriesWinProbability)),
+      };
+    };
+
+    const qf1 = simulateSeries('Negyeddöntő', 1, 8);
+    const qf2 = simulateSeries('Negyeddöntő', 2, 7);
+    const qf3 = simulateSeries('Negyeddöntő', 3, 6);
+    const qf4 = simulateSeries('Negyeddöntő', 4, 5);
+
+    const seedOf = (team: string) => topEight.find(item => item.team === team)?.seed ?? 99;
+    const sfASeeds = [seedOf(qf1.winner), seedOf(qf4.winner)].sort((a, b) => a - b);
+    const sfBSeeds = [seedOf(qf2.winner), seedOf(qf3.winner)].sort((a, b) => a - b);
+
+    const sf1 = simulateSeries('Elődöntő', sfASeeds[0], sfASeeds[1]);
+    const sf2 = simulateSeries('Elődöntő', sfBSeeds[0], sfBSeeds[1]);
+
+    const finalSeeds = [seedOf(sf1.winner), seedOf(sf2.winner)].sort((a, b) => a - b);
+    const bronzeSeeds = [seedOf(sf1.loser), seedOf(sf2.loser)].sort((a, b) => a - b);
+
+    const finalSeries = simulateSeries('Döntő', finalSeeds[0], finalSeeds[1]);
+    const bronzeSeries = simulateSeries('Bronz', bronzeSeeds[0], bronzeSeeds[1]);
+
+    const quarterLosers = [qf1.loser, qf2.loser, qf3.loser, qf4.loser]
+      .sort((a, b) => seedOf(a) - seedOf(b));
+
+    const finalRanking: Array<{ position: number; team: string; note?: string }> = [
+      { position: 1, team: finalSeries.winner, note: 'Bajnok' },
+      { position: 2, team: finalSeries.loser, note: 'Döntős' },
+      { position: 3, team: bronzeSeries.winner, note: 'Bronzérmes' },
+      { position: 4, team: bronzeSeries.loser, note: '4. hely' },
+      { position: 5, team: quarterLosers[0], note: 'Negyeddöntő kieső' },
+      { position: 6, team: quarterLosers[1], note: 'Negyeddöntő kieső' },
+      { position: 7, team: quarterLosers[2], note: 'Negyeddöntő kieső' },
+      { position: 8, team: quarterLosers[3], note: 'Negyeddöntő kieső' },
+      ...projectedStandings.slice(8).map((row, index) => ({
+        position: index + 9,
+        team: row.team,
+        note: 'Alapszakasz alapján',
+      })),
+    ];
+
+    return {
+      champion: finalSeries.winner,
+      runnerUp: finalSeries.loser,
+      third: bronzeSeries.winner,
+      fourth: bronzeSeries.loser,
+      finalRanking,
+      series: [qf1, qf2, qf3, qf4, sf1, sf2, finalSeries, bronzeSeries],
+    };
+  }, [projectedStandings, projectionHomeAdvantage, projectionLogisticDivisor, projectionStrengthByTeamKey, recentFormByTeamKey, headToHeadByPair]);
 
   const projectionContext = useMemo(() => {
     if (projectedStandings.length === 0 || !resolvedTeamId || resolvedTeamId === 'all') return null;
@@ -2787,6 +3363,92 @@ export function SeasonComparison({
       avgWinProbability: selectedTeamProjection?.avgWinProbability ?? 0.5,
     };
   }, [allTeams, projectedStandings, resolvedTeamId]);
+
+  const projectionFinalPlaceForSelectedTeam = useMemo(() => {
+    if (!playoffProjection || !resolvedTeamId || resolvedTeamId === 'all') return null;
+    const selectedTeamName = allTeams.find(team => team.id === resolvedTeamId)?.name;
+    if (!selectedTeamName) return null;
+    const selectedKey = normalizeTeamKey(selectedTeamName);
+    const hit = playoffProjection.finalRanking.find(row => normalizeTeamKey(row.team) === selectedKey);
+    return hit?.position ?? null;
+  }, [allTeams, playoffProjection, resolvedTeamId]);
+
+  const projectionWhyForSelectedTeam = useMemo(() => {
+    if (!projectionContext || !resolvedTeamId || resolvedTeamId === 'all') return null;
+    const selectedTeamName = allTeams.find(team => team.id === resolvedTeamId)?.name;
+    if (!selectedTeamName) return null;
+    const selectedKey = normalizeTeamKey(selectedTeamName);
+    const selectedForm = recentFormByTeamKey.get(selectedKey);
+    const selectedStrength = projectionStrengthByTeamKey.get(selectedKey) ?? 0;
+    const selectedScheduleStrength = scheduleStrengthByTeamKey.get(selectedKey) ?? null;
+
+    const qfSeries = playoffProjection?.series.find(
+      item => item.round === 'Negyeddöntő' && (normalizeTeamKey(item.homeTeam) === selectedKey || normalizeTeamKey(item.awayTeam) === selectedKey)
+    );
+
+    const h2hLine = (() => {
+      if (!qfSeries) return null;
+      const opponentName = normalizeTeamKey(qfSeries.homeTeam) === selectedKey ? qfSeries.awayTeam : qfSeries.homeTeam;
+      const opponentKey = normalizeTeamKey(opponentName);
+      const [teamAKey, teamBKey] = [selectedKey, opponentKey].sort((a, b) => a.localeCompare(b));
+      const h2h = headToHeadByPair.get(`${teamAKey}__${teamBKey}`);
+      if (!h2h || h2h.games === 0) return `Nincs idei H2H minta ${opponentName} ellen.`;
+
+      const selectedIsA = h2h.teamAKey === selectedKey;
+      const selectedWins = selectedIsA ? h2h.teamAWins : h2h.teamBWins;
+      const oppWins = selectedIsA ? h2h.teamBWins : h2h.teamAWins;
+      const selectedPts = selectedIsA ? h2h.teamAPoints : h2h.teamBPoints;
+      const oppPts = selectedIsA ? h2h.teamBPoints : h2h.teamAPoints;
+      const net = (selectedPts - oppPts) / Math.max(1, h2h.games);
+      return `H2H vs ${opponentName}: ${selectedWins}-${oppWins}, nettó ${net >= 0 ? '+' : ''}${net.toFixed(1)} pont/meccs (${h2h.games} meccs).`;
+    })();
+
+    return {
+      selectedTeamName,
+      selectedStrength,
+      selectedScheduleStrength,
+      selectedForm,
+      qfSeries,
+      h2hLine,
+    };
+  }, [allTeams, projectionContext, projectionStrengthByTeamKey, scheduleStrengthByTeamKey, recentFormByTeamKey, resolvedTeamId, playoffProjection, headToHeadByPair]);
+
+  const whatIfTeamOptions = useMemo(() => {
+    if (projectedStandings.length > 0) {
+      return projectedStandings.map(row => ({
+        key: normalizeTeamKey(row.team),
+        label: row.team,
+      }));
+    }
+
+    return standingsSnapshot.map(row => ({
+      key: normalizeTeamKey(row.team),
+      label: row.team,
+    }));
+  }, [projectedStandings, standingsSnapshot]);
+
+  const applyWhatIfTeamAdjustment = () => {
+    if (!whatIfTeamKey) return;
+    const parsed = Number(whatIfTeamDeltaInput.replace(',', '.'));
+    if (!Number.isFinite(parsed)) return;
+    const clamped = Math.max(-2, Math.min(2, parsed));
+    setWhatIfTeamAdjustments(prev => ({ ...prev, [whatIfTeamKey]: clamped }));
+  };
+
+  const removeWhatIfTeamAdjustment = (teamKey: string) => {
+    setWhatIfTeamAdjustments(prev => {
+      const next = { ...prev };
+      delete next[teamKey];
+      return next;
+    });
+  };
+
+  const resetWhatIfSettings = () => {
+    setWhatIfHomeAdvantageDelta(0);
+    setWhatIfLogisticDelta(0);
+    setWhatIfTeamAdjustments({});
+    setWhatIfTeamDeltaInput('0');
+  };
 
   const getPercentileColor = (value: number) => {
     if (value >= 80) return '#22c55e';
@@ -5563,10 +6225,157 @@ export function SeasonComparison({
                 </div>
               )}
 
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <div className="text-xs uppercase tracking-wide text-slate-400">Szcenárió mód</div>
+                  <Select value={projectionScenario} onValueChange={(value: 'baseline' | 'form' | 'upset') => setProjectionScenario(value)}>
+                    <SelectTrigger className="bg-slate-800 border-slate-700 w-full">
+                      <SelectValue placeholder="Válassz szcenáriót" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-slate-800 border-slate-700 text-slate-100">
+                      <SelectItem value="baseline">Alap</SelectItem>
+                      <SelectItem value="form">Forma-követő (utolsó 5 meccs erősebb súly)</SelectItem>
+                      <SelectItem value="upset">Upset-figyelő (nagyobb variancia)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="rounded-md border border-slate-700 bg-slate-800/60 px-3 py-2 text-xs text-slate-300">
+                  Aktív profil: <span className="font-semibold text-slate-100">{projectionScenarioSettings.label}</span>
+                  <div className="mt-1 text-slate-400">
+                    A modell csapatstatisztikákból számolt erősségre épül, utolsó 5 meccs súlyozással.
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-md border border-slate-700 bg-slate-800/50 p-3 space-y-3">
+                <div className="text-xs uppercase tracking-wide text-slate-400">What-if panel</div>
+                <div className="rounded-md border border-slate-700/70 bg-slate-900/40 px-3 py-2 text-xs text-slate-300 space-y-1">
+                  <div className="font-medium text-slate-200">Használati útmutató</div>
+                  <div>1. Válassz szcenárió módot (Alap / Forma-követő / Upset-figyelő).</div>
+                  <div>2. Állítsd a Hazai pálya delta és Variancia delta csúszkákat a kívánt modellérzékenységhez.</div>
+                  <div>3. Ha egy csapatra külön becslést szeretnél, válaszd ki és adj meg -2 és +2 közötti erősség deltát, majd kattints az Alkalmaz gombra.</div>
+                  <div>4. Az aktív korrekciók chipként látszanak; kattintással egyesével törölhetők, a Reset mindent nulláz.</div>
+                  <div className="text-slate-400">Pozitív csapat-delta növeli, negatív csökkenti a csapat matchup esélyeit.</div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <label className="text-xs text-slate-300">
+                    Hazai pálya delta: <span className="font-semibold text-slate-100">{whatIfHomeAdvantageDelta >= 0 ? '+' : ''}{whatIfHomeAdvantageDelta.toFixed(2)}</span>
+                    <input
+                      type="range"
+                      min={-0.3}
+                      max={0.3}
+                      step={0.01}
+                      value={whatIfHomeAdvantageDelta}
+                      onChange={(event) => setWhatIfHomeAdvantageDelta(Number(event.target.value))}
+                      className="mt-1 w-full"
+                    />
+                  </label>
+                  <label className="text-xs text-slate-300">
+                    Variancia delta (logistic): <span className="font-semibold text-slate-100">{whatIfLogisticDelta >= 0 ? '+' : ''}{whatIfLogisticDelta.toFixed(2)}</span>
+                    <input
+                      type="range"
+                      min={-0.25}
+                      max={0.25}
+                      step={0.01}
+                      value={whatIfLogisticDelta}
+                      onChange={(event) => setWhatIfLogisticDelta(Number(event.target.value))}
+                      className="mt-1 w-full"
+                    />
+                  </label>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-[1fr_120px_auto_auto] gap-2 items-end">
+                  <div>
+                    <div className="text-xs text-slate-400 mb-1">Csapat erősség korrekció</div>
+                    <Select value={whatIfTeamKey} onValueChange={setWhatIfTeamKey}>
+                      <SelectTrigger className="bg-slate-800 border-slate-700 w-full">
+                        <SelectValue placeholder="Válassz csapatot" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-slate-800 border-slate-700 text-slate-100">
+                        {whatIfTeamOptions.map(option => (
+                          <SelectItem key={option.key} value={option.key}>{option.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <div className="text-xs text-slate-400 mb-1">Delta (-2..+2)</div>
+                    <Input
+                      value={whatIfTeamDeltaInput}
+                      onChange={(event) => setWhatIfTeamDeltaInput(event.target.value)}
+                      className="bg-slate-800 border-slate-700"
+                    />
+                  </div>
+                  <Button type="button" size="sm" onClick={applyWhatIfTeamAdjustment} className="bg-cyan-600 hover:bg-cyan-500 text-white">
+                    Alkalmaz
+                  </Button>
+                  <Button type="button" size="sm" variant="outline" onClick={resetWhatIfSettings} className="border-slate-700 text-slate-300 hover:bg-slate-800">
+                    Reset
+                  </Button>
+                </div>
+
+                {Object.keys(whatIfTeamAdjustments).length > 0 && (
+                  <div className="space-y-1">
+                    <div className="text-xs text-slate-400">Aktív csapat-korrekciók</div>
+                    <div className="flex flex-wrap gap-2">
+                      {Object.entries(whatIfTeamAdjustments).map(([teamKey, delta]) => {
+                        const label = whatIfTeamOptions.find(item => item.key === teamKey)?.label ?? teamKey;
+                        return (
+                          <button
+                            key={teamKey}
+                            type="button"
+                            onClick={() => removeWhatIfTeamAdjustment(teamKey)}
+                            className="rounded-full border border-slate-600 px-2 py-1 text-xs text-slate-200 hover:bg-slate-700"
+                          >
+                            {label}: {delta >= 0 ? '+' : ''}{delta.toFixed(2)} ×
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="rounded-md border border-slate-700 bg-slate-800/40 p-3">
+                <div className="text-xs uppercase tracking-wide text-slate-400 mb-2">Forma ellenőrzés (utolsó 5 meccs)</div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="border-b border-slate-700 text-slate-400">
+                        <th className="text-left py-1 pr-2">Csapat</th>
+                        <th className="text-right py-1 pr-2">Mérleg</th>
+                        <th className="text-right py-1 pr-2">Win%</th>
+                        <th className="text-right py-1">Net/meccs</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {Array.from(recentFormByTeamKey.values())
+                        .sort((a, b) => b.winRate - a.winRate || b.netPerGame - a.netPerGame)
+                        .slice(0, 10)
+                        .map(item => (
+                          <tr key={item.team} className="border-b border-slate-800">
+                            <td className="py-1 pr-2 text-slate-200">{item.team}</td>
+                            <td className="py-1 pr-2 text-right text-slate-300">{item.wins}-{item.losses}</td>
+                            <td className="py-1 pr-2 text-right text-slate-300">{(item.winRate * 100).toFixed(0)}%</td>
+                            <td className={`py-1 text-right ${item.netPerGame >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
+                              {item.netPerGame >= 0 ? '+' : ''}{item.netPerGame.toFixed(1)}
+                            </td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
               {projectionContext && (
                 <div className="rounded-lg border border-cyan-700/40 bg-cyan-950/20 px-4 py-3 text-sm text-cyan-100">
                   <div>
-                    Várható helyezés: <span className="font-semibold">{projectionContext.seed}. hely</span>
+                    Várható alapszakasz seed: <span className="font-semibold">{projectionContext.seed}. hely</span>
+                    {projectionFinalPlaceForSelectedTeam && (
+                      <span className="ml-2 text-cyan-200">
+                        • Várható végső hely: <span className="font-semibold text-cyan-100">{projectionFinalPlaceForSelectedTeam}. hely</span>
+                      </span>
+                    )}
                   </div>
                   <div className="mt-1 text-cyan-200">
                     Hátralévő meccsek átlagos győzelmi esélye: {(projectionContext.avgWinProbability * 100).toFixed(1)}% •
@@ -5577,6 +6386,40 @@ export function SeasonComparison({
                       Lehetséges playoff párharc: {projectionContext.seed}. vs {projectionContext.playoffOpponentSeed}. (
                       {projectionContext.playoffOpponent})
                     </div>
+                  )}
+                </div>
+              )}
+
+              {projectionWhyForSelectedTeam && (
+                <div className="rounded-md border border-indigo-700/40 bg-indigo-950/20 px-4 py-3 space-y-2">
+                  <div className="text-xs uppercase tracking-wide text-indigo-200">Miért ez a várható végső hely?</div>
+                  <div className="text-sm text-indigo-100">
+                    {projectionWhyForSelectedTeam.selectedTeamName} erősségi score: {projectionWhyForSelectedTeam.selectedStrength >= 0 ? '+' : ''}
+                    {projectionWhyForSelectedTeam.selectedStrength.toFixed(2)}
+                  </div>
+                  {projectionWhyForSelectedTeam.selectedForm && (
+                    <div className="text-sm text-indigo-200">
+                      Utolsó {projectionWhyForSelectedTeam.selectedForm.games} meccs forma: {projectionWhyForSelectedTeam.selectedForm.wins}-
+                      {projectionWhyForSelectedTeam.selectedForm.losses}, nettó {projectionWhyForSelectedTeam.selectedForm.netPerGame >= 0 ? '+' : ''}
+                      {projectionWhyForSelectedTeam.selectedForm.netPerGame.toFixed(1)} pont/meccs.
+                    </div>
+                  )}
+                  {projectionWhyForSelectedTeam.selectedScheduleStrength && (
+                    <div className="text-sm text-indigo-200">
+                      Ellenfél-erősség (SOS): szezon {projectionWhyForSelectedTeam.selectedScheduleStrength.season >= 0 ? '+' : ''}
+                      {projectionWhyForSelectedTeam.selectedScheduleStrength.season.toFixed(2)} • utolsó 5 {projectionWhyForSelectedTeam.selectedScheduleStrength.recent >= 0 ? '+' : ''}
+                      {projectionWhyForSelectedTeam.selectedScheduleStrength.recent.toFixed(2)}.
+                    </div>
+                  )}
+                  {projectionWhyForSelectedTeam.qfSeries && (
+                    <div className="text-sm text-indigo-200">
+                      Negyeddöntő esély: {projectionWhyForSelectedTeam.qfSeries.winner} várható győzelmi esélye{' '}
+                      {(Math.max(projectionWhyForSelectedTeam.qfSeries.homeWinProbability, projectionWhyForSelectedTeam.qfSeries.awayWinProbability) * 100).toFixed(1)}%
+                      .
+                    </div>
+                  )}
+                  {projectionWhyForSelectedTeam.h2hLine && (
+                    <div className="text-sm text-indigo-200">{projectionWhyForSelectedTeam.h2hLine}</div>
                   )}
                 </div>
               )}
@@ -5635,9 +6478,85 @@ export function SeasonComparison({
                   </tbody>
                 </table>
               </div>
+
+              {playoffProjection && (
+                <div className="space-y-3">
+                  <div className="rounded-lg border border-emerald-800/40 bg-emerald-950/20 px-4 py-3 text-sm text-emerald-100">
+                    <div className="font-medium">Rájátszás előrejelzés (modell)</div>
+                    <div className="mt-1 text-emerald-200">
+                      Bajnok: <span className="font-semibold">{playoffProjection.champion}</span> •
+                      Döntős: {playoffProjection.runnerUp} •
+                      Bronz: {playoffProjection.third}
+                    </div>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-slate-700 text-slate-400">
+                          <th className="text-left py-2 pr-2">Kör</th>
+                          <th className="text-left py-2 pr-2">Párharc</th>
+                          <th className="text-right py-2 pr-2">Hazai ág esély</th>
+                          <th className="text-right py-2 pr-2">Várható eredmény</th>
+                          <th className="text-right py-2">Bizonyosság</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {playoffProjection.series.map(item => (
+                          <tr key={`${item.round}-${item.homeTeam}-${item.awayTeam}`} className="border-b border-slate-800">
+                            <td className="py-2 pr-2 text-slate-300">{item.round}</td>
+                            <td className="py-2 pr-2 text-slate-100">
+                              ({item.homeSeed}) {item.homeTeam} vs ({item.awaySeed}) {item.awayTeam}
+                            </td>
+                            <td className="py-2 pr-2 text-right text-slate-200">{(item.homeWinProbability * 100).toFixed(1)}%</td>
+                            <td className="py-2 pr-2 text-right text-cyan-300">
+                              {item.winner} ({item.mostLikelyScore})
+                            </td>
+                            <td
+                              className={`py-2 text-right ${
+                                item.certaintyLabel === 'Magas'
+                                  ? 'text-emerald-300'
+                                  : item.certaintyLabel === 'Közepes'
+                                    ? 'text-amber-300'
+                                    : 'text-slate-400'
+                              }`}
+                            >
+                              {item.certaintyLabel}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-slate-700 text-slate-400">
+                          <th className="text-left py-2 pr-2">Várható végső hely</th>
+                          <th className="text-left py-2 pr-2">Csapat</th>
+                          <th className="text-left py-2">Megjegyzés</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {playoffProjection.finalRanking.map(row => (
+                          <tr key={`${row.position}-${row.team}`} className="border-b border-slate-800">
+                            <td className="py-2 pr-2 text-slate-100 font-medium">{row.position}.</td>
+                            <td className="py-2 pr-2 text-slate-100">{row.team}</td>
+                            <td className="py-2 text-slate-400">{row.note || ''}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
               <div className="text-xs text-slate-400">
                 A modell a jelenlegi tabellaállásból indul, és a hátralévő meccsekre várható győzelmi valószínűséget számol
-                csapat-erősség (pontkülönbség/meccs) és hazai pálya alapján.
+                csapat-erősség (szezon + utolsó 5 meccs súlyozott statisztika), valamint hazai pálya alapján.
+                A becslés korrigál ellenfél-erősséggel (SOS) is, szezonos és utolsó 5 meccses bontásban.
+                A várható alapszakasz seed és a várható végső hely eltérhet, mert a playoff ág upseteket is tartalmazhat.
               </div>
             </>
           )}
