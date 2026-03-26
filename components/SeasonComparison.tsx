@@ -121,6 +121,14 @@ type StandingsSnapshotRow = {
   points: number;
 };
 
+type SeasonFixture = {
+  id: string;
+  home_team_id: string;
+  away_team_id: string;
+  game_date: string;
+  status: string;
+};
+
 type ShotRawRow = {
   id: string;
   home_team_id: string | null;
@@ -174,6 +182,7 @@ type ProjectionRow = {
 };
 
 type PlayoffSeriesProjection = {
+  seriesKey: string;
   round: 'Negyeddöntő' | 'Elődöntő' | 'Döntő' | 'Bronz';
   homeSeed: number;
   awaySeed: number;
@@ -185,6 +194,22 @@ type PlayoffSeriesProjection = {
   loser: string;
   mostLikelyScore: string;
   certaintyLabel: 'Magas' | 'Közepes' | 'Alacsony';
+  manualOverride: boolean;
+};
+
+type ProjectionUpcomingGame = {
+  fixtureId: string;
+  gameDate: string;
+  homeTeam: string;
+  awayTeam: string;
+  homeTeamKey: string;
+  awayTeamKey: string;
+  homeWinProbabilityModel: number;
+  awayWinProbabilityModel: number;
+  homeWinProbabilityApplied: number;
+  awayWinProbabilityApplied: number;
+  certaintyApplied: number;
+  overrideWinnerSide: 'home' | 'away' | null;
 };
 
 type PlayoffProjectionResult = {
@@ -1166,9 +1191,7 @@ export function SeasonComparison({
   const [leagueSeasonShotRows, setLeagueSeasonShotRows] = useState<ShotEventRow[]>([]);
   const [playerSeasonShotRows, setPlayerSeasonShotRows] = useState<ShotEventRow[]>([]);
   const [standingsSnapshot, setStandingsSnapshot] = useState<StandingsSnapshotRow[]>([]);
-  const [seasonFixtures, setSeasonFixtures] = useState<
-    Array<{ home_team_id: string; away_team_id: string; game_date: string; status: string }>
-  >([]);
+  const [seasonFixtures, setSeasonFixtures] = useState<SeasonFixture[]>([]);
   const [seasonPlayedFixtures, setSeasonPlayedFixtures] = useState<
     Array<{
       home_team_id: string;
@@ -1186,6 +1209,9 @@ export function SeasonComparison({
   const [whatIfTeamAdjustments, setWhatIfTeamAdjustments] = useState<Record<string, number>>({});
   const [whatIfTeamKey, setWhatIfTeamKey] = useState<string>('');
   const [whatIfTeamDeltaInput, setWhatIfTeamDeltaInput] = useState<string>('0');
+  const [selectedProjectionTeamKey, setSelectedProjectionTeamKey] = useState<string>('');
+  const [fixtureWinnerOverrides, setFixtureWinnerOverrides] = useState<Partial<Record<string, 'home' | 'away'>>>({});
+  const [playoffSeriesWinnerOverrides, setPlayoffSeriesWinnerOverrides] = useState<Partial<Record<string, 'home' | 'away'>>>({});
   const handleToggleOwnInjury = (playerId: string) => {
     setPregameOwnInjuries(prev => (prev.includes(playerId) ? prev.filter(id => id !== playerId) : [...prev, playerId]));
   };
@@ -1207,6 +1233,19 @@ export function SeasonComparison({
 
   const resolvedSeasonId = selectedSeasonId || currentSeasonId || allSeasons[0]?.id || '';
   const resolvedTeamId = selectedTeamId || currentTeamId || 'all';
+
+  useEffect(() => {
+    setSelectedProjectionTeamKey('');
+    setFixtureWinnerOverrides({});
+    setPlayoffSeriesWinnerOverrides({});
+  }, [resolvedSeasonId]);
+
+  useEffect(() => {
+    if (!resolvedTeamId || resolvedTeamId === 'all') return;
+    const selectedTeamName = allTeams.find(team => team.id === resolvedTeamId)?.name;
+    if (!selectedTeamName) return;
+    setSelectedProjectionTeamKey(normalizeTeamKey(selectedTeamName));
+  }, [allTeams, resolvedTeamId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1303,7 +1342,7 @@ export function SeasonComparison({
             .maybeSingle(),
           supabase
             .from('league_fixtures')
-            .select('home_team_id, away_team_id, game_date, status')
+            .select('id, home_team_id, away_team_id, game_date, status')
             .eq('season_id', resolvedSeasonId)
             .in('status', ['scheduled', 'postponed']),
           supabase
@@ -1341,7 +1380,7 @@ export function SeasonComparison({
         }
 
         setStandingsSnapshot(rows);
-        setSeasonFixtures((fixturesData || []) as Array<{ home_team_id: string; away_team_id: string; game_date: string; status: string }>);
+        setSeasonFixtures((fixturesData || []) as SeasonFixture[]);
         setSeasonPlayedFixtures((playedFixturesData || []) as Array<{
           home_team_id: string;
           away_team_id: string;
@@ -3086,52 +3125,42 @@ export function SeasonComparison({
     whatIfTeamAdjustments,
   ]);
 
-  const projectedStandings = useMemo(() => {
-    if (standingsSnapshot.length === 0) return [] as ProjectionRow[];
+  const projectionUpcomingGames = useMemo(() => {
+    if (standingsSnapshot.length === 0) return [] as ProjectionUpcomingGame[];
 
     const teamNameById = new Map(allTeams.map(team => [team.id, team.name]));
-    const projectionMap = new Map(
+    const currentStandingByKey = new Map(
       standingsSnapshot.map(row => [
         normalizeTeamKey(row.team),
         {
-          team: row.team,
-          currentWins: row.wins,
-          currentLosses: row.losses,
-          projectedWins: row.wins,
-          projectedLosses: row.losses,
-          expectedExtraWins: 0,
-          expectedFinalPoints: row.points,
-          winProbabilitySum: 0,
-          remainingGames: 0,
-          certaintyAccumulator: 0,
-          scored: row.scored,
-          conceded: row.conceded,
+          wins: row.wins,
+          losses: row.losses,
         },
       ])
     );
 
     const today = new Date().toISOString().split('T')[0];
 
-    seasonFixtures
+    return seasonFixtures
       .filter(fixture => fixture.game_date >= today)
-      .forEach(fixture => {
+      .reduce<ProjectionUpcomingGame[]>((games, fixture) => {
         const homeName = teamNameById.get(fixture.home_team_id);
         const awayName = teamNameById.get(fixture.away_team_id);
-        if (!homeName || !awayName) return;
+        if (!homeName || !awayName) return games;
 
         const homeKey = normalizeTeamKey(homeName);
         const awayKey = normalizeTeamKey(awayName);
-        const homeProjection = projectionMap.get(homeKey);
-        const awayProjection = projectionMap.get(awayKey);
-        if (!homeProjection || !awayProjection) return;
+        const homeStandingBase = currentStandingByKey.get(homeKey);
+        const awayStandingBase = currentStandingByKey.get(awayKey);
+        if (!homeStandingBase || !awayStandingBase) return games;
 
         const homeStrengthBase = projectionStrengthByTeamKey.get(homeKey) ?? 0;
         const awayStrengthBase = projectionStrengthByTeamKey.get(awayKey) ?? 0;
-        const homeStanding = (homeProjection.currentWins + homeProjection.currentLosses) > 0
-          ? homeProjection.currentWins / (homeProjection.currentWins + homeProjection.currentLosses)
+        const homeStanding = (homeStandingBase.wins + homeStandingBase.losses) > 0
+          ? homeStandingBase.wins / (homeStandingBase.wins + homeStandingBase.losses)
           : 0.5;
-        const awayStanding = (awayProjection.currentWins + awayProjection.currentLosses) > 0
-          ? awayProjection.currentWins / (awayProjection.currentWins + awayProjection.currentLosses)
+        const awayStanding = (awayStandingBase.wins + awayStandingBase.losses) > 0
+          ? awayStandingBase.wins / (awayStandingBase.wins + awayStandingBase.losses)
           : 0.5;
 
         const homeStrength = homeStrengthBase + (homeStanding - 0.5) * 0.8;
@@ -3160,26 +3189,87 @@ export function SeasonComparison({
         })();
 
         const expectedStrengthDelta = (homeStrength + homeRecentAdj + homeH2hAdj - awayStrength - awayRecentAdj) + projectionHomeAdvantage;
-        const homeWinProbability = 1 / (1 + Math.exp(-expectedStrengthDelta / projectionLogisticDivisor));
-        const awayWinProbability = 1 - homeWinProbability;
-        const certainty = Math.abs(homeWinProbability - 0.5) * 2;
+        const homeWinProbabilityModel = 1 / (1 + Math.exp(-expectedStrengthDelta / projectionLogisticDivisor));
+        const awayWinProbabilityModel = 1 - homeWinProbabilityModel;
+        const overrideWinnerSide = fixtureWinnerOverrides[fixture.id] ?? null;
+        const homeWinProbabilityApplied = overrideWinnerSide === 'home' ? 1 : overrideWinnerSide === 'away' ? 0 : homeWinProbabilityModel;
+        const awayWinProbabilityApplied = 1 - homeWinProbabilityApplied;
+        const certaintyApplied = overrideWinnerSide ? 1 : Math.abs(homeWinProbabilityModel - 0.5) * 2;
 
-        homeProjection.projectedWins += homeWinProbability;
-        homeProjection.projectedLosses += awayWinProbability;
-        homeProjection.expectedExtraWins += homeWinProbability;
-        homeProjection.expectedFinalPoints += homeWinProbability * 2;
-        homeProjection.winProbabilitySum += homeWinProbability;
-        homeProjection.remainingGames += 1;
-        homeProjection.certaintyAccumulator += certainty;
+        games.push({
+          fixtureId: fixture.id,
+          gameDate: fixture.game_date,
+          homeTeam: homeName,
+          awayTeam: awayName,
+          homeTeamKey: homeKey,
+          awayTeamKey: awayKey,
+          homeWinProbabilityModel,
+          awayWinProbabilityModel,
+          homeWinProbabilityApplied,
+          awayWinProbabilityApplied,
+          certaintyApplied,
+          overrideWinnerSide,
+        });
 
-        awayProjection.projectedWins += awayWinProbability;
-        awayProjection.projectedLosses += homeWinProbability;
-        awayProjection.expectedExtraWins += awayWinProbability;
-        awayProjection.expectedFinalPoints += awayWinProbability * 2;
-        awayProjection.winProbabilitySum += awayWinProbability;
-        awayProjection.remainingGames += 1;
-        awayProjection.certaintyAccumulator += certainty;
-      });
+        return games;
+      }, [])
+      .sort((a, b) => new Date(a.gameDate).getTime() - new Date(b.gameDate).getTime());
+  }, [
+    allTeams,
+    fixtureWinnerOverrides,
+    headToHeadByPair,
+    projectionHomeAdvantage,
+    projectionLogisticDivisor,
+    projectionStrengthByTeamKey,
+    recentFormByTeamKey,
+    seasonFixtures,
+    standingsSnapshot,
+  ]);
+
+  const projectedStandings = useMemo(() => {
+    if (standingsSnapshot.length === 0) return [] as ProjectionRow[];
+
+    const projectionMap = new Map(
+      standingsSnapshot.map(row => [
+        normalizeTeamKey(row.team),
+        {
+          team: row.team,
+          currentWins: row.wins,
+          currentLosses: row.losses,
+          projectedWins: row.wins,
+          projectedLosses: row.losses,
+          expectedExtraWins: 0,
+          expectedFinalPoints: row.points,
+          winProbabilitySum: 0,
+          remainingGames: 0,
+          certaintyAccumulator: 0,
+          scored: row.scored,
+          conceded: row.conceded,
+        },
+      ])
+    );
+
+    projectionUpcomingGames.forEach(game => {
+      const homeProjection = projectionMap.get(game.homeTeamKey);
+      const awayProjection = projectionMap.get(game.awayTeamKey);
+      if (!homeProjection || !awayProjection) return;
+
+      homeProjection.projectedWins += game.homeWinProbabilityApplied;
+      homeProjection.projectedLosses += game.awayWinProbabilityApplied;
+      homeProjection.expectedExtraWins += game.homeWinProbabilityApplied;
+      homeProjection.expectedFinalPoints += game.homeWinProbabilityApplied * 2;
+      homeProjection.winProbabilitySum += game.homeWinProbabilityApplied;
+      homeProjection.remainingGames += 1;
+      homeProjection.certaintyAccumulator += game.certaintyApplied;
+
+      awayProjection.projectedWins += game.awayWinProbabilityApplied;
+      awayProjection.projectedLosses += game.homeWinProbabilityApplied;
+      awayProjection.expectedExtraWins += game.awayWinProbabilityApplied;
+      awayProjection.expectedFinalPoints += game.awayWinProbabilityApplied * 2;
+      awayProjection.winProbabilitySum += game.awayWinProbabilityApplied;
+      awayProjection.remainingGames += 1;
+      awayProjection.certaintyAccumulator += game.certaintyApplied;
+    });
 
     return Array.from(projectionMap.values())
       .sort((a, b) => {
@@ -3203,16 +3293,7 @@ export function SeasonComparison({
         expectedExtraWins: item.expectedExtraWins,
         expectedFinalPoints: item.expectedFinalPoints,
       }));
-  }, [
-    allTeams,
-    projectionHomeAdvantage,
-    projectionLogisticDivisor,
-    projectionStrengthByTeamKey,
-    headToHeadByPair,
-    recentFormByTeamKey,
-    seasonFixtures,
-    standingsSnapshot,
-  ]);
+  }, [projectionUpcomingGames, standingsSnapshot]);
 
   const playoffProjection = useMemo<PlayoffProjectionResult | null>(() => {
     if (projectedStandings.length < 8) return null;
@@ -3272,7 +3353,9 @@ export function SeasonComparison({
       const homeCourtPattern: Array<1 | -1> = [1, -1, 1, -1, 1];
       const gameProbabilities = homeCourtPattern.map(sign => singleGameHomeWinProbability(homeSeed, awaySeed, sign));
       const seriesOutcome = bestOfSeriesOutcome(gameProbabilities, 3);
-      const homeSeriesWinProbability = seriesOutcome.homeSeriesWinProbability;
+      const seriesKey = `${round}-${homeSeed}-${awaySeed}`;
+      const manualWinnerSide = playoffSeriesWinnerOverrides[seriesKey] ?? null;
+      const homeSeriesWinProbability = manualWinnerSide === 'home' ? 1 : manualWinnerSide === 'away' ? 0 : seriesOutcome.homeSeriesWinProbability;
       const awaySeriesWinProbability = 1 - homeSeriesWinProbability;
       const homeWinsSeries = homeSeriesWinProbability >= awaySeriesWinProbability;
       const mostLikelyScore = homeWinsSeries
@@ -3280,6 +3363,7 @@ export function SeasonComparison({
         : (seriesOutcome.mostLikelyAwayWinScore ?? '2-3');
 
       return {
+        seriesKey,
         round,
         homeSeed,
         awaySeed,
@@ -3291,6 +3375,7 @@ export function SeasonComparison({
         loser: homeWinsSeries ? away.team : home.team,
         mostLikelyScore,
         certaintyLabel: probabilityLabel(Math.max(homeSeriesWinProbability, awaySeriesWinProbability)),
+        manualOverride: manualWinnerSide !== null,
       };
     };
 
@@ -3339,7 +3424,15 @@ export function SeasonComparison({
       finalRanking,
       series: [qf1, qf2, qf3, qf4, sf1, sf2, finalSeries, bronzeSeries],
     };
-  }, [projectedStandings, projectionHomeAdvantage, projectionLogisticDivisor, projectionStrengthByTeamKey, recentFormByTeamKey, headToHeadByPair]);
+  }, [
+    projectedStandings,
+    projectionHomeAdvantage,
+    projectionLogisticDivisor,
+    projectionStrengthByTeamKey,
+    recentFormByTeamKey,
+    headToHeadByPair,
+    playoffSeriesWinnerOverrides,
+  ]);
 
   const projectionContext = useMemo(() => {
     if (projectedStandings.length === 0 || !resolvedTeamId || resolvedTeamId === 'all') return null;
@@ -3412,6 +3505,74 @@ export function SeasonComparison({
       h2hLine,
     };
   }, [allTeams, projectionContext, projectionStrengthByTeamKey, scheduleStrengthByTeamKey, recentFormByTeamKey, resolvedTeamId, playoffProjection, headToHeadByPair]);
+
+  const activeProjectionTeamKey = useMemo(() => {
+    if (selectedProjectionTeamKey) return selectedProjectionTeamKey;
+    if (!resolvedTeamId || resolvedTeamId === 'all') return '';
+    const selectedTeamName = allTeams.find(team => team.id === resolvedTeamId)?.name;
+    return selectedTeamName ? normalizeTeamKey(selectedTeamName) : '';
+  }, [allTeams, resolvedTeamId, selectedProjectionTeamKey]);
+
+  const remainingProjectionGamesForSelectedTeam = useMemo(() => {
+    if (!activeProjectionTeamKey) return [];
+    return projectionUpcomingGames
+      .filter(item => item.homeTeamKey === activeProjectionTeamKey || item.awayTeamKey === activeProjectionTeamKey)
+      .map(item => {
+        const isHome = item.homeTeamKey === activeProjectionTeamKey;
+        const ownTeam = isHome ? item.homeTeam : item.awayTeam;
+        const opponent = isHome ? item.awayTeam : item.homeTeam;
+        const ownModelWinProbability = isHome ? item.homeWinProbabilityModel : item.awayWinProbabilityModel;
+        const ownAppliedWinProbability = isHome ? item.homeWinProbabilityApplied : item.awayWinProbabilityApplied;
+        const selectedWinner = item.overrideWinnerSide
+          ? (item.overrideWinnerSide === 'home' ? item.homeTeam : item.awayTeam)
+          : null;
+
+        return {
+          ...item,
+          isHome,
+          ownTeam,
+          opponent,
+          ownModelWinProbability,
+          ownAppliedWinProbability,
+          selectedWinner,
+        };
+      });
+  }, [activeProjectionTeamKey, projectionUpcomingGames]);
+
+  const activeProjectionTeamName = useMemo(() => {
+    if (remainingProjectionGamesForSelectedTeam.length > 0) return remainingProjectionGamesForSelectedTeam[0].ownTeam;
+    const hit = projectedStandings.find(row => normalizeTeamKey(row.team) === activeProjectionTeamKey);
+    return hit?.team ?? null;
+  }, [activeProjectionTeamKey, projectedStandings, remainingProjectionGamesForSelectedTeam]);
+
+  const setFixtureWinnerOverride = (fixtureId: string, winnerMode: 'model' | 'home' | 'away') => {
+    setFixtureWinnerOverrides(prev => {
+      const next = { ...prev };
+      if (winnerMode === 'model') {
+        delete next[fixtureId];
+      } else {
+        next[fixtureId] = winnerMode;
+      }
+      return next;
+    });
+  };
+
+  const setPlayoffSeriesWinnerOverride = (seriesKey: string, winnerMode: 'model' | 'home' | 'away') => {
+    setPlayoffSeriesWinnerOverrides(prev => {
+      const next = { ...prev };
+      if (winnerMode === 'model') {
+        delete next[seriesKey];
+      } else {
+        next[seriesKey] = winnerMode;
+      }
+      return next;
+    });
+  };
+
+  const resetWinnerOverrides = () => {
+    setFixtureWinnerOverrides({});
+    setPlayoffSeriesWinnerOverrides({});
+  };
 
   const whatIfTeamOptions = useMemo(() => {
     if (projectedStandings.length > 0) {
@@ -6424,6 +6585,75 @@ export function SeasonComparison({
                 </div>
               )}
 
+              <div className="rounded-md border border-slate-700 bg-slate-800/40 p-3 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <div className="text-xs uppercase tracking-wide text-slate-400">Hátralévő meccsek (interaktív)</div>
+                    <div className="text-sm text-slate-200">
+                      {activeProjectionTeamName
+                        ? `${activeProjectionTeamName} hátralévő alapszakasz meccsei`
+                        : 'Kattints egy csapatra az előrejelzett tabellában'}
+                    </div>
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={resetWinnerOverrides}
+                    className="border-slate-700 text-slate-300 hover:bg-slate-800"
+                  >
+                    Győztes-felülírás reset
+                  </Button>
+                </div>
+
+                {remainingProjectionGamesForSelectedTeam.length > 0 ? (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-slate-700 text-slate-400">
+                          <th className="text-left py-2 pr-2">Dátum</th>
+                          <th className="text-left py-2 pr-2">Párharc</th>
+                          <th className="text-right py-2 pr-2">Modell W%</th>
+                          <th className="text-right py-2 pr-2">Figyelembe vett W%</th>
+                          <th className="text-right py-2">Győztes</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {remainingProjectionGamesForSelectedTeam.map(item => (
+                          <tr key={item.fixtureId} className="border-b border-slate-800">
+                            <td className="py-2 pr-2 text-slate-300">{item.gameDate}</td>
+                            <td className="py-2 pr-2 text-slate-100">
+                              {item.isHome ? 'H' : 'V'}: {item.ownTeam} vs {item.opponent}
+                            </td>
+                            <td className="py-2 pr-2 text-right text-slate-300">{(item.ownModelWinProbability * 100).toFixed(1)}%</td>
+                            <td className={`py-2 pr-2 text-right ${item.overrideWinnerSide ? 'text-cyan-300 font-medium' : 'text-slate-300'}`}>
+                              {(item.ownAppliedWinProbability * 100).toFixed(1)}%
+                            </td>
+                            <td className="py-2 text-right">
+                              <Select
+                                value={item.overrideWinnerSide ?? 'model'}
+                                onValueChange={(value) => setFixtureWinnerOverride(item.fixtureId, value as 'model' | 'home' | 'away')}
+                              >
+                                <SelectTrigger className="ml-auto w-45 bg-slate-800 border-slate-700">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent className="bg-slate-800 border-slate-700 text-slate-100">
+                                  <SelectItem value="model">Modell alapján</SelectItem>
+                                  <SelectItem value="home">{item.homeTeam}</SelectItem>
+                                  <SelectItem value="away">{item.awayTeam}</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="text-xs text-slate-400">Az adott csapatnál nincs több hátralévő meccs a menetrendben.</div>
+                )}
+              </div>
+
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
@@ -6441,9 +6671,8 @@ export function SeasonComparison({
                   <tbody>
                     {projectedStandings.slice(0, 14).map((row, index) => {
                       const isTop8 = index < 8;
-                      const isSelectedTeam = resolvedTeamId !== 'all'
-                        && normalizeTeamKey(row.team)
-                          === normalizeTeamKey(allTeams.find(team => team.id === resolvedTeamId)?.name ?? '');
+                      const rowTeamKey = normalizeTeamKey(row.team);
+                      const isSelectedTeam = rowTeamKey === activeProjectionTeamKey;
 
                       return (
                         <tr
@@ -6453,7 +6682,15 @@ export function SeasonComparison({
                           <td className="py-2 pr-2 text-slate-200">
                             <span className={isTop8 ? 'text-emerald-300 font-semibold' : 'text-slate-300'}>{index + 1}</span>
                           </td>
-                          <td className="py-2 pr-2 text-slate-100">{row.team}</td>
+                          <td className="py-2 pr-2 text-slate-100">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedProjectionTeamKey(rowTeamKey)}
+                              className={`text-left hover:text-cyan-300 ${isSelectedTeam ? 'text-cyan-200 font-medium' : ''}`}
+                            >
+                              {row.team}
+                            </button>
+                          </td>
                           <td className="py-2 pr-2 text-right text-slate-300">
                             {row.currentWins}-{row.currentLosses}
                           </td>
@@ -6498,6 +6735,7 @@ export function SeasonComparison({
                           <th className="text-left py-2 pr-2">Párharc</th>
                           <th className="text-right py-2 pr-2">Hazai ág esély</th>
                           <th className="text-right py-2 pr-2">Várható eredmény</th>
+                          <th className="text-right py-2 pr-2">Győztes</th>
                           <th className="text-right py-2">Bizonyosság</th>
                         </tr>
                       </thead>
@@ -6512,6 +6750,21 @@ export function SeasonComparison({
                             <td className="py-2 pr-2 text-right text-cyan-300">
                               {item.winner} ({item.mostLikelyScore})
                             </td>
+                            <td className="py-2 pr-2 text-right">
+                              <Select
+                                value={playoffSeriesWinnerOverrides[item.seriesKey] ?? 'model'}
+                                onValueChange={(value) => setPlayoffSeriesWinnerOverride(item.seriesKey, value as 'model' | 'home' | 'away')}
+                              >
+                                <SelectTrigger className="ml-auto w-45 bg-slate-800 border-slate-700">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent className="bg-slate-800 border-slate-700 text-slate-100">
+                                  <SelectItem value="model">Modell alapján</SelectItem>
+                                  <SelectItem value="home">{item.homeTeam}</SelectItem>
+                                  <SelectItem value="away">{item.awayTeam}</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </td>
                             <td
                               className={`py-2 text-right ${
                                 item.certaintyLabel === 'Magas'
@@ -6521,7 +6774,7 @@ export function SeasonComparison({
                                     : 'text-slate-400'
                               }`}
                             >
-                              {item.certaintyLabel}
+                              {item.manualOverride ? 'Manuális' : item.certaintyLabel}
                             </td>
                           </tr>
                         ))}
