@@ -142,7 +142,7 @@ export function KosarstatPbpImport({ selectedSeasonId, selectedSeasonName, onImp
       if (shouldFinalize) {
         const activeStartedAt = activeImportStartedAtRef.current;
         if (activeStartedAt && typeof data.startedAt === 'number' && data.startedAt !== activeStartedAt) {
-          return;
+          return null;
         }
 
         if (typeof data.durationMs === 'number') {
@@ -156,7 +156,7 @@ export function KosarstatPbpImport({ selectedSeasonId, selectedSeasonName, onImp
           setCleanupInfo(data.stopMessage || 'A Kosarstat import leallt.');
           activeImportStartedAtRef.current = null;
           stopPolling();
-          return;
+          return data;
         }
 
         if (data.lastError) {
