@@ -29,7 +29,8 @@ Szabályok:
 - Csak a megadott adatokból dolgozhatsz.
 - Nem találhatsz ki új számot vagy mutatót.
 - A szöveg legyen olvasmányos, közérthető, mégis szakmailag pontos.
-- Kerüld a száraz, túlzottan táblázatszerű megfogalmazást.`;
+- Kerüld a száraz, túlzottan táblázatszerű megfogalmazást.
+- Ha az advancedStats egy blokkja alacsony confidence-et jelez, ezt óvatosan, irányadó megállapításként fogalmazd meg.`;
 
 const FORMAT_INSTRUCTIONS = `Készíts magyar nyelvű, 12-16 mondatos, szurkolóbarát játékos szezonértékelést.
 Kötelező szerkezet:
@@ -38,6 +39,7 @@ Kötelező szerkezet:
 3) Dobásprofil-olvasat (2-3 mondat): külön kezeld a gyűrű/festék/középtáv/sarok tripla/egyéb tripla mintázatot
 4) Kockázatok és limitációk (2-3 mondat)
 5) Edzői fókuszpontok a következő időszakra (2-3 mondat)
+6) Haladó statisztikai blokk értelmezés (2-3 mondat): shot quality, clutch, on/off impact, döntésminőség, stabilitás, matchup, terhelés
 
 Szabályok:
 - Ne számolj új mutatót, ne becsülj.
@@ -45,7 +47,19 @@ Szabályok:
 - Adj ok-okozati mondatokat ("mert", "emiatt", "ezért").
 - A dobásprofil következtetés legyen konkrét, ne sablon.
 - A hangnem legyen tárgyilagosan biztató, ne rideg.
-- A zárásban legyen egy rövid, előremutató összegzés.`;
+- A zárásban legyen egy rövid, előremutató összegzés.
+
+Haladó statisztikák feldolgozási elvek:
+- Az advancedStats mezőből emelj ki legalább 4 blokkot, és írd le a hatásukat rövid ok-okozati lánccal.
+- A blockVerdicts szövegeit használd irányadónak, de ne másold szó szerint egymás után.
+- A thresholdHints alapján fogalmazd meg röviden, hogy miért lett jó/közepes/kockázatos az adott blokk.
+- Ha egy blokk confidence szintje "alacsony", azt jelezd: "korlátozott minta" vagy "irányadó minta".
+- A coachingFocus pontokat építsd be az edzői fókusz szakaszba, ne hagyd figyelmen kívül.
+
+Stíluskontroll:
+- Ne listázz mechanikusan számokat; a számokat mindig értelmezd.
+- Azonosíts legalább egy erősséget és legalább egy fejlesztendő területet az advancedStats alapján.
+- Ne írj ellentmondást: ha valamely blokk kockázatos, a zárás ne nevezze egyértelmű erősségnek ugyanazt a területet.`;
 
 type GeneratePlayerSeasonPayload = {
   seasonId: string;
@@ -55,6 +69,7 @@ type GeneratePlayerSeasonPayload = {
   playerName: string;
   generatedBy?: string | null;
   analysis: unknown;
+  advancedStats?: unknown;
   shotProfile?: unknown;
   recentGames?: unknown;
 };
@@ -67,6 +82,7 @@ const buildUserPrompt = (payload: GeneratePlayerSeasonPayload) => {
     playerId: payload.playerId,
     playerName: payload.playerName,
     analysis: payload.analysis,
+    advancedStats: payload.advancedStats ?? null,
     shotProfile: payload.shotProfile ?? null,
     recentGames: payload.recentGames ?? null,
   };
@@ -142,6 +158,7 @@ export async function POST(request: Request) {
           narrative,
           analysis_snapshot: {
             analysis: payload.analysis,
+            advancedStats: payload.advancedStats ?? null,
             shotProfile: payload.shotProfile ?? null,
             recentGames: payload.recentGames ?? null,
           },

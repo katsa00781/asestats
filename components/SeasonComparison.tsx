@@ -1002,7 +1002,7 @@ type ProjectionRow = {
 
 type PlayoffSeriesProjection = {
   seriesKey: string;
-  round: 'Negyeddöntő' | 'Elődöntő' | 'Döntő' | 'Bronz';
+  round: 'Negyeddöntő' | 'Elődöntő' | 'Döntő' | 'Bronz' | '5-8 helyosztó elődöntő' | '5. helyért' | '7. helyért';
   homeSeed: number;
   awaySeed: number;
   homeTeam: string;
@@ -1073,6 +1073,7 @@ const SKILL_LABELS_HU: Record<string, string> = {
 const RECENT_GAMES_WINDOW = 5;
 const TEAM_FORM_WINDOW = 5;
 const TEAM_FORM_CHART_POINTS = 8;
+const TEAM_FORM_ROLLING_WINDOW = 3;
 const TEAM_FORM_EFG_THRESHOLD = 3;
 const TEAM_FORM_MARGIN_THRESHOLD = 4;
 const HEAD_TO_HEAD_MATCH_WINDOW_MS = 36 * 60 * 60 * 1000; // 36 hours tolerance when pairing mirrored game IDs
@@ -1097,6 +1098,18 @@ const isNegativeDecisiveLabel = (label: string, axis: 'offense' | 'defense') => 
 const roundValue = (value: number, digits = 1) => {
   const factor = Math.pow(10, digits);
   return Math.round(value * factor) / factor;
+};
+
+const formatNullableNumber = (value: number | null | undefined, digits = 1, suffix = '') => {
+  if (value === null || value === undefined || !Number.isFinite(value)) return 'n/a';
+  return `${Number(value).toFixed(digits)}${suffix}`;
+};
+
+const getInsightToneClass = (tone: 'good' | 'neutral' | 'risk' | 'na') => {
+  if (tone === 'good') return 'text-emerald-300';
+  if (tone === 'risk') return 'text-rose-300';
+  if (tone === 'neutral') return 'text-amber-300';
+  return 'text-slate-400';
 };
 
 const stdDev = (values: number[]) => {
@@ -1188,12 +1201,17 @@ const buildTeamGameMetrics = (rows: GamePlayerStatRow[]) => {
   const threePct = totals.fga3 > 0 ? (totals.fgm3 / totals.fga3) * 100 : 0;
   const turnoverRate = pace > 0 ? totals.tov / pace : 0;
   const efg = fga > 0 ? ((fgm + 0.5 * totals.fgm3) / fga) * 100 : 0;
+  const tsDenominator = 2 * (fga + 0.44 * totals.fta);
+  const tsPct = tsDenominator > 0 ? (totals.points / tsDenominator) * 100 : 0;
+  const ppp = pace > 0 ? totals.points / pace : 0;
 
   return {
     pace,
     threePct,
     turnoverRate,
     efg,
+    tsPct,
+    ppp,
     points: totals.points,
   };
 };
@@ -4098,6 +4116,9 @@ export function SeasonComparison({
         ourScore: typeof ourScore === 'number' ? ourScore : 0,
         oppScore: typeof oppScore === 'number' ? oppScore : 0,
         efg: metrics?.efg ?? null,
+        tsPct: metrics?.tsPct ?? null,
+        turnoverRate: metrics?.turnoverRate ?? null,
+        ppp: metrics?.ppp ?? null,
         pace: metrics?.pace ?? null,
       };
     });
@@ -4121,8 +4142,25 @@ export function SeasonComparison({
     const efgValues = windowGames
       .map(item => item.efg)
       .filter((value): value is number => Number.isFinite(value));
+    const tsValues = windowGames
+      .map(item => item.tsPct)
+      .filter((value): value is number => Number.isFinite(value));
+    const tovValues = windowGames
+      .map(item => item.turnoverRate)
+      .filter((value): value is number => Number.isFinite(value));
     const recentEfgAvg = efgValues.length > 0 ? roundValue(average(efgValues), 1) : null;
+    const recentTsAvg = tsValues.length > 0 ? roundValue(average(tsValues), 1) : null;
+    const recentTovAvg = tovValues.length > 0 ? roundValue(average(tovValues) * 100, 1) : null;
     const efgDelta = recentEfgAvg !== null ? roundValue(recentEfgAvg - normalizedTeamStats.efg, 1) : null;
+
+    const efgStd = efgValues.length > 1 ? roundValue(stdDev(efgValues), 1) : 0;
+    const tsStd = tsValues.length > 1 ? roundValue(stdDev(tsValues), 1) : 0;
+    const tovStdPct = tovValues.length > 1 ? roundValue(stdDev(tovValues.map(item => item * 100)), 1) : 0;
+    const marginStd = windowGames.length > 1 ? roundValue(stdDev(windowGames.map(item => item.margin)), 1) : 0;
+    const volatilityIndex = roundValue(
+      clamp01((efgStd / 8) * 0.35 + (tsStd / 8) * 0.25 + (tovStdPct / 5) * 0.2 + (marginStd / 12) * 0.2) * 100,
+      1
+    );
 
     let status: 'up' | 'down' | 'flat' = 'flat';
     if (marginDelta >= TEAM_FORM_MARGIN_THRESHOLD || (efgDelta !== null && efgDelta >= TEAM_FORM_EFG_THRESHOLD)) {
@@ -4148,6 +4186,12 @@ export function SeasonComparison({
     if (recentEfgAvg !== null && efgDelta !== null) {
       descriptionParts.push(`eFG: ${recentEfgAvg.toFixed(1)}% (${efgDelta >= 0 ? '+' : ''}${efgDelta.toFixed(1)} pp)`);
     }
+    if (recentTsAvg !== null) {
+      descriptionParts.push(`TS: ${recentTsAvg.toFixed(1)}%`);
+    }
+    if (recentTovAvg !== null) {
+      descriptionParts.push(`TO: ${recentTovAvg.toFixed(1)}%`);
+    }
 
     return {
       badgeLabel,
@@ -4160,6 +4204,13 @@ export function SeasonComparison({
       seasonEfg: normalizedTeamStats.efg,
       recentEfgAvg,
       efgDelta,
+      recentTsAvg,
+      recentTovAvg,
+      efgStd,
+      tsStd,
+      tovStdPct,
+      marginStd,
+      volatilityIndex,
     };
   }, [normalizedTeamStats, teamFormSeries]);
 
@@ -4176,11 +4227,147 @@ export function SeasonComparison({
           label,
           margin: roundValue(item.margin, 1),
           efg: item.efg !== null ? roundValue(item.efg, 1) : null,
+          tsPct: item.tsPct !== null ? roundValue(item.tsPct, 1) : null,
+          turnoverPct: item.turnoverRate !== null ? roundValue(item.turnoverRate * 100, 1) : null,
+          ppp: item.ppp !== null ? roundValue(item.ppp, 3) : null,
           opponent: item.opponent,
           result: item.result,
         };
       });
   }, [teamFormSeries]);
+
+  const teamFormVolatilityData = useMemo(() => {
+    const base = teamFormSeries
+      .slice(0, TEAM_FORM_CHART_POINTS)
+      .reverse()
+      .map(item => {
+        const timestamp = item.date ? new Date(item.date).getTime() : 0;
+        const label = timestamp
+          ? new Date(timestamp).toLocaleDateString('hu-HU', { month: 'short', day: 'numeric' })
+          : 'Ismeretlen';
+        return {
+          label,
+          efg: typeof item.efg === 'number' ? item.efg : null,
+          tsPct: typeof item.tsPct === 'number' ? item.tsPct : null,
+          turnoverPct: typeof item.turnoverRate === 'number' ? item.turnoverRate * 100 : null,
+          ppp: typeof item.ppp === 'number' ? item.ppp : null,
+          margin: item.margin,
+        };
+      });
+
+    if (base.length === 0) return [] as Array<{
+      label: string;
+      rollEfg: number | null;
+      rollTs: number | null;
+      rollTo: number | null;
+      rollPpp: number | null;
+      stdEfg: number | null;
+      stdTs: number | null;
+      stdPpp: number | null;
+      phase: 'Felfelé' | 'Stabil' | 'Hektikus' | 'Lejtmenet';
+      phaseScore: number;
+    }>;
+
+    const seasonPpp = normalizedTeamStats && normalizedTeamStats.pace > 0
+      ? (normalizedTeamStats.pointsFor / Math.max(1, normalizedTeamStats.games)) / normalizedTeamStats.pace
+      : null;
+
+    return base.map((item, index) => {
+      const start = Math.max(0, index - TEAM_FORM_ROLLING_WINDOW + 1);
+      const window = base.slice(start, index + 1);
+
+      const efgValues = window.map(entry => entry.efg).filter((value): value is number => Number.isFinite(value));
+      const tsValues = window.map(entry => entry.tsPct).filter((value): value is number => Number.isFinite(value));
+      const toValues = window.map(entry => entry.turnoverPct).filter((value): value is number => Number.isFinite(value));
+      const pppValues = window.map(entry => entry.ppp).filter((value): value is number => Number.isFinite(value));
+
+      const rollEfg = efgValues.length > 0 ? roundValue(average(efgValues), 1) : null;
+      const rollTs = tsValues.length > 0 ? roundValue(average(tsValues), 1) : null;
+      const rollTo = toValues.length > 0 ? roundValue(average(toValues), 1) : null;
+      const rollPpp = pppValues.length > 0 ? roundValue(average(pppValues), 3) : null;
+
+      const stdEfg = efgValues.length > 1 ? roundValue(stdDev(efgValues), 1) : null;
+      const stdTs = tsValues.length > 1 ? roundValue(stdDev(tsValues), 1) : null;
+      const stdPpp = pppValues.length > 1 ? roundValue(stdDev(pppValues), 3) : null;
+
+      let phase: 'Felfelé' | 'Stabil' | 'Hektikus' | 'Lejtmenet' = 'Stabil';
+      if (
+        (stdEfg !== null && stdEfg >= 5.5)
+        || (stdTs !== null && stdTs >= 4.8)
+        || (stdPpp !== null && stdPpp >= 0.085)
+      ) {
+        phase = 'Hektikus';
+      }
+
+      if (
+        rollEfg !== null
+        && normalizedTeamStats
+        && rollEfg <= normalizedTeamStats.efg - 2.5
+      ) {
+        phase = 'Lejtmenet';
+      }
+
+      if (
+        phase !== 'Lejtmenet'
+        && rollEfg !== null
+        && normalizedTeamStats
+        && rollEfg >= normalizedTeamStats.efg + 2
+        && (seasonPpp === null || (rollPpp !== null && rollPpp >= seasonPpp + 0.035))
+      ) {
+        phase = 'Felfelé';
+      }
+
+      const phaseScore = roundValue(
+        clamp01(
+          (rollEfg !== null && normalizedTeamStats ? (rollEfg - normalizedTeamStats.efg + 10) / 20 : 0.5) * 0.55
+          + (rollPpp !== null && seasonPpp !== null ? (rollPpp - seasonPpp + 0.18) / 0.36 : 0.5) * 0.45
+        ) * 100,
+        1
+      );
+
+      return {
+        label: item.label,
+        rollEfg,
+        rollTs,
+        rollTo,
+        rollPpp,
+        stdEfg,
+        stdTs,
+        stdPpp,
+        phase,
+        phaseScore,
+      };
+    });
+  }, [normalizedTeamStats, teamFormSeries]);
+
+  const teamFormPhaseSummary = useMemo(() => {
+    if (teamFormVolatilityData.length === 0) return null;
+
+    const counts = teamFormVolatilityData.reduce(
+      (acc, item) => {
+        acc[item.phase] += 1;
+        return acc;
+      },
+      { Felfelé: 0, Stabil: 0, Hektikus: 0, Lejtmenet: 0 } as Record<'Felfelé' | 'Stabil' | 'Hektikus' | 'Lejtmenet', number>
+    );
+
+    const latest = teamFormVolatilityData[teamFormVolatilityData.length - 1] ?? null;
+    if (!latest) return null;
+
+    const latestBadgeClass = latest.phase === 'Felfelé'
+      ? 'bg-emerald-600/20 text-emerald-200 border border-emerald-500/60'
+      : latest.phase === 'Lejtmenet'
+        ? 'bg-rose-600/20 text-rose-200 border border-rose-500/60'
+        : latest.phase === 'Hektikus'
+          ? 'bg-amber-600/20 text-amber-200 border border-amber-500/60'
+          : 'bg-slate-800 text-slate-200 border border-slate-700';
+
+    return {
+      counts,
+      latest,
+      latestBadgeClass,
+    };
+  }, [teamFormVolatilityData]);
 
   const consistencyInsights = useMemo(() => {
     if (recentGameMetrics.length < 3) return [];
@@ -5034,18 +5221,27 @@ export function SeasonComparison({
     const finalSeries = simulateSeries('Döntő', finalSeeds[0], finalSeeds[1]);
     const bronzeSeries = simulateSeries('Bronz', bronzeSeeds[0], bronzeSeeds[1]);
 
-    const quarterLosers = [qf1.loser, qf2.loser, qf3.loser, qf4.loser]
-      .sort((a, b) => seedOf(a) - seedOf(b));
+    const placeSemiASeeds = [seedOf(qf1.loser), seedOf(qf4.loser)].sort((a, b) => a - b);
+    const placeSemiBSeeds = [seedOf(qf2.loser), seedOf(qf3.loser)].sort((a, b) => a - b);
+
+    const placeSemiA = simulateSeries('5-8 helyosztó elődöntő', placeSemiASeeds[0], placeSemiASeeds[1]);
+    const placeSemiB = simulateSeries('5-8 helyosztó elődöntő', placeSemiBSeeds[0], placeSemiBSeeds[1]);
+
+    const place5Seeds = [seedOf(placeSemiA.winner), seedOf(placeSemiB.winner)].sort((a, b) => a - b);
+    const place7Seeds = [seedOf(placeSemiA.loser), seedOf(placeSemiB.loser)].sort((a, b) => a - b);
+
+    const place5Series = simulateSeries('5. helyért', place5Seeds[0], place5Seeds[1]);
+    const place7Series = simulateSeries('7. helyért', place7Seeds[0], place7Seeds[1]);
 
     const finalRanking: Array<{ position: number; team: string; note?: string }> = [
       { position: 1, team: finalSeries.winner, note: 'Bajnok' },
       { position: 2, team: finalSeries.loser, note: 'Döntős' },
       { position: 3, team: bronzeSeries.winner, note: 'Bronzérmes' },
       { position: 4, team: bronzeSeries.loser, note: '4. hely' },
-      { position: 5, team: quarterLosers[0], note: 'Negyeddöntő kieső' },
-      { position: 6, team: quarterLosers[1], note: 'Negyeddöntő kieső' },
-      { position: 7, team: quarterLosers[2], note: 'Negyeddöntő kieső' },
-      { position: 8, team: quarterLosers[3], note: 'Negyeddöntő kieső' },
+      { position: 5, team: place5Series.winner, note: '5. helyért győztes' },
+      { position: 6, team: place5Series.loser, note: '5. helyért vesztes' },
+      { position: 7, team: place7Series.winner, note: '7. helyért győztes' },
+      { position: 8, team: place7Series.loser, note: '7. helyért vesztes' },
       ...projectedStandings.slice(8).map((row, index) => ({
         position: index + 9,
         team: row.team,
@@ -5059,7 +5255,7 @@ export function SeasonComparison({
       third: bronzeSeries.winner,
       fourth: bronzeSeries.loser,
       finalRanking,
-      series: [qf1, qf2, qf3, qf4, sf1, sf2, finalSeries, bronzeSeries],
+      series: [qf1, qf2, qf3, qf4, sf1, sf2, finalSeries, bronzeSeries, placeSemiA, placeSemiB, place5Series, place7Series],
     };
   }, [
     projectedStandings,
@@ -6760,6 +6956,245 @@ export function SeasonComparison({
     return focus.slice(0, 3);
   }, [kosarstatPostgameContext.nextFocus, kosarstatPostgameContext.problems, nextGameAutoFocus, postgameReport, showKosarstatOnlyPostgame]);
 
+  const enrichedTeamAnalysis = useMemo<TeamAnalysis | null>(() => {
+    if (!displayTeamAnalysis) return null;
+
+    const sampleLabel = (minutes: number): 'alacsony' | 'kozepes' | 'magas' => {
+      if (minutes >= 20) return 'magas';
+      if (minutes >= 10) return 'kozepes';
+      return 'alacsony';
+    };
+
+    const stints = activeKosarstatTeamAnalysis?.stints ?? [];
+    const pairStats = activeKosarstatTeamAnalysis?.pairStats ?? [];
+
+    const validStints = stints
+      .map(stint => ({
+        ...stint,
+        minutes: roundValue((stint.seconds || 0) / 60, 1),
+        netPer40: Number.isFinite(Number(stint.on40)) ? Number(stint.on40) : null,
+      }))
+      .filter(stint => (stint.seconds || 0) >= 90 && stint.netPer40 !== null);
+
+    const sortedStints = [...validStints].sort((a, b) => Number(b.netPer40) - Number(a.netPer40));
+    const topLineupRaw = sortedStints[0] ?? null;
+    const bottomLineupRaw = sortedStints.length > 1 ? sortedStints[sortedStints.length - 1] : null;
+
+    const validPairs = pairStats
+      .map(item => ({
+        ...item,
+        minutes: roundValue((item.seconds || 0) / 60, 1),
+      }))
+      .filter(item => (item.seconds || 0) >= 90 && Number.isFinite(Number(item.netPer40)));
+
+    const topPairRaw = [...validPairs].sort((a, b) => Number(b.netPer40) - Number(a.netPer40))[0] ?? null;
+    const bottomPairRaw = [...validPairs].sort((a, b) => Number(a.netPer40) - Number(b.netPer40))[0] ?? null;
+
+    let cumulativeSeconds = 0;
+    let rotationBreakpoint: {
+      minute: number | null;
+      trigger: string;
+      netDropPer40: number;
+      confidence: 'alacsony' | 'kozepes' | 'magas';
+    } | null = null;
+
+    for (let i = 1; i < validStints.length; i += 1) {
+      const prev = validStints[i - 1];
+      const curr = validStints[i];
+      cumulativeSeconds += prev.seconds || 0;
+      if (prev.netPer40 === null || curr.netPer40 === null) continue;
+      const drop = Number(prev.netPer40) - Number(curr.netPer40);
+      if (drop < 8) continue;
+
+      const prevPlayers = new Set(prev.players || []);
+      const currPlayers = new Set(curr.players || []);
+      const left = Array.from(prevPlayers).filter(player => !currPlayers.has(player));
+      const entered = Array.from(currPlayers).filter(player => !prevPlayers.has(player));
+      const trigger = entered.length > 0 || left.length > 0
+        ? `be: ${entered.join(', ') || '-'} | ki: ${left.join(', ') || '-'}`
+        : 'ötösváltás';
+      const sampleMinutes = roundValue(((prev.seconds || 0) + (curr.seconds || 0)) / 60, 1);
+      const confidence: 'alacsony' | 'kozepes' | 'magas' = sampleMinutes >= 14 ? 'magas' : sampleMinutes >= 8 ? 'kozepes' : 'alacsony';
+
+      if (!rotationBreakpoint || drop > rotationBreakpoint.netDropPer40) {
+        rotationBreakpoint = {
+          minute: roundValue(cumulativeSeconds / 60, 1),
+          trigger,
+          netDropPer40: roundValue(drop, 1),
+          confidence,
+        };
+      }
+    }
+
+    const ownMetric = kosarstatPostgameContext.ownMetrics;
+    const oppMetric = kosarstatPostgameContext.oppMetrics;
+    const clutch = kosarstatPostgameContext.clutch;
+
+    const clutchProfile: NonNullable<TeamAnalysis['clutchProfile']> = {
+      available: Boolean(clutch?.available),
+      sampleSize: clutch?.eventCount ?? 0,
+      ortg: ownMetric?.ortg ?? null,
+      drtg: oppMetric?.ortg ?? null,
+      net: ownMetric?.ortg !== null && ownMetric?.ortg !== undefined && oppMetric?.ortg !== null && oppMetric?.ortg !== undefined
+        ? roundValue((ownMetric.ortg as number) - (oppMetric.ortg as number), 1)
+        : null,
+      tovPct: ownMetric?.tov_pct ?? null,
+      rebPct: ownMetric?.orb_pct ?? null,
+      ftRate: ownMetric?.ftm_rate ?? null,
+      topUsageClosers: (activeKosarstatTeamAnalysis?.playerMinutes || [])
+        .map(item => ({
+          player: item.player,
+          usageShare: item.seconds > 0
+            ? roundValue(item.seconds / Math.max(1, (activeKosarstatTeamAnalysis?.playerMinutes || []).reduce((sum, row) => sum + (row.seconds || 0), 0)), 3)
+            : 0,
+        }))
+        .sort((a, b) => b.usageShare - a.usageShare)
+        .slice(0, 2),
+      assistToTurnover: null,
+      notes: clutch?.available
+        ? [
+            'Clutch ORtg/DRtg blokk jelenleg game-level team metricből közelítve.',
+            'Lezáró profil a clutch közeli perc-terhelés alapján.'
+          ]
+        : ['Nincs elegendő clutch minta a kiválasztott meccshez.'],
+    };
+
+    const shotMapProfile: NonNullable<TeamAnalysis['shotMapProfile']> = {
+      available: Boolean(teamSeasonShotSummary),
+      zones: teamSeasonShotSummary
+        ? ([
+            { key: 'rim', label: 'Gyűrű' },
+            { key: 'paint', label: 'Festék' },
+            { key: 'mid', label: 'Középtáv' },
+            { key: 'corner3', label: 'Sarok tripla' },
+            { key: 'aboveBreak3', label: 'Egyéb tripla' },
+          ] as const).map(zone => {
+            const total = Math.max(1, teamSeasonShotSummary.attempts);
+            const zoneStats = teamSeasonShotSummary.zoneStats[zone.key];
+            const relative = teamLeagueRelativeZoneRows.find(row => row.label === zone.label);
+            return {
+              key: zone.key,
+              label: zone.label,
+              rate: roundValue((zoneStats.attempts / total) * 100, 1),
+              pct: roundValue(zoneStats.pct, 1),
+              rateDeltaVsLeague: relative?.rateDelta ?? 0,
+              pctDeltaVsLeague: relative?.pctDelta ?? 0,
+              rateDeltaVsSeason: 0,
+              pctDeltaVsSeason: 0,
+            };
+          })
+        : [],
+      offenseQualityIndex: teamSeasonShotSummary
+        ? roundValue(
+            teamSeasonShotSummary.zoneStats.rim.pct * 0.32
+            + teamSeasonShotSummary.zoneStats.corner3.pct * 0.25
+            + teamSeasonShotSummary.zoneStats.aboveBreak3.pct * 0.18
+            - teamSeasonShotSummary.zoneStats.mid.pct * 0.12,
+            1
+          )
+        : null,
+      allowedQualityIndex: null,
+      notes: teamSeasonShotSummary
+        ? ['Shot-quality index jelenleg támadó oldali shot map alapján.']
+        : ['Nincs szezon shot map adat.'],
+    };
+
+    const avgNetPer40 = validStints.length > 0
+      ? average(validStints.map(item => Number(item.netPer40 || 0)))
+      : null;
+
+    const selectedTeamKey = normalizeTeamKey(displayTeamAnalysis.teamName);
+    const scheduleStrength = selectedTeamKey
+      ? scheduleStrengthByTeamKey.get(selectedTeamKey) ?? null
+      : null;
+    const sosWeight = scheduleStrength !== null ? roundValue(1 + scheduleStrength.combined * 0.08, 3) : null;
+
+    const impactProfile: NonNullable<TeamAnalysis['impactProfile']> = {
+      available: validStints.length > 0,
+      bestNetPer40: topLineupRaw?.netPer40 !== null && topLineupRaw?.netPer40 !== undefined ? roundValue(Number(topLineupRaw.netPer40), 1) : null,
+      worstNetPer40: bottomLineupRaw?.netPer40 !== null && bottomLineupRaw?.netPer40 !== undefined ? roundValue(Number(bottomLineupRaw.netPer40), 1) : null,
+      adjustedNetPer40: avgNetPer40 !== null
+        ? roundValue(avgNetPer40 * (sosWeight ?? 1), 1)
+        : null,
+      sosWeight,
+      garbageTimeFiltered: true,
+      sampleMinutes: roundValue(validStints.reduce((sum, item) => sum + item.minutes, 0), 1),
+      notes: [
+        'Possession-normalizált net/40 alkalmazva.',
+        'Egyszerű SOS súly beépítve (schedule-strength alapján).',
+        'Alacsony játékidejű stintek kiszűrve.'
+      ],
+    };
+
+    const actionableFocus = [
+      rotationBreakpoint
+        ? `Rotációs töréspont kezelése: ~${rotationBreakpoint.minute ?? 0}. perc, ${rotationBreakpoint.trigger} után -${rotationBreakpoint.netDropPer40} net/40.`
+        : null,
+      topPairRaw && bottomPairRaw
+        ? `Páros menedzsment: ${topPairRaw.players.join(' + ')} (${roundValue(Number(topPairRaw.netPer40), 1)} net/40) priorizálása, ${bottomPairRaw.players.join(' + ')} limitálása.`
+        : null,
+      clutch?.available
+        ? `Clutch fókusz: utolsó 5 percben TO kontroll (${clutch.ownTurnovers}-${clutch.oppTurnovers}) és első opciós spacing.`
+        : 'Clutch minta alacsony: végjáték protokollok stabilizálása (ATO, első passz, fault-management).',
+    ].filter((item): item is string => Boolean(item)).slice(0, 3);
+
+    return {
+      ...displayTeamAnalysis,
+      clutchProfile,
+      shotMapProfile,
+      lineupProfile: {
+        available: validStints.length > 0,
+        topLineup: topLineupRaw
+          ? {
+              players: topLineupRaw.players,
+              minutes: topLineupRaw.minutes,
+              netPer40: roundValue(Number(topLineupRaw.netPer40), 1),
+              sampleLabel: sampleLabel(topLineupRaw.minutes),
+            }
+          : null,
+        bottomLineup: bottomLineupRaw
+          ? {
+              players: bottomLineupRaw.players,
+              minutes: bottomLineupRaw.minutes,
+              netPer40: roundValue(Number(bottomLineupRaw.netPer40), 1),
+              sampleLabel: sampleLabel(bottomLineupRaw.minutes),
+            }
+          : null,
+        topPair: topPairRaw
+          ? {
+              players: topPairRaw.players,
+              minutes: topPairRaw.minutes,
+              netPer40: roundValue(Number(topPairRaw.netPer40), 1),
+              sampleLabel: sampleLabel(topPairRaw.minutes),
+            }
+          : null,
+        bottomPair: bottomPairRaw
+          ? {
+              players: bottomPairRaw.players,
+              minutes: bottomPairRaw.minutes,
+              netPer40: roundValue(Number(bottomPairRaw.netPer40), 1),
+              sampleLabel: sampleLabel(bottomPairRaw.minutes),
+            }
+          : null,
+        rotationBreakpoint,
+        notes: validStints.length > 0
+          ? ['Lineup alapú döntéstámogatás aktív (Kosarstat stints + pair stats).']
+          : ['Nincs elegendő lineup minta a döntéstámogatáshoz.'],
+      },
+      impactProfile,
+      actionableFocus,
+    };
+  }, [
+    activeKosarstatTeamAnalysis,
+    displayTeamAnalysis,
+    kosarstatPostgameContext,
+    scheduleStrengthByTeamKey,
+    teamLeagueRelativeZoneRows,
+    teamSeasonShotSummary,
+  ]);
+
+  const effectiveTeamAnalysis = enrichedTeamAnalysis ?? displayTeamAnalysis;
+
   const playerUsageVsTsData = useMemo(() => {
     if (!postgameReport?.playerReport?.players) return [] as Array<{ name: string; usagePct: number; tsPct: number; valPer36: number }>;
     return postgameReport.playerReport.players.map(player => ({
@@ -7214,7 +7649,7 @@ export function SeasonComparison({
   };
 
   const handleGenerateTeamNarrative = async () => {
-    if (!displayTeamAnalysis || !resolvedSeasonId || !resolvedTeamId || resolvedTeamId === 'all') return;
+    if (!effectiveTeamAnalysis || !resolvedSeasonId || !resolvedTeamId || resolvedTeamId === 'all') return;
 
     setIsGeneratingTeamNarrative(true);
     setTeamNarrative({ status: 'loading' });
@@ -7226,9 +7661,9 @@ export function SeasonComparison({
         body: JSON.stringify({
           seasonId: resolvedSeasonId,
           teamId: resolvedTeamId,
-          teamName: displayTeamAnalysis.teamName,
+          teamName: effectiveTeamAnalysis.teamName,
           stylePreset: teamNarrativeStyle,
-          teamAnalysis: displayTeamAnalysis,
+          teamAnalysis: effectiveTeamAnalysis,
           shotProfile: teamSeasonShotSummary
             ? {
                 attempts: teamSeasonShotSummary.attempts,
@@ -7295,6 +7730,7 @@ export function SeasonComparison({
           playerName: selectedPlayer.name,
           generatedBy: 'season-comparison-ui',
           analysis,
+          advancedStats: playerAdvancedLlmContext,
           shotProfile: playerSeasonShotSummary
             ? {
                 attempts: playerSeasonShotSummary.attempts,
@@ -7372,6 +7808,7 @@ export function SeasonComparison({
           generatedBy: 'season-comparison-ui',
           analysisSnapshot: {
             analysis,
+            advancedStats: playerAdvancedLlmContext,
             shotProfile: playerSeasonShotSummary
               ? {
                   attempts: playerSeasonShotSummary.attempts,
@@ -7519,6 +7956,543 @@ export function SeasonComparison({
       .reverse();
   }, [lastFiveGames]);
 
+  const playerAdvancedInsights = useMemo(() => {
+    if (!selectedPlayer || !analysis) return null;
+
+    const asPct = (num: number, den: number) => (den > 0 ? (num / den) * 100 : 0);
+    const safeNum = (value: number | null | undefined) => (Number.isFinite(Number(value)) ? Number(value) : 0);
+    const confidenceFromSample = (sample: number, medium: number, high: number): 'alacsony' | 'kozepes' | 'magas' => {
+      if (sample >= high) return 'magas';
+      if (sample >= medium) return 'kozepes';
+      return 'alacsony';
+    };
+    const shotInterpretation = (valueAdd: number | null): 'jobb mint varhato' | 'varhato szint' | 'varakozas alatt' | 'n/a' => {
+      if (valueAdd === null) return 'n/a';
+      if (valueAdd >= 1.5) return 'jobb mint varhato';
+      if (valueAdd <= -1.5) return 'varakozas alatt';
+      return 'varhato szint';
+    };
+    const matchupInterpretation = (tsDelta: number | null): 'ellenall' | 'semleges' | 'erzekeny' | 'n/a' => {
+      if (tsDelta === null) return 'n/a';
+      if (tsDelta >= -1.5) return 'ellenall';
+      if (tsDelta <= -4) return 'erzekeny';
+      return 'semleges';
+    };
+    const gradeHigherBetter = (value: number | null, goodAtOrAbove: number, riskBelow: number): 'good' | 'neutral' | 'risk' | 'na' => {
+      if (value === null || !Number.isFinite(value)) return 'na';
+      if (value >= goodAtOrAbove) return 'good';
+      if (value < riskBelow) return 'risk';
+      return 'neutral';
+    };
+    const gradeLowerBetter = (value: number | null, goodAtOrBelow: number, riskAbove: number): 'good' | 'neutral' | 'risk' | 'na' => {
+      if (value === null || !Number.isFinite(value)) return 'na';
+      if (value <= goodAtOrBelow) return 'good';
+      if (value > riskAbove) return 'risk';
+      return 'neutral';
+    };
+    const positionProfile = (() => {
+      if (analysis.position === 'PG' || analysis.position === 'SG') {
+        return {
+          decisionGood: 64,
+          decisionRisk: 52,
+          stabilityGood: 18,
+          stabilityRisk: 30,
+          fatigueGoodDrop: -0.8,
+          fatigueRiskDrop: -2.6,
+        };
+      }
+      if (analysis.position === 'SF') {
+        return {
+          decisionGood: 60,
+          decisionRisk: 50,
+          stabilityGood: 17,
+          stabilityRisk: 29,
+          fatigueGoodDrop: -1.0,
+          fatigueRiskDrop: -3.0,
+        };
+      }
+      return {
+        decisionGood: 58,
+        decisionRisk: 48,
+        stabilityGood: 16,
+        stabilityRisk: 28,
+        fatigueGoodDrop: -1.2,
+        fatigueRiskDrop: -3.2,
+      };
+    })();
+    const gameById = new Map(games.map(game => [game.id, game]));
+
+    const usageByGameAndTeam = new Map<string, number>();
+    playerGameStats.forEach(row => {
+      const teamId = row.players?.team_id;
+      if (!teamId) return;
+      const key = `${row.game_id}::${teamId}`;
+      const usage = (row.close_attempted || 0) + (row.mid_attempted || 0) + (row.three_attempted || 0) + 0.44 * (row.free_throw_attempted || 0) + (row.turnovers || 0);
+      usageByGameAndTeam.set(key, (usageByGameAndTeam.get(key) ?? 0) + usage);
+    });
+
+    const rows = selectedPlayerRows
+      .map(row => {
+        const fga = (row.close_attempted || 0) + (row.mid_attempted || 0) + (row.three_attempted || 0);
+        const fgm = (row.close_made || 0) + (row.mid_made || 0) + (row.three_made || 0);
+        const fta = row.free_throw_attempted || 0;
+        const usageProxy = fga + 0.44 * fta + (row.turnovers || 0);
+        const tsDen = 2 * (fga + 0.44 * fta);
+        const tsPct = tsDen > 0 ? ((row.points || 0) / tsDen) * 100 : 0;
+        const efgPct = fga > 0 ? ((fgm + 0.5 * (row.three_made || 0)) / fga) * 100 : 0;
+        const ppp = usageProxy > 0 ? (row.points || 0) / usageProxy : 0;
+        const tovPct = asPct(row.turnovers || 0, usageProxy);
+        const astTo = (row.turnovers || 0) > 0 ? (row.assists || 0) / (row.turnovers || 1) : (row.assists || 0);
+        const teamId = row.players?.team_id ?? selectedPlayer.teamId ?? null;
+        const teamUsage = teamId ? usageByGameAndTeam.get(`${row.game_id}::${teamId}`) ?? 0 : 0;
+        const usageSharePct = asPct(usageProxy, teamUsage);
+        const minutes = row.minutes || 0;
+        const valPer36 = minutes > 0 ? ((row.valuation || 0) / minutes) * 36 : 0;
+        const dateValue = row.games?.date ? new Date(row.games.date).getTime() : 0;
+        const gameMeta = gameById.get(row.game_id);
+        const margin = gameMeta ? Math.abs((gameMeta.ourScore || 0) - (gameMeta.oppScore || 0)) : null;
+        const opponentKey = normalizeTeamKey(String(row.games?.opponent || ''));
+        const oppQuality = opponentQualityByTeamKey.get(opponentKey) ?? null;
+        const threeRate = asPct(row.three_attempted || 0, fga);
+        const rimRate = asPct(row.close_attempted || 0, fga);
+        const midRate = asPct(row.mid_attempted || 0, fga);
+
+        return {
+          row,
+          fga,
+          usageProxy,
+          tsPct,
+          efgPct,
+          ppp,
+          tovPct,
+          astTo,
+          usageSharePct,
+          valPer36,
+          minutes,
+          dateValue,
+          margin,
+          oppQuality,
+          threeRate,
+          rimRate,
+          midRate,
+        };
+      })
+      .filter(item => item.fga > 0 || item.usageProxy > 0);
+
+    const seasonTs = average(rows.map(item => item.tsPct));
+    const seasonPpp = average(rows.map(item => item.ppp));
+    const seasonTov = average(rows.map(item => item.tovPct));
+
+    const shotQualityVsMaking = (() => {
+      if (!playerSeasonShotSummary || !leagueSeasonShotSummary) {
+        return {
+          available: false,
+          expectedEfg: null as number | null,
+          actualEfg: null as number | null,
+          valueAdd: null as number | null,
+          zoneAdds: [] as Array<{ label: string; delta: number }>,
+        };
+      }
+
+      const zones: Array<{ key: ShotZoneKey; label: string; weight: number }> = [
+        { key: 'rim', label: 'Gyűrű', weight: 2 },
+        { key: 'paint', label: 'Festék', weight: 2 },
+        { key: 'mid', label: 'Középtáv', weight: 2 },
+        { key: 'corner3', label: 'Sarok tripla', weight: 3 },
+        { key: 'aboveBreak3', label: 'Egyéb tripla', weight: 3 },
+      ];
+
+      const totalAttempts = Math.max(1, playerSeasonShotSummary.attempts);
+      let expectedPoints = 0;
+      let actualPoints = 0;
+
+      const zoneAdds = zones.map(zone => {
+        const attempts = playerSeasonShotSummary.zoneStats[zone.key].attempts;
+        const actualPct = playerSeasonShotSummary.zoneStats[zone.key].pct / 100;
+        const expectedPct = leagueSeasonShotSummary.zoneStats[zone.key].pct / 100;
+        const zoneActualPoints = attempts * actualPct * zone.weight;
+        const zoneExpectedPoints = attempts * expectedPct * zone.weight;
+        expectedPoints += zoneExpectedPoints;
+        actualPoints += zoneActualPoints;
+        return {
+          label: zone.label,
+          delta: roundValue((zoneActualPoints - zoneExpectedPoints) / totalAttempts * 100, 1),
+        };
+      });
+
+      const expectedEfg = roundValue((expectedPoints / (2 * totalAttempts)) * 100, 1);
+      const actualEfg = roundValue((actualPoints / (2 * totalAttempts)) * 100, 1);
+      return {
+        available: true,
+        sampleAttempts: totalAttempts,
+        confidence: confidenceFromSample(totalAttempts, 70, 140),
+        expectedEfg,
+        actualEfg,
+        valueAdd: roundValue(actualEfg - expectedEfg, 1),
+        interpretation: shotInterpretation(roundValue(actualEfg - expectedEfg, 1)),
+        zoneAdds,
+      };
+    })();
+
+    const clutchIdentity = (() => {
+      const clutchRows = rows.filter(item => item.margin !== null && item.margin <= 5);
+      if (clutchRows.length === 0) {
+        return {
+          available: false,
+          games: 0,
+          usagePct: null as number | null,
+          tsPct: null as number | null,
+          tovPct: null as number | null,
+          astTo: null as number | null,
+          ppp: null as number | null,
+        };
+      }
+      return {
+        available: true,
+        games: clutchRows.length,
+        confidence: confidenceFromSample(clutchRows.length, 4, 8),
+        usagePct: roundValue(average(clutchRows.map(item => item.usageSharePct)), 1),
+        tsPct: roundValue(average(clutchRows.map(item => item.tsPct)), 1),
+        tovPct: roundValue(average(clutchRows.map(item => item.tovPct)), 1),
+        astTo: roundValue(average(clutchRows.map(item => item.astTo)), 2),
+        ppp: roundValue(average(clutchRows.map(item => item.ppp)), 3),
+      };
+    })();
+
+    const plusMinusContext = (() => {
+      const stints = activeKosarstatTeamAnalysis?.stints ?? [];
+      const withNet = stints
+        .map(stint => ({
+          ...stint,
+          netPer40: Number.isFinite(Number(stint.on40)) ? Number(stint.on40) : (stint.seconds > 0 ? (stint.plusMinus * 2400) / stint.seconds : null),
+        }))
+        .filter(stint => stint.netPer40 !== null && stint.seconds >= 60);
+
+      const on = withNet.filter(stint => stint.players.includes(selectedPlayer.name));
+      const off = withNet.filter(stint => !stint.players.includes(selectedPlayer.name));
+
+      const weighted = (pool: typeof withNet) => {
+        const sec = pool.reduce((sum, item) => sum + item.seconds, 0);
+        if (sec <= 0) return null;
+        const weightedNet = pool.reduce((sum, item) => sum + safeNum(item.netPer40) * item.seconds, 0) / sec;
+        return roundValue(weightedNet, 1);
+      };
+
+      const topPairWithPlayer = (activeKosarstatTeamAnalysis?.pairStats ?? [])
+        .filter(pair => pair.players.includes(selectedPlayer.name) && pair.seconds >= 90)
+        .sort((a, b) => b.netPer40 - a.netPer40)[0] ?? null;
+
+      return {
+        available: on.length > 0 || off.length > 0,
+        confidence: confidenceFromSample(roundValue(on.reduce((sum, item) => sum + item.seconds, 0) / 60, 1), 12, 24),
+        onNet40: weighted(on),
+        offNet40: weighted(off),
+        delta: weighted(on) !== null && weighted(off) !== null ? roundValue((weighted(on) as number) - (weighted(off) as number), 1) : null,
+        lineupMinutes: roundValue(on.reduce((sum, item) => sum + item.seconds, 0) / 60, 1),
+        topPair: topPairWithPlayer
+          ? {
+              label: topPairWithPlayer.players.join(' + '),
+              netPer40: roundValue(topPairWithPlayer.netPer40, 1),
+              minutes: roundValue(topPairWithPlayer.seconds / 60, 1),
+            }
+          : null,
+      };
+    })();
+
+    const roleEfficiency = (() => {
+      const ballHandlerRows = rows.filter(item => item.usageSharePct >= 24);
+      const offBallRows = rows.filter(item => item.usageSharePct < 18);
+      const highThreeRows = rows.filter(item => item.threeRate >= 45);
+      const rimPressureRows = rows.filter(item => item.rimRate >= 35);
+
+      return {
+        confidence: confidenceFromSample(Math.max(ballHandlerRows.length, offBallRows.length), 4, 8),
+        ballHandlerSample: ballHandlerRows.length,
+        offBallSample: offBallRows.length,
+        ballHandlerTs: ballHandlerRows.length ? roundValue(average(ballHandlerRows.map(item => item.tsPct)), 1) : null,
+        ballHandlerPpp: ballHandlerRows.length ? roundValue(average(ballHandlerRows.map(item => item.ppp)), 3) : null,
+        offBallTs: offBallRows.length ? roundValue(average(offBallRows.map(item => item.tsPct)), 1) : null,
+        offBallPpp: offBallRows.length ? roundValue(average(offBallRows.map(item => item.ppp)), 3) : null,
+        highThreeTs: highThreeRows.length ? roundValue(average(highThreeRows.map(item => item.tsPct)), 1) : null,
+        rimPressureTs: rimPressureRows.length ? roundValue(average(rimPressureRows.map(item => item.tsPct)), 1) : null,
+      };
+    })();
+
+    const decisionQuality = (() => {
+      const astTo = roundValue(average(rows.map(item => item.astTo)), 2);
+      const tovPct = roundValue(average(rows.map(item => item.tovPct)), 1);
+      const midRate = roundValue(average(rows.map(item => item.midRate)), 1);
+      const qualityAdd = shotQualityVsMaking.valueAdd ?? 0;
+      const scoreRaw = 55 + astTo * 8 - tovPct * 1.3 - midRate * 0.15 + qualityAdd * 2;
+      const score = Math.max(0, Math.min(100, roundValue(scoreRaw, 1)));
+      const tier = score >= 70 ? 'elit' : score >= 55 ? 'stabil' : 'kockázatos';
+      return {
+        confidence: confidenceFromSample(rows.length, 6, 12),
+        score,
+        tier,
+        astTo,
+        tovPct,
+        midRate,
+      };
+    })();
+
+    const stability = (() => {
+      const chrono = [...rows].sort((a, b) => a.dateValue - b.dateValue);
+      const rollingWindow = 5;
+      const rolling: Array<{ ts: number; ppp: number; tov: number }> = [];
+      for (let i = rollingWindow - 1; i < chrono.length; i += 1) {
+        const slice = chrono.slice(i - rollingWindow + 1, i + 1);
+        rolling.push({
+          ts: average(slice.map(item => item.tsPct)),
+          ppp: average(slice.map(item => item.ppp)),
+          tov: average(slice.map(item => item.tovPct)),
+        });
+      }
+
+      const tsStd = roundValue(stdDev(rows.map(item => item.tsPct)), 1);
+      const pppStd = roundValue(stdDev(rows.map(item => item.ppp)), 3);
+      const tovStd = roundValue(stdDev(rows.map(item => item.tovPct)), 1);
+      const volatility = roundValue(Math.min(100, tsStd * 1.2 + pppStd * 18 + tovStd * 1.4), 1);
+      const trend = rows.length >= 6
+        ? roundValue(average(rows.slice(0, 3).map(item => item.tsPct)) - average(rows.slice(-3).map(item => item.tsPct)), 1)
+        : 0;
+
+      return {
+        confidence: confidenceFromSample(rows.length, 8, 14),
+        rollingPoints: rolling.length,
+        tsStd,
+        pppStd,
+        tovStd,
+        volatility,
+        trend,
+      };
+    })();
+
+    const matchupSensitivity = (() => {
+      const withQuality = rows.filter(item => item.oppQuality !== null) as Array<typeof rows[number] & { oppQuality: number }>;
+      if (withQuality.length < 4) {
+        return {
+          available: false,
+          strongTs: null as number | null,
+          weakTs: null as number | null,
+          strongPpp: null as number | null,
+          weakPpp: null as number | null,
+          tsDelta: null as number | null,
+        };
+      }
+
+      const strong = withQuality.filter(item => item.oppQuality >= 0.5);
+      const weak = withQuality.filter(item => item.oppQuality <= -0.5);
+      const strongPool = strong.length >= 2 ? strong : [...withQuality].sort((a, b) => b.oppQuality - a.oppQuality).slice(0, Math.ceil(withQuality.length / 2));
+      const weakPool = weak.length >= 2 ? weak : [...withQuality].sort((a, b) => a.oppQuality - b.oppQuality).slice(0, Math.ceil(withQuality.length / 2));
+
+      const strongTs = roundValue(average(strongPool.map(item => item.tsPct)), 1);
+      const weakTs = roundValue(average(weakPool.map(item => item.tsPct)), 1);
+      const strongPpp = roundValue(average(strongPool.map(item => item.ppp)), 3);
+      const weakPpp = roundValue(average(weakPool.map(item => item.ppp)), 3);
+      return {
+        available: true,
+        confidence: confidenceFromSample(withQuality.length, 5, 10),
+        sampleSize: withQuality.length,
+        strongTs,
+        weakTs,
+        strongPpp,
+        weakPpp,
+        tsDelta: roundValue(strongTs - weakTs, 1),
+        interpretation: matchupInterpretation(roundValue(strongTs - weakTs, 1)),
+      };
+    })();
+
+    const fatigueLoad = (() => {
+      const sorted = [...rows].sort((a, b) => a.dateValue - b.dateValue);
+      const withB2B = sorted.map((item, index) => {
+        if (index === 0) return { ...item, b2b: false };
+        const prev = sorted[index - 1];
+        const dayGap = (item.dateValue - prev.dateValue) / (1000 * 60 * 60 * 24);
+        return { ...item, b2b: Number.isFinite(dayGap) && dayGap > 0 && dayGap <= 1.5 };
+      });
+
+      const highLoad = withB2B.filter(item => item.minutes >= 30);
+      const normalLoad = withB2B.filter(item => item.minutes < 30);
+      const b2b = withB2B.filter(item => item.b2b);
+
+      const highTs = highLoad.length ? roundValue(average(highLoad.map(item => item.tsPct)), 1) : null;
+      const normalTs = normalLoad.length ? roundValue(average(normalLoad.map(item => item.tsPct)), 1) : null;
+      const b2bTov = b2b.length ? roundValue(average(b2b.map(item => item.tovPct)), 1) : null;
+
+      return {
+        confidence: confidenceFromSample(sorted.length, 8, 14),
+        sampleSize: sorted.length,
+        highLoadGames: highLoad.length,
+        b2bGames: b2b.length,
+        highLoadTs: highTs,
+        normalLoadTs: normalTs,
+        tsDrop: highTs !== null && normalTs !== null ? roundValue(highTs - normalTs, 1) : null,
+        b2bTovPct: b2bTov,
+      };
+    })();
+
+    const coachingFocus = [
+      shotQualityVsMaking.valueAdd !== null && shotQualityVsMaking.valueAdd <= -1.5
+        ? 'Dobásminőség és kivitelezés: expected eFG alatt termel, érdemes a preferált zónákra visszaterelni.'
+        : null,
+      decisionQuality.score < 55
+        ? `Döntéshozatali kockázat: ${decisionQuality.score.toFixed(1)}-es index, AST/TO ${decisionQuality.astTo.toFixed(2)}.`
+        : null,
+      plusMinusContext.delta !== null && plusMinusContext.delta <= -4
+        ? 'Lineup fit probléma: on/off delta negatív, érdemes a sikeres párosokkal többet együtt játszatni.'
+        : null,
+      matchupSensitivity.available && matchupSensitivity.tsDelta !== null && matchupSensitivity.tsDelta <= -4
+        ? 'Matchup érzékenység erős védelmek ellen: ellenállóbb belső opciók vagy korai könnyű kísérletek növelése javasolt.'
+        : null,
+      fatigueLoad.tsDrop !== null && fatigueLoad.tsDrop <= -3
+        ? 'Terhelés menedzsment: nagy percterhelésnél hatékonyság-esés látható, váltás/rotáció finomítása indokolt.'
+        : null,
+    ].filter((item): item is string => Boolean(item)).slice(0, 3);
+
+    const blockVerdicts = (() => {
+      const shotTone = gradeHigherBetter(shotQualityVsMaking.valueAdd, 1.5, -1.5);
+      const clutchTsDelta = clutchIdentity.tsPct !== null ? roundValue(clutchIdentity.tsPct - seasonTs, 1) : null;
+      const clutchTone = gradeHigherBetter(clutchTsDelta, 1.0, -2.0);
+      const impactTone = gradeHigherBetter(plusMinusContext.delta, 2.0, -2.0);
+      const roleBestTs = Math.max(
+        roleEfficiency.ballHandlerTs ?? -Infinity,
+        roleEfficiency.offBallTs ?? -Infinity,
+        roleEfficiency.highThreeTs ?? -Infinity,
+        roleEfficiency.rimPressureTs ?? -Infinity
+      );
+      const roleTsDelta = Number.isFinite(roleBestTs) ? roundValue(roleBestTs - seasonTs, 1) : null;
+      const roleTone = gradeHigherBetter(roleTsDelta, 1.0, -1.5);
+      const decisionTone = gradeHigherBetter(decisionQuality.score, positionProfile.decisionGood, positionProfile.decisionRisk);
+      const stabilityTone = gradeLowerBetter(stability.volatility, positionProfile.stabilityGood, positionProfile.stabilityRisk);
+      const matchupTone = gradeHigherBetter(matchupSensitivity.tsDelta, -1.0, -4.0);
+      const fatigueTone = gradeHigherBetter(fatigueLoad.tsDrop, positionProfile.fatigueGoodDrop, positionProfile.fatigueRiskDrop);
+
+      return {
+        shot: {
+          tone: shotTone,
+          text: shotTone === 'good'
+            ? 'Verdict: a dobáskivitelezés a vártnál jobb szintet hoz.'
+            : shotTone === 'risk'
+              ? 'Verdict: a kivitelezés elmarad a várható dobásminőségtől.'
+              : 'Verdict: a kivitelezés nagyjából a várható szinten mozog.',
+        },
+        clutch: {
+          tone: clutchTone,
+          text: clutchTone === 'good'
+            ? 'Verdict: clutch helyzetben stabilan tartja vagy javítja a szezon-szintet.'
+            : clutchTone === 'risk'
+              ? 'Verdict: clutchban érdemi visszaesés látszik a szezonátlaghoz képest.'
+              : 'Verdict: clutch teljesítménye jelenleg közeli a szezonmintához.',
+        },
+        impact: {
+          tone: impactTone,
+          text: impactTone === 'good'
+            ? 'Verdict: a lineup on/off alapján pozitív nettó hatást ad.'
+            : impactTone === 'risk'
+              ? 'Verdict: a jelenlegi lineup-környezetben negatívabb nettó hatás látszik.'
+              : 'Verdict: a lineup-hatás vegyes, matchup- és rotációfüggő.',
+        },
+        role: {
+          tone: roleTone,
+          text: roleTone === 'good'
+            ? 'Verdict: legalább egy szerepkörben a szezon-szint fölé tud lépni.'
+            : roleTone === 'risk'
+              ? 'Verdict: a szerepkörök között nincs stabilan pluszt hozó profil.'
+              : 'Verdict: a szerepkör-hatékonyság közepes, még finomhangolható.',
+        },
+        decision: {
+          tone: decisionTone,
+          text: decisionTone === 'good'
+            ? 'Verdict: döntésminőség jelenleg erős.'
+            : decisionTone === 'risk'
+              ? 'Verdict: döntésminőségi kockázat látszik (shot selection / labdabiztonság).'
+              : 'Verdict: döntésminőség stabil, de nem kiugró.',
+        },
+        stability: {
+          tone: stabilityTone,
+          text: stabilityTone === 'good'
+            ? 'Verdict: meccsről meccsre alacsonyabb kilengés, megbízhatóbb output.'
+            : stabilityTone === 'risk'
+              ? 'Verdict: magasabb ingadozás, a teljesítmény kevésbé kiszámítható.'
+              : 'Verdict: közepes stabilitás, rövid távon hullámzó lehet.',
+        },
+        matchup: {
+          tone: matchupTone,
+          text: matchupTone === 'good'
+            ? 'Verdict: erősebb védelem ellen is jól tartja a hatékonyságát.'
+            : matchupTone === 'risk'
+              ? 'Verdict: erősebb védelem ellen érzékenyebb visszaesés látszik.'
+              : 'Verdict: matchup-érzékenység közepes, ellenféltől függően változik.',
+        },
+        fatigue: {
+          tone: fatigueTone,
+          text: fatigueTone === 'good'
+            ? 'Verdict: terhelés mellett is tartja a hatékonyságot.'
+            : fatigueTone === 'risk'
+              ? 'Verdict: nagy terhelésnél érdemi hatékonyság-esés jelentkezik.'
+              : 'Verdict: terhelésre mérsékelten reagál, monitorozás javasolt.',
+        },
+      };
+    })();
+
+    const toneReason = (tone: 'good' | 'neutral' | 'risk' | 'na') => {
+      if (tone === 'good') return 'good, mert átlépi a pozitív küszöböt';
+      if (tone === 'risk') return 'risk, mert a kockázati küszöb alá/fölé esik';
+      if (tone === 'neutral') return 'neutral, mert a két küszöb között van';
+      return 'n/a, mert nincs elég adat';
+    };
+
+    const clutchDeltaForHint = clutchIdentity.tsPct !== null ? roundValue(clutchIdentity.tsPct - seasonTs, 1) : null;
+    const roleBestTsForHint = Math.max(
+      roleEfficiency.ballHandlerTs ?? -Infinity,
+      roleEfficiency.offBallTs ?? -Infinity,
+      roleEfficiency.highThreeTs ?? -Infinity,
+      roleEfficiency.rimPressureTs ?? -Infinity
+    );
+    const roleTsDeltaForHint = Number.isFinite(roleBestTsForHint) ? roundValue(roleBestTsForHint - seasonTs, 1) : null;
+
+    const thresholdHints = {
+      shot: `Good: value add >= +1.5 pp | Risk: value add < -1.5 pp | Minta: ${shotQualityVsMaking.sampleAttempts ?? 0} kísérlet\nAktuális: ${formatNullableNumber(shotQualityVsMaking.valueAdd, 1, ' pp')} | Indok: ${toneReason(blockVerdicts.shot.tone)}`,
+      clutch: `Good: clutch TS - szezon TS >= +1.0 pp | Risk: <= -2.0 pp | Minta: ${clutchIdentity.games} szoros meccs\nAktuális: ${formatNullableNumber(clutchDeltaForHint, 1, ' pp')} | Indok: ${toneReason(blockVerdicts.clutch.tone)}`,
+      impact: `Good: on/off delta >= +2.0 net/40 | Risk: < -2.0 net/40 | Minta: ${plusMinusContext.lineupMinutes.toFixed(1)} lineup perc\nAktuális: ${formatNullableNumber(plusMinusContext.delta, 1)} | Indok: ${toneReason(blockVerdicts.impact.tone)}`,
+      role: `Good: legjobb szerepkör TS >= szezon TS +1.0 pp | Risk: <= -1.5 pp | Minta: BH ${roleEfficiency.ballHandlerSample} / OB ${roleEfficiency.offBallSample}\nAktuális: ${formatNullableNumber(roleTsDeltaForHint, 1, ' pp')} | Indok: ${toneReason(blockVerdicts.role.tone)}`,
+      decision: `Good: index >= ${positionProfile.decisionGood} | Risk: < ${positionProfile.decisionRisk} | Pozíciós küszöb (${analysis.position})\nAktuális: ${decisionQuality.score.toFixed(1)} | Indok: ${toneReason(blockVerdicts.decision.tone)}`,
+      stability: `Good: volatilitási index <= ${positionProfile.stabilityGood} | Risk: > ${positionProfile.stabilityRisk} | Pozíciós küszöb (${analysis.position})\nAktuális: ${stability.volatility.toFixed(1)} | Indok: ${toneReason(blockVerdicts.stability.tone)}`,
+      matchup: `Good: erős-gyenge TS delta >= -1.0 pp | Risk: < -4.0 pp | Minta: ${matchupSensitivity.sampleSize ?? 0} meccs\nAktuális: ${formatNullableNumber(matchupSensitivity.tsDelta, 1, ' pp')} | Indok: ${toneReason(blockVerdicts.matchup.tone)}`,
+      fatigue: `Good: high-load TS - normal TS >= ${positionProfile.fatigueGoodDrop.toFixed(1)} pp | Risk: <= ${positionProfile.fatigueRiskDrop.toFixed(1)} pp | Pozíciós küszöb (${analysis.position})\nAktuális: ${formatNullableNumber(fatigueLoad.tsDrop, 1, ' pp')} | Indok: ${toneReason(blockVerdicts.fatigue.tone)}`,
+    };
+
+    return {
+      shotQualityVsMaking,
+      clutchIdentity,
+      plusMinusContext,
+      roleEfficiency,
+      decisionQuality,
+      stability,
+      matchupSensitivity,
+      fatigueLoad,
+      blockVerdicts,
+      thresholdHints,
+      coachingFocus,
+      season: {
+        tsPct: roundValue(seasonTs, 1),
+        ppp: roundValue(seasonPpp, 3),
+        tovPct: roundValue(seasonTov, 1),
+      },
+    };
+  }, [
+    activeKosarstatTeamAnalysis,
+    analysis,
+    games,
+    leagueSeasonShotSummary,
+    opponentQualityByTeamKey,
+    playerGameStats,
+    playerSeasonShotSummary,
+    selectedPlayer,
+    selectedPlayerRows,
+  ]);
+
   const eligibleCount = useMemo(() => {
     if (!resolvedSeasonId) return 0;
     return seasonPlayers
@@ -7526,11 +8500,102 @@ export function SeasonComparison({
       .filter(isEligibleSample).length;
   }, [league, seasonPlayers, resolvedSeasonId]);
 
+  const playerAdvancedLlmContext = useMemo(() => {
+    if (!playerAdvancedInsights) return null;
+
+    return {
+      shotQualityVsMaking: {
+        confidence: playerAdvancedInsights.shotQualityVsMaking.confidence ?? 'alacsony',
+        expectedEfg: playerAdvancedInsights.shotQualityVsMaking.expectedEfg,
+        actualEfg: playerAdvancedInsights.shotQualityVsMaking.actualEfg,
+        valueAdd: playerAdvancedInsights.shotQualityVsMaking.valueAdd,
+        interpretation: playerAdvancedInsights.shotQualityVsMaking.interpretation ?? null,
+      },
+      clutchIdentity: {
+        confidence: playerAdvancedInsights.clutchIdentity.confidence ?? 'alacsony',
+        games: playerAdvancedInsights.clutchIdentity.games,
+        usagePct: playerAdvancedInsights.clutchIdentity.usagePct,
+        tsPct: playerAdvancedInsights.clutchIdentity.tsPct,
+        tovPct: playerAdvancedInsights.clutchIdentity.tovPct,
+        astTo: playerAdvancedInsights.clutchIdentity.astTo,
+        ppp: playerAdvancedInsights.clutchIdentity.ppp,
+      },
+      plusMinusContext: {
+        confidence: playerAdvancedInsights.plusMinusContext.confidence ?? 'alacsony',
+        onNet40: playerAdvancedInsights.plusMinusContext.onNet40,
+        offNet40: playerAdvancedInsights.plusMinusContext.offNet40,
+        delta: playerAdvancedInsights.plusMinusContext.delta,
+        lineupMinutes: playerAdvancedInsights.plusMinusContext.lineupMinutes,
+        topPair: playerAdvancedInsights.plusMinusContext.topPair ?? null,
+      },
+      roleEfficiency: {
+        confidence: playerAdvancedInsights.roleEfficiency.confidence,
+        ballHandlerSample: playerAdvancedInsights.roleEfficiency.ballHandlerSample,
+        offBallSample: playerAdvancedInsights.roleEfficiency.offBallSample,
+        ballHandlerTs: playerAdvancedInsights.roleEfficiency.ballHandlerTs,
+        offBallTs: playerAdvancedInsights.roleEfficiency.offBallTs,
+        highThreeTs: playerAdvancedInsights.roleEfficiency.highThreeTs,
+        rimPressureTs: playerAdvancedInsights.roleEfficiency.rimPressureTs,
+      },
+      decisionQuality: {
+        confidence: playerAdvancedInsights.decisionQuality.confidence,
+        score: playerAdvancedInsights.decisionQuality.score,
+        tier: playerAdvancedInsights.decisionQuality.tier,
+        astTo: playerAdvancedInsights.decisionQuality.astTo,
+        tovPct: playerAdvancedInsights.decisionQuality.tovPct,
+      },
+      stability: {
+        confidence: playerAdvancedInsights.stability.confidence,
+        volatility: playerAdvancedInsights.stability.volatility,
+        tsStd: playerAdvancedInsights.stability.tsStd,
+        pppStd: playerAdvancedInsights.stability.pppStd,
+        trend: playerAdvancedInsights.stability.trend,
+      },
+      matchupSensitivity: {
+        confidence: playerAdvancedInsights.matchupSensitivity.confidence ?? 'alacsony',
+        sampleSize: playerAdvancedInsights.matchupSensitivity.sampleSize ?? 0,
+        strongTs: playerAdvancedInsights.matchupSensitivity.strongTs,
+        weakTs: playerAdvancedInsights.matchupSensitivity.weakTs,
+        tsDelta: playerAdvancedInsights.matchupSensitivity.tsDelta,
+        interpretation: playerAdvancedInsights.matchupSensitivity.interpretation ?? null,
+      },
+      fatigueLoad: {
+        confidence: playerAdvancedInsights.fatigueLoad.confidence,
+        sampleSize: playerAdvancedInsights.fatigueLoad.sampleSize,
+        highLoadGames: playerAdvancedInsights.fatigueLoad.highLoadGames,
+        b2bGames: playerAdvancedInsights.fatigueLoad.b2bGames,
+        highLoadTs: playerAdvancedInsights.fatigueLoad.highLoadTs,
+        normalLoadTs: playerAdvancedInsights.fatigueLoad.normalLoadTs,
+        tsDrop: playerAdvancedInsights.fatigueLoad.tsDrop,
+      },
+      blockVerdicts: playerAdvancedInsights.blockVerdicts,
+      coachingFocus: playerAdvancedInsights.coachingFocus,
+    };
+  }, [playerAdvancedInsights]);
+
   const showPlayerSection = activeSection === 'player';
   const showTeamSection = activeSection === 'team';
   const showPregameSection = activeSection === 'pregame';
   const showPostgameSection = activeSection === 'postgame';
   const showProjectionSection = activeSection === 'projection';
+
+  const renderThresholdTooltip = (content: string) => (
+    <UiTooltip>
+      <TooltipTrigger asChild>
+        <span
+          role="button"
+          tabIndex={0}
+          className="inline-flex h-4 w-4 cursor-help items-center justify-center rounded-full border border-slate-600 text-[10px] text-slate-300 hover:bg-slate-800"
+          aria-label="Küszöb információ"
+        >
+          i
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side="top" className="max-w-xs whitespace-pre-line text-xs leading-relaxed">
+        {content}
+      </TooltipContent>
+    </UiTooltip>
+  );
 
   return (
     <div className="space-y-6">
@@ -7907,6 +8972,222 @@ export function SeasonComparison({
               </CardContent>
             </Card>
 
+            {playerAdvancedInsights && (
+              <Card className="bg-slate-900 border-slate-800">
+                <CardHeader>
+                  <CardTitle className="text-slate-50">Haladó játékos blokkok (új statok)</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <TooltipProvider delayDuration={120}>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                    <div className="rounded-md border border-slate-800 bg-slate-900/50 p-3 space-y-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5">
+                          <div className="text-slate-200 font-medium">1) Shot quality vs shot making</div>
+                          {renderThresholdTooltip(playerAdvancedInsights.thresholdHints.shot)}
+                        </div>
+                        {'confidence' in playerAdvancedInsights.shotQualityVsMaking && (
+                          <Badge className="bg-slate-800 text-slate-200 border border-slate-700">{playerAdvancedInsights.shotQualityVsMaking.confidence}</Badge>
+                        )}
+                      </div>
+                      <div className={`text-[11px] ${getInsightToneClass(playerAdvancedInsights.blockVerdicts.shot.tone)}`}>
+                        {playerAdvancedInsights.blockVerdicts.shot.text}
+                      </div>
+                      <div className="text-slate-300">Expected eFG: {formatNullableNumber(playerAdvancedInsights.shotQualityVsMaking.expectedEfg, 1, '%')}</div>
+                      <div className="text-slate-300">Actual eFG: {formatNullableNumber(playerAdvancedInsights.shotQualityVsMaking.actualEfg, 1, '%')}</div>
+                      <div className={Number(playerAdvancedInsights.shotQualityVsMaking.valueAdd ?? 0) >= 0 ? 'text-emerald-300' : 'text-rose-300'}>
+                        Shot value add: {formatNullableNumber(playerAdvancedInsights.shotQualityVsMaking.valueAdd, 1, ' pp')}
+                      </div>
+                      {'interpretation' in playerAdvancedInsights.shotQualityVsMaking && (
+                        <div className="text-slate-400">Értelmezés: {playerAdvancedInsights.shotQualityVsMaking.interpretation}</div>
+                      )}
+                      {playerAdvancedInsights.shotQualityVsMaking.zoneAdds.length > 0 && (
+                        <div className="text-slate-400">
+                          Zóna delta: {playerAdvancedInsights.shotQualityVsMaking.zoneAdds.slice(0, 3).map(item => `${item.label} ${item.delta >= 0 ? '+' : ''}${item.delta.toFixed(1)}`).join(' • ')}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="rounded-md border border-slate-800 bg-slate-900/50 p-3 space-y-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5">
+                          <div className="text-slate-200 font-medium">2) Clutch identitás</div>
+                          {renderThresholdTooltip(playerAdvancedInsights.thresholdHints.clutch)}
+                        </div>
+                        {'confidence' in playerAdvancedInsights.clutchIdentity && (
+                          <Badge className="bg-slate-800 text-slate-200 border border-slate-700">{playerAdvancedInsights.clutchIdentity.confidence}</Badge>
+                        )}
+                      </div>
+                      <div className={`text-[11px] ${getInsightToneClass(playerAdvancedInsights.blockVerdicts.clutch.tone)}`}>
+                        {playerAdvancedInsights.blockVerdicts.clutch.text}
+                      </div>
+                      <div className="text-slate-300">Minta: {playerAdvancedInsights.clutchIdentity.games} szoros meccs</div>
+                      <div className="text-slate-300">Clutch USG proxy: {formatNullableNumber(playerAdvancedInsights.clutchIdentity.usagePct, 1, '%')}</div>
+                      <div className="text-slate-300">Clutch TS%: {formatNullableNumber(playerAdvancedInsights.clutchIdentity.tsPct, 1, '%')}</div>
+                      <div className="text-slate-300">Clutch TOV%: {formatNullableNumber(playerAdvancedInsights.clutchIdentity.tovPct, 1, '%')}</div>
+                      <div className="text-slate-300">Clutch AST/TO: {formatNullableNumber(playerAdvancedInsights.clutchIdentity.astTo, 2)}</div>
+                      <div className="text-slate-300">Clutch PPP: {formatNullableNumber(playerAdvancedInsights.clutchIdentity.ppp, 3)}</div>
+                    </div>
+
+                    <div className="rounded-md border border-slate-800 bg-slate-900/50 p-3 space-y-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5">
+                          <div className="text-slate-200 font-medium">3) Kontextusos +/- (lineup)</div>
+                          {renderThresholdTooltip(playerAdvancedInsights.thresholdHints.impact)}
+                        </div>
+                        {'confidence' in playerAdvancedInsights.plusMinusContext && (
+                          <Badge className="bg-slate-800 text-slate-200 border border-slate-700">{playerAdvancedInsights.plusMinusContext.confidence}</Badge>
+                        )}
+                      </div>
+                      <div className={`text-[11px] ${getInsightToneClass(playerAdvancedInsights.blockVerdicts.impact.tone)}`}>
+                        {playerAdvancedInsights.blockVerdicts.impact.text}
+                      </div>
+                      <div className="text-slate-300">On net/40: {formatNullableNumber(playerAdvancedInsights.plusMinusContext.onNet40, 1)}</div>
+                      <div className="text-slate-300">Off net/40: {formatNullableNumber(playerAdvancedInsights.plusMinusContext.offNet40, 1)}</div>
+                      <div className={Number(playerAdvancedInsights.plusMinusContext.delta ?? 0) >= 0 ? 'text-emerald-300' : 'text-rose-300'}>
+                        On/Off delta: {formatNullableNumber(playerAdvancedInsights.plusMinusContext.delta, 1)}
+                      </div>
+                      <div className="text-slate-400">Lineup minta: {playerAdvancedInsights.plusMinusContext.lineupMinutes.toFixed(1)} perc</div>
+                      {playerAdvancedInsights.plusMinusContext.topPair && (
+                        <div className="text-slate-400">
+                          Legjobb páros: {playerAdvancedInsights.plusMinusContext.topPair.label} ({playerAdvancedInsights.plusMinusContext.topPair.netPer40.toFixed(1)} net/40)
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="rounded-md border border-slate-800 bg-slate-900/50 p-3 space-y-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5">
+                          <div className="text-slate-200 font-medium">4) Szerepkör-hatékonyság</div>
+                          {renderThresholdTooltip(playerAdvancedInsights.thresholdHints.role)}
+                        </div>
+                        {'confidence' in playerAdvancedInsights.roleEfficiency && (
+                          <Badge className="bg-slate-800 text-slate-200 border border-slate-700">{playerAdvancedInsights.roleEfficiency.confidence}</Badge>
+                        )}
+                      </div>
+                      <div className={`text-[11px] ${getInsightToneClass(playerAdvancedInsights.blockVerdicts.role.tone)}`}>
+                        {playerAdvancedInsights.blockVerdicts.role.text}
+                      </div>
+                      <div className="text-slate-300">Ball-handler TS/PPP: {formatNullableNumber(playerAdvancedInsights.roleEfficiency.ballHandlerTs, 1, '%')} / {formatNullableNumber(playerAdvancedInsights.roleEfficiency.ballHandlerPpp, 3)}</div>
+                      <div className="text-slate-300">Off-ball TS/PPP: {formatNullableNumber(playerAdvancedInsights.roleEfficiency.offBallTs, 1, '%')} / {formatNullableNumber(playerAdvancedInsights.roleEfficiency.offBallPpp, 3)}</div>
+                      <div className="text-slate-300">High-3PA TS%: {formatNullableNumber(playerAdvancedInsights.roleEfficiency.highThreeTs, 1, '%')}</div>
+                      <div className="text-slate-300">Rim-pressure TS%: {formatNullableNumber(playerAdvancedInsights.roleEfficiency.rimPressureTs, 1, '%')}</div>
+                      {'ballHandlerSample' in playerAdvancedInsights.roleEfficiency && 'offBallSample' in playerAdvancedInsights.roleEfficiency && (
+                        <div className="text-slate-400">Minta: ball-handler {playerAdvancedInsights.roleEfficiency.ballHandlerSample} • off-ball {playerAdvancedInsights.roleEfficiency.offBallSample}</div>
+                      )}
+                    </div>
+
+                    <div className="rounded-md border border-slate-800 bg-slate-900/50 p-3 space-y-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5">
+                          <div className="text-slate-200 font-medium">5) Döntésminőség index</div>
+                          {renderThresholdTooltip(playerAdvancedInsights.thresholdHints.decision)}
+                        </div>
+                        {'confidence' in playerAdvancedInsights.decisionQuality && (
+                          <Badge className="bg-slate-800 text-slate-200 border border-slate-700">{playerAdvancedInsights.decisionQuality.confidence}</Badge>
+                        )}
+                      </div>
+                      <div className={`text-[11px] ${getInsightToneClass(playerAdvancedInsights.blockVerdicts.decision.tone)}`}>
+                        {playerAdvancedInsights.blockVerdicts.decision.text}
+                      </div>
+                      <div className="text-slate-300">Index: <span className="font-semibold text-cyan-300">{playerAdvancedInsights.decisionQuality.score.toFixed(1)} / 100</span> ({playerAdvancedInsights.decisionQuality.tier})</div>
+                      <div className="text-slate-300">AST/TO: {playerAdvancedInsights.decisionQuality.astTo.toFixed(2)}</div>
+                      <div className="text-slate-300">TOV%: {playerAdvancedInsights.decisionQuality.tovPct.toFixed(1)}%</div>
+                      <div className="text-slate-300">Midrange rate: {playerAdvancedInsights.decisionQuality.midRate.toFixed(1)}%</div>
+                    </div>
+
+                    <div className="rounded-md border border-slate-800 bg-slate-900/50 p-3 space-y-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5">
+                          <div className="text-slate-200 font-medium">6) Stabilitás és hullámzás</div>
+                          {renderThresholdTooltip(playerAdvancedInsights.thresholdHints.stability)}
+                        </div>
+                        {'confidence' in playerAdvancedInsights.stability && (
+                          <Badge className="bg-slate-800 text-slate-200 border border-slate-700">{playerAdvancedInsights.stability.confidence}</Badge>
+                        )}
+                      </div>
+                      <div className={`text-[11px] ${getInsightToneClass(playerAdvancedInsights.blockVerdicts.stability.tone)}`}>
+                        {playerAdvancedInsights.blockVerdicts.stability.text}
+                      </div>
+                      <div className="text-slate-300">Volatilitás: {playerAdvancedInsights.stability.volatility.toFixed(1)} / 100</div>
+                      <div className="text-slate-300">TS szórás: {playerAdvancedInsights.stability.tsStd.toFixed(1)}</div>
+                      <div className="text-slate-300">PPP szórás: {playerAdvancedInsights.stability.pppStd.toFixed(3)}</div>
+                      <div className="text-slate-300">TO szórás: {playerAdvancedInsights.stability.tovStd.toFixed(1)} pp</div>
+                      <div className={playerAdvancedInsights.stability.trend >= 0 ? 'text-emerald-300' : 'text-rose-300'}>
+                        Rövid trend (TS): {playerAdvancedInsights.stability.trend >= 0 ? '+' : ''}{playerAdvancedInsights.stability.trend.toFixed(1)} pp
+                      </div>
+                    </div>
+
+                    <div className="rounded-md border border-slate-800 bg-slate-900/50 p-3 space-y-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5">
+                          <div className="text-slate-200 font-medium">7) Matchup érzékenység</div>
+                          {renderThresholdTooltip(playerAdvancedInsights.thresholdHints.matchup)}
+                        </div>
+                        {'confidence' in playerAdvancedInsights.matchupSensitivity && (
+                          <Badge className="bg-slate-800 text-slate-200 border border-slate-700">{playerAdvancedInsights.matchupSensitivity.confidence}</Badge>
+                        )}
+                      </div>
+                      <div className={`text-[11px] ${getInsightToneClass(playerAdvancedInsights.blockVerdicts.matchup.tone)}`}>
+                        {playerAdvancedInsights.blockVerdicts.matchup.text}
+                      </div>
+                      {playerAdvancedInsights.matchupSensitivity.available ? (
+                        <>
+                          <div className="text-slate-300">Erős védelem TS/PPP: {formatNullableNumber(playerAdvancedInsights.matchupSensitivity.strongTs, 1, '%')} / {formatNullableNumber(playerAdvancedInsights.matchupSensitivity.strongPpp, 3)}</div>
+                          <div className="text-slate-300">Gyengébb védelem TS/PPP: {formatNullableNumber(playerAdvancedInsights.matchupSensitivity.weakTs, 1, '%')} / {formatNullableNumber(playerAdvancedInsights.matchupSensitivity.weakPpp, 3)}</div>
+                          <div className={Number(playerAdvancedInsights.matchupSensitivity.tsDelta ?? 0) >= 0 ? 'text-emerald-300' : 'text-rose-300'}>
+                            TS delta (erős-gyenge): {formatNullableNumber(playerAdvancedInsights.matchupSensitivity.tsDelta, 1, ' pp')}
+                          </div>
+                          {'interpretation' in playerAdvancedInsights.matchupSensitivity && (
+                            <div className="text-slate-400">Értelmezés: {playerAdvancedInsights.matchupSensitivity.interpretation}</div>
+                          )}
+                        </>
+                      ) : (
+                        <div className="text-slate-400">Nincs elég minta az ellenfél-minőség szerinti splithez.</div>
+                      )}
+                    </div>
+
+                    <div className="rounded-md border border-slate-800 bg-slate-900/50 p-3 space-y-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5">
+                          <div className="text-slate-200 font-medium">8) Fáradás és terhelés</div>
+                          {renderThresholdTooltip(playerAdvancedInsights.thresholdHints.fatigue)}
+                        </div>
+                        {'confidence' in playerAdvancedInsights.fatigueLoad && (
+                          <Badge className="bg-slate-800 text-slate-200 border border-slate-700">{playerAdvancedInsights.fatigueLoad.confidence}</Badge>
+                        )}
+                      </div>
+                      <div className={`text-[11px] ${getInsightToneClass(playerAdvancedInsights.blockVerdicts.fatigue.tone)}`}>
+                        {playerAdvancedInsights.blockVerdicts.fatigue.text}
+                      </div>
+                      <div className="text-slate-300">High-load meccsek: {playerAdvancedInsights.fatigueLoad.highLoadGames}</div>
+                      <div className="text-slate-300">Back-to-back minta: {playerAdvancedInsights.fatigueLoad.b2bGames}</div>
+                      <div className="text-slate-300">High-load TS%: {formatNullableNumber(playerAdvancedInsights.fatigueLoad.highLoadTs, 1, '%')}</div>
+                      <div className="text-slate-300">Normál TS%: {formatNullableNumber(playerAdvancedInsights.fatigueLoad.normalLoadTs, 1, '%')}</div>
+                      <div className={Number(playerAdvancedInsights.fatigueLoad.tsDrop ?? 0) >= 0 ? 'text-emerald-300' : 'text-rose-300'}>
+                        TS különbség (high-load - normál): {formatNullableNumber(playerAdvancedInsights.fatigueLoad.tsDrop, 1, ' pp')}
+                      </div>
+                      <div className="text-slate-300">B2B TOV%: {formatNullableNumber(playerAdvancedInsights.fatigueLoad.b2bTovPct, 1, '%')}</div>
+                    </div>
+                    </div>
+                  </TooltipProvider>
+
+                  {playerAdvancedInsights.coachingFocus.length > 0 && (
+                    <div className="space-y-1 rounded-md border border-cyan-900/70 bg-cyan-950/20 p-3">
+                      <div className="text-xs font-medium text-cyan-200">Edzői fókusz (automatikus)</div>
+                      {playerAdvancedInsights.coachingFocus.map(item => (
+                        <div key={item} className="text-xs text-cyan-100">• {item}</div>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="text-[11px] text-slate-500">
+                    Megjegyzés: több blokk proxy mutatókat használ (lineup/pályahatás és clutch), mert jelenleg nincs teljes possession-szintű játékos event rekonstrukció minden meccsre.
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             <Card className="bg-slate-900 border-slate-800">
               <CardHeader>
                 <CardTitle className="text-slate-50">Összegzett értékelés</CardTitle>
@@ -8015,17 +9296,16 @@ export function SeasonComparison({
             </div>
           )}
 
-          {resolvedTeamId !== 'all' && !displayTeamAnalysis && (
+          {resolvedTeamId !== 'all' && !effectiveTeamAnalysis && (
             <div className="text-sm text-slate-300">
               Nincs elég adat a csapat elemzéséhez.
             </div>
           )}
 
-          {resolvedTeamId !== 'all' && displayTeamAnalysis && (
-            <div className="space-y-4">
-              <div className="text-sm text-slate-200 leading-relaxed">{displayTeamAnalysis.summary}</div>
-
-              <div className="rounded-lg border border-slate-800 bg-slate-900/45 p-3 space-y-2">
+          {resolvedTeamId !== 'all' && effectiveTeamAnalysis && (
+            <div className="space-y-4 text-sm">
+              <div className="text-sm text-slate-200 leading-relaxed">{effectiveTeamAnalysis.summary}</div>
+              <div className="space-y-2">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="text-sm text-slate-300 font-medium">LLM csapatértékelés (gyenge pontok és matchup következmény)</div>
                   <div className="flex flex-wrap items-center gap-2">
@@ -8053,7 +9333,7 @@ export function SeasonComparison({
                       type="button"
                       size="sm"
                       onClick={handleGenerateTeamNarrative}
-                      disabled={isGeneratingTeamNarrative || !displayTeamAnalysis}
+                      disabled={isGeneratingTeamNarrative || !effectiveTeamAnalysis}
                       className="bg-indigo-500 hover:bg-indigo-400 text-white disabled:opacity-60"
                     >
                       {isGeneratingTeamNarrative ? 'LLM értékelés készül…' : teamNarrative.status === 'success' ? 'LLM értékelés frissítése' : 'LLM értékelés generálása'}
@@ -8083,17 +9363,17 @@ export function SeasonComparison({
               </div>
 
               <div className="flex flex-wrap gap-2">
-                {displayTeamAnalysis.style.offense.map(style => (
+                {effectiveTeamAnalysis.style.offense.map(style => (
                   <Badge key={style} className="bg-cyan-600/20 text-cyan-200 border border-cyan-600/40">
                     {style}
                   </Badge>
                 ))}
-                {displayTeamAnalysis.style.defense.map(style => (
+                {effectiveTeamAnalysis.style.defense.map(style => (
                   <Badge key={style} className="bg-emerald-600/20 text-emerald-200 border border-emerald-600/40">
                     {style}
                   </Badge>
                 ))}
-                {displayTeamAnalysis.style.offense.length === 0 && displayTeamAnalysis.style.defense.length === 0 && (
+                {effectiveTeamAnalysis.style.offense.length === 0 && effectiveTeamAnalysis.style.defense.length === 0 && (
                   <Badge variant="secondary" className="bg-slate-800 text-slate-200">
                     Nincs egyértelmű stílusprofil
                   </Badge>
@@ -8116,6 +9396,12 @@ export function SeasonComparison({
                         eFG: {teamFormSummary.recentEfgAvg.toFixed(1)}% ({teamFormSummary.efgDelta >= 0 ? '+' : ''}{teamFormSummary.efgDelta.toFixed(1)} pp)
                       </div>
                     )}
+                    <div className="text-xs text-slate-400">
+                      Volatilitás-index: {teamFormSummary.volatilityIndex.toFixed(1)} / 100
+                      {' '}• eFG szórás: {teamFormSummary.efgStd.toFixed(1)}
+                      {' '}• TS szórás: {teamFormSummary.tsStd.toFixed(1)}
+                      {' '}• TO szórás: {teamFormSummary.tovStdPct.toFixed(1)} pp
+                    </div>
                   </div>
                   <div className="lg:col-span-2">
                     <div className="h-56 rounded-lg border border-slate-800 bg-slate-950/40 p-3">
@@ -8141,6 +9427,9 @@ export function SeasonComparison({
                                   opponent: string;
                                   margin: number;
                                   efg: number | null;
+                                  tsPct: number | null;
+                                  turnoverPct: number | null;
+                                  ppp: number | null;
                                   result: 'win' | 'loss';
                                 };
                                 if (!datum) return null;
@@ -8154,6 +9443,15 @@ export function SeasonComparison({
                                     </div>
                                     {typeof datum.efg === 'number' && (
                                       <div>eFG: {datum.efg.toFixed(1)}%</div>
+                                    )}
+                                    {typeof datum.tsPct === 'number' && (
+                                      <div>TS: {datum.tsPct.toFixed(1)}%</div>
+                                    )}
+                                    {typeof datum.turnoverPct === 'number' && (
+                                      <div>TO: {datum.turnoverPct.toFixed(1)}%</div>
+                                    )}
+                                    {typeof datum.ppp === 'number' && (
+                                      <div>PPP: {datum.ppp.toFixed(3)}</div>
                                     )}
                                   </div>
                                 );
@@ -8178,11 +9476,114 @@ export function SeasonComparison({
                               name="eFG%"
                               connectNulls
                             />
+                            <Line
+                              yAxisId="efg"
+                              type="monotone"
+                              dataKey="tsPct"
+                              stroke="#a78bfa"
+                              strokeWidth={2}
+                              dot={{ r: 3 }}
+                              name="TS%"
+                              connectNulls
+                            />
+                            <Line
+                              yAxisId="efg"
+                              type="monotone"
+                              dataKey="turnoverPct"
+                              stroke="#f43f5e"
+                              strokeWidth={2}
+                              dot={{ r: 3 }}
+                              name="TO%"
+                              connectNulls
+                            />
                           </LineChart>
                         </ResponsiveContainer>
                       ) : (
                         <div className="text-sm text-slate-400">Nincs trend adat.</div>
                       )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {teamFormVolatilityData.length > 0 && teamFormPhaseSummary && (
+                <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <div className="text-sm text-slate-300 font-medium">
+                      Teljesítmény-hullámzás (rolling {TEAM_FORM_ROLLING_WINDOW} meccs)
+                    </div>
+                    <Badge className={teamFormPhaseSummary.latestBadgeClass}>
+                      Aktuális fázis: {teamFormPhaseSummary.latest.phase}
+                    </Badge>
+                    <div className="text-xs text-slate-400">
+                      Fázis-pontszám: {teamFormPhaseSummary.latest.phaseScore.toFixed(1)} / 100
+                    </div>
+                    <div className="text-xs text-slate-400">
+                      Felfelé: {teamFormPhaseSummary.counts.Felfelé} • Stabil: {teamFormPhaseSummary.counts.Stabil}
+                      {' '}• Hektikus: {teamFormPhaseSummary.counts.Hektikus} • Lejtmenet: {teamFormPhaseSummary.counts.Lejtmenet}
+                    </div>
+                    <div className="text-xs text-slate-400">
+                      A rolling panel megmutatja, hogy a hatékonyság trendje stabilan javul-e, vagy inkább variancia-vezérelt hullámzás látszik.
+                    </div>
+                  </div>
+                  <div className="xl:col-span-2 space-y-3">
+                    <div className="h-56 rounded-lg border border-slate-800 bg-slate-950/40 p-3">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={teamFormVolatilityData} margin={{ left: 8, right: 16 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
+                          <XAxis dataKey="label" stroke="#94a3b8" tick={{ fontSize: 11 }} />
+                          <YAxis yAxisId="eff" stroke="#22d3ee" tick={{ fontSize: 11 }} width={52} domain={[35, 75]} />
+                          <YAxis yAxisId="to" orientation="right" stroke="#f43f5e" tick={{ fontSize: 11 }} width={52} domain={[5, 25]} />
+                          <Tooltip
+                            content={({ active, payload }) => {
+                              if (!active || !payload || payload.length === 0) return null;
+                              const datum = payload[0]?.payload as {
+                                label: string;
+                                rollEfg: number | null;
+                                rollTs: number | null;
+                                rollTo: number | null;
+                                rollPpp: number | null;
+                                phase: string;
+                              };
+                              if (!datum) return null;
+                              return (
+                                <div className="rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-100 space-y-1">
+                                  <div className="font-semibold text-slate-50">{datum.label} • {datum.phase}</div>
+                                  {typeof datum.rollEfg === 'number' && <div>Rolling eFG: {datum.rollEfg.toFixed(1)}%</div>}
+                                  {typeof datum.rollTs === 'number' && <div>Rolling TS: {datum.rollTs.toFixed(1)}%</div>}
+                                  {typeof datum.rollTo === 'number' && <div>Rolling TO: {datum.rollTo.toFixed(1)}%</div>}
+                                  {typeof datum.rollPpp === 'number' && <div>Rolling PPP: {datum.rollPpp.toFixed(3)}</div>}
+                                </div>
+                              );
+                            }}
+                          />
+                          <Line yAxisId="eff" type="monotone" dataKey="rollEfg" stroke="#22d3ee" strokeWidth={2} dot={{ r: 2 }} name="Rolling eFG%" connectNulls />
+                          <Line yAxisId="eff" type="monotone" dataKey="rollTs" stroke="#a78bfa" strokeWidth={2} dot={{ r: 2 }} name="Rolling TS%" connectNulls />
+                          <Line yAxisId="to" type="monotone" dataKey="rollTo" stroke="#f43f5e" strokeWidth={2} dot={{ r: 2 }} name="Rolling TO%" connectNulls />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+                    <div className="h-44 rounded-lg border border-slate-800 bg-slate-950/40 p-3">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={teamFormVolatilityData} margin={{ left: 8, right: 16 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
+                          <XAxis dataKey="label" stroke="#94a3b8" tick={{ fontSize: 11 }} />
+                          <YAxis stroke="#f59e0b" tick={{ fontSize: 11 }} width={52} />
+                          <Tooltip
+                            formatter={(value: number | string | undefined, name?: string) => {
+                              const numeric = Number(value ?? 0);
+                              const label = name ?? '';
+                              if (label.includes('PPP')) return [numeric.toFixed(3), label];
+                              return [numeric.toFixed(1), label];
+                            }}
+                            contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #475569', borderRadius: '8px', color: '#f1f5f9' }}
+                          />
+                          <Legend wrapperStyle={{ color: '#94a3b8' }} verticalAlign="top" height={24} />
+                          <Line type="monotone" dataKey="stdEfg" stroke="#f59e0b" strokeWidth={2} dot={{ r: 2 }} name="eFG szórás" connectNulls />
+                          <Line type="monotone" dataKey="stdTs" stroke="#fb7185" strokeWidth={2} dot={{ r: 2 }} name="TS szórás" connectNulls />
+                          <Line type="monotone" dataKey="stdPpp" stroke="#60a5fa" strokeWidth={2} dot={{ r: 2 }} name="PPP szórás" connectNulls />
+                        </LineChart>
+                      </ResponsiveContainer>
                     </div>
                   </div>
                 </div>
@@ -8337,12 +9738,121 @@ export function SeasonComparison({
                 </div>
               )}
 
+              {(effectiveTeamAnalysis.lineupProfile || effectiveTeamAnalysis.clutchProfile || effectiveTeamAnalysis.impactProfile) && (
+                <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+                  <div className="rounded-lg border border-slate-800 bg-slate-950/40 p-3 space-y-2">
+                    <div className="text-sm text-slate-300 font-medium">Lineup stabilitás és döntéstámogatás</div>
+                    {effectiveTeamAnalysis.lineupProfile?.topLineup && (
+                      <div className="text-xs text-slate-200">
+                        Legjobb 5-ös: <span className="text-emerald-300">{effectiveTeamAnalysis.lineupProfile.topLineup.netPer40.toFixed(1)} net/40</span>
+                        {' '}• {effectiveTeamAnalysis.lineupProfile.topLineup.players.join(', ')}
+                        {' '}<span className="text-slate-500">({effectiveTeamAnalysis.lineupProfile.topLineup.minutes.toFixed(1)} perc, minta: {effectiveTeamAnalysis.lineupProfile.topLineup.sampleLabel})</span>
+                      </div>
+                    )}
+                    {effectiveTeamAnalysis.lineupProfile?.bottomLineup && (
+                      <div className="text-xs text-slate-200">
+                        Legrosszabb 5-ös: <span className="text-rose-300">{effectiveTeamAnalysis.lineupProfile.bottomLineup.netPer40.toFixed(1)} net/40</span>
+                        {' '}• {effectiveTeamAnalysis.lineupProfile.bottomLineup.players.join(', ')}
+                        {' '}<span className="text-slate-500">({effectiveTeamAnalysis.lineupProfile.bottomLineup.minutes.toFixed(1)} perc, minta: {effectiveTeamAnalysis.lineupProfile.bottomLineup.sampleLabel})</span>
+                      </div>
+                    )}
+                    {effectiveTeamAnalysis.lineupProfile?.topPair && (
+                      <div className="text-xs text-slate-300">
+                        Legjobb páros: {effectiveTeamAnalysis.lineupProfile.topPair.players.join(' + ')}
+                        {' '}<span className="text-emerald-300">({effectiveTeamAnalysis.lineupProfile.topPair.netPer40.toFixed(1)} net/40)</span>
+                      </div>
+                    )}
+                    {effectiveTeamAnalysis.lineupProfile?.bottomPair && (
+                      <div className="text-xs text-slate-300">
+                        Legrosszabb páros: {effectiveTeamAnalysis.lineupProfile.bottomPair.players.join(' + ')}
+                        {' '}<span className="text-rose-300">({effectiveTeamAnalysis.lineupProfile.bottomPair.netPer40.toFixed(1)} net/40)</span>
+                      </div>
+                    )}
+                    {effectiveTeamAnalysis.lineupProfile?.rotationBreakpoint && (
+                      <div className="text-xs text-amber-200 rounded-md border border-amber-700/40 bg-amber-950/20 px-2 py-1.5">
+                        Rotációs töréspont: {effectiveTeamAnalysis.lineupProfile.rotationBreakpoint.minute?.toFixed(1) ?? '-'} perc
+                        {' '}• {effectiveTeamAnalysis.lineupProfile.rotationBreakpoint.trigger}
+                        {' '}• -{effectiveTeamAnalysis.lineupProfile.rotationBreakpoint.netDropPer40.toFixed(1)} net/40
+                        {' '}({effectiveTeamAnalysis.lineupProfile.rotationBreakpoint.confidence})
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="rounded-lg border border-slate-800 bg-slate-950/40 p-3 space-y-2">
+                    <div className="text-sm text-slate-300 font-medium">Clutch identitás blokk</div>
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div className="rounded-md border border-slate-800 bg-slate-900/60 px-2 py-1.5 text-slate-200">ORtg: {formatNullableNumber(effectiveTeamAnalysis.clutchProfile?.ortg, 1)}</div>
+                      <div className="rounded-md border border-slate-800 bg-slate-900/60 px-2 py-1.5 text-slate-200">DRtg: {formatNullableNumber(effectiveTeamAnalysis.clutchProfile?.drtg, 1)}</div>
+                      <div className="rounded-md border border-slate-800 bg-slate-900/60 px-2 py-1.5 text-slate-200">Net: {formatNullableNumber(effectiveTeamAnalysis.clutchProfile?.net, 1)}</div>
+                      <div className="rounded-md border border-slate-800 bg-slate-900/60 px-2 py-1.5 text-slate-200">TO%: {formatNullableNumber(effectiveTeamAnalysis.clutchProfile?.tovPct, 1, '%')}</div>
+                      <div className="rounded-md border border-slate-800 bg-slate-900/60 px-2 py-1.5 text-slate-200">REB%: {formatNullableNumber(effectiveTeamAnalysis.clutchProfile?.rebPct, 1, '%')}</div>
+                      <div className="rounded-md border border-slate-800 bg-slate-900/60 px-2 py-1.5 text-slate-200">FT-rate: {formatNullableNumber(effectiveTeamAnalysis.clutchProfile?.ftRate, 1)}</div>
+                    </div>
+                    <div className="text-xs text-slate-300">
+                      Lezáró profil: {effectiveTeamAnalysis.clutchProfile?.topUsageClosers.length
+                        ? effectiveTeamAnalysis.clutchProfile.topUsageClosers.map(item => `${item.player} (${(item.usageShare * 100).toFixed(1)}%)`).join(', ')
+                        : 'nincs elegendő minta'}
+                    </div>
+                    <div className="text-xs text-slate-400">
+                      Assist/TO: {formatNullableNumber(effectiveTeamAnalysis.clutchProfile?.assistToTurnover, 2)} •
+                      {' '}minta: {effectiveTeamAnalysis.clutchProfile?.sampleSize ?? 0} esemény
+                    </div>
+                  </div>
+
+                  <div className="rounded-lg border border-slate-800 bg-slate-950/40 p-3 space-y-2">
+                    <div className="text-sm text-slate-300 font-medium">Impact (+/-) kontextus</div>
+                    <div className="text-xs text-slate-200">Best net/40: {formatNullableNumber(effectiveTeamAnalysis.impactProfile?.bestNetPer40, 1)}</div>
+                    <div className="text-xs text-slate-200">Worst net/40: {formatNullableNumber(effectiveTeamAnalysis.impactProfile?.worstNetPer40, 1)}</div>
+                    <div className="text-xs text-slate-200">Adjusted net/40: {formatNullableNumber(effectiveTeamAnalysis.impactProfile?.adjustedNetPer40, 1)}</div>
+                    <div className="text-xs text-slate-400">
+                      SOS súly: {formatNullableNumber(effectiveTeamAnalysis.impactProfile?.sosWeight, 3)}
+                      {' '}• Garbage-time szűrve: {effectiveTeamAnalysis.impactProfile?.garbageTimeFiltered ? 'igen' : 'nem'}
+                      {' '}• Minta: {formatNullableNumber(effectiveTeamAnalysis.impactProfile?.sampleMinutes, 1)} perc
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {effectiveTeamAnalysis.shotMapProfile?.available && (
+                <div className="space-y-2">
+                  <div className="text-sm text-slate-300 font-medium">Shot-quality profil</div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-2">
+                    {effectiveTeamAnalysis.shotMapProfile.zones.map(zone => (
+                      <div key={`sq-${zone.key}`} className="rounded-md border border-slate-800 bg-slate-900/50 px-2.5 py-2 text-xs">
+                        <div className="text-slate-100 font-medium">{zone.label}</div>
+                        <div className="text-slate-300">Vol: {zone.rate.toFixed(1)}%</div>
+                        <div className="text-slate-300">FG%: {zone.pct.toFixed(1)}%</div>
+                        <div className={zone.rateDeltaVsLeague >= 0 ? 'text-emerald-300' : 'text-rose-300'}>
+                          Liga vol delta: {zone.rateDeltaVsLeague >= 0 ? '+' : ''}{zone.rateDeltaVsLeague.toFixed(1)} pp
+                        </div>
+                        <div className={zone.pctDeltaVsLeague >= 0 ? 'text-emerald-300' : 'text-rose-300'}>
+                          Liga FG delta: {zone.pctDeltaVsLeague >= 0 ? '+' : ''}{zone.pctDeltaVsLeague.toFixed(1)} pp
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="text-xs text-slate-400">
+                    Minőség-index (támadás): {formatNullableNumber(effectiveTeamAnalysis.shotMapProfile.offenseQualityIndex, 1)}
+                    {' '}• Minőség-index (engedett): {formatNullableNumber(effectiveTeamAnalysis.shotMapProfile.allowedQualityIndex, 1)}
+                  </div>
+                </div>
+              )}
+
+              {effectiveTeamAnalysis.actionableFocus && effectiveTeamAnalysis.actionableFocus.length > 0 && (
+                <div className="space-y-2">
+                  <div className="text-sm text-slate-300 font-medium">Actionable fókusz (edzői)</div>
+                  {effectiveTeamAnalysis.actionableFocus.map(item => (
+                    <div key={item} className="text-sm text-cyan-100 rounded-md border border-cyan-700/40 bg-cyan-950/20 px-3 py-2">• {item}</div>
+                  ))}
+                </div>
+              )}
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <div className="text-sm text-slate-300 font-medium">Erősségek</div>
-                  {displayTeamAnalysis.strengths.length > 0 ? (
+                  {effectiveTeamAnalysis.strengths.length > 0 ? (
                     <ul className="list-disc list-inside space-y-1 text-sm text-slate-200 text-pretty leading-relaxed">
-                      {displayTeamAnalysis.strengths.map(item => (
+                      {effectiveTeamAnalysis.strengths.map(item => (
                         <li key={item}>{item}</li>
                       ))}
                     </ul>
@@ -8352,9 +9862,9 @@ export function SeasonComparison({
                 </div>
                 <div className="space-y-2">
                   <div className="text-sm text-slate-300 font-medium">Limitációk</div>
-                  {displayTeamAnalysis.limitations.length > 0 ? (
+                  {effectiveTeamAnalysis.limitations.length > 0 ? (
                     <ul className="list-disc list-inside space-y-1 text-sm text-slate-200 text-pretty leading-relaxed">
-                      {displayTeamAnalysis.limitations.map(item => (
+                      {effectiveTeamAnalysis.limitations.map(item => (
                         <li key={item}>{item}</li>
                       ))}
                     </ul>
@@ -8370,7 +9880,7 @@ export function SeasonComparison({
                   <div className="h-72 rounded-lg border border-slate-800 bg-slate-950/40 p-3">
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart
-                        data={displayTeamAnalysis.leagueProfile.entries}
+                        data={effectiveTeamAnalysis.leagueProfile.entries}
                         layout="vertical"
                         margin={{ left: 12, right: 12 }}
                       >
@@ -8399,7 +9909,7 @@ export function SeasonComparison({
                           }}
                         />
                         <Bar dataKey="percentile" radius={[4, 4, 4, 4]}>
-                          {displayTeamAnalysis.leagueProfile.entries.map(entry => (
+                          {effectiveTeamAnalysis.leagueProfile.entries.map(entry => (
                             <Cell key={entry.key} fill={getPercentileColor(entry.percentile)} />
                           ))}
                         </Bar>
@@ -8407,7 +9917,7 @@ export function SeasonComparison({
                     </ResponsiveContainer>
                   </div>
                   <div className="space-y-2 text-sm">
-                    {displayTeamAnalysis.leagueProfile.entries.map(entry => (
+                    {effectiveTeamAnalysis.leagueProfile.entries.map(entry => (
                       <div key={entry.key} className="flex items-center justify-between text-slate-200">
                         <span>{entry.label}</span>
                         <span className="text-slate-400">
@@ -8416,12 +9926,12 @@ export function SeasonComparison({
                       </div>
                     ))}
                     <div className="text-xs text-slate-400">
-                      Liga-klaszter: {displayTeamAnalysis.leagueProfile.clusterLabel}
-                      {displayTeamAnalysis.leagueProfile.clusterCount && displayTeamAnalysis.leagueProfile.teamCount
-                        ? ` (${displayTeamAnalysis.leagueProfile.clusterCount}/${displayTeamAnalysis.leagueProfile.teamCount} csapat)`
+                      Liga-klaszter: {effectiveTeamAnalysis.leagueProfile.clusterLabel}
+                      {effectiveTeamAnalysis.leagueProfile.clusterCount && effectiveTeamAnalysis.leagueProfile.teamCount
+                        ? ` (${effectiveTeamAnalysis.leagueProfile.clusterCount}/${effectiveTeamAnalysis.leagueProfile.teamCount} csapat)`
                         : ''}
                     </div>
-                    {!displayTeamAnalysis.leagueProfile.opponentStatsComplete && (
+                    {!effectiveTeamAnalysis.leagueProfile.opponentStatsComplete && (
                       <div className="text-xs text-amber-300">
                         Opponent statisztikák hiányosak, védekezési profil korlátozott.
                       </div>
@@ -8433,12 +9943,12 @@ export function SeasonComparison({
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <div className="text-sm text-slate-300 font-medium">Posztmegoszlás</div>
-                  {(Object.entries(displayTeamAnalysis.rosterSummary.positionMinutesShare) as Array<[Position, number]>)
+                  {(Object.entries(effectiveTeamAnalysis.rosterSummary.positionMinutesShare) as Array<[Position, number]>)
                     .map(([pos, share]) => ({
                       pos,
                       share,
                       label: getPositionLabel(pos),
-                      players: displayTeamAnalysis.rosterSummary.positionPlayers[pos] ?? [],
+                      players: effectiveTeamAnalysis.rosterSummary.positionPlayers[pos] ?? [],
                     }))
                     .map(({ pos, share, label, players }) => (
                       <div key={pos} className="text-sm text-slate-200 space-y-0.5">
@@ -8453,16 +9963,16 @@ export function SeasonComparison({
                         )}
                       </div>
                     ))}
-                  {displayTeamAnalysis.rosterSummary.avgHeightOverall && (
+                  {effectiveTeamAnalysis.rosterSummary.avgHeightOverall && (
                     <div className="text-xs text-slate-400">
-                      Átlagmagasság: {displayTeamAnalysis.rosterSummary.avgHeightOverall.toFixed(1)} cm
+                      Átlagmagasság: {effectiveTeamAnalysis.rosterSummary.avgHeightOverall.toFixed(1)} cm
                     </div>
                   )}
                 </div>
                 <div className="space-y-2">
                   <div className="text-sm text-slate-300 font-medium">Role-megoszlás</div>
-                  {Object.keys(displayTeamAnalysis.rosterSummary.roleCounts).length > 0 ? (
-                    Object.entries(displayTeamAnalysis.rosterSummary.roleCounts).map(([role, count]) => (
+                  {Object.keys(effectiveTeamAnalysis.rosterSummary.roleCounts).length > 0 ? (
+                    Object.entries(effectiveTeamAnalysis.rosterSummary.roleCounts).map(([role, count]) => (
                       <div key={role} className="text-sm text-slate-200 space-y-0.5">
                         <div>
                           {count >= 3
@@ -8472,7 +9982,7 @@ export function SeasonComparison({
                               : `${role}: ${count}`}
                         </div>
                         {(() => {
-                          const playerNames = displayTeamAnalysis.rosterSummary.rolePlayers[role] ?? [];
+                          const playerNames = effectiveTeamAnalysis.rosterSummary.rolePlayers[role] ?? [];
                           if (playerNames.length === 0 && (rolePlayersByRole.get(role)?.length ?? 0) === 0) return null;
                           const inferredNames = playerNames.length > 0
                             ? playerNames
@@ -8494,29 +10004,29 @@ export function SeasonComparison({
                 <div className="space-y-2">
                   <div className="text-sm text-slate-300 font-medium">Usage koncentráció</div>
                   <div className="text-sm text-slate-200">
-                    Top2 usage arány: {(displayTeamAnalysis.rosterSummary.top2UsageShare * 100).toFixed(1)}%
+                    Top2 usage arány: {(effectiveTeamAnalysis.rosterSummary.top2UsageShare * 100).toFixed(1)}%
                   </div>
                   <div className="text-xs text-slate-400">
-                    {displayTeamAnalysis.rosterSummary.flags.scorerDependency && '• Túlzott scorer-függőség'}
-                    {displayTeamAnalysis.rosterSummary.flags.lowPlaymakingDepth && ' • Alacsony playmaking depth'}
-                    {displayTeamAnalysis.rosterSummary.flags.weakReboundingPresence && ' • Lepattanó hiány posztonként'}
+                    {effectiveTeamAnalysis.rosterSummary.flags.scorerDependency && '• Túlzott scorer-függőség'}
+                    {effectiveTeamAnalysis.rosterSummary.flags.lowPlaymakingDepth && ' • Alacsony playmaking depth'}
+                    {effectiveTeamAnalysis.rosterSummary.flags.weakReboundingPresence && ' • Lepattanó hiány posztonként'}
                   </div>
                 </div>
               </div>
 
-              {displayTeamAnalysis.rosterInsights.length > 0 && (
+              {effectiveTeamAnalysis.rosterInsights.length > 0 && (
                 <div className="space-y-2">
                   <div className="text-sm text-slate-300 font-medium">Roster értelmezés</div>
-                  {displayTeamAnalysis.rosterInsights.map(item => (
+                  {effectiveTeamAnalysis.rosterInsights.map(item => (
                     <div key={item} className="text-sm text-slate-200">• {item}</div>
                   ))}
                 </div>
               )}
 
-              {displayTeamAnalysis.riskPriorities.length > 0 && (
+              {effectiveTeamAnalysis.riskPriorities.length > 0 && (
                 <div className="space-y-2">
                   <div className="text-sm text-slate-300 font-medium">Kockázatok</div>
-                  {displayTeamAnalysis.riskPriorities.map(item => (
+                  {effectiveTeamAnalysis.riskPriorities.map(item => (
                     <div key={item} className="text-sm text-slate-200">• {item}</div>
                   ))}
                 </div>

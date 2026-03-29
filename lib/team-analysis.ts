@@ -148,6 +148,80 @@ export type TeamAnalysis = {
     teamCount: number | null;
     opponentStatsComplete: boolean;
   };
+  clutchProfile?: {
+    available: boolean;
+    sampleSize: number;
+    ortg: number | null;
+    drtg: number | null;
+    net: number | null;
+    tovPct: number | null;
+    rebPct: number | null;
+    ftRate: number | null;
+    topUsageClosers: Array<{ player: string; usageShare: number }>;
+    assistToTurnover: number | null;
+    notes: string[];
+  } | null;
+  shotMapProfile?: {
+    available: boolean;
+    zones: Array<{
+      key: 'rim' | 'paint' | 'mid' | 'corner3' | 'aboveBreak3';
+      label: string;
+      rate: number;
+      pct: number;
+      rateDeltaVsLeague: number;
+      pctDeltaVsLeague: number;
+      rateDeltaVsSeason: number;
+      pctDeltaVsSeason: number;
+    }>;
+    offenseQualityIndex: number | null;
+    allowedQualityIndex: number | null;
+    notes: string[];
+  } | null;
+  lineupProfile?: {
+    available: boolean;
+    topLineup: {
+      players: string[];
+      minutes: number;
+      netPer40: number;
+      sampleLabel: 'alacsony' | 'kozepes' | 'magas';
+    } | null;
+    bottomLineup: {
+      players: string[];
+      minutes: number;
+      netPer40: number;
+      sampleLabel: 'alacsony' | 'kozepes' | 'magas';
+    } | null;
+    topPair: {
+      players: string[];
+      minutes: number;
+      netPer40: number;
+      sampleLabel: 'alacsony' | 'kozepes' | 'magas';
+    } | null;
+    bottomPair: {
+      players: string[];
+      minutes: number;
+      netPer40: number;
+      sampleLabel: 'alacsony' | 'kozepes' | 'magas';
+    } | null;
+    rotationBreakpoint: {
+      minute: number | null;
+      trigger: string;
+      netDropPer40: number;
+      confidence: 'alacsony' | 'kozepes' | 'magas';
+    } | null;
+    notes: string[];
+  } | null;
+  impactProfile?: {
+    available: boolean;
+    bestNetPer40: number | null;
+    worstNetPer40: number | null;
+    adjustedNetPer40: number | null;
+    sosWeight: number | null;
+    garbageTimeFiltered: boolean;
+    sampleMinutes: number;
+    notes: string[];
+  } | null;
+  actionableFocus?: string[];
   summary: string;
 };
 
@@ -1336,6 +1410,11 @@ export const analyzeTeamSeason = (
     rosterInsights,
     riskPriorities: riskPriorities.slice(1),
     leagueProfile,
+    clutchProfile: null,
+    shotMapProfile: null,
+    lineupProfile: null,
+    impactProfile: null,
+    actionableFocus: [],
     summary: buildSummary(normalized, style, rosterSummary, rosterInsights, benchmarks),
   };
 };

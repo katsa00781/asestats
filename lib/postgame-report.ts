@@ -1226,17 +1226,131 @@ const buildOpponentProfileSection = (
   season: NormalizedTeamStats,
   preGame?: PreGameXFactorContext
 ) => {
+  const keyLabel = (key: string, fallback?: string) => fallback || X_FACTOR_LABELS[key] || key;
+  const signed = (value: number) => `${value >= 0 ? '+' : ''}${round(value, 1)}`;
+  const signedPct = (value: number) => `${value >= 0 ? '+' : ''}${toPct(value, 1)}%`;
+
+  const evaluateOpponentMechanism = (key: string, label: string) => {
+    switch (key) {
+      case 'perimeter': {
+        const delta = game.threePct - season.threePct;
+        const realized = delta <= -4;
+        return {
+          label,
+          realized,
+          expectation: `${label}: a saját 3P-hatékonyságunk visszanyomása volt várható.`,
+          actual: `${label}: 3P% ${season.threePct.toFixed(1)}% → ${game.threePct.toFixed(1)}% (${signed(delta)} pp).`,
+          verdict: realized ? 'realizálódott' : 'nem realizálódott',
+        };
+      }
+      case 'turnover': {
+        const delta = game.turnoverRate - season.turnoverRate;
+        const realized = delta >= 0.03;
+        return {
+          label,
+          realized,
+          expectation: `${label}: magasabb labdanyomás és több eladott labda volt várható.`,
+          actual: `${label}: TO-rate ${toPct(season.turnoverRate, 1)}% → ${toPct(game.turnoverRate, 1)}% (${signedPct(delta)}).`,
+          verdict: realized ? 'realizálódott' : 'nem realizálódott',
+        };
+      }
+      case 'rebound': {
+        const delta = game.orebRate - season.orebRate;
+        const realized = delta <= -0.06;
+        return {
+          label,
+          realized,
+          expectation: `${label}: a támadólepattanóink visszaszorítása volt várható.`,
+          actual: `${label}: OREB% ${toPct(season.orebRate, 1)}% → ${toPct(game.orebRate, 1)}% (${signedPct(delta)}).`,
+          verdict: realized ? 'realizálódott' : 'nem realizálódott',
+        };
+      }
+      case 'tempo': {
+        const delta = game.pace - season.pace;
+        const realized = delta <= -4;
+        return {
+          label,
+          realized,
+          expectation: `${label}: lassabb ritmus és kevesebb nyílt pályás helyzet volt várható.`,
+          actual: `${label}: tempó ${season.pace.toFixed(1)} → ${game.pace.toFixed(1)} (${signed(delta)}).`,
+          verdict: realized ? 'realizálódott' : 'nem realizálódott',
+        };
+      }
+      case 'paint': {
+        const twoDelta = game.twoRate - season.twoRate;
+        const ftDelta = game.ftRate - season.ftRate;
+        const realized = twoDelta <= -0.05 || ftDelta <= -0.06;
+        return {
+          label,
+          realized,
+          expectation: `${label}: festékbe jutás és fault-kiharcolás csökkenése volt várható.`,
+          actual: `${label}: 2P arány ${toPct(season.twoRate, 1)}% → ${toPct(game.twoRate, 1)}% (${signedPct(twoDelta)}), FT-rate ${toPct(season.ftRate, 1)}% → ${toPct(game.ftRate, 1)}% (${signedPct(ftDelta)}).`,
+          verdict: realized ? 'realizálódott' : 'nem realizálódott',
+        };
+      }
+      default: {
+        const delta = game.efg - season.efg;
+        const realized = delta <= -3;
+        return {
+          label,
+          realized,
+          expectation: `${label}: a támadóhatékonyságunk csökkentése volt várható.`,
+          actual: `${label}: eFG% ${season.efg.toFixed(1)}% → ${game.efg.toFixed(1)}% (${signed(delta)} pp).`,
+          verdict: realized ? 'realizálódott' : 'nem realizálódott',
+        };
+      }
+    }
+  };
+
   const lines = ['**Ellenfél profil**'];
+  const preGameEvaluations: Array<{
+    label: string;
+    realized: boolean;
+    expectation: string;
+    actual: string;
+    verdict: string;
+  }> = [];
   const descriptors: string[] = [];
   if (preGame) {
     const labels = [
-      preGame.primaryLabel || X_FACTOR_LABELS[preGame.primaryKey] || preGame.primaryKey,
+      keyLabel(preGame.primaryKey, preGame.primaryLabel),
       preGame.secondaryKey
-        ? preGame.secondaryLabel || X_FACTOR_LABELS[preGame.secondaryKey] || preGame.secondaryKey
+        ? keyLabel(preGame.secondaryKey, preGame.secondaryLabel)
         : null,
     ].filter(Boolean) as string[];
     if (labels.length > 0) {
       lines.push(`• Pre-game fókusz: ${labels.join(' + ')}.`);
+      lines.push('• Meccs előtt várható hatás:');
+      const primaryEval = evaluateOpponentMechanism(
+        preGame.primaryKey,
+        keyLabel(preGame.primaryKey, preGame.primaryLabel)
+      );
+      preGameEvaluations.push(primaryEval);
+      lines.push(`• ${primaryEval.expectation}`);
+
+      if (preGame.secondaryKey) {
+        const secondaryEval = evaluateOpponentMechanism(
+          preGame.secondaryKey,
+          keyLabel(preGame.secondaryKey, preGame.secondaryLabel)
+        );
+        preGameEvaluations.push(secondaryEval);
+        lines.push(`• ${secondaryEval.expectation}`);
+      }
+
+      lines.push('• Meccs után (realizáció):');
+      preGameEvaluations.forEach(item => {
+        lines.push(`• ${item.actual} Értékelés: ${item.verdict}.`);
+      });
+
+      const realizedCount = preGameEvaluations.filter(item => item.realized).length;
+      const total = preGameEvaluations.length;
+      const conclusion = realizedCount === total
+        ? `${opponentName} védekező profilja teljes mértékben realizálódott, érdemben szűkítette a támadásunkat.`
+        : realizedCount > 0
+          ? `${opponentName} védekező profilja részben realizálódott (${realizedCount}/${total}), de több kulcsterületet nem tudott stabilan kontrollálni.`
+          : `${opponentName} védekező profilja ezen a meccsen nem realizálódott; a saját támadóidentitásunk maradt domináns.`;
+      lines.push(`• Következtetés: ${conclusion}`);
+      return lines;
     }
   }
 

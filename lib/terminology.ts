@@ -15,6 +15,135 @@ export type TerminologySection = {
 
 export const terminologySections: TerminologySection[] = [
   {
+    id: 'stat-abbreviations-boxscore',
+    title: 'Statisztikai roviditesek - Alap (boxscore)',
+    entries: [
+      {
+        term: 'PTS',
+        definition: 'Pontok osszesen. A jatekos vagy csapat altal szerzett teljes pontmennyiseg.',
+      },
+      {
+        term: 'FGM / FGA / FG%',
+        definition:
+          'Field Goal Made / Attempted / Percentage. Bedobott es vallalt mezo dobaskiserletek, valamint ezek hatekonysaga.',
+      },
+      {
+        term: '2PM / 2PA / 2P%',
+        definition: 'Ketpontos dobaskiserletek bedobott, vallalt es szazalekos mutatoi.',
+      },
+      {
+        term: '3PM / 3PA / 3P%',
+        definition: 'Harompontos dobaskiserletek bedobott, vallalt es szazalekos mutatoi.',
+      },
+      {
+        term: 'FTM / FTA / FT%',
+        definition: 'Buntetok bedobott, vallalt es szazalekos mutatoi.',
+      },
+      {
+        term: 'ORB / DRB / TRB (REB)',
+        definition: 'Tamado lepattano / vedo lepattano / osszes lepattano.',
+      },
+      {
+        term: 'AST',
+        definition: 'Assziszt. Kozvetlen passz, amelybol azonnal kosar szuletik.',
+      },
+      {
+        term: 'TOV (TO)',
+        definition: 'Eladott labda. A tamadas labdabirtoklasanak elvesztese dobas nelkul vagy hiba miatt.',
+      },
+      {
+        term: 'STL',
+        definition: 'Labdaszerzes. Vedekezesben megszerzett ellenfel-labdabirtoklas.',
+      },
+      {
+        term: 'BLK',
+        definition: 'Blokk. Ellenfel dobaskiserletenek ervenyes megakadalyozasa.',
+      },
+      {
+        term: 'PF',
+        definition: 'Szemelyi hiba. A jatekos altal elkovetett faultok szama.',
+      },
+      {
+        term: '+/-',
+        definition:
+          'Plusz/minusz. Az adott jatekos palyan toltott idejeben a csapat pontkulonbsege (csapat pont - ellenfel pont).',
+      },
+      {
+        term: 'MIN',
+        definition: 'Jatekido percben.',
+      },
+    ],
+  },
+  {
+    id: 'stat-abbreviations-advanced',
+    title: 'Statisztikai roviditesek - Halado mutatok',
+    entries: [
+      {
+        term: 'POSS',
+        definition: 'Labdabirtoklasok becsult szama. A tamadasok volumenenek alap mutatoja.',
+      },
+      {
+        term: 'PACE',
+        definition: 'Tempo. Merkozesenkenti becsult labdabirtoklas 40 vagy 48 percre normalizalva.',
+      },
+      {
+        term: 'ORtg',
+        definition: 'Offensive Rating. Szerzett pontok 100 labdabirtoklasra vetitve.',
+      },
+      {
+        term: 'DRtg',
+        definition: 'Defensive Rating. Kapott pontok 100 labdabirtoklasra vetitve.',
+      },
+      {
+        term: 'NetRtg',
+        definition: 'Net Rating. ORtg - DRtg, vagyis netto pontkulonbseg 100 labdabirtoklasonkent.',
+      },
+      {
+        term: 'PPP',
+        definition: 'Points Per Possession. Egy labdabirtoklasra juto ponttermeles.',
+      },
+      {
+        term: 'eFG%',
+        definition:
+          'Effective Field Goal Percentage. A mezo dobashatekonysag, ahol a tripla 1.5 dobott kosarkent szamit. Formula: (FGM + 0.5 * 3PM) / FGA.',
+      },
+      {
+        term: 'TS%',
+        definition:
+          'True Shooting Percentage. Osszetett dobashatekonysag, amely figyelembe veszi a ketpontost, triplat es buntetot is. Formula: PTS / (2 * (FGA + 0.44 * FTA)).',
+      },
+      {
+        term: 'USG%',
+        definition:
+          'Usage Rate. A csapat tamadasainak mekkora resze fejezodik be az adott jatekos dobasaval, buntetojekkel vagy eladott labdajaval, amig palyan van.',
+      },
+      {
+        term: 'AST%',
+        definition: 'Assziszt rata. A csapattarsak dobott kosarainak becsult hanyada, amelyhez a jatekos asszisztot adott.',
+      },
+      {
+        term: 'TOV%',
+        definition: 'Eladott labda rata. A labdabirtoklasokhoz viszonyitott labdaeladasi arany.',
+      },
+      {
+        term: 'AST/TO',
+        definition: 'Assziszt per eladott labda arany. Donteshozatali hatekonysagot jelzo mutato.',
+      },
+      {
+        term: 'REB% / ORB% / DRB%',
+        definition: 'Lepattano-ratak. Az elerheto lepattanok mekkora reszet szerzi meg a jatekos vagy csapat osszesen, tamadasban vagy vedekezesben.',
+      },
+      {
+        term: 'FTr',
+        definition: 'Free Throw Rate. Bunteto-vonalig jutas gyakorisaga, jellemzoen FTA / FGA alakban.',
+      },
+      {
+        term: '3PAr',
+        definition: 'Three-Point Attempt Rate. A mezo dobaskiserleteken belul a triplak aranya. Formula: 3PA / FGA.',
+      },
+    ],
+  },
+  {
     id: 'spatial-offense',
     title: 'Térbeli / támadási orientációk',
     entries: [
