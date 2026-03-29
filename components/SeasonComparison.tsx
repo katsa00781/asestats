@@ -2582,9 +2582,13 @@ export function SeasonComparison({
             ];
             if (loadedQuarterStats.length > 0) {
               notes.push(`Negyedenkénti pontprofil csatolva (${loadedQuarterStats.length} sor).`);
+            } else {
+              notes.push('Kosarstat negyedenkénti pontprofil még nem érhető el ehhez a meccshez.');
             }
             if (loadedTeamMetrics.length > 0) {
               notes.push(`Team advanced mutatók csatolva (${loadedTeamMetrics.length} sor).`);
+            } else {
+              notes.push('Kosarstat team advanced mutatók még nem érhetők el ehhez a meccshez.');
             }
             setKosarstatPostgameNotes(notes);
             setKosarstatLineupAnalysis(null);
@@ -2660,9 +2664,13 @@ export function SeasonComparison({
             ];
             if (loadedQuarterStats.length > 0) {
               notes.push(`Negyedenkénti pontprofil csatolva (${loadedQuarterStats.length} sor).`);
+            } else {
+              notes.push('Kosarstat negyedenkénti pontprofil még nem érhető el ehhez a meccshez.');
             }
             if (loadedTeamMetrics.length > 0) {
               notes.push(`Team advanced mutatók csatolva (${loadedTeamMetrics.length} sor).`);
+            } else {
+              notes.push('Kosarstat team advanced mutatók még nem érhetők el ehhez a meccshez.');
             }
             setKosarstatPostgameNotes(notes);
             setKosarstatLineupAnalysis(null);
@@ -2777,9 +2785,13 @@ export function SeasonComparison({
 
         if (loadedQuarterStats.length > 0) {
           notes.push(`Negyedenkénti pontprofil csatolva (${loadedQuarterStats.length} sor).`);
+        } else {
+          notes.push('Kosarstat negyedenkénti pontprofil még nem érhető el ehhez a meccshez.');
         }
         if (loadedTeamMetrics.length > 0) {
           notes.push(`Team advanced mutatók csatolva (${loadedTeamMetrics.length} sor).`);
+        } else {
+          notes.push('Kosarstat team advanced mutatók még nem érhetők el ehhez a meccshez.');
         }
 
         if (!cancelled) {

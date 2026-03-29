@@ -62,6 +62,8 @@ type StopImportApiResponse = {
 export function KosarstatPbpImport({ selectedSeasonId, selectedSeasonName, onImportComplete }: KosarstatPbpImportProps) {
   const cleanupConfirmWord = 'TORLES';
   const [seasonCode, setSeasonCode] = useState('2526');
+  const [roundFilter, setRoundFilter] = useState('');
+  const [gameIdFilter, setGameIdFilter] = useState('');
   const [gameLimit, setGameLimit] = useState('0');
   const [startGameIndex, setStartGameIndex] = useState('1');
   const [headless, setHeadless] = useState(true);
@@ -242,6 +244,8 @@ export function KosarstatPbpImport({ selectedSeasonId, selectedSeasonName, onImp
           seasonId: selectedSeasonId,
           seasonName: selectedSeasonName,
           seasonCode: seasonCode.trim() || undefined,
+          rounds: roundFilter.trim() || undefined,
+          gameIds: gameIdFilter.trim() || undefined,
           gameLimit: normalizedGameLimit,
           startGameIndex: normalizedStartGameIndex,
           forceReimport,
@@ -415,6 +419,24 @@ export function KosarstatPbpImport({ selectedSeasonId, selectedSeasonName, onImp
             />
           </div>
           <div className="space-y-2">
+            <label className="text-sm text-slate-300">Forduló szűrő</label>
+            <Input
+              value={roundFilter}
+              onChange={event => setRoundFilter(event.target.value)}
+              placeholder="pl. 24 vagy 20-24 vagy 22,24"
+              className="bg-slate-800 border-slate-700 text-slate-100"
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm text-slate-300">Game ID szűrő</label>
+            <Input
+              value={gameIdFilter}
+              onChange={event => setGameIdFilter(event.target.value)}
+              placeholder="pl. 20260328102119 vagy vesszővel több"
+              className="bg-slate-800 border-slate-700 text-slate-100"
+            />
+          </div>
+          <div className="space-y-2">
             <label className="text-sm text-slate-300">Bongeszo mod</label>
             <button
               type="button"
@@ -437,6 +459,11 @@ export function KosarstatPbpImport({ selectedSeasonId, selectedSeasonName, onImp
           <span className="text-xs text-slate-400">
             Soha nem ir felul meglevo adatot: csak hianyzo tablakat/DOM metadata mezoket potol. BE allasban minden mar importalt meccset is vegignez.
           </span>
+        </div>
+
+        <div className="rounded-md border border-slate-800 bg-slate-950/30 px-3 py-2 text-xs text-slate-400">
+          Tipp: fordulo szerinti gyors importhoz hasznald a &quot;Forduló szűrő&quot; mezőt. Formátum: 24, 20-24, vagy 22,24.
+          Ha forduló vagy game ID szűrőt adsz meg, a rendszer automatikusan újraimportálja a kiválasztott meccseket.
         </div>
 
         <div className="grid gap-4 md:grid-cols-2">

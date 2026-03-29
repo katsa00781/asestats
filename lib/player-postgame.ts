@@ -136,6 +136,9 @@ const mapImpactLabel = (impactClass: PlayerImpactClass) => {
 };
 
 const mapContextualImpactLabel = (impactClass: PlayerImpactClass, context: DerivedPlayerContext) => {
+  if (impactClass === 'mvp' && context.usageTier === 'low') {
+    return 'Hatékony szerepjátékos';
+  }
   if (impactClass === 'engine' && !context.isStarter) {
     return 'Rotációs hozzájárulás';
   }

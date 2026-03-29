@@ -9,6 +9,8 @@ type KosarstatImportPayload = {
   seasonId?: string;
   seasonName?: string;
   seasonCode?: string;
+  rounds?: string;
+  gameIds?: string;
   gameLimit?: number;
   startGameIndex?: number;
   forceReimport?: boolean;
@@ -25,6 +27,8 @@ type ImportOptions = {
   seasonId: string;
   seasonName?: string;
   seasonCode?: string;
+  rounds?: string;
+  gameIds?: string;
   gameLimit?: number;
   startGameIndex?: number;
   forceReimport?: boolean;
@@ -166,9 +170,11 @@ export async function POST(request: Request) {
 
   const seasonName = payload?.seasonName?.trim() || undefined;
   const seasonCode = sanitizeSeasonCode(payload?.seasonCode);
+  const rounds = sanitizeCsvLike(payload?.rounds);
+  const gameIds = sanitizeCsvLike(payload?.gameIds);
   const gameLimit = sanitizeGameLimit(payload?.gameLimit);
   const startGameIndex = sanitizeStartGameIndex(payload?.startGameIndex);
-  const forceReimport = payload?.forceReimport === true;
+  const forceReimport = payload?.forceReimport === true || Boolean(rounds) || Boolean(gameIds);
   const headless = payload?.headless;
 
   isRunning = true;
@@ -196,6 +202,8 @@ export async function POST(request: Request) {
     seasonId,
     seasonName,
     seasonCode,
+    rounds,
+    gameIds,
     gameLimit,
     startGameIndex,
     forceReimport,
@@ -242,7 +250,7 @@ export async function POST(request: Request) {
   });
 }
 
-const runImporter = ({ seasonId, seasonName, seasonCode, gameLimit, startGameIndex, forceReimport, headless = true }: ImportOptions) =>
+const runImporter = ({ seasonId, seasonName, seasonCode, rounds, gameIds, gameLimit, startGameIndex, forceReimport, headless = true }: ImportOptions) =>
   new Promise<ImportResult>((resolve, reject) => {
     let settled = false;
     const safeResolve = (value: ImportResult) => {
@@ -264,6 +272,8 @@ const runImporter = ({ seasonId, seasonName, seasonCode, gameLimit, startGameInd
 
     if (seasonName) env.KOSARSTAT_SEASON_NAME = seasonName;
     if (seasonCode) env.KOSARSTAT_SEASON_CODE = seasonCode;
+    if (rounds) env.KOSARSTAT_ONLY_ROUNDS = rounds;
+    if (gameIds) env.KOSARSTAT_ONLY_GAME_IDS = gameIds;
     if (typeof gameLimit === 'number') env.KOSARSTAT_GAME_LIMIT = String(gameLimit);
     if (typeof startGameIndex === 'number') env.KOSARSTAT_START_GAME_INDEX = String(startGameIndex);
     if (forceReimport) env.KOSARSTAT_FORCE_REIMPORT = 'true';
@@ -345,6 +355,16 @@ const sanitizeStartGameIndex = (value?: number | null) => {
   if (intValue < 1) return 1;
   if (intValue > 5000) return 5000;
   return intValue;
+};
+
+const sanitizeCsvLike = (value?: string | null) => {
+  if (!value) return undefined;
+  const normalized = value
+    .split(',')
+    .map(item => item.trim())
+    .filter(Boolean)
+    .join(',');
+  return normalized || undefined;
 };
 
 const tailText = (input: string, length: number) => {

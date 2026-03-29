@@ -923,9 +923,10 @@ const analyzePlayerImpact = (players: PlayerGameStat[]) => {
     const usageShare = totalUsage > 0 ? usage / totalUsage : 0;
     const ts = computePlayerTrueShooting(player);
     const valPer36 = player.minutes > 0 ? (player.val / player.minutes) * 36 : 0;
+    const hasReliableSample = player.minutes >= 8;
 
     if (usageShare >= 0.13 && player.val <= 5) negative.push(player.name);
-    if (usageShare <= 0.1 && (player.val >= 10 || valPer36 >= 18)) {
+    if (hasReliableSample && usageShare <= 0.1 && (player.val >= 10 || (player.minutes >= 12 && valPer36 >= 18))) {
       positive.push(formatPositiveContributorLabel(player));
     }
 
@@ -935,7 +936,12 @@ const analyzePlayerImpact = (players: PlayerGameStat[]) => {
       && (ts >= 0.55 || usageShare >= 0.12);
 
     if (qualifiesOverperformer) {
-      const score = player.val * 0.5 + valPer36 * 0.35 + ts * 100 * 0.15 + usageShare * 100 * 0.1;
+      const score =
+        player.val * 0.45
+        + valPer36 * 0.2
+        + player.points * 0.2
+        + ts * 100 * 0.1
+        + usageShare * 100 * 0.05;
       overperformers.push({ name: player.name, score });
     }
 
@@ -955,7 +961,7 @@ const analyzePlayerImpact = (players: PlayerGameStat[]) => {
     negative: negative.slice(0, 3),
     overperformers: overperformers
       .sort((a, b) => b.score - a.score)
-      .slice(0, 3)
+      .slice(0, 4)
       .map(entry => entry.name),
     underperformers: underperformers
       .sort((a, b) => b.score - a.score)
@@ -1198,6 +1204,13 @@ const buildNextFocus = (
     );
   }
 
+  const margin = game.pointsFor - game.pointsAgainst;
+  if (margin >= 20 && focus.length < 2) {
+    addFocus(
+      'Domináns minták konzerválása: a legerősebb rotációs és spacing-sémák tudatos korai visszahívása a következő meccsen.'
+    );
+  }
+
   if (focus.length === 0) {
     addFocus('Végrehajtás stabilizálása a meglévő erősségek fenntartásával.');
   }
@@ -1236,7 +1249,12 @@ const buildOpponentProfileSection = (
   const assistDelta = toPct(game.assistRate - season.assistRate, 1);
   if (assistDelta <= -5) descriptors.push(`passzútvonal-zavarás (Assist-rate ${toPct(game.assistRate, 1)}% vs ${toPct(season.assistRate, 1)}%)`);
   if (descriptors.length === 0) {
-    lines.push(`• ${opponentName} védekező identitása ezen a meccsen nem torzította markánsan a támadóprofilunkat.`);
+    const margin = game.pointsFor - game.pointsAgainst;
+    if (margin >= 20) {
+      lines.push(`• ${opponentName} védekező identitása nem tudta érdemben lassítani a támadásunkat; domináns saját végrehajtás alakította a profilt.`);
+    } else {
+      lines.push(`• ${opponentName} védekező identitása ezen a meccsen nem torzította markánsan a támadóprofilunkat.`);
+    }
   } else {
     lines.push(`• ${opponentName} védekezési realizáció: ${descriptors.join('; ')}.`);
   }

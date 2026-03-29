@@ -17,6 +17,21 @@ if (!SUPABASE_URL || (!SUPABASE_ANON_KEY && !SUPABASE_SERVICE_ROLE_KEY)) {
 const SUPABASE_KEY = SUPABASE_SERVICE_ROLE_KEY || SUPABASE_ANON_KEY;
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: false } });
 
+const readCliArg = (name: string) => {
+  const withEquals = process.argv.find(arg => arg.startsWith(`${name}=`));
+  if (withEquals) return withEquals.slice(name.length + 1).trim();
+
+  const index = process.argv.findIndex(arg => arg === name);
+  if (index >= 0 && process.argv[index + 1]) {
+    return String(process.argv[index + 1]).trim();
+  }
+
+  return '';
+};
+
+const CLI_ROUNDS = readCliArg('--rounds') || readCliArg('--round');
+const CLI_GAME_IDS = readCliArg('--games') || readCliArg('--game');
+
 const KOSARSTAT_BASE = 'https://kosarstat.hu';
 const KOSARSTAT_SEASON_CODE = process.env.KOSARSTAT_SEASON_CODE || '2526';
 const KOSARSTAT_SEASON_NAME = process.env.KOSARSTAT_SEASON_NAME || '2025/2026';
@@ -25,9 +40,14 @@ const KOSARSTAT_HEADLESS = process.env.KOSARSTAT_HEADLESS === 'false' ? false : 
 const KOSARSTAT_GAME_LIMIT = parseInt(process.env.KOSARSTAT_GAME_LIMIT || '0', 10);
 const KOSARSTAT_START_GAME_INDEX = parseInt(process.env.KOSARSTAT_START_GAME_INDEX || '1', 10);
 const KOSARSTAT_FORCE_REIMPORT = process.env.KOSARSTAT_FORCE_REIMPORT === 'true';
+const KOSARSTAT_ONLY_GAME_IDS = String(CLI_GAME_IDS || process.env.KOSARSTAT_ONLY_GAME_IDS || '')
+  .split(',')
+  .map(item => item.trim())
+  .filter(Boolean);
+const KOSARSTAT_ONLY_ROUNDS_RAW = String(CLI_ROUNDS || process.env.KOSARSTAT_ONLY_ROUNDS || '').trim();
 const NAVIGATION_TIMEOUT_MS = parseInt(process.env.KOSARSTAT_NAVIGATION_TIMEOUT_MS || '60000', 10);
 const NAVIGATION_RETRIES = parseInt(process.env.KOSARSTAT_NAVIGATION_RETRIES || '4', 10);
-const REQUIRED_PAGE_TYPES = ['game', 'game_lineups', 'game_events', 'game_result_chart', 'game_quarters'] as const;
+const REQUIRED_PAGE_TYPES = ['game', 'game_lineups', 'game_events', 'game_result_chart', 'game_quarters', 'game_clutch'] as const;
 
 type ExtractedTable = {
   tableIndex: number;
@@ -502,9 +522,12 @@ const discoverGamePageUrls = async (page: Page, gameId: string) => {
     rootUrl,
     `${KOSARSTAT_BASE}/games/game/game_lineups/?game=${gameId}`,
     `${KOSARSTAT_BASE}/games/game/game_events/?game=${gameId}`,
+    `${KOSARSTAT_BASE}/games/game/pbp/?game=${gameId}`,
     `${KOSARSTAT_BASE}/games/game/game_result_chart/?game=${gameId}`,
+    `${KOSARSTAT_BASE}/games/game/score_evolution/?game=${gameId}`,
     `${KOSARSTAT_BASE}/games/game/game_qrts/?game=${gameId}`,
     `${KOSARSTAT_BASE}/games/game/game_quarters/?game=${gameId}`,
+    `${KOSARSTAT_BASE}/games/game/clutch_stat/?game=${gameId}`,
   ];
 
   const merged = new Set<string>([...defaults, ...links]);
@@ -514,9 +537,12 @@ const discoverGamePageUrls = async (page: Page, gameId: string) => {
 const detectPageType = (url: string) => {
   if (url.includes('/game_lineups/')) return 'game_lineups';
   if (url.includes('/game_events/')) return 'game_events';
+  if (url.includes('/pbp/')) return 'game_events';
   if (url.includes('/game_result_chart/')) return 'game_result_chart';
+  if (url.includes('/score_evolution/')) return 'game_result_chart';
   if (url.includes('/game_qrts/')) return 'game_quarters';
   if (url.includes('/game_quarters/')) return 'game_quarters';
+  if (url.includes('/clutch_stat/')) return 'game_clutch';
   return 'game';
 };
 
@@ -536,6 +562,62 @@ const parseNumeric = (value: string) => {
   if (!normalized) return null;
   const num = Number.parseFloat(normalized);
   return Number.isFinite(num) ? num : null;
+};
+
+const parseRoundToken = (token: string) => {
+  const normalized = token.trim();
+  if (!normalized) return [] as number[];
+
+  const rangeMatch = normalized.match(/^(\d+)\s*[-:]\s*(\d+)$/);
+  if (rangeMatch) {
+    const left = Number.parseInt(rangeMatch[1], 10);
+    const right = Number.parseInt(rangeMatch[2], 10);
+    if (!Number.isFinite(left) || !Number.isFinite(right)) return [] as number[];
+    const start = Math.min(left, right);
+    const end = Math.max(left, right);
+    const expanded: number[] = [];
+    for (let i = start; i <= end; i += 1) expanded.push(i);
+    return expanded;
+  }
+
+  const single = Number.parseInt(normalized, 10);
+  return Number.isFinite(single) ? [single] : [];
+};
+
+const parseRoundFilter = (input: string) => {
+  const rounds = new Set<number>();
+  input
+    .split(',')
+    .map(item => item.trim())
+    .filter(Boolean)
+    .forEach(token => {
+      parseRoundToken(token).forEach(value => {
+        if (value >= 1) rounds.add(value);
+      });
+    });
+  return rounds;
+};
+
+const KOSARSTAT_ONLY_ROUNDS = parseRoundFilter(KOSARSTAT_ONLY_ROUNDS_RAW);
+
+const parseDbRound = (value: unknown) => {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return Math.trunc(value);
+  }
+  if (typeof value === 'string') {
+    const match = value.match(/\d+/);
+    if (!match) return null;
+    const parsed = Number.parseInt(match[0], 10);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+};
+
+const extractDateFromKosarstatGameId = (value: string) => {
+  const normalized = String(value || '').trim();
+  const match = normalized.match(/^(\d{4})(\d{2})(\d{2})/);
+  if (!match) return null;
+  return `${match[1]}-${match[2]}-${match[3]}`;
 };
 
 const getTeamSide = (teamName: string, metadata: RawPageMetadata): 'home' | 'away' | 'unknown' => {
@@ -570,6 +652,173 @@ const extractGameStatsFromTables = (
   const importedAt = new Date().toISOString();
   const quarterStats: QuarterStatRow[] = [];
   const teamMetrics: TeamMetricRow[] = [];
+
+  const teamNameFromBanner = (value: string) => {
+    const text = String(value || '').trim();
+    if (!text) return '';
+    const beforeParen = text.split('(')[0]?.trim() || '';
+    return beforeParen;
+  };
+
+  const toIntSafe = (value: string | number | null | undefined) => {
+    const parsed = parseNumeric(String(value || ''));
+    if (parsed === null) return 0;
+    return Math.round(parsed);
+  };
+
+  const fallbackQuarter = new Map<string, QuarterStatRow>();
+  const fallbackTeamTotals = new Map<string, {
+    points: number;
+    fgm2: number;
+    fga2: number;
+    fgm3: number;
+    fga3: number;
+    ftm: number;
+    fta: number;
+    orb: number;
+    drb: number;
+    tov: number;
+  }>();
+
+  const readFallbackFromQuarterPlayerTables = () => {
+    for (let i = 0; i < tables.length - 1; i += 1) {
+      const banner = tables[i];
+      const statsTable = tables[i + 1];
+
+      const bannerHeaders = banner.headers.map(item => normalizeText(item));
+      const hasSimpleBannerHeader = bannerHeaders.length === 1 && bannerHeaders[0] === 'a';
+      const bannerRow = Array.isArray(banner.rows[0]) ? banner.rows[0] : [];
+      const teamName = teamNameFromBanner(String(bannerRow[0] || ''));
+      if (!hasSimpleBannerHeader || !teamName) continue;
+
+      const statsHeaders = statsTable.headers;
+      const qIndex = headerIndex(statsHeaders, ['q', 'negyed']);
+      const ptsIndex = headerIndex(statsHeaders, ['pts']);
+      if (qIndex < 0 || ptsIndex < 0) continue;
+
+      const rowTypeIndex = headerIndex(statsHeaders, ['row_type']);
+      const made2Index = headerIndex(statsHeaders, ['2p made']);
+      const att2Index = headerIndex(statsHeaders, ['2p att']);
+      const made3Index = headerIndex(statsHeaders, ['3p made']);
+      const att3Index = headerIndex(statsHeaders, ['3p att']);
+      const ftMadeIndex = headerIndex(statsHeaders, ['ft made']);
+      const ftAttIndex = headerIndex(statsHeaders, ['ft att']);
+      const orbIndex = headerIndex(statsHeaders, ['orb']);
+      const drbIndex = headerIndex(statsHeaders, ['drb']);
+      const tovIndex = headerIndex(statsHeaders, ['tov']);
+
+      const quarterAccumulator = new Map<number, number>();
+      let hasQuarterRows = false;
+
+      const teamTotals = {
+        points: 0,
+        fgm2: 0,
+        fga2: 0,
+        fgm3: 0,
+        fga3: 0,
+        ftm: 0,
+        fta: 0,
+        orb: 0,
+        drb: 0,
+        tov: 0,
+      };
+
+      (statsTable.rows || []).forEach(row => {
+        const qLabel = normalizeText(String(row[qIndex] || ''));
+        const rowTypeValue = rowTypeIndex >= 0 ? toIntSafe(String(row[rowTypeIndex] || '')) : null;
+
+        const quarterMatch = qLabel.match(/^q([1-4])$/);
+        if (quarterMatch) {
+          const quarter = Number.parseInt(quarterMatch[1], 10);
+          if (!Number.isFinite(quarter)) return;
+          if (rowTypeValue !== null && rowTypeValue !== 1) return;
+
+          const points = toIntSafe(String(row[ptsIndex] || ''));
+          quarterAccumulator.set(quarter, (quarterAccumulator.get(quarter) || 0) + points);
+          hasQuarterRows = true;
+          return;
+        }
+
+        const isTotalRow = qLabel === 'tot' || qLabel === 'ossz' || qLabel === 'total';
+        if (!isTotalRow) return;
+        if (rowTypeValue !== null && rowTypeValue !== 0) return;
+
+        teamTotals.points += toIntSafe(String(row[ptsIndex] || ''));
+        if (made2Index >= 0) teamTotals.fgm2 += toIntSafe(String(row[made2Index] || ''));
+        if (att2Index >= 0) teamTotals.fga2 += toIntSafe(String(row[att2Index] || ''));
+        if (made3Index >= 0) teamTotals.fgm3 += toIntSafe(String(row[made3Index] || ''));
+        if (att3Index >= 0) teamTotals.fga3 += toIntSafe(String(row[att3Index] || ''));
+        if (ftMadeIndex >= 0) teamTotals.ftm += toIntSafe(String(row[ftMadeIndex] || ''));
+        if (ftAttIndex >= 0) teamTotals.fta += toIntSafe(String(row[ftAttIndex] || ''));
+        if (orbIndex >= 0) teamTotals.orb += toIntSafe(String(row[orbIndex] || ''));
+        if (drbIndex >= 0) teamTotals.drb += toIntSafe(String(row[drbIndex] || ''));
+        if (tovIndex >= 0) teamTotals.tov += toIntSafe(String(row[tovIndex] || ''));
+      });
+
+      if (hasQuarterRows) {
+        let cumulative = 0;
+        [1, 2, 3, 4].forEach(quarter => {
+          const points = quarterAccumulator.get(quarter);
+          if (points === undefined) return;
+          cumulative += points;
+          const key = `${normalizeText(teamName)}::${quarter}`;
+          fallbackQuarter.set(key, {
+            season_id: seasonId,
+            kosarstat_game_id: gameId,
+            page_raw_id: pageRawId,
+            team_name: teamName,
+            team_side: getTeamSide(teamName, metadata),
+            quarter,
+            points,
+            cumulative_points: cumulative,
+            imported_at: importedAt,
+          });
+        });
+      }
+
+      if (teamTotals.points > 0 || teamTotals.fga2 + teamTotals.fga3 > 0) {
+        fallbackTeamTotals.set(normalizeText(teamName), teamTotals);
+      }
+    }
+
+    if (fallbackTeamTotals.size >= 1) {
+      const byTeam = Array.from(fallbackTeamTotals.entries());
+
+      byTeam.forEach(([teamKey, totals]) => {
+        const ownName = Array.from(fallbackQuarter.values()).find(row => normalizeText(row.team_name) === teamKey)?.team_name
+          || teamKey;
+
+        const opponent = byTeam.find(([otherKey]) => otherKey !== teamKey)?.[1] || null;
+        const fga = totals.fga2 + totals.fga3;
+        const fgm = totals.fgm2 + totals.fgm3;
+        const possRaw = fga + 0.44 * totals.fta + totals.tov - totals.orb;
+        const poss = possRaw > 0 ? possRaw : fga + 0.44 * totals.fta + totals.tov;
+
+        const ortg = poss > 0 ? (totals.points / poss) * 100 : null;
+        const efg = fga > 0 ? ((fgm + 0.5 * totals.fgm3) / fga) * 100 : null;
+        const tovPct = poss > 0 ? (totals.tov / poss) * 100 : null;
+        const orbPct = opponent && (totals.orb + opponent.drb) > 0
+          ? (totals.orb / (totals.orb + opponent.drb)) * 100
+          : null;
+        const ftmRate = fga > 0 ? totals.ftm / fga : null;
+
+        teamMetrics.push({
+          season_id: seasonId,
+          kosarstat_game_id: gameId,
+          page_raw_id: pageRawId,
+          team_name: ownName,
+          team_side: getTeamSide(ownName, metadata),
+          poss,
+          ortg,
+          efg,
+          tov_pct: tovPct,
+          orb_pct: orbPct,
+          ftm_rate: ftmRate,
+          imported_at: importedAt,
+        });
+      });
+    }
+  };
 
   tables.forEach(table => {
     const headers = table.headers.map(item => item.trim()).filter(Boolean);
@@ -654,6 +903,11 @@ const extractGameStatsFromTables = (
     });
   });
 
+  // Fallback: derive quarter/team metrics from per-player quarter tables on game_qrts pages.
+  if (quarterStats.length === 0 || teamMetrics.length === 0) {
+    readFallbackFromQuarterPlayerTables();
+  }
+
   const quarterKey = (row: QuarterStatRow) =>
     `${row.season_id}::${row.kosarstat_game_id}::${normalizeText(row.team_name)}::${row.quarter}`;
   const metricKey = (row: TeamMetricRow) =>
@@ -662,6 +916,11 @@ const extractGameStatsFromTables = (
   const uniqueQuarter = new Map<string, QuarterStatRow>();
   quarterStats.forEach(row => {
     uniqueQuarter.set(quarterKey(row), row);
+  });
+  fallbackQuarter.forEach((row, key) => {
+    if (!uniqueQuarter.has(key)) {
+      uniqueQuarter.set(key, row);
+    }
   });
 
   const uniqueMetrics = new Map<string, TeamMetricRow>();
@@ -737,6 +996,105 @@ const getSeasonGameIdsFromDatabase = async (seasonId: string) => {
   return Array.from(ids);
 };
 
+const getRoundMappedGameIds = async (seasonId: string, rounds: Set<number>, candidateGameIds: string[]) => {
+  if (rounds.size === 0) return new Set<string>();
+
+  const roundList = Array.from(rounds.values()).sort((a, b) => a - b);
+
+  // Preferred path: use Hunbasket round->date mapping from league fixtures,
+  // then collect Kosarstat game ids whose game date matches those fixture dates.
+  const { data: fixtureRows, error: fixtureError } = await supabase
+    .from('league_fixtures')
+    .select('round, game_date')
+    .eq('season_id', seasonId)
+    .in('round', roundList)
+    .not('game_date', 'is', null);
+
+  if (fixtureError) {
+    throw new Error(`DB round filter lookup failed (league_fixtures): ${formatSupabaseError(fixtureError)}`);
+  }
+
+  const targetDates = new Set<string>();
+  (fixtureRows || []).forEach(row => {
+    const dateRaw = String((row as { game_date?: string | null }).game_date || '').trim();
+    if (!dateRaw) return;
+    targetDates.add(dateRaw.slice(0, 10));
+  });
+
+  const normalizedCandidates = Array.from(new Set(candidateGameIds.map(item => String(item || '').trim()).filter(Boolean)));
+
+  if (targetDates.size > 0 && normalizedCandidates.length > 0) {
+    const filteredByGameIdDate = new Set<string>();
+    normalizedCandidates.forEach(gameId => {
+      const gameDate = extractDateFromKosarstatGameId(gameId);
+      if (gameDate && targetDates.has(gameDate)) {
+        filteredByGameIdDate.add(gameId);
+      }
+    });
+
+    if (filteredByGameIdDate.size > 0) {
+      console.log(
+        `Round mapping source: league_fixtures dates + kosarstat_game_id date (${targetDates.size} dates across rounds ${roundList.join(',')}).`
+      );
+      return filteredByGameIdDate;
+    }
+  }
+
+  if (targetDates.size > 0) {
+    const { data: gamesRowsByDate, error: gamesByDateError } = await supabase
+      .from('games')
+      .select('kosarstat_game_id, date')
+      .eq('season_id', seasonId)
+      .not('kosarstat_game_id', 'is', null)
+      .not('date', 'is', null)
+      .in('date', Array.from(targetDates.values()));
+
+    if (gamesByDateError) {
+      throw new Error(`DB round filter lookup failed (games by fixture dates): ${formatSupabaseError(gamesByDateError)}`);
+    }
+
+    const filteredByDate = new Set<string>();
+    (gamesRowsByDate || []).forEach(row => {
+      const gameId = String((row as { kosarstat_game_id?: string | null }).kosarstat_game_id || '').trim();
+      if (gameId) filteredByDate.add(gameId);
+    });
+
+    if (filteredByDate.size > 0) {
+      console.log(`Round mapping source: league_fixtures dates via games.date (${targetDates.size} dates across rounds ${roundList.join(',')}).`);
+      return filteredByDate;
+    }
+  }
+
+  console.warn(
+    `Round mapping fallback: no games matched via league_fixtures dates for rounds ${roundList.join(',')}; using games.round.`
+  );
+
+  const { data: gamesRows, error } = await supabase
+    .from('games')
+    .select('kosarstat_game_id, round')
+    .eq('season_id', seasonId)
+    .not('kosarstat_game_id', 'is', null)
+    .not('round', 'is', null);
+
+  if (error) {
+    throw new Error(`DB round filter lookup failed (games): ${formatSupabaseError(error)}`);
+  }
+
+  const filtered = new Set<string>();
+  (gamesRows || []).forEach(row => {
+    const gameId = String((row as { kosarstat_game_id?: string | null }).kosarstat_game_id || '').trim();
+    if (!gameId) return;
+
+    const roundValue = parseDbRound((row as { round?: unknown }).round);
+    if (roundValue === null) return;
+    if (rounds.has(roundValue)) {
+      filtered.add(gameId);
+    }
+  });
+
+  return filtered;
+};
+
 const getGameMissingState = async (seasonId: string, gameId: string) => {
   const { data: rawPages, error: rawPagesError } = await supabase
     .from('kosarstat_game_pages_raw')
@@ -772,6 +1130,55 @@ const getGameMissingState = async (seasonId: string, gameId: string) => {
     };
   }
 
+  const statsSourceRawIds = rows
+    .filter(row => {
+      const normalizedType = String(row.page_type || '').trim();
+      return normalizedType === 'game' || normalizedType === 'game_quarters' || normalizedType === 'game_result_chart';
+    })
+    .map(row => String(row.id || ''))
+    .filter(Boolean);
+
+  let hasQuarterSourceTable = false;
+  let hasTeamMetricSourceTable = false;
+
+  if (statsSourceRawIds.length > 0) {
+    const { data: sourceTables, error: sourceTablesError } = await supabase
+      .from('kosarstat_game_page_tables')
+      .select('headers')
+      .in('page_raw_id', statsSourceRawIds);
+
+    if (sourceTablesError) {
+      throw new Error(`Missing-state check failed (source tables): ${formatSupabaseError(sourceTablesError)}`);
+    }
+
+    (sourceTables || []).forEach(row => {
+      const headers = Array.isArray((row as { headers?: unknown }).headers)
+        ? ((row as { headers?: unknown[] }).headers || []).map(item => normalizeText(String(item || '')))
+        : [];
+      if (headers.length === 0) return;
+
+      const hasTeamCol = headers.some(header => header === 'csapat' || header.includes('csapat'));
+      const hasQ1 = headers.some(header => header === 'q1' || header.includes('q1'));
+      const hasQ2 = headers.some(header => header === 'q2' || header.includes('q2'));
+      const hasQ3 = headers.some(header => header === 'q3' || header.includes('q3'));
+      const hasQ4 = headers.some(header => header === 'q4' || header.includes('q4'));
+
+      if (hasTeamCol && hasQ1 && hasQ2 && hasQ3 && hasQ4) {
+        hasQuarterSourceTable = true;
+      }
+
+      const hasPoss = headers.some(header => header === 'poss' || header.includes('poss'));
+      const hasOrtg = headers.some(header => header === 'ortg' || header.includes('ortg'));
+      const hasEfg = headers.some(header => header === 'efg' || header.includes('efg'));
+      const hasTov = headers.some(header => header === 'tov' || header.includes('tov'));
+      const hasOrb = headers.some(header => header === 'orb' || header.includes('orb'));
+
+      if (hasTeamCol && hasPoss && hasOrtg && hasEfg && hasTov && hasOrb) {
+        hasTeamMetricSourceTable = true;
+      }
+    });
+  }
+
   const { count, error: missingError } = await supabase
     .from('kosarstat_game_page_tables')
     .select('id', { count: 'exact', head: true })
@@ -805,8 +1212,8 @@ const getGameMissingState = async (seasonId: string, gameId: string) => {
   }
 
   // Typical regulation games produce 8 quarter rows (2 teams x 4 quarters) and 2 team metric rows.
-  const missingQuarterStats = (quarterStatCount || 0) < 8;
-  const missingTeamMetrics = (teamMetricCount || 0) < 2;
+  const missingQuarterStats = hasQuarterSourceTable ? (quarterStatCount || 0) < 8 : false;
+  const missingTeamMetrics = hasTeamMetricSourceTable ? (teamMetricCount || 0) < 2 : false;
 
   return {
     alreadyImported,
@@ -1145,7 +1552,7 @@ const importOneGamePage = async (
 
   let quarterStatRows = 0;
   let teamMetricRows = 0;
-  if (pageType === 'game' || pageType === 'game_quarters') {
+  if (pageType === 'game' || pageType === 'game_quarters' || pageType === 'game_result_chart') {
     const extracted = extractGameStatsFromTables(seasonId, gameId, pageRawId, tables, metadata);
     quarterStatRows = extracted.quarterStats.length;
     teamMetricRows = extracted.teamMetrics.length;
@@ -1186,11 +1593,32 @@ const main = async () => {
     console.log(`Kosarstat game IDs loaded from DB: ${dbGameIds.length}`);
     console.log(`Kosarstat game IDs total to consider: ${allGameIds.length}`);
 
+    let filteredGameIds = [...allGameIds];
+
+    if (KOSARSTAT_ONLY_ROUNDS.size > 0) {
+      const roundMappedGameIds = await getRoundMappedGameIds(seasonId, KOSARSTAT_ONLY_ROUNDS, filteredGameIds);
+      filteredGameIds = filteredGameIds.filter(gameId => roundMappedGameIds.has(gameId));
+      const sortedRounds = Array.from(KOSARSTAT_ONLY_ROUNDS.values()).sort((a, b) => a - b);
+      console.log(
+        `Round filter active: rounds=${sortedRounds.join(',')} matched=${filteredGameIds.length}.`
+      );
+    }
+
+    if (KOSARSTAT_ONLY_GAME_IDS.length > 0) {
+      filteredGameIds = filteredGameIds.filter(gameId => KOSARSTAT_ONLY_GAME_IDS.includes(gameId));
+    }
+
+    if (KOSARSTAT_ONLY_GAME_IDS.length > 0) {
+      console.log(
+        `Game-id filter active: requested=${KOSARSTAT_ONLY_GAME_IDS.length}, matched=${filteredGameIds.length}.`
+      );
+    }
+
     const startIndex = Number.isFinite(KOSARSTAT_START_GAME_INDEX)
       ? Math.max(1, Math.floor(KOSARSTAT_START_GAME_INDEX))
       : 1;
-    const resumeOffset = Math.min(allGameIds.length, startIndex - 1);
-    const resumedGameIds = allGameIds.slice(resumeOffset);
+    const resumeOffset = Math.min(filteredGameIds.length, startIndex - 1);
+    const resumedGameIds = filteredGameIds.slice(resumeOffset);
     const gameIds = KOSARSTAT_GAME_LIMIT > 0
       ? resumedGameIds.slice(0, KOSARSTAT_GAME_LIMIT)
       : resumedGameIds;
@@ -1222,7 +1650,7 @@ const main = async () => {
 
     for (const [idx, gameId] of gameIds.entries()) {
       const absoluteIndex = resumeOffset + idx + 1;
-      console.log(`[${absoluteIndex}/${allGameIds.length}] game=${gameId}`);
+      console.log(`[${absoluteIndex}/${filteredGameIds.length}] game=${gameId}`);
 
       try {
         const missingState = await getGameMissingState(seasonId, gameId);
