@@ -15,6 +15,15 @@ type UpdateItem = {
 
 const updates: UpdateItem[] = [
   {
+    date: '2026. március 29.',
+    version: '1.7.4',
+    category: 'improvement',
+    icon: <BarChart3 className="w-5 h-5" />,
+    title: 'Post-game lineup fejlesztés + LLM stíluskapcsoló',
+    description:
+      'A Kosarstat post-game feldolgozás lineup oldalon stabilabb lett: javult az ötös adatválasztás, determinisztikus sorrendben történik a táblák értelmezése, és a jelentésbe bekerül a legerősebb/leggyengébb ötös, a kulcspáros, valamint a rotációs következmény. Az LLM mérkőzésértékelésnél új stíluskapcsoló érhető el (Szurkolóbarát / Balanced / Edzői), így azonos adatokból választhatóan olvasmányosabb vagy szakmaibb szöveg kérhető, kötelező lineup-értelmezéssel.',
+  },
+  {
     date: '2026. március 24.',
     version: '1.7.3',
     category: 'improvement',

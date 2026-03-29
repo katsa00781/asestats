@@ -32,12 +32,16 @@ Kritikus szabályok:
 - Csak a megadott adatokból dolgozhatsz.
 - Nem számolhatsz új statisztikát és nem találhatsz ki új tényt.
 - Tartsd a kért szerkezetet, de a megfogalmazás legyen természetes, narratív.
-- Magyar szaknyelvet használj, angol zsargont kerüld.`;
+- Magyar szaknyelvet használj, angol zsargont kerüld.
+- A hangnem legyen támogató és érthető: ne legyen bántó, ne hibáztass név szerint.
+- Úgy fogalmazz, mintha meccs után egy szurkolói műsorban magyaráznád az összefüggéseket.
+- Legyen emberi tónus, de maradjon adatvezérelt és szakmailag feszes.`;
 
 type GeneratePayload = {
   gameId: string;
   opponentName?: string;
   reportType?: 'pregame' | 'postgame' | 'combined';
+  stylePreset?: 'fan' | 'balanced' | 'coach';
   pregameReport: ScoutingReport;
   postgameReport: PostGameReport;
   generatedBy?: string | null;
@@ -79,9 +83,10 @@ const extractPostgameContext = (report: PostGameReport) => ({
   nextFocus: report.nextFocus,
   reflection: report.reflection,
   playerImpact: report.playerImpact,
+  lineupInsights: report.lineupInsights ?? null,
 });
 
-const formatInstructions = `Feladatod egy szurkolóbarát, jól olvasható szöveges mérkőzés-elemzés készítése a pre-game és post-game riportok alapján.
+const BASE_INSTRUCTIONS = `Feladatod egy szurkolóbarát, jól olvasható szöveges mérkőzés-elemzés készítése a pre-game és post-game riportok alapján.
 
 Kritikus szabályok:
 - Ne számolj új statisztikát és ne becsülj új esélyeket.
@@ -91,6 +96,9 @@ Kritikus szabályok:
 - Az X-faktor kontextust csak egyszer említsd meg, ne duplikáld sem a pre-, sem a post-game blokkból.
 - Narratív, leíró, olvasmányos hangnemben fogalmazz; minden blokk legyen legalább 2 összefüggő mondat.
 - A post-game értékelés során mindig köss össze adatot és következményt ("mert" szerkezet vagy ok-okozati fordulat).
+- Ha a post-game blokk tartalmaz lineupInsights mezőt, kötelező legalább 2 mondatban értelmezni az ötös statokat és azok taktikai/rotációs következményeit.
+- A hangvétel legyen szurkolóbarát: közérthető, de ne leegyszerűsítő; kritikát is építő módon fogalmazz meg.
+- Minden fő blokkban szerepeljen legalább egy konkrét szám vagy százalékpont-eltérés a kapott adatokból.
 - Adj konkrét edzői javaslatot arra, hogyan használható fel a tapasztalat a következő meccsen / visszavágón.
 
 Terminológiai egység:
@@ -109,30 +117,67 @@ Kötelező szerkezet (alcímeket is írd ki):
 Plusz elvárások:
 - Adj rövid indoklást arra, hogy melyik előzetes fókuszpont miért NEM vált döntővé (ha releváns).
 - Emeld ki, ha valamely kockázati jelző nem materializálódott, és miért.
+- Lineup adatoknál írd le: melyik ötös/páros hozott vagy veszített előnyt, és ez milyen konkrét rotációs döntést indokol.
+- Lineup adatoknál ne abszolút ítéletet írj, hanem valószínűsíthető mintázatot és alkalmazható következő lépést.
 - A záró tanulság mindig mutasson előre (edzésfókusz, rotáció, taktikai döntés), pozitív és érthető stílusban.
 - Használj kötőszavakat, amelyek segítik a logikus átmenetet ("emiatt", "ezért", "mivel").
+- Célzott számtartalom: a teljes szövegben 4-8 konkrét szám szerepeljen; ne legyen se száraz, se túl általános.
 
 Stíluselvárás:
 - A szöveg legyen olyan, amit egy szurkoló is szívesen végigolvas.
 - Kerüld a túl tömör, táblázatszagú mondatokat.
 - Rövidebb bekezdésekben, tiszta logikával írd le az összefüggéseket.
+- Alkalmazz világos történetívet: mi történt a pályán -> miért történt -> mit érdemes ebből továbbvinni.
+- Váltogasd a mondathosszt (rövid + közepes), hogy ne legyen monoton a szöveg.
+- Blokkonként 1-2 kulcsszámot emelj ki, és mindig tedd mellé a szakmai következményt.
+- Amikor kritikát fogalmazol, megoldási iránnyal zárd a gondolatot.
 
 Terjedelem: 14–20 mondat. Alkoss összefüggő, UI-ba illeszthető szöveget.`;
 
+const getStyleInstructions = (style: 'fan' | 'balanced' | 'coach') => {
+  if (style === 'fan') {
+    return `
+Stílusprofil: SZURKOLÓBARÁT
+- Közérthető, lendületes nyelv, erős átvezetésekkel.
+- Minden bekezdésben legyen legalább 1 konkrét adat, de a hangsúly a magyarázaton legyen.
+- Kerüld a túl technikai felsorolásokat, inkább meséld el, hogyan hatott a pályán.`;
+  }
+  if (style === 'coach') {
+    return `
+Stílusprofil: EDZŐI
+- Tömörebb, szakmaibb és döntéstámogató nyelv.
+- Minden fő blokkban kötelező legalább 2 konkrét adat vagy delta.
+- A javaslatok legyenek végrehajthatóak (rotáció, matchup, tempókontroll, lepattanófeladatok).`;
+  }
+  return `
+Stílusprofil: KIEGYENSÚLYOZOTT
+- Adatvezérelt, de olvasmányos hangnem.
+- Blokkonként 1-2 kulcsszám + egyértelmű következmény.
+- A szöveg legyen szakmailag feszes, mégis szurkoló számára követhető.`;
+};
+
+const resolveTemperature = (style: 'fan' | 'balanced' | 'coach') => {
+  if (style === 'fan') return 0.4;
+  if (style === 'coach') return 0.3;
+  return 0.36;
+};
+
 const buildUserPrompt = (payload: GeneratePayload) => {
+  const style = payload.stylePreset ?? 'balanced';
   const pregame = extractPregameContext(payload.pregameReport);
   const postgame = extractPostgameContext(payload.postgameReport);
   const contextBlock = {
     gameId: payload.gameId,
     opponentName: payload.opponentName ?? payload.pregameReport.opponentTeamName,
+    stylePreset: style,
     pregame,
     postgame,
   };
 
-  return `${formatInstructions}\n\n### KONKRÉT ADATOK JSON FORMÁBAN\n${JSON.stringify(contextBlock, null, 2)}`;
+  return `${BASE_INSTRUCTIONS}${getStyleInstructions(style)}\n\n### KONKRÉT ADATOK JSON FORMÁBAN\n${JSON.stringify(contextBlock, null, 2)}`;
 };
 
-const callOpenAi = async (prompt: string) => {
+const callOpenAi = async (prompt: string, style: 'fan' | 'balanced' | 'coach') => {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), MAX_RESPONSE_MS);
   try {
@@ -144,7 +189,7 @@ const callOpenAi = async (prompt: string) => {
       },
       body: JSON.stringify({
         model: OPENAI_MODEL,
-        temperature: 0.35,
+        temperature: resolveTemperature(style),
         messages: [
           { role: 'system', content: SYSTEM_PROMPT },
           { role: 'user', content: prompt },
@@ -183,8 +228,9 @@ export async function POST(request: Request) {
   }
 
   try {
+    const style = payload.stylePreset ?? 'balanced';
     const prompt = buildUserPrompt(payload);
-    const narrative = await callOpenAi(prompt);
+    const narrative = await callOpenAi(prompt, style);
     const reportType = payload.reportType ?? 'combined';
     const ownTeamId = resolveOwnTeamId(payload);
     const ownTeamName = resolveOwnTeamName(payload);

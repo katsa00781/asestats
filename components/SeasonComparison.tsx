@@ -1809,6 +1809,7 @@ export function SeasonComparison({
   const [textReportError, setTextReportError] = useState<string | null>(null);
   const [isLoadingTextReport, setIsLoadingTextReport] = useState(false);
   const [isGeneratingTextReport, setIsGeneratingTextReport] = useState(false);
+  const [textReportStyle, setTextReportStyle] = useState<'fan' | 'balanced' | 'coach'>('balanced');
   const [expandedPlayerImpactId, setExpandedPlayerImpactId] = useState<string | null>(null);
   const [playerNarratives, setPlayerNarratives] = useState<Record<string, PlayerNarrativeStatus>>({});
   const [teamNarrative, setTeamNarrative] = useState<TeamNarrativeStatus>({ status: 'idle' });
@@ -5750,15 +5751,100 @@ export function SeasonComparison({
       postgameShotContext ?? undefined
     );
 
-    if (kosarstatPostgameNotes.length === 0) {
+    const activeLineupTeam =
+      kosarstatLineupAnalysis?.selectedTeam ||
+      kosarstatLineupAnalysis?.homeTeam ||
+      kosarstatLineupAnalysis?.awayTeam ||
+      null;
+
+    const lineupInsights: PostGameReport['lineupInsights'] | undefined = (() => {
+      if (!activeLineupTeam) return undefined;
+
+      const validStints = activeLineupTeam.stints.filter(stint => stint.seconds > 0 && stint.players.length === 5);
+      const totalSeconds = validStints.reduce((sum, stint) => sum + stint.seconds, 0);
+      const totalMinutes = roundValue(totalSeconds / 60, 1);
+
+      const withDerived = validStints.map(stint => ({
+        ...stint,
+        netPer40: stint.seconds > 0 ? roundValue((stint.plusMinus * 2400) / stint.seconds, 1) : 0,
+      }));
+
+      const minSampleSeconds = 180;
+      const stableSample = withDerived.filter(stint => stint.seconds >= minSampleSeconds);
+      const topPool = stableSample.length > 0 ? stableSample : withDerived;
+      const topLineup = [...topPool].sort((a, b) => b.netPer40 - a.netPer40 || b.seconds - a.seconds)[0] || null;
+
+      const bottomCandidates = [...topPool]
+        .filter(stint => !topLineup || stint.players.join('|') !== topLineup.players.join('|'))
+        .sort((a, b) => a.netPer40 - b.netPer40 || b.seconds - a.seconds);
+      const bottomLineup = bottomCandidates[0] || null;
+
+      const pairPool = activeLineupTeam.pairStats.filter(item => item.seconds >= minSampleSeconds);
+      const topPairSource = (pairPool.length > 0 ? pairPool : activeLineupTeam.pairStats)
+        .slice()
+        .sort((a, b) => b.netPer40 - a.netPer40 || b.seconds - a.seconds)[0] || null;
+
+      const implications: string[] = [];
+      if (topLineup && topLineup.netPer40 >= 6) {
+        implications.push(`A legeredményesebb ötös (${topLineup.players.join(', ')}) jó ritmust hozott (${topLineup.netPer40.toFixed(1)} net/40), ezért érdemes ezt a felállást tudatosabban és korábban bevonni a rotációba.`);
+      }
+      if (bottomLineup && bottomLineup.netPer40 <= -6) {
+        implications.push(`A kevésbé működő ötös (${bottomLineup.players.join(', ')}) ebben a meccsképben nehezebben találta az előnyöket (${bottomLineup.netPer40.toFixed(1)} net/40), ezért ellenfélfüggő szerep- vagy párosítási finomhangolás javasolt.`);
+      }
+      if (topLineup && bottomLineup) {
+        const spread = roundValue(topLineup.netPer40 - bottomLineup.netPer40, 1);
+        if (spread >= 10) {
+          implications.push(`Jelentős különbség látszott az ötösök között (${spread.toFixed(1)} net/40), emiatt a csereegységek időzítése és szerkezete fontos meccsfaktor lehetett.`);
+        }
+      }
+      if (topPairSource && topPairSource.netPer40 >= 6) {
+        implications.push(`A legerősebb páros (${topPairSource.players.join(' + ')}) együtt stabilabban termelte az előnyt, ezért célszerű tudatosan közös perceket adni nekik.`);
+      }
+      if (totalMinutes < 12) {
+        implications.push('A lineup minta korlátozott játékidőből áll össze, ezért az értékelés irányadó, de nem végleges ítélet.');
+      }
+
+      return {
+        available: validStints.length > 0,
+        totalStints: validStints.length,
+        totalMinutes,
+        topLineup: topLineup
+          ? {
+              players: topLineup.players,
+              minutes: roundValue(topLineup.seconds / 60, 1),
+              plusMinus: topLineup.plusMinus,
+              netPer40: topLineup.netPer40,
+            }
+          : null,
+        bottomLineup: bottomLineup
+          ? {
+              players: bottomLineup.players,
+              minutes: roundValue(bottomLineup.seconds / 60, 1),
+              plusMinus: bottomLineup.plusMinus,
+              netPer40: bottomLineup.netPer40,
+            }
+          : null,
+        topPair: topPairSource
+          ? {
+              players: topPairSource.players,
+              minutes: roundValue(topPairSource.seconds / 60, 1),
+              netPer40: roundValue(topPairSource.netPer40, 1),
+            }
+          : null,
+        implications,
+      };
+    })();
+
+    if (kosarstatPostgameNotes.length === 0 && !lineupInsights) {
       return baseReport;
     }
 
     return {
       ...baseReport,
       dataNotes: [...baseReport.dataNotes, ...kosarstatPostgameNotes],
+      lineupInsights,
     };
-  }, [kosarstatPostgameNotes, league, playerGameStats, postgameBenchmarks, postgameShotContext, pregameReport, rolesByPlayerId, seasonPlayers, selectedGame, resolvedTeamId, selectedTeamStats]);
+  }, [kosarstatLineupAnalysis, kosarstatPostgameNotes, league, playerGameStats, postgameBenchmarks, postgameShotContext, pregameReport, rolesByPlayerId, seasonPlayers, selectedGame, resolvedTeamId, selectedTeamStats]);
 
   const activeKosarstatTeamAnalysis = useMemo(() => {
     if (!kosarstatLineupAnalysis) return null;
@@ -6453,9 +6539,10 @@ export function SeasonComparison({
           gameId: selectedGame.id,
           opponentName: selectedGame.opponent,
           reportType: 'combined',
+          stylePreset: textReportStyle,
           pregameReport,
           postgameReport,
-          generatedBy: 'season-comparison-ui',
+          generatedBy: `season-comparison-ui:${textReportStyle}`,
         }),
       });
 
@@ -10566,6 +10653,26 @@ export function SeasonComparison({
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-1 rounded-md border border-slate-700 bg-slate-900/60 p-1">
+              {[
+                { key: 'fan', label: 'Szurkolóbarát' },
+                { key: 'balanced', label: 'Balanced' },
+                { key: 'coach', label: 'Edzői' },
+              ].map(option => (
+                <Button
+                  key={`postgame-style-${option.key}`}
+                  type="button"
+                  size="sm"
+                  variant={textReportStyle === option.key ? 'default' : 'outline'}
+                  className={textReportStyle === option.key
+                    ? 'h-7 px-2 bg-cyan-300 text-slate-900 hover:bg-cyan-200'
+                    : 'h-7 px-2 border-slate-700 text-slate-300 hover:bg-slate-800'}
+                  onClick={() => setTextReportStyle(option.key as 'fan' | 'balanced' | 'coach')}
+                >
+                  {option.label}
+                </Button>
+              ))}
+            </div>
             <Button
               type="button"
               onClick={handleGenerateTextReport}
@@ -10587,7 +10694,7 @@ export function SeasonComparison({
                 if (textReportMeta.generatedAt) {
                   return `Utolsó mentés: ${formatGeneratedAt(textReportMeta.generatedAt) ?? 'ismeretlen időpont'}`;
                 }
-                return 'Generálj egy szöveges összefoglalót, amit automatikusan el is mentünk.';
+                return `Aktív stílus: ${textReportStyle === 'fan' ? 'szurkolóbarát' : textReportStyle === 'coach' ? 'edzői' : 'kiegyensúlyozott'}. Generálj egy szöveges összefoglalót, amit automatikusan el is mentünk.`;
               })()}
             </div>
           </div>

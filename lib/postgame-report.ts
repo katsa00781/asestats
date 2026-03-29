@@ -147,6 +147,29 @@ export type PostGameReport = {
     xFactor: string;
     risk: string;
   };
+  lineupInsights?: {
+    available: boolean;
+    totalStints: number;
+    totalMinutes: number;
+    topLineup?: {
+      players: string[];
+      minutes: number;
+      plusMinus: number;
+      netPer40: number;
+    } | null;
+    bottomLineup?: {
+      players: string[];
+      minutes: number;
+      plusMinus: number;
+      netPer40: number;
+    } | null;
+    topPair?: {
+      players: string[];
+      minutes: number;
+      netPer40: number;
+    } | null;
+    implications: string[];
+  };
   summary: string;
 };
 
