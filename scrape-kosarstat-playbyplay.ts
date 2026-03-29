@@ -57,6 +57,33 @@ type MergeTablesResult = {
   updatedMetadata: number;
 };
 
+type QuarterStatRow = {
+  season_id: string;
+  kosarstat_game_id: string;
+  page_raw_id: string;
+  team_name: string;
+  team_side: 'home' | 'away' | 'unknown';
+  quarter: number;
+  points: number | null;
+  cumulative_points: number | null;
+  imported_at: string;
+};
+
+type TeamMetricRow = {
+  season_id: string;
+  kosarstat_game_id: string;
+  page_raw_id: string;
+  team_name: string;
+  team_side: 'home' | 'away' | 'unknown';
+  poss: number | null;
+  ortg: number | null;
+  efg: number | null;
+  tov_pct: number | null;
+  orb_pct: number | null;
+  ftm_rate: number | null;
+  imported_at: string;
+};
+
 const formatSupabaseError = (error: unknown) => {
   if (!error) return 'unknown error';
   if (error instanceof Error) return error.message;
@@ -493,6 +520,187 @@ const detectPageType = (url: string) => {
   return 'game';
 };
 
+const normalizeText = (value: string) =>
+  String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const parseNumeric = (value: string) => {
+  const normalized = String(value || '')
+    .replace(/\s+/g, '')
+    .replace(',', '.')
+    .replace('%', '');
+  if (!normalized) return null;
+  const num = Number.parseFloat(normalized);
+  return Number.isFinite(num) ? num : null;
+};
+
+const getTeamSide = (teamName: string, metadata: RawPageMetadata): 'home' | 'away' | 'unknown' => {
+  const normalized = normalizeText(teamName);
+  if (!normalized) return 'unknown';
+
+  const home = normalizeText(metadata.homeTeamName || '');
+  const away = normalizeText(metadata.awayTeamName || '');
+  if (home && (normalized === home || normalized.includes(home) || home.includes(normalized))) return 'home';
+  if (away && (normalized === away || normalized.includes(away) || away.includes(normalized))) return 'away';
+  return 'unknown';
+};
+
+const headerIndex = (headers: string[], candidates: string[]) => {
+  const normalized = headers.map(h => normalizeText(h));
+  for (let i = 0; i < normalized.length; i += 1) {
+    const current = normalized[i];
+    if (candidates.some(candidate => current === candidate || current.includes(candidate))) {
+      return i;
+    }
+  }
+  return -1;
+};
+
+const extractGameStatsFromTables = (
+  seasonId: string,
+  gameId: string,
+  pageRawId: string,
+  tables: ExtractedTable[],
+  metadata: RawPageMetadata
+) => {
+  const importedAt = new Date().toISOString();
+  const quarterStats: QuarterStatRow[] = [];
+  const teamMetrics: TeamMetricRow[] = [];
+
+  tables.forEach(table => {
+    const headers = table.headers.map(item => item.trim()).filter(Boolean);
+    const normalizedHeaders = headers.map(item => normalizeText(item));
+
+    const hasTeamCol = normalizedHeaders.some(header => header === 'csapat' || header.includes('csapat'));
+    if (!hasTeamCol) return;
+
+    const quarterHeaderCount = normalizedHeaders.filter(header => /^q[1-4]$/.test(header)).length;
+
+    if (quarterHeaderCount >= 4) {
+      table.rows.forEach(row => {
+        const teamName = String(row[0] || '').trim();
+        if (!teamName || normalizeText(teamName) === 'csapat') return;
+
+        const values = row
+          .slice(1)
+          .map(cell => parseNumeric(cell))
+          .filter((num): num is number => typeof num === 'number');
+
+        if (values.length < 4) return;
+
+        const quarterPoints = values.slice(0, 4);
+        const cumulative = values.length >= 8 ? values.slice(4, 8) : null;
+        const teamSide = getTeamSide(teamName, metadata);
+
+        quarterPoints.forEach((points, quarterIndex) => {
+          quarterStats.push({
+            season_id: seasonId,
+            kosarstat_game_id: gameId,
+            page_raw_id: pageRawId,
+            team_name: teamName,
+            team_side: teamSide,
+            quarter: quarterIndex + 1,
+            points: Number.isFinite(points) ? Math.round(points) : null,
+            cumulative_points:
+              cumulative && Number.isFinite(cumulative[quarterIndex])
+                ? Math.round(cumulative[quarterIndex])
+                : null,
+            imported_at: importedAt,
+          });
+        });
+      });
+      return;
+    }
+
+    const possIndex = headerIndex(headers, ['poss']);
+    const ortgIndex = headerIndex(headers, ['ortg']);
+    const efgIndex = headerIndex(headers, ['efg']);
+    const tovIndex = headerIndex(headers, ['tov']);
+    const orbIndex = headerIndex(headers, ['orb']);
+    const ftmRateIndex = headerIndex(headers, ['ftm rate', 'ftm']);
+
+    const canParseMetrics =
+      possIndex >= 0 &&
+      ortgIndex >= 0 &&
+      efgIndex >= 0 &&
+      tovIndex >= 0 &&
+      orbIndex >= 0 &&
+      ftmRateIndex >= 0;
+
+    if (!canParseMetrics) return;
+
+    table.rows.forEach(row => {
+      const teamName = String(row[0] || '').trim();
+      if (!teamName || normalizeText(teamName) === 'csapat') return;
+
+      teamMetrics.push({
+        season_id: seasonId,
+        kosarstat_game_id: gameId,
+        page_raw_id: pageRawId,
+        team_name: teamName,
+        team_side: getTeamSide(teamName, metadata),
+        poss: parseNumeric(row[possIndex] || ''),
+        ortg: parseNumeric(row[ortgIndex] || ''),
+        efg: parseNumeric(row[efgIndex] || ''),
+        tov_pct: parseNumeric(row[tovIndex] || ''),
+        orb_pct: parseNumeric(row[orbIndex] || ''),
+        ftm_rate: parseNumeric(row[ftmRateIndex] || ''),
+        imported_at: importedAt,
+      });
+    });
+  });
+
+  const quarterKey = (row: QuarterStatRow) =>
+    `${row.season_id}::${row.kosarstat_game_id}::${normalizeText(row.team_name)}::${row.quarter}`;
+  const metricKey = (row: TeamMetricRow) =>
+    `${row.season_id}::${row.kosarstat_game_id}::${normalizeText(row.team_name)}`;
+
+  const uniqueQuarter = new Map<string, QuarterStatRow>();
+  quarterStats.forEach(row => {
+    uniqueQuarter.set(quarterKey(row), row);
+  });
+
+  const uniqueMetrics = new Map<string, TeamMetricRow>();
+  teamMetrics.forEach(row => {
+    uniqueMetrics.set(metricKey(row), row);
+  });
+
+  return {
+    quarterStats: Array.from(uniqueQuarter.values()),
+    teamMetrics: Array.from(uniqueMetrics.values()),
+  };
+};
+
+const upsertGameStats = async (quarterStats: QuarterStatRow[], teamMetrics: TeamMetricRow[]) => {
+  if (quarterStats.length > 0) {
+    const { error } = await supabase
+      .from('kosarstat_game_quarter_stats')
+      .upsert(quarterStats, { onConflict: 'season_id,kosarstat_game_id,team_name,quarter' });
+
+    if (error) {
+      throw new Error(
+        `Quarter stat upsert failed: ${formatSupabaseError(error)}. Futtasd a supabase-kosarstat-pbp-tables.sql frissitett verziojat.`
+      );
+    }
+  }
+
+  if (teamMetrics.length > 0) {
+    const { error } = await supabase
+      .from('kosarstat_game_team_metrics')
+      .upsert(teamMetrics, { onConflict: 'season_id,kosarstat_game_id,team_name' });
+
+    if (error) {
+      throw new Error(
+        `Team metric upsert failed: ${formatSupabaseError(error)}. Futtasd a supabase-kosarstat-pbp-tables.sql frissitett verziojat.`
+      );
+    }
+  }
+};
+
 const getSeasonGameIdsFromDatabase = async (seasonId: string) => {
   const ids = new Set<string>();
 
@@ -558,6 +766,8 @@ const getGameMissingState = async (seasonId: string, gameId: string) => {
       alreadyImported,
       missingPageTypes,
       missingTableMetadata: true,
+      missingQuarterStats: true,
+      missingTeamMetrics: true,
       needsRefresh: true,
     };
   }
@@ -574,11 +784,41 @@ const getGameMissingState = async (seasonId: string, gameId: string) => {
 
   const missingTableMetadata = (count || 0) > 0;
 
+  const { count: quarterStatCount, error: quarterStatError } = await supabase
+    .from('kosarstat_game_quarter_stats')
+    .select('id', { count: 'exact', head: true })
+    .eq('season_id', seasonId)
+    .eq('kosarstat_game_id', gameId);
+
+  if (quarterStatError) {
+    throw new Error(`Missing-state check failed (quarter stats): ${formatSupabaseError(quarterStatError)}`);
+  }
+
+  const { count: teamMetricCount, error: teamMetricError } = await supabase
+    .from('kosarstat_game_team_metrics')
+    .select('id', { count: 'exact', head: true })
+    .eq('season_id', seasonId)
+    .eq('kosarstat_game_id', gameId);
+
+  if (teamMetricError) {
+    throw new Error(`Missing-state check failed (team metrics): ${formatSupabaseError(teamMetricError)}`);
+  }
+
+  // Typical regulation games produce 8 quarter rows (2 teams x 4 quarters) and 2 team metric rows.
+  const missingQuarterStats = (quarterStatCount || 0) < 8;
+  const missingTeamMetrics = (teamMetricCount || 0) < 2;
+
   return {
     alreadyImported,
     missingPageTypes,
     missingTableMetadata,
-    needsRefresh: missingPageTypes.length > 0 || missingTableMetadata,
+    missingQuarterStats,
+    missingTeamMetrics,
+    needsRefresh:
+      missingPageTypes.length > 0 ||
+      missingTableMetadata ||
+      missingQuarterStats ||
+      missingTeamMetrics,
   };
 };
 
@@ -903,11 +1143,24 @@ const importOneGamePage = async (
   });
   const mergeResult = await mergePageTables(pageRawId, tables);
 
+  let quarterStatRows = 0;
+  let teamMetricRows = 0;
+  if (pageType === 'game' || pageType === 'game_quarters') {
+    const extracted = extractGameStatsFromTables(seasonId, gameId, pageRawId, tables, metadata);
+    quarterStatRows = extracted.quarterStats.length;
+    teamMetricRows = extracted.teamMetrics.length;
+    if (quarterStatRows > 0 || teamMetricRows > 0) {
+      await upsertGameStats(extracted.quarterStats, extracted.teamMetrics);
+    }
+  }
+
   return {
     pageType,
     tableCount: tables.length,
     insertedTables: mergeResult.inserted,
     updatedMetadata: mergeResult.updatedMetadata,
+    quarterStatRows,
+    teamMetricRows,
   };
 };
 
@@ -987,7 +1240,7 @@ const main = async () => {
             ? missingState.missingPageTypes.join(', ')
             : 'none';
           console.log(
-            `  REFRESH missing parts (missing pages: ${missingPagesLabel}; missing table metadata: ${missingState.missingTableMetadata ? 'yes' : 'no'})`
+            `  REFRESH missing parts (missing pages: ${missingPagesLabel}; missing table metadata: ${missingState.missingTableMetadata ? 'yes' : 'no'}; missing quarter stats: ${missingState.missingQuarterStats ? 'yes' : 'no'}; missing team metrics: ${missingState.missingTeamMetrics ? 'yes' : 'no'})`
           );
         }
 
@@ -1010,7 +1263,7 @@ const main = async () => {
               refreshedPages += 1;
             }
             console.log(
-              `  OK ${result.pageType} tables=${result.tableCount} inserted=${result.insertedTables} metaUpdated=${result.updatedMetadata}`
+              `  OK ${result.pageType} tables=${result.tableCount} inserted=${result.insertedTables} metaUpdated=${result.updatedMetadata} qStats=${result.quarterStatRows} teamMetrics=${result.teamMetricRows}`
             );
           } catch (error) {
             gamePageFailures += 1;

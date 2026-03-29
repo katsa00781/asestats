@@ -100,9 +100,14 @@ const classifyMinutesBucket = (minutes: number): PlayerMinutesBucket => {
   return 'micro';
 };
 
-const classifyUsageTier = (usageShare: number): PlayerUsageTier => {
-  if (usageShare >= 0.27) return 'high';
-  if (usageShare >= 0.18) return 'balanced';
+const classifyUsageTier = (usageShare: number, activePlayers: number): PlayerUsageTier => {
+  const safeActivePlayers = Math.max(activePlayers, 5);
+  const baselineShare = 1 / safeActivePlayers;
+  const highThreshold = Math.max(0.16, baselineShare * 1.35);
+  const balancedThreshold = Math.max(0.11, baselineShare * 0.95);
+
+  if (usageShare >= highThreshold) return 'high';
+  if (usageShare >= balancedThreshold) return 'balanced';
   return 'low';
 };
 
@@ -277,6 +282,8 @@ export const buildPlayerPostGameReport = (
   players: PlayerGameStat[],
   shotMapContext?: PlayerShotMapContext
 ): PlayerPostGameReport => {
+  const activePlayers = players.filter(player => player.minutes > 0).length;
+
   const starterIds = new Set(
     [...players]
       .filter(player => player.minutes > 0)
@@ -303,7 +310,7 @@ export const buildPlayerPostGameReport = (
     const minutesBucket = classifyMinutesBucket(player.minutes);
     const usage = computePlayerUsage(player);
     const usageShare = totals.usage > 0 ? usage / totals.usage : 0;
-    const usageTier = classifyUsageTier(usageShare);
+    const usageTier = classifyUsageTier(usageShare, activePlayers);
     const tsPct = computeTrueShooting(player);
     const valPer36 = player.minutes > 0 ? (player.val / player.minutes) * 36 : player.val;
     const reboundShare = totals.rebounds > 0 ? (player.oreb + player.dreb) / totals.rebounds : 0;
