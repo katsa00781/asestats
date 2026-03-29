@@ -2,6 +2,7 @@
 
 import { TerminologyGlossary } from './TerminologyGlossary';
 import Image from 'next/image';
+import { Loader2 } from 'lucide-react';
 
 import { useEffect, useMemo, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, Cell, LabelList, Legend, Line, LineChart, ResponsiveContainer, Scatter, ScatterChart, Tooltip, XAxis, YAxis, ZAxis } from 'recharts';
@@ -59,7 +60,6 @@ type SeasonComparisonProps = {
   allTeams: { id: string; name: string }[];
   currentSeasonId?: string | null;
   currentTeamId?: string | null;
-  currentTeamPlayers: PlayerStats[];
   games: TeamGame[];
   playerGameStats: GamePlayerStatRow[];
 };
@@ -119,6 +119,648 @@ type StandingsSnapshotRow = {
   scored: number;
   conceded: number;
   points: number;
+  pointsAgainst: number;
+};
+
+type KosarstatLineupTableRow = {
+  rows?: unknown;
+  headers?: unknown;
+  source_table_dom_id?: unknown;
+  table_index?: unknown;
+};
+
+type KosarstatPlayerMinuteStat = {
+  player: string;
+  minutesLabel: string;
+  seconds: number;
+  plusMinus: number | null;
+  on40: number | null;
+  teamPts: number | null;
+  oppPts: number | null;
+};
+
+type KosarstatSubEvent = {
+  gameSecond: number;
+  minute: number;
+  clockLabel: string;
+  type: 'in' | 'out';
+  player: string;
+};
+
+type KosarstatPlayerTimeline = {
+  player: string;
+  minuteCodes: string[];
+  minutesLabel: string;
+  seconds: number;
+  plusMinus: number | null;
+  subInMinutes: number[];
+  subOutMinutes: number[];
+};
+
+type KosarstatLineupStint = {
+  players: string[];
+  minutesLabel: string;
+  seconds: number;
+  teamPts: number;
+  oppPts: number;
+  plusMinus: number;
+  on40: number | null;
+};
+
+type KosarstatComboStat = {
+  key: string;
+  players: string[];
+  stints: number;
+  seconds: number;
+  minutesLabel: string;
+  plusMinus: number;
+  netPer40: number;
+  offPer40: number;
+  defPer40: number;
+  assists: null;
+};
+
+type KosarstatTeamLineupAnalysis = {
+  teamName: string;
+  starters: string[];
+  playerMinutes: KosarstatPlayerMinuteStat[];
+  playerTimelines: KosarstatPlayerTimeline[];
+  substitutions: KosarstatSubEvent[];
+  stints: KosarstatLineupStint[];
+  pairStats: KosarstatComboStat[];
+  trioStats: KosarstatComboStat[];
+};
+
+type KosarstatLineupAnalysis = {
+  gameId: string;
+  selectedTeam: KosarstatTeamLineupAnalysis | null;
+  homeTeam: KosarstatTeamLineupAnalysis | null;
+  awayTeam: KosarstatTeamLineupAnalysis | null;
+};
+
+const parseSignedNumber = (value: unknown) => {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value !== 'string') return null;
+  const normalized = value.trim().replace(',', '.').replace(/^\+/, '');
+  if (!/^[-+]?\d+(?:\.\d+)?$/.test(normalized)) return null;
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const parseMmSsToSeconds = (value: unknown) => {
+  if (typeof value !== 'string') return 0;
+  const text = value.trim();
+  const match = text.match(/^(\d{1,2}):(\d{2})$/);
+  if (!match) return 0;
+  const minutes = Number(match[1]);
+  const seconds = Number(match[2]);
+  if (!Number.isFinite(minutes) || !Number.isFinite(seconds)) return 0;
+  return minutes * 60 + seconds;
+};
+
+const formatSecondsAsMmSs = (seconds: number) => {
+  const safe = Math.max(0, Math.round(seconds));
+  const mm = Math.floor(safe / 60);
+  const ss = safe % 60;
+  return `${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}`;
+};
+
+const formatElapsedGameClock = (elapsedSeconds: number) => {
+  const totalSeconds = Math.max(0, Math.round(elapsedSeconds));
+  const periodLengthSeconds = 10 * 60;
+  const maxRegulationSeconds = 40 * 60;
+  const bounded = Math.min(totalSeconds, maxRegulationSeconds);
+
+  const period = Math.min(4, Math.floor(bounded / periodLengthSeconds) + 1);
+  const periodStart = (period - 1) * periodLengthSeconds;
+  const inPeriodElapsed = Math.max(0, bounded - periodStart);
+  const remainingInPeriod = Math.max(0, periodLengthSeconds - inPeriodElapsed);
+
+  return `Q${period} ${formatSecondsAsMmSs(remainingInPeriod)}`;
+};
+
+const buildComboStats = (stints: KosarstatLineupStint[], comboSize: 2 | 3): KosarstatComboStat[] => {
+  const aggregate = new Map<string, { players: string[]; stints: number; seconds: number; plusMinus: number; teamPts: number; oppPts: number }>();
+
+  const combinations = (items: string[], size: number): string[][] => {
+    const out: string[][] = [];
+    const walk = (start: number, current: string[]) => {
+      if (current.length === size) {
+        out.push([...current]);
+        return;
+      }
+      for (let i = start; i < items.length; i += 1) {
+        current.push(items[i]);
+        walk(i + 1, current);
+        current.pop();
+      }
+    };
+    walk(0, []);
+    return out;
+  };
+
+  stints.forEach(stint => {
+    if (stint.players.length < comboSize || stint.seconds <= 0) return;
+    const combos = combinations(stint.players, comboSize);
+    combos.forEach(players => {
+      const key = [...players].sort().join(' | ');
+      const existing = aggregate.get(key) || {
+        players: [...players].sort(),
+        stints: 0,
+        seconds: 0,
+        plusMinus: 0,
+        teamPts: 0,
+        oppPts: 0,
+      };
+
+      existing.stints += 1;
+      existing.seconds += stint.seconds;
+      existing.plusMinus += stint.plusMinus;
+      existing.teamPts += stint.teamPts;
+      existing.oppPts += stint.oppPts;
+      aggregate.set(key, existing);
+    });
+  });
+
+  return Array.from(aggregate.entries())
+    .map(([key, value]) => {
+      const per40Factor = value.seconds > 0 ? 2400 / value.seconds : 0;
+      return {
+        key,
+        players: value.players,
+        stints: value.stints,
+        seconds: value.seconds,
+        minutesLabel: formatSecondsAsMmSs(value.seconds),
+        plusMinus: value.plusMinus,
+        netPer40: (value.teamPts - value.oppPts) * per40Factor,
+        offPer40: value.teamPts * per40Factor,
+        defPer40: value.oppPts * per40Factor,
+        assists: null,
+      };
+    })
+    .sort((a, b) => b.netPer40 - a.netPer40 || b.seconds - a.seconds);
+};
+
+const parseKosarstatTeamLineupAnalysis = (
+  teamName: string,
+  teamTables: Array<{ headers: string[]; rows: unknown[][]; sourceTableDomId: string | null }>
+): KosarstatTeamLineupAnalysis => {
+  const isInvalidPlayerLabel = (value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed) return true;
+    if (/^\d+$/.test(trimmed)) return true;
+    if (/^(?:j[aá]t[eé]kos|player)$/i.test(trimmed)) return true;
+    return false;
+  };
+
+  const isLikelyMinuteGridTable = (table: { headers: string[]; rows: unknown[][] }) => {
+    const row = table.rows.find(item => Array.isArray(item)) as unknown[] | undefined;
+    if (!row || row.length < 8) return false;
+    const cells = row.map(cell => String(cell ?? '').trim());
+    const hasPlayerAndMinute = cells.includes('Játékos') && cells.includes('Perc');
+    const numericMinuteMarkers = cells.filter(cell => /^\d{1,2}$/.test(cell) && Number(cell) >= 1 && Number(cell) <= 40);
+    return hasPlayerAndMinute && numericMinuteMarkers.length >= 10;
+  };
+
+  const getMinuteColumnIndexes = (table: { headers: string[]; rows: unknown[][] }) => {
+    const fromHeaders = table.headers
+      .map((header, index) => ({ header, index }))
+      .filter(item => /^\d{1,2}$/.test(item.header) && Number(item.header) >= 1 && Number(item.header) <= 40)
+      .sort((a, b) => Number(a.header) - Number(b.header));
+
+    if (fromHeaders.length > 0) {
+      return fromHeaders;
+    }
+
+    const headerLikeRow = table.rows.find(item => {
+      if (!Array.isArray(item)) return false;
+      const cells = item.map(cell => String(cell ?? '').trim());
+      return cells.includes('Játékos') && cells.includes('Perc') && cells.some(cell => /^\d{1,2}$/.test(cell));
+    }) as unknown[] | undefined;
+
+    if (!headerLikeRow) return [] as Array<{ header: string; index: number }>;
+
+    const cells = headerLikeRow.map(cell => String(cell ?? '').trim());
+    const hasLeadingOrder = /^\d+$/.test(cells[0] || '') && cells.includes('Játékos') && cells.includes('Perc');
+    const headerBaseOffset = hasLeadingOrder ? 1 : 0;
+
+    return cells
+      .map((cell, index) => ({ header: cell, index: index - headerBaseOffset }))
+      .filter(item => item.index >= 0 && /^\d{1,2}$/.test(item.header) && Number(item.header) >= 1 && Number(item.header) <= 40)
+      .sort((a, b) => Number(a.header) - Number(b.header));
+  };
+
+  const playerSummaryCandidates = teamTables.filter(table => table.headers.includes('Játékos') && table.headers.includes('Min') && table.headers.includes('On40'));
+  const minuteGrid =
+    teamTables.find(table => table.sourceTableDomId === 'table_7' || table.sourceTableDomId === 'table_12') ||
+    teamTables.find(table => table.headers.includes('Perc') && table.headers.includes('1') && table.headers.includes('40')) ||
+    teamTables.find(table => isLikelyMinuteGridTable(table));
+  const fiveMan = teamTables.find(table => table.headers.includes('PG') && table.headers.includes('SG') && table.headers.includes('SF') && table.headers.includes('PF') && table.headers.includes('C') && table.headers.some(h => h.includes('On +/-')));
+
+  const parsePlayerSummaryTable = (table: { headers: string[]; rows: unknown[][] }) => {
+    const list: KosarstatPlayerMinuteStat[] = [];
+    const idx = {
+      player: table.headers.indexOf('Játékos'),
+      min: table.headers.indexOf('Min'),
+      teamPts: table.headers.indexOf('Team PTS'),
+      oppPts: table.headers.indexOf('Opp. PTS'),
+      pm: table.headers.indexOf('+/-'),
+      on40: table.headers.findIndex(h => h.toLowerCase() === 'on40' || h.toLowerCase() === 'on 40'),
+    };
+
+    table.rows.forEach(rawRow => {
+      if (!Array.isArray(rawRow)) return;
+      const player = String(rawRow[idx.player] || '').trim();
+      const minutesLabel = String(rawRow[idx.min] || '').trim();
+      if (!minutesLabel || player === 'Játékos' || isInvalidPlayerLabel(player)) return;
+
+      list.push({
+        player,
+        minutesLabel,
+        seconds: parseMmSsToSeconds(minutesLabel),
+        plusMinus: parseSignedNumber(rawRow[idx.pm]),
+        on40: parseSignedNumber(rawRow[idx.on40]),
+        teamPts: parseSignedNumber(rawRow[idx.teamPts]),
+        oppPts: parseSignedNumber(rawRow[idx.oppPts]),
+      });
+    });
+
+    return list.sort((a, b) => b.seconds - a.seconds);
+  };
+
+  const playerMinutes: KosarstatPlayerMinuteStat[] = [];
+
+  const stints: KosarstatLineupStint[] = [];
+  if (fiveMan) {
+    const idx = {
+      pg: fiveMan.headers.indexOf('PG'),
+      sg: fiveMan.headers.indexOf('SG'),
+      sf: fiveMan.headers.indexOf('SF'),
+      pf: fiveMan.headers.indexOf('PF'),
+      c: fiveMan.headers.indexOf('C'),
+      min: fiveMan.headers.indexOf('Min'),
+      teamPts: fiveMan.headers.indexOf('Team PTS'),
+      oppPts: fiveMan.headers.indexOf('Opp. PTS'),
+      pm: fiveMan.headers.findIndex(h => h.includes('On +/-')),
+      on40: fiveMan.headers.findIndex(h => h.includes('On 40')),
+    };
+
+    fiveMan.rows.forEach(rawRow => {
+      if (!Array.isArray(rawRow)) return;
+      const players = [rawRow[idx.pg], rawRow[idx.sg], rawRow[idx.sf], rawRow[idx.pf], rawRow[idx.c]]
+        .map(cell => (typeof cell === 'string' ? cell.trim() : ''))
+        .filter(Boolean);
+      const minutesLabel = typeof rawRow[idx.min] === 'string' ? String(rawRow[idx.min]).trim() : '';
+      if (players.length !== 5 || !minutesLabel || minutesLabel === 'Min') return;
+      const seconds = parseMmSsToSeconds(minutesLabel);
+      if (seconds <= 0) return;
+
+      const teamPts = parseSignedNumber(rawRow[idx.teamPts]) ?? 0;
+      const oppPts = parseSignedNumber(rawRow[idx.oppPts]) ?? 0;
+      const plusMinus = parseSignedNumber(rawRow[idx.pm]) ?? teamPts - oppPts;
+
+      stints.push({
+        players,
+        minutesLabel,
+        seconds,
+        teamPts,
+        oppPts,
+        plusMinus,
+        on40: parseSignedNumber(rawRow[idx.on40]),
+      });
+    });
+  }
+
+  let starters = stints[0]?.players || [];
+
+  const substitutions: KosarstatSubEvent[] = [];
+  const playerTimelines: KosarstatPlayerTimeline[] = [];
+  if (minuteGrid) {
+    const minuteColumnIndexes = getMinuteColumnIndexes(minuteGrid);
+
+    const startersFromGrid: string[] = [];
+
+    minuteGrid.rows.forEach(rawRow => {
+      if (!Array.isArray(rawRow)) return;
+
+      const row = rawRow.map(cell => String(cell ?? '').trim());
+      if (row.length < 4) return;
+
+      const hasLeadingOrder = /^\d+$/.test(row[0] || '') && /^\d{1,2}:\d{2}$/.test(row[2] || '');
+      const baseOffset = hasLeadingOrder ? 1 : 0;
+
+      const player = (row[0 + baseOffset] || '').trim();
+      if (player === 'Játékos' || player.includes('Pályán töltött') || isInvalidPlayerLabel(player)) return;
+
+      const minuteCodes = minuteColumnIndexes.map(({ index, header }) => ({
+        minute: Number(header),
+        code: (row[index + baseOffset] || '').trim(),
+      }));
+
+      const rowMinutesLabel = (row[1 + baseOffset] || '').trim();
+      const parsedRowSeconds = parseMmSsToSeconds(rowMinutesLabel);
+      const rowPlusMinus = parseSignedNumber(row[2 + baseOffset]);
+      const derivedSecondsFromCodes = minuteCodes.reduce((acc, item) => {
+        const code = item.code;
+        if (code === '1') return acc + 60;
+        if (code === '2' || code === '3') return acc + 30;
+        return acc;
+      }, 0);
+      const timelineSeconds = parsedRowSeconds > 0 ? parsedRowSeconds : derivedSecondsFromCodes;
+      const timelineMinutesLabel = parsedRowSeconds > 0
+        ? rowMinutesLabel
+        : formatSecondsAsMmSs(timelineSeconds);
+
+      const firstMinuteCode = minuteCodes.find(item => item.minute === 1)?.code || '';
+      if (firstMinuteCode === '1' || firstMinuteCode === '3') {
+        startersFromGrid.push(player);
+      }
+
+      const minuteCodesOnly = minuteCodes.map(item => item.code || '0');
+      const subInMinutes = minuteCodes.filter(item => item.code === '2').map(item => item.minute);
+      const subOutMinutes = minuteCodes.filter(item => item.code === '3').map(item => item.minute);
+      playerTimelines.push({
+        player,
+        minuteCodes: minuteCodesOnly,
+        minutesLabel: timelineMinutesLabel,
+        seconds: timelineSeconds,
+        plusMinus: rowPlusMinus,
+        subInMinutes,
+        subOutMinutes,
+      });
+
+      const hasExplicitCodes = minuteCodes.some(item => item.code === '2' || item.code === '3');
+
+      minuteCodes.forEach(item => {
+        const gameSecond = Math.max(0, (item.minute - 1) * 60);
+        const clockLabel = formatElapsedGameClock(gameSecond);
+
+        if (item.code === '2') {
+          substitutions.push({
+            gameSecond,
+            minute: item.minute,
+            clockLabel,
+            type: 'in',
+            player,
+          });
+        } else if (item.code === '3') {
+          substitutions.push({
+            gameSecond,
+            minute: item.minute,
+            clockLabel,
+            type: 'out',
+            player,
+          });
+        }
+      });
+
+      // Fallback for legacy data where explicit 2/3 event markers are missing.
+      if (!hasExplicitCodes) {
+        let wasOn = false;
+        minuteCodes.forEach(item => {
+          const gameSecond = Math.max(0, (item.minute - 1) * 60);
+          const clockLabel = formatElapsedGameClock(gameSecond);
+          const isOn = item.code !== '' && item.code !== '0';
+          if (!wasOn && isOn) {
+            substitutions.push({ gameSecond, minute: item.minute, clockLabel, type: 'in', player });
+          }
+          if (wasOn && !isOn) {
+            substitutions.push({ gameSecond, minute: item.minute, clockLabel, type: 'out', player });
+          }
+          wasOn = isOn;
+        });
+      }
+    });
+
+    if (startersFromGrid.length >= 5) {
+      starters = startersFromGrid.slice(0, 5);
+    }
+  } else if (stints.length > 1) {
+    let elapsedSeconds = 0;
+
+    for (let index = 0; index < stints.length - 1; index += 1) {
+      const current = stints[index];
+      const next = stints[index + 1];
+      elapsedSeconds += current.seconds;
+
+      const nextSet = new Set(next.players);
+      const currentSet = new Set(current.players);
+
+      const outPlayers = current.players.filter(player => !nextSet.has(player));
+      const inPlayers = next.players.filter(player => !currentSet.has(player));
+
+      const minute = Math.min(40, Math.max(1, Math.floor(elapsedSeconds / 60) + 1));
+      const clockLabel = formatElapsedGameClock(elapsedSeconds);
+
+      outPlayers.forEach(player => {
+        substitutions.push({
+          gameSecond: elapsedSeconds,
+          minute,
+          clockLabel,
+          type: 'out',
+          player,
+        });
+      });
+
+      inPlayers.forEach(player => {
+        substitutions.push({
+          gameSecond: elapsedSeconds,
+          minute,
+          clockLabel,
+          type: 'in',
+          player,
+        });
+      });
+    }
+  }
+
+  const referencePlayers = new Set<string>();
+  starters.forEach(player => {
+    if (player) referencePlayers.add(player);
+  });
+  stints.forEach(stint => {
+    stint.players.forEach(player => {
+      if (player) referencePlayers.add(player);
+    });
+  });
+  playerTimelines.forEach(row => {
+    if (row.player) referencePlayers.add(row.player);
+  });
+
+  if (playerSummaryCandidates.length > 0) {
+    const scoredSummaries = playerSummaryCandidates
+      .map(table => {
+        const parsed = parsePlayerSummaryTable(table);
+        const names = new Set(parsed.map(item => item.player));
+        let overlap = 0;
+        referencePlayers.forEach(name => {
+          if (names.has(name)) overlap += 1;
+        });
+        return { parsed, overlap };
+      })
+      .sort((a, b) => b.overlap - a.overlap || b.parsed.length - a.parsed.length);
+
+    const best = scoredSummaries[0];
+    if (best && (best.overlap > 0 || referencePlayers.size === 0)) {
+      playerMinutes.push(...best.parsed);
+    }
+  }
+
+  if (starters.length < 5 && playerMinutes.length > 0) {
+    starters = playerMinutes.slice(0, 5).map(item => item.player);
+  }
+
+  if (starters.length < 5 && playerTimelines.length > 0) {
+    starters = playerTimelines.slice(0, 5).map(item => item.player);
+  }
+
+  const minuteStatByPlayer = new Map(playerMinutes.map(item => [item.player, item]));
+  playerTimelines.forEach(row => {
+    const minuteStat = minuteStatByPlayer.get(row.player);
+    if (!minuteStat) return;
+    row.minutesLabel = minuteStat.minutesLabel;
+    row.seconds = minuteStat.seconds;
+    row.plusMinus = minuteStat.plusMinus;
+  });
+
+  if (playerMinutes.length === 0 && playerTimelines.length > 0) {
+    playerTimelines.forEach(row => {
+      playerMinutes.push({
+        player: row.player,
+        minutesLabel: row.minutesLabel,
+        seconds: row.seconds,
+        plusMinus: row.plusMinus,
+        on40: null,
+        teamPts: null,
+        oppPts: null,
+      });
+    });
+    playerMinutes.sort((a, b) => b.seconds - a.seconds || a.player.localeCompare(b.player, 'hu'));
+  }
+
+  playerTimelines.sort((a, b) => b.seconds - a.seconds || a.player.localeCompare(b.player, 'hu'));
+
+  substitutions.sort((a, b) => a.gameSecond - b.gameSecond || a.type.localeCompare(b.type));
+
+  return {
+    teamName,
+    starters,
+    playerMinutes,
+    playerTimelines,
+    substitutions,
+    stints,
+    pairStats: buildComboStats(stints, 2),
+    trioStats: buildComboStats(stints, 3),
+  };
+};
+
+const parseKosarstatLineupAnalysis = (
+  tablesData: KosarstatLineupTableRow[],
+  gameId: string,
+  selectedTeamName: string | null,
+  preferredSide?: 'home' | 'away'
+): KosarstatLineupAnalysis | null => {
+  const tables = tablesData
+    .map(table => ({
+      headers: Array.isArray(table.headers) ? (table.headers as unknown[]).map(item => (typeof item === 'string' ? item.trim() : '')).filter(Boolean) : [],
+      rows: Array.isArray(table.rows) ? (table.rows as unknown[]) : [],
+      sourceTableDomId: typeof table.source_table_dom_id === 'string' ? table.source_table_dom_id.trim() || null : null,
+    }))
+    .map(table => ({
+      headers: table.headers,
+      rows: table.rows.filter(Array.isArray) as unknown[][],
+      sourceTableDomId: table.sourceTableDomId,
+    }));
+
+  type Bucket = { teamName: string; tables: Array<{ headers: string[]; rows: unknown[][]; sourceTableDomId: string | null }> };
+  const buckets: Bucket[] = [];
+  let currentBucket: Bucket | null = null;
+
+  tables.forEach(table => {
+    const firstCell = Array.isArray(table.rows[0]) ? String(table.rows[0][0] || '').trim() : '';
+    if (firstCell && firstCell.includes('Mérleg:')) {
+      const teamName = firstCell.split('(')[0].trim();
+      currentBucket = { teamName, tables: [] };
+      buckets.push(currentBucket);
+      return;
+    }
+
+    if (currentBucket) {
+      currentBucket.tables.push(table);
+    }
+  });
+
+  const parsedTeams = buckets
+    .map(bucket => parseKosarstatTeamLineupAnalysis(bucket.teamName, bucket.tables))
+    .filter(team => team.playerMinutes.length > 0 || team.playerTimelines.length > 0 || team.stints.length > 0);
+  if (parsedTeams.length === 0) return null;
+
+  const selectedKey = selectedTeamName ? normalizeTeamKey(selectedTeamName) : '';
+  const sideSelectedTeam = preferredSide === 'home'
+    ? parsedTeams[0] || null
+    : preferredSide === 'away'
+      ? parsedTeams[1] || null
+      : null;
+  const nameSelectedTeam = selectedKey
+    ? parsedTeams.find(team => normalizeTeamKey(team.teamName).includes(selectedKey) || selectedKey.includes(normalizeTeamKey(team.teamName))) || null
+    : null;
+  const selectedTeam = nameSelectedTeam || sideSelectedTeam || parsedTeams[0] || null;
+
+  return {
+    gameId,
+    selectedTeam,
+    homeTeam: parsedTeams[0] || null,
+    awayTeam: parsedTeams[1] || null,
+  };
+};
+
+const normalizeSearchText = (value: string) =>
+  value
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const toDateSearchVariants = (value: string) => {
+  const variants = new Set<string>();
+  if (!value) return variants;
+
+  variants.add(value);
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return variants;
+
+  const yyyy = String(date.getFullYear());
+  const mm = String(date.getMonth() + 1).padStart(2, '0');
+  const dd = String(date.getDate()).padStart(2, '0');
+
+  variants.add(`${yyyy}-${mm}-${dd}`);
+  variants.add(`${yyyy}.${mm}.${dd}`);
+  variants.add(`${yyyy}/${mm}/${dd}`);
+  variants.add(`${dd}.${mm}.${yyyy}`);
+  variants.add(`${dd}/${mm}/${yyyy}`);
+
+  return variants;
+};
+
+const toIsoDateString = (value: string) => {
+  if (!value) return '';
+
+  const trimmed = value.trim();
+  const isoMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(trimmed);
+  if (isoMatch) return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
+
+  const huMatch = /^(\d{4})\.(\d{2})\.(\d{2})\.?$/.exec(trimmed);
+  if (huMatch) return `${huMatch[1]}-${huMatch[2]}-${huMatch[3]}`;
+
+  const parsed = new Date(trimmed);
+  if (Number.isNaN(parsed.getTime())) return '';
+
+  const yyyy = String(parsed.getFullYear());
+  const mm = String(parsed.getMonth() + 1).padStart(2, '0');
+  const dd = String(parsed.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
 };
 
 type SeasonFixture = {
@@ -1123,7 +1765,6 @@ export function SeasonComparison({
   allTeams,
   currentSeasonId,
   currentTeamId,
-  currentTeamPlayers,
   games,
   playerGameStats,
 }: SeasonComparisonProps) {
@@ -1179,6 +1820,20 @@ export function SeasonComparison({
     { type: 'success' | 'error'; message: string } | null
   >(null);
   const [postgameShotContext, setPostgameShotContext] = useState<PostGameShotMapContext | null>(null);
+  const [kosarstatPostgameNotes, setKosarstatPostgameNotes] = useState<string[]>([]);
+  const [kosarstatLineupAnalysis, setKosarstatLineupAnalysis] = useState<KosarstatLineupAnalysis | null>(null);
+  const [isLoadingKosarstatPostgame, setIsLoadingKosarstatPostgame] = useState(false);
+  const [selectedComboSize, setSelectedComboSize] = useState<2 | 3>(2);
+  const [selectedComboPlayerA, setSelectedComboPlayerA] = useState('');
+  const [selectedComboPlayerB, setSelectedComboPlayerB] = useState('');
+  const [selectedComboPlayerC, setSelectedComboPlayerC] = useState('');
+  const LINEUP_FILTER_ALL = '__all__';
+  const [lineupAnyPlayerFilter, setLineupAnyPlayerFilter] = useState(LINEUP_FILTER_ALL);
+  const [lineupPgFilter, setLineupPgFilter] = useState(LINEUP_FILTER_ALL);
+  const [lineupSgFilter, setLineupSgFilter] = useState(LINEUP_FILTER_ALL);
+  const [lineupSfFilter, setLineupSfFilter] = useState(LINEUP_FILTER_ALL);
+  const [lineupPfFilter, setLineupPfFilter] = useState(LINEUP_FILTER_ALL);
+  const [lineupCFilter, setLineupCFilter] = useState(LINEUP_FILTER_ALL);
   const [selectedPostgameShotPlayerId, setSelectedPostgameShotPlayerId] = useState('all');
   const [showPostgameShotPoints, setShowPostgameShotPoints] = useState(true);
   const [showPostgameShotHeatmap, setShowPostgameShotHeatmap] = useState(true);
@@ -1233,6 +1888,29 @@ export function SeasonComparison({
 
   const resolvedSeasonId = selectedSeasonId || currentSeasonId || allSeasons[0]?.id || '';
   const resolvedTeamId = selectedTeamId || currentTeamId || 'all';
+  const selectedGameForPostgame = useMemo(() => {
+    if (!selectedGameId) return null;
+    return games.find(game => game.id === selectedGameId) || null;
+  }, [games, selectedGameId]);
+  const selectedTeamNameForPostgame = useMemo(() => {
+    return allTeams.find(team => team.id === resolvedTeamId)?.name || null;
+  }, [allTeams, resolvedTeamId]);
+  const selectedGamePlayerNameKeysForPostgame = useMemo(() => {
+    if (!selectedGameForPostgame?.id) return [] as string[];
+    const names = new Set<string>();
+    playerGameStats.forEach(row => {
+      if (row.game_id !== selectedGameForPostgame.id) return;
+      const normalized = normalizeTeamKey(row.players?.name || '');
+      if (normalized) names.add(normalized);
+    });
+    return Array.from(names).sort((a, b) => a.localeCompare(b, 'hu'));
+  }, [playerGameStats, selectedGameForPostgame?.id]);
+  const selectedGamePlayerNamesSignatureForPostgame = useMemo(() => {
+    return selectedGamePlayerNameKeysForPostgame.join('|');
+  }, [selectedGamePlayerNameKeysForPostgame]);
+  const selectedGamePlayerNamesCsvSignatureForPostgame = useMemo(() => {
+    return selectedGamePlayerNameKeysForPostgame.join(',');
+  }, [selectedGamePlayerNameKeysForPostgame]);
 
   useEffect(() => {
     setSelectedProjectionTeamKey('');
@@ -1282,6 +1960,640 @@ export function SeasonComparison({
       cancelled = true;
     };
   }, [resolvedSeasonId, resolvedTeamId]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadKosarstatPostgameNotes = async () => {
+      const targetGame = selectedGameForPostgame;
+      const selectedTeamName = selectedTeamNameForPostgame;
+
+      if (!targetGame || !resolvedSeasonId || !resolvedTeamId || resolvedTeamId === 'all') {
+        if (!cancelled) {
+          setKosarstatPostgameNotes([]);
+          setKosarstatLineupAnalysis(null);
+          setIsLoadingKosarstatPostgame(false);
+        }
+        return;
+      }
+
+      setIsLoadingKosarstatPostgame(true);
+
+      try {
+        const ownTeamNeedle = normalizeSearchText(selectedTeamName || '');
+        const opponentNeedle = normalizeSearchText(targetGame.opponent || '');
+        const dateVariants = Array.from(toDateSearchVariants(targetGame.date)).map(normalizeSearchText);
+        const targetDateIso = toIsoDateString(targetGame.date);
+        const ownScoreNeedle = Number.isFinite(targetGame.ourScore) ? String(targetGame.ourScore) : '';
+        const oppScoreNeedle = Number.isFinite(targetGame.oppScore) ? String(targetGame.oppScore) : '';
+        const hasScoreContext = Number.isFinite(targetGame.ourScore) && Number.isFinite(targetGame.oppScore);
+        const hasDateContext = dateVariants.length > 0;
+        const expectedHomeScore = targetGame.homeAway === 'home' ? targetGame.ourScore : targetGame.oppScore;
+        const expectedAwayScore = targetGame.homeAway === 'home' ? targetGame.oppScore : targetGame.ourScore;
+        const scoreSeparators = '[:\\-–]';
+
+        const containsScorePair = (text: string, left: number, right: number) => {
+          const matcher = new RegExp(`(^|\\D)${left}\\s*${scoreSeparators}\\s*${right}(\\D|$)`);
+          return matcher.test(text);
+        };
+
+        const scoreGamePageCandidate = (row: {
+          raw_text?: string;
+          source_url?: string;
+          match_date?: string | null;
+          home_team_name?: string | null;
+          away_team_name?: string | null;
+          home_score?: number | null;
+          away_score?: number | null;
+          competition_phase?: string | null;
+        }) => {
+          const raw = typeof row.raw_text === 'string' ? row.raw_text : '';
+          const normalizedRaw = normalizeSearchText(raw);
+          const normalizedUrl = normalizeSearchText(typeof row.source_url === 'string' ? row.source_url : '');
+          const normalizedHomeTeam = normalizeSearchText(typeof row.home_team_name === 'string' ? row.home_team_name : '');
+          const normalizedAwayTeam = normalizeSearchText(typeof row.away_team_name === 'string' ? row.away_team_name : '');
+          const metadataDate = typeof row.match_date === 'string' ? row.match_date : '';
+          const metadataDateMatched = !!targetDateIso && !!metadataDate && metadataDate === targetDateIso;
+          const metadataHomeScore = typeof row.home_score === 'number' && Number.isFinite(row.home_score) ? row.home_score : null;
+          const metadataAwayScore = typeof row.away_score === 'number' && Number.isFinite(row.away_score) ? row.away_score : null;
+          const metadataScoreOrderMatched =
+            hasScoreContext &&
+            metadataHomeScore !== null &&
+            metadataAwayScore !== null &&
+            metadataHomeScore === expectedHomeScore &&
+            metadataAwayScore === expectedAwayScore;
+          const metadataReverseScoreOrderMatched =
+            hasScoreContext &&
+            metadataHomeScore !== null &&
+            metadataAwayScore !== null &&
+            metadataHomeScore === expectedAwayScore &&
+            metadataAwayScore === expectedHomeScore;
+          const ownMatched = ownTeamNeedle
+            ? normalizedRaw.includes(ownTeamNeedle) || normalizedUrl.includes(ownTeamNeedle) || normalizedHomeTeam.includes(ownTeamNeedle) || normalizedAwayTeam.includes(ownTeamNeedle)
+            : false;
+          const opponentMatched = opponentNeedle
+            ? normalizedRaw.includes(opponentNeedle) || normalizedUrl.includes(opponentNeedle) || normalizedHomeTeam.includes(opponentNeedle) || normalizedAwayTeam.includes(opponentNeedle)
+            : false;
+          const rawDateMatched = dateVariants.some(variant => variant && (normalizedRaw.includes(variant) || normalizedUrl.includes(variant)));
+          const dateMatched = metadataDateMatched || rawDateMatched;
+          const expectedScoreOrderMatched = hasScoreContext
+            ? containsScorePair(raw, expectedHomeScore, expectedAwayScore) || metadataScoreOrderMatched
+            : false;
+          const reverseScoreOrderMatched = hasScoreContext
+            ? containsScorePair(raw, expectedAwayScore, expectedHomeScore) || metadataReverseScoreOrderMatched
+            : false;
+          let score = 0;
+
+          if (ownMatched) score += 5;
+          if (opponentMatched) score += 5;
+          if (ownMatched && opponentMatched) score += 6;
+          if (rawDateMatched) score += 8;
+          if (metadataDateMatched) score += 20;
+          if (metadataScoreOrderMatched) score += 20;
+          if (ownScoreNeedle && raw.includes(ownScoreNeedle)) score += 1;
+          if (oppScoreNeedle && raw.includes(oppScoreNeedle)) score += 1;
+          if (expectedScoreOrderMatched) score += 8;
+          if (reverseScoreOrderMatched) score -= 4;
+
+          return {
+            score,
+            ownMatched,
+            opponentMatched,
+            dateMatched,
+            expectedScoreOrderMatched,
+          };
+        };
+
+        const selectedGamePlayerNames = new Set(
+          selectedGamePlayerNamesSignatureForPostgame
+            ? selectedGamePlayerNamesSignatureForPostgame.split('|').filter(Boolean)
+            : []
+        );
+
+        const normalizedHeader = (value: unknown) =>
+          String(value ?? '')
+            .replace(/\u00A0/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .toLowerCase();
+
+        const hasHeader = (headers: string[], matcher: (header: string) => boolean) =>
+          headers.some(header => matcher(normalizedHeader(header)));
+
+        const computeLineupRawQuality = (tables: KosarstatLineupTableRow[]) => {
+          let hasFiveMan = false;
+          let hasPlayerSummary = false;
+          let hasMinuteGrid = false;
+
+          tables.forEach(table => {
+            const headers = Array.isArray(table.headers)
+              ? (table.headers as unknown[]).map(item => String(item ?? '').trim()).filter(Boolean)
+              : [];
+            if (headers.length === 0) return;
+
+            const hasPg = hasHeader(headers, h => h === 'pg');
+            const hasSg = hasHeader(headers, h => h === 'sg');
+            const hasSf = hasHeader(headers, h => h === 'sf');
+            const hasPf = hasHeader(headers, h => h === 'pf');
+            const hasC = hasHeader(headers, h => h === 'c');
+            const hasMin = hasHeader(headers, h => h === 'min');
+            const hasOnPlusMinus = hasHeader(headers, h => h.includes('on +/-') || h.includes('on + -') || h.includes('on±'));
+            const hasOn40 = hasHeader(headers, h => h === 'on40' || h === 'on 40');
+            const hasJatekos = hasHeader(headers, h => h === 'játékos' || h === 'jatekos');
+            const hasPerc = hasHeader(headers, h => h === 'perc');
+            const hasMinute1 = hasHeader(headers, h => h === '1');
+            const hasMinute40 = hasHeader(headers, h => h === '40');
+
+            if (hasPg && hasSg && hasSf && hasPf && hasC && hasMin && hasOnPlusMinus) {
+              hasFiveMan = true;
+            }
+            if (hasJatekos && hasMin && hasOn40) {
+              hasPlayerSummary = true;
+            }
+            if (hasJatekos && hasPerc && hasMinute1 && hasMinute40) {
+              hasMinuteGrid = true;
+            }
+          });
+
+          let score = 0;
+          if (hasFiveMan) score += 100;
+          if (hasPlayerSummary) score += 40;
+          if (hasMinuteGrid) score += 25;
+          score += Math.min(20, tables.length);
+
+          return {
+            score,
+            hasFiveMan,
+            hasPlayerSummary,
+            hasMinuteGrid,
+          };
+        };
+
+        const directGameId = typeof targetGame.kosarstatGameId === 'string' ? targetGame.kosarstatGameId.trim() : '';
+        let gameId = directGameId;
+
+        if (gameId) {
+          const { data: directGamePage } = await supabase
+            .from('kosarstat_game_pages_raw' as never)
+            .select('raw_text, source_url, match_date, home_team_name, away_team_name, home_score, away_score, competition_phase')
+            .eq('season_id', resolvedSeasonId)
+            .eq('page_type', 'game')
+            .eq('kosarstat_game_id', gameId)
+            .order('imported_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          const check = scoreGamePageCandidate((directGamePage || {}) as {
+            raw_text?: string;
+            source_url?: string;
+            match_date?: string | null;
+            home_team_name?: string | null;
+            away_team_name?: string | null;
+            home_score?: number | null;
+            away_score?: number | null;
+            competition_phase?: string | null;
+          });
+          const directLooksValid =
+            check.ownMatched &&
+            check.opponentMatched &&
+            (!hasDateContext || check.dateMatched) &&
+            (!hasScoreContext || check.expectedScoreOrderMatched);
+          if (!directLooksValid) {
+            if (selectedGameId) {
+              await supabase
+                .from('games' as never)
+                .update({ kosarstat_game_id: null } as never)
+                .eq('id', selectedGameId);
+            }
+            gameId = '';
+          }
+        }
+
+        if (!gameId) {
+          const { data: gamePages, error: gameError } = await supabase
+            .from('kosarstat_game_pages_raw' as never)
+            .select('kosarstat_game_id, imported_at, raw_text, source_url, match_date, home_team_name, away_team_name, home_score, away_score, competition_phase')
+            .eq('season_id', resolvedSeasonId)
+            .eq('page_type', 'game')
+            .order('imported_at', { ascending: false })
+            .limit(2000);
+
+          if (gameError || !Array.isArray(gamePages) || gamePages.length === 0) {
+            if (!cancelled) {
+              setKosarstatPostgameNotes([]);
+              setIsLoadingKosarstatPostgame(false);
+            }
+            return;
+          }
+
+          const scoredCandidates = (gamePages as Array<{
+            kosarstat_game_id?: string;
+            raw_text?: string;
+            imported_at?: string;
+            source_url?: string;
+            match_date?: string | null;
+            home_team_name?: string | null;
+            away_team_name?: string | null;
+            home_score?: number | null;
+            away_score?: number | null;
+            competition_phase?: string | null;
+          }>).
+            map(row => {
+              const scored = scoreGamePageCandidate(row);
+
+              return {
+                row,
+                ...scored,
+              };
+            })
+            .filter(candidate => candidate.score > 0)
+            .sort((a, b) => b.score - a.score);
+
+          const strictWithDateCandidates = scoredCandidates.filter(candidate => {
+            const ownOk = ownTeamNeedle ? candidate.ownMatched : true;
+            const opponentOk = opponentNeedle ? candidate.opponentMatched : true;
+            const dateOk = hasDateContext ? candidate.dateMatched : true;
+            const scoreOk = hasScoreContext ? candidate.expectedScoreOrderMatched : true;
+            return ownOk && opponentOk && dateOk && scoreOk;
+          });
+
+          const strictCandidates = strictWithDateCandidates.length > 0
+            ? strictWithDateCandidates
+            : scoredCandidates.filter(candidate => {
+                const ownOk = ownTeamNeedle ? candidate.ownMatched : true;
+                const opponentOk = opponentNeedle ? candidate.opponentMatched : true;
+                const scoreOk = hasScoreContext ? candidate.expectedScoreOrderMatched : true;
+                return ownOk && opponentOk && scoreOk;
+              });
+
+          const baseCandidates = strictCandidates
+            .map(candidate => String(candidate.row?.kosarstat_game_id || ''))
+            .filter(Boolean);
+
+          gameId = baseCandidates[0] || '';
+
+          if (selectedGamePlayerNames.size > 0 && baseCandidates.length > 1) {
+            const candidateGameIds = Array.from(new Set(baseCandidates)).slice(0, 6);
+
+            const { data: lineupRawCandidates } = await supabase
+              .from('kosarstat_game_pages_raw' as never)
+              .select('id, kosarstat_game_id, imported_at')
+              .eq('season_id', resolvedSeasonId)
+              .eq('page_type', 'game_lineups')
+              .in('kosarstat_game_id', candidateGameIds)
+              .order('imported_at', { ascending: false });
+
+            const rawIdsByGameId = new Map<string, string[]>();
+            (lineupRawCandidates as Array<{ id?: string; kosarstat_game_id?: string }> | null)?.forEach(row => {
+              const gid = String(row.kosarstat_game_id || '');
+              const rid = String(row.id || '');
+              if (!gid || !rid) return;
+              if (!rawIdsByGameId.has(gid)) rawIdsByGameId.set(gid, []);
+              rawIdsByGameId.get(gid)!.push(rid);
+            });
+
+            const rawIds = Array.from(new Set(Array.from(rawIdsByGameId.values()).flat()));
+            if (rawIds.length > 0) {
+              const { data: candidateTables } = await supabase
+                .from('kosarstat_game_page_tables' as never)
+                .select('page_raw_id, table_index, rows, headers, source_table_dom_id')
+                .in('page_raw_id', rawIds)
+                .order('table_index', { ascending: true });
+
+              const tablesByRawId = new Map<string, KosarstatLineupTableRow[]>();
+              (candidateTables as Array<KosarstatLineupTableRow & { page_raw_id?: string }> | null)?.forEach(row => {
+                const rawId = String(row.page_raw_id || '');
+                if (!rawId) return;
+                if (!tablesByRawId.has(rawId)) tablesByRawId.set(rawId, []);
+                tablesByRawId.get(rawId)!.push(row);
+              });
+
+              tablesByRawId.forEach((items, rawId) => {
+                items.sort((a, b) => {
+                  const aIdx = Number.parseInt(String((a as { table_index?: unknown }).table_index ?? ''), 10);
+                  const bIdx = Number.parseInt(String((b as { table_index?: unknown }).table_index ?? ''), 10);
+                  if (Number.isFinite(aIdx) && Number.isFinite(bIdx)) return aIdx - bIdx;
+                  return 0;
+                });
+                tablesByRawId.set(rawId, items);
+              });
+
+              const usableRawByGameId = new Map<string, string>();
+              rawIdsByGameId.forEach((ids, gid) => {
+                const ranked = ids
+                  .map(id => {
+                    const tables = tablesByRawId.get(id) || [];
+                    return {
+                      id,
+                      quality: computeLineupRawQuality(tables),
+                      tableCount: tables.length,
+                    };
+                  })
+                  .sort((a, b) => b.quality.score - a.quality.score || b.tableCount - a.tableCount);
+
+                const usableId = ranked[0]?.id || ids[0];
+                if (usableId) usableRawByGameId.set(gid, usableId);
+              });
+
+              let bestOverlapGameId = gameId;
+              let bestOverlapCount = -1;
+
+              candidateGameIds.forEach(candidateId => {
+                const rawId = usableRawByGameId.get(candidateId);
+                if (!rawId) return;
+                const tables = tablesByRawId.get(rawId) || [];
+                if (tables.length === 0) return;
+
+                const parsed = parseKosarstatLineupAnalysis(tables, candidateId, selectedTeamName, targetGame.homeAway);
+                const team = parsed?.selectedTeam || parsed?.homeTeam || parsed?.awayTeam;
+                if (!team) return;
+
+                const lineupPlayers = new Set(team.playerMinutes.map(item => normalizeTeamKey(item.player)).filter(Boolean));
+                let overlap = 0;
+                selectedGamePlayerNames.forEach(name => {
+                  if (lineupPlayers.has(name)) overlap += 1;
+                });
+
+                if (overlap > bestOverlapCount) {
+                  bestOverlapCount = overlap;
+                  bestOverlapGameId = candidateId;
+                }
+              });
+
+              if (bestOverlapCount >= 2) {
+                gameId = bestOverlapGameId;
+              }
+            }
+          }
+
+          if (gameId && selectedGameId && gameId !== directGameId) {
+            await supabase
+              .from('games' as never)
+              .update({ kosarstat_game_id: gameId } as never)
+              .eq('id', selectedGameId);
+          }
+        }
+
+        if (!gameId) {
+          if (!cancelled) {
+            setKosarstatPostgameNotes([
+              `Kosarstat meccs-egyeztetes sikertelen ehhez a postgame meccshez (datum=${targetGame.date}, ellenfel=${targetGame.opponent || 'ismeretlen'}).`,
+            ]);
+            setIsLoadingKosarstatPostgame(false);
+          }
+          return;
+        }
+
+        const { data: lineupRawData, error: lineupRawError } = await supabase
+          .from('kosarstat_game_pages_raw' as never)
+          .select('id, imported_at')
+          .eq('season_id', resolvedSeasonId)
+          .eq('page_type', 'game_lineups')
+          .eq('kosarstat_game_id', gameId)
+          .order('imported_at', { ascending: false })
+          .limit(12);
+
+        const lineupRawRows = Array.isArray(lineupRawData)
+          ? (lineupRawData as Array<{ id?: string; imported_at?: string | null }>)
+          : [];
+        const lineupRawIds = lineupRawRows
+          .map(row => String(row.id || ''))
+          .filter(Boolean);
+
+        if (lineupRawError || lineupRawIds.length === 0) {
+          if (!cancelled) {
+            setKosarstatPostgameNotes([
+              `Kosarstat game adat azonosítva (game=${gameId}), de lineup tábla még nem érhető el ehhez a meccshez.`,
+            ]);
+            setKosarstatLineupAnalysis(null);
+            setIsLoadingKosarstatPostgame(false);
+          }
+          return;
+        }
+
+        const { data: tablesData, error: tablesError } = await supabase
+          .from('kosarstat_game_page_tables' as never)
+          .select('page_raw_id, table_index, rows, headers, source_table_dom_id')
+          .in('page_raw_id', lineupRawIds)
+          .order('table_index', { ascending: true });
+
+        if (tablesError || !Array.isArray(tablesData)) {
+          if (!cancelled) {
+            setKosarstatPostgameNotes([
+              `Kosarstat lineup betöltés sikertelen (game=${gameId}).`,
+            ]);
+            setKosarstatLineupAnalysis(null);
+            setIsLoadingKosarstatPostgame(false);
+          }
+          return;
+        }
+
+        const tablesByRawId = new Map<string, KosarstatLineupTableRow[]>();
+        (tablesData as Array<KosarstatLineupTableRow & { page_raw_id?: string }>).forEach(row => {
+          const rawId = String(row.page_raw_id || '');
+          if (!rawId) return;
+          if (!tablesByRawId.has(rawId)) tablesByRawId.set(rawId, []);
+          tablesByRawId.get(rawId)!.push(row);
+        });
+
+        tablesByRawId.forEach((items, rawId) => {
+          items.sort((a, b) => {
+            const aIdx = Number.parseInt(String((a as { table_index?: unknown }).table_index ?? ''), 10);
+            const bIdx = Number.parseInt(String((b as { table_index?: unknown }).table_index ?? ''), 10);
+            if (Number.isFinite(aIdx) && Number.isFinite(bIdx)) return aIdx - bIdx;
+            return 0;
+          });
+          tablesByRawId.set(rawId, items);
+        });
+
+        const selectedLineupRawId = (() => {
+          const ranked = lineupRawIds
+            .map(id => {
+              const tables = tablesByRawId.get(id) || [];
+              return {
+                id,
+                quality: computeLineupRawQuality(tables),
+                tableCount: tables.length,
+              };
+            })
+            .sort((a, b) => b.quality.score - a.quality.score || b.tableCount - a.tableCount);
+
+          return ranked[0]?.id || lineupRawIds[0] || '';
+        })();
+        const selectedTablesData = selectedLineupRawId
+          ? (tablesByRawId.get(selectedLineupRawId) || [])
+          : [];
+
+        if (selectedTablesData.length === 0) {
+          if (!cancelled) {
+            setKosarstatPostgameNotes([
+              `Kosarstat game adat azonosítva (game=${gameId}), de a mentett lineup raw rekord(ok)hoz nincs feldolgozott táblázat.`,
+            ]);
+            setKosarstatLineupAnalysis(null);
+            setIsLoadingKosarstatPostgame(false);
+          }
+          return;
+        }
+
+        const parsedLineupRaw = parseKosarstatLineupAnalysis(
+          selectedTablesData,
+          gameId,
+          selectedTeamName,
+          targetGame.homeAway
+        );
+
+        const teamOverlapScore = (team: KosarstatTeamLineupAnalysis | null) => {
+          if (!team || selectedGamePlayerNames.size === 0) return 0;
+          const names = new Set<string>();
+          team.playerMinutes.forEach(item => names.add(normalizeTeamKey(item.player)));
+          team.playerTimelines.forEach(item => names.add(normalizeTeamKey(item.player)));
+          team.stints.forEach(stint => stint.players.forEach(player => names.add(normalizeTeamKey(player))));
+          let overlap = 0;
+          selectedGamePlayerNames.forEach(name => {
+            if (names.has(name)) overlap += 1;
+          });
+          return overlap;
+        };
+
+        let parsedLineup = parsedLineupRaw;
+        if (parsedLineupRaw) {
+          const homeScore = teamOverlapScore(parsedLineupRaw.homeTeam);
+          const awayScore = teamOverlapScore(parsedLineupRaw.awayTeam);
+
+          let byOverlap = homeScore >= awayScore ? parsedLineupRaw.homeTeam : parsedLineupRaw.awayTeam;
+
+          // Tie-breaker: prefer the requested side if overlap is equal.
+          if (homeScore === awayScore) {
+            if (targetGame.homeAway === 'home' && parsedLineupRaw.homeTeam) {
+              byOverlap = parsedLineupRaw.homeTeam;
+            } else if (targetGame.homeAway === 'away' && parsedLineupRaw.awayTeam) {
+              byOverlap = parsedLineupRaw.awayTeam;
+            }
+          }
+
+          if (selectedGamePlayerNames.size > 0 && Math.max(homeScore, awayScore) >= 1 && byOverlap) {
+            parsedLineup = {
+              ...parsedLineupRaw,
+              selectedTeam: {
+                ...byOverlap,
+                // Ensure the header reflects the selected team context when Kosarstat labels are swapped.
+                teamName: selectedTeamName || byOverlap.teamName,
+              },
+            };
+          }
+        }
+
+        let totalRows = 0;
+        const plusMinusValues: number[] = [];
+
+        selectedTablesData.forEach(table => {
+          const headers = Array.isArray(table.headers) ? (table.headers as unknown[]) : [];
+          const plusMinusColumnIndexes = headers
+            .map((header, index) => ({
+              index,
+              text:
+                typeof header === 'string'
+                  ? header
+                      .toLowerCase()
+                      .replace(/\s+/g, ' ')
+                      .trim()
+                  : '',
+            }))
+            .filter(item =>
+              item.text.includes('+/-') ||
+              item.text.includes('±') ||
+              item.text.includes('plus/minus') ||
+              item.text === '+-'
+            )
+            .map(item => item.index);
+
+          const rows = Array.isArray(table.rows) ? (table.rows as unknown[]) : [];
+          totalRows += rows.length;
+
+          rows.forEach(rawRow => {
+            if (!Array.isArray(rawRow)) return;
+            const indexesToCheck = plusMinusColumnIndexes.length > 0
+              ? plusMinusColumnIndexes
+              : [];
+
+            indexesToCheck.forEach(index => {
+              const cell = rawRow[index];
+              if (typeof cell !== 'string') return;
+              const normalized = cell.trim().replace(',', '.');
+              if (!/^[-+]?\d{1,3}(?:\.\d+)?$/.test(normalized)) return;
+              const value = Number(normalized);
+              if (!Number.isFinite(value)) return;
+              if (Math.abs(value) > 100) return;
+              plusMinusValues.push(value);
+            });
+          });
+        });
+
+        const notes: string[] = [
+          `Kosarstat lineup adat csatolva (game=${gameId}, raw=${selectedLineupRawId}, tablazatok=${selectedTablesData.length}, sorok=${totalRows}).`,
+        ];
+
+        if (plusMinusValues.length > 0) {
+          const minPm = Math.min(...plusMinusValues);
+          const maxPm = Math.max(...plusMinusValues);
+          notes.push(`Lineup +/- tartomány: ${minPm > 0 ? '+' : ''}${minPm} ... ${maxPm > 0 ? '+' : ''}${maxPm}.`);
+        }
+
+        if (!cancelled) {
+          setKosarstatPostgameNotes(notes);
+          setKosarstatLineupAnalysis(parsedLineup);
+          setIsLoadingKosarstatPostgame(false);
+        }
+      } catch {
+        if (!cancelled) {
+          setKosarstatPostgameNotes([]);
+          setKosarstatLineupAnalysis(null);
+          setIsLoadingKosarstatPostgame(false);
+        }
+      }
+    };
+
+    loadKosarstatPostgameNotes();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    resolvedSeasonId,
+    resolvedTeamId,
+    selectedGameId,
+    selectedGameForPostgame,
+    selectedTeamNameForPostgame,
+    selectedGamePlayerNamesCsvSignatureForPostgame,
+    selectedGamePlayerNamesSignatureForPostgame,
+  ]);
+
+  useEffect(() => {
+    const activeTeam =
+      kosarstatLineupAnalysis?.selectedTeam ||
+      kosarstatLineupAnalysis?.homeTeam ||
+      kosarstatLineupAnalysis?.awayTeam ||
+      null;
+
+    setLineupAnyPlayerFilter(LINEUP_FILTER_ALL);
+    setLineupPgFilter(LINEUP_FILTER_ALL);
+    setLineupSgFilter(LINEUP_FILTER_ALL);
+    setLineupSfFilter(LINEUP_FILTER_ALL);
+    setLineupPfFilter(LINEUP_FILTER_ALL);
+    setLineupCFilter(LINEUP_FILTER_ALL);
+
+    if (!activeTeam) {
+      setSelectedComboPlayerA('');
+      setSelectedComboPlayerB('');
+      setSelectedComboPlayerC('');
+      return;
+    }
+
+    const defaults = activeTeam.starters.slice(0, 3);
+    setSelectedComboPlayerA(defaults[0] || '');
+    setSelectedComboPlayerB(defaults[1] || '');
+    setSelectedComboPlayerC(defaults[2] || '');
+  }, [kosarstatLineupAnalysis]);
 
   useEffect(() => {
     let cancelled = false;
@@ -2202,6 +3514,10 @@ export function SeasonComparison({
     return games.find(game => game.id === selectedGameId) || null;
   }, [games, selectedGameId]);
 
+  const ownGameIds = useMemo(() => {
+    return new Set(games.map(game => game.id));
+  }, [games]);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -2377,26 +3693,16 @@ export function SeasonComparison({
         ?? null
     : latestHeadToHeadGame?.opponentGameId ?? latestHeadToHeadGame?.ownGameId ?? null;
 
-  const currentTeamPlayerIds = useMemo(() => {
-    const set = new Set<string>();
-    currentTeamPlayers.forEach(player => set.add(player.id));
-    return set;
-  }, [currentTeamPlayers]);
-
   const teamPlayerRowsByGame = useMemo(() => {
     const map = new Map<string, GamePlayerStatRow[]>();
-    if (!resolvedTeamId) return map;
     playerGameStats.forEach(row => {
       if (resolvedSeasonId && String(row.games?.season_id ?? '') !== String(resolvedSeasonId)) return;
-      const belongsToTeam = row.players?.team_id === resolvedTeamId
-        || currentTeamPlayerIds.has(row.player_id)
-        || playerTeamMap.get(row.player_id) === resolvedTeamId;
-      if (!belongsToTeam) return;
+      if (!ownGameIds.has(row.game_id)) return;
       if (!map.has(row.game_id)) map.set(row.game_id, []);
       map.get(row.game_id)!.push(row);
     });
     return map;
-  }, [currentTeamPlayerIds, playerGameStats, playerTeamMap, resolvedSeasonId, resolvedTeamId]);
+  }, [ownGameIds, playerGameStats, resolvedSeasonId]);
 
   const recentGameMetrics = useMemo(() => {
     if (!resolvedTeamId) return [];
@@ -4303,25 +5609,11 @@ export function SeasonComparison({
   const postgameReport = useMemo<PostGameReport | null>(() => {
     if (!selectedGame || !selectedTeamStats || !postgameBenchmarks || !resolvedTeamId || resolvedTeamId === 'all') return null;
 
-    const teamPlayers = playerGameStats.filter(row => {
-      if (row.game_id !== selectedGame.id) return false;
-      if (currentTeamPlayerIds.size > 0) {
-        return currentTeamPlayerIds.has(row.player_id);
-      }
-      const teamId = row.players?.team_id ?? playerTeamMap.get(row.player_id);
-      return teamId === resolvedTeamId;
-    });
+    const teamPlayers = playerGameStats.filter(row => row.game_id === selectedGame.id);
 
     const opponentPlayers = selectedGame.opponentGameId
       ? playerGameStats.filter(row => row.game_id === selectedGame.opponentGameId)
-      : playerGameStats.filter(row => {
-          if (row.game_id !== selectedGame.id) return false;
-          if (currentTeamPlayerIds.size > 0) {
-            return !currentTeamPlayerIds.has(row.player_id);
-          }
-          const teamId = row.players?.team_id ?? playerTeamMap.get(row.player_id);
-          return teamId ? teamId !== resolvedTeamId : false;
-        });
+      : [];
 
     if (teamPlayers.length === 0) return null;
 
@@ -4448,7 +5740,7 @@ export function SeasonComparison({
         ? pregameReport.xFactorContext
         : undefined;
 
-    return analyzePostGameReport(
+    const baseReport = analyzePostGameReport(
       teamGame,
       opponentGame,
       seasonStats,
@@ -4457,7 +5749,148 @@ export function SeasonComparison({
       alignedXFactorContext,
       postgameShotContext ?? undefined
     );
-  }, [currentTeamPlayerIds, league, playerGameStats, playerTeamMap, postgameBenchmarks, postgameShotContext, pregameReport, rolesByPlayerId, seasonPlayers, selectedGame, resolvedTeamId, selectedTeamStats]);
+
+    if (kosarstatPostgameNotes.length === 0) {
+      return baseReport;
+    }
+
+    return {
+      ...baseReport,
+      dataNotes: [...baseReport.dataNotes, ...kosarstatPostgameNotes],
+    };
+  }, [kosarstatPostgameNotes, league, playerGameStats, postgameBenchmarks, postgameShotContext, pregameReport, rolesByPlayerId, seasonPlayers, selectedGame, resolvedTeamId, selectedTeamStats]);
+
+  const activeKosarstatTeamAnalysis = useMemo(() => {
+    if (!kosarstatLineupAnalysis) return null;
+    return kosarstatLineupAnalysis.selectedTeam || kosarstatLineupAnalysis.homeTeam || kosarstatLineupAnalysis.awayTeam;
+  }, [kosarstatLineupAnalysis]);
+
+  const comboPlayerOptions = useMemo(() => {
+    if (!activeKosarstatTeamAnalysis) return [] as string[];
+    const names = new Set<string>();
+    activeKosarstatTeamAnalysis.playerMinutes.forEach(item => names.add(item.player));
+    activeKosarstatTeamAnalysis.stints.forEach(stint => stint.players.forEach(player => names.add(player)));
+    return Array.from(names).sort((a, b) => a.localeCompare(b, 'hu'));
+  }, [activeKosarstatTeamAnalysis]);
+
+  const lineupPositionOptions = useMemo(() => {
+    if (!activeKosarstatTeamAnalysis) {
+      return {
+        pg: [] as string[],
+        sg: [] as string[],
+        sf: [] as string[],
+        pf: [] as string[],
+        c: [] as string[],
+      };
+    }
+
+    const pg = new Set<string>();
+    const sg = new Set<string>();
+    const sf = new Set<string>();
+    const pf = new Set<string>();
+    const c = new Set<string>();
+
+    activeKosarstatTeamAnalysis.stints.forEach(stint => {
+      if (stint.players[0]) pg.add(stint.players[0]);
+      if (stint.players[1]) sg.add(stint.players[1]);
+      if (stint.players[2]) sf.add(stint.players[2]);
+      if (stint.players[3]) pf.add(stint.players[3]);
+      if (stint.players[4]) c.add(stint.players[4]);
+    });
+
+    const sorter = (a: string, b: string) => a.localeCompare(b, 'hu');
+    return {
+      pg: Array.from(pg).sort(sorter),
+      sg: Array.from(sg).sort(sorter),
+      sf: Array.from(sf).sort(sorter),
+      pf: Array.from(pf).sort(sorter),
+      c: Array.from(c).sort(sorter),
+    };
+  }, [activeKosarstatTeamAnalysis]);
+
+  useEffect(() => {
+    if (lineupPgFilter !== LINEUP_FILTER_ALL && !lineupPositionOptions.pg.includes(lineupPgFilter)) {
+      setLineupPgFilter(LINEUP_FILTER_ALL);
+    }
+    if (lineupSgFilter !== LINEUP_FILTER_ALL && !lineupPositionOptions.sg.includes(lineupSgFilter)) {
+      setLineupSgFilter(LINEUP_FILTER_ALL);
+    }
+    if (lineupSfFilter !== LINEUP_FILTER_ALL && !lineupPositionOptions.sf.includes(lineupSfFilter)) {
+      setLineupSfFilter(LINEUP_FILTER_ALL);
+    }
+    if (lineupPfFilter !== LINEUP_FILTER_ALL && !lineupPositionOptions.pf.includes(lineupPfFilter)) {
+      setLineupPfFilter(LINEUP_FILTER_ALL);
+    }
+    if (lineupCFilter !== LINEUP_FILTER_ALL && !lineupPositionOptions.c.includes(lineupCFilter)) {
+      setLineupCFilter(LINEUP_FILTER_ALL);
+    }
+  }, [
+    LINEUP_FILTER_ALL,
+    lineupPgFilter,
+    lineupSgFilter,
+    lineupSfFilter,
+    lineupPfFilter,
+    lineupCFilter,
+    lineupPositionOptions,
+  ]);
+
+  const filteredFiveManLineups = useMemo(() => {
+    if (!activeKosarstatTeamAnalysis) {
+      return [] as Array<
+        KosarstatLineupStint & {
+          pg: string;
+          sg: string;
+          sf: string;
+          pf: string;
+          c: string;
+        }
+      >;
+    }
+
+    return activeKosarstatTeamAnalysis.stints
+      .map(stint => ({
+        ...stint,
+        pg: stint.players[0] || '',
+        sg: stint.players[1] || '',
+        sf: stint.players[2] || '',
+        pf: stint.players[3] || '',
+        c: stint.players[4] || '',
+      }))
+      .filter(stint => {
+        if (lineupAnyPlayerFilter !== LINEUP_FILTER_ALL && !stint.players.includes(lineupAnyPlayerFilter)) {
+          return false;
+        }
+        if (lineupPgFilter !== LINEUP_FILTER_ALL && stint.pg !== lineupPgFilter) return false;
+        if (lineupSgFilter !== LINEUP_FILTER_ALL && stint.sg !== lineupSgFilter) return false;
+        if (lineupSfFilter !== LINEUP_FILTER_ALL && stint.sf !== lineupSfFilter) return false;
+        if (lineupPfFilter !== LINEUP_FILTER_ALL && stint.pf !== lineupPfFilter) return false;
+        if (lineupCFilter !== LINEUP_FILTER_ALL && stint.c !== lineupCFilter) return false;
+        return true;
+      })
+      .sort((a, b) => b.seconds - a.seconds || b.plusMinus - a.plusMinus);
+  }, [
+    LINEUP_FILTER_ALL,
+    activeKosarstatTeamAnalysis,
+    lineupAnyPlayerFilter,
+    lineupPgFilter,
+    lineupSgFilter,
+    lineupSfFilter,
+    lineupPfFilter,
+    lineupCFilter,
+  ]);
+
+  const selectedComboStat = useMemo(() => {
+    if (!activeKosarstatTeamAnalysis) return null;
+    const source = selectedComboSize === 2 ? activeKosarstatTeamAnalysis.pairStats : activeKosarstatTeamAnalysis.trioStats;
+    const selectedPlayers = [selectedComboPlayerA, selectedComboPlayerB, selectedComboPlayerC]
+      .slice(0, selectedComboSize)
+      .filter(Boolean)
+      .sort((a, b) => a.localeCompare(b, 'hu'));
+
+    if (selectedPlayers.length !== selectedComboSize) return null;
+    const key = selectedPlayers.join(' | ');
+    return source.find(item => item.key === key) || null;
+  }, [activeKosarstatTeamAnalysis, selectedComboPlayerA, selectedComboPlayerB, selectedComboPlayerC, selectedComboSize]);
 
   const decisiveFactorGroups = useMemo(() => {
     if (!postgameReport) return [] as Array<{ key: string; axis: 'offense' | 'defense'; type: string; label: string; items: string[] }>;
@@ -7867,6 +9300,13 @@ export function SeasonComparison({
             </div>
           )}
 
+          {selectedGameId && isLoadingKosarstatPostgame && (
+            <div className="flex items-center gap-2 text-xs text-slate-400">
+              <Loader2 size={14} className="animate-spin" />
+              Kosarstat lineup adatok csatolása folyamatban...
+            </div>
+          )}
+
           {postgameReport && (
             <div className="space-y-4">
               <div className="text-sm text-slate-200 leading-relaxed">{postgameReport.summary}</div>
@@ -7885,6 +9325,358 @@ export function SeasonComparison({
               {postgameReport.dataNotes.length > 0 && (
                 <div className="text-xs text-slate-400">
                   {postgameReport.dataNotes.join(' ')}
+                </div>
+              )}
+
+              {activeKosarstatTeamAnalysis && (
+                <div className="rounded-lg border border-slate-700 bg-slate-900/60 p-4 space-y-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="text-sm font-medium text-slate-100">
+                      Kosarstat lineup elemzés: {activeKosarstatTeamAnalysis.teamName}
+                    </div>
+                    <div className="text-xs text-slate-400">
+                      Assist alapú páros/trió adat jelenleg nem érhető el a Kosarstat lineup exportból.
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="text-xs text-slate-400 mb-2">Kezdő ötös</div>
+                    <div className="flex flex-wrap gap-2">
+                      {activeKosarstatTeamAnalysis.starters.map(player => (
+                        <Badge key={`starter-${player}`} variant="secondary" className="bg-emerald-900/40 text-emerald-200 border border-emerald-700/50">
+                          {player}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <div className="rounded-md border border-slate-800 bg-slate-950/35 p-3">
+                      <div className="text-sm text-slate-300 font-medium mb-2">Játékpercek és +/-</div>
+                      <div className="space-y-1 max-h-56 overflow-y-auto pr-1">
+                        {activeKosarstatTeamAnalysis.playerMinutes.map(item => (
+                          <div key={`pm-${item.player}`} className="flex items-center justify-between text-xs bg-slate-900/40 rounded px-2 py-1">
+                            <span className="text-slate-200 truncate pr-2">{item.player}</span>
+                            <span className="text-slate-400">{item.minutesLabel}</span>
+                            <span className={item.plusMinus !== null && item.plusMinus >= 0 ? 'text-emerald-300' : 'text-rose-300'}>
+                              {item.plusMinus === null ? '-' : `${item.plusMinus > 0 ? '+' : ''}${item.plusMinus.toFixed(1)}`}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="rounded-md border border-slate-800 bg-slate-950/35 p-3">
+                      <div className="text-sm text-slate-300 font-medium mb-2">Csere-események (2=be, 3=le)</div>
+                      <div className="space-y-1 max-h-56 overflow-y-auto pr-1">
+                        {activeKosarstatTeamAnalysis.substitutions.length === 0 && (
+                          <div className="text-xs text-slate-500">Nincs használható csereesemény.</div>
+                        )}
+                        {activeKosarstatTeamAnalysis.substitutions.slice(0, 40).map((event, idx) => (
+                          <div key={`sub-${idx}-${event.player}-${event.gameSecond}-${event.type}`} className="flex items-center justify-between text-xs bg-slate-900/40 rounded px-2 py-1">
+                            <span className="text-slate-300">{event.clockLabel}</span>
+                            <span className={event.type === 'in' ? 'text-emerald-300' : 'text-amber-300'}>
+                              {event.type === 'in' ? 'be' : 'le'}
+                            </span>
+                            <span className="text-slate-200 truncate pl-2">{event.player}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-md border border-slate-800 bg-slate-950/35 p-3 space-y-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="text-sm text-slate-300 font-medium">Rotáció timeline (1 képre)</div>
+                      <div className="text-xs text-slate-500">Színek alapján: pályánlét és cserepillanatok</div>
+                    </div>
+
+                    <div className="flex flex-wrap gap-3 text-[11px] text-slate-400">
+                      <div className="flex items-center gap-1"><span className="inline-block h-3 w-3 rounded bg-slate-700" />Nincs pályán</div>
+                      <div className="flex items-center gap-1"><span className="inline-block h-3 w-3 rounded bg-emerald-700/80" />Pályán</div>
+                      <div className="flex items-center gap-1"><span className="inline-block h-3 w-3 rounded bg-emerald-400" />Beállás</div>
+                      <div className="flex items-center gap-1"><span className="inline-block h-3 w-3 rounded bg-amber-400" />Lecsere</div>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-[11px] border-collapse table-fixed" style={{ minWidth: 1320 }}>
+                        <thead>
+                          <tr className="text-slate-400">
+                            <th className="text-left px-2 py-1 w-44">Játékos</th>
+                            <th className="text-center px-2 py-1 w-16 tabular-nums">Idő</th>
+                            <th className="text-center px-2 py-1 w-12 tabular-nums">+/-</th>
+                            {Array.from({ length: 40 }, (_, i) => i + 1).map(minute => (
+                              <th
+                                key={`rot-head-${minute}`}
+                                className={`px-1 py-1 text-center border-l border-slate-800/70 w-5 tabular-nums ${minute % 10 === 1 ? 'border-slate-300/80' : ''}`}
+                              >
+                                {minute}
+                              </th>
+                            ))}
+                            <th className="text-right px-2 py-1 w-20">Be</th>
+                            <th className="text-right px-2 py-1 w-20">Le</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {activeKosarstatTeamAnalysis.playerTimelines.map(row => (
+                            <tr key={`rot-row-${row.player}`} className="border-t border-slate-800/80">
+                              <td className="px-2 py-1 text-slate-200 whitespace-nowrap truncate">{row.player}</td>
+                              <td className="px-2 py-1 text-slate-300 whitespace-nowrap text-center tabular-nums">{row.minutesLabel}</td>
+                              <td className={`px-2 py-1 whitespace-nowrap text-center tabular-nums ${row.plusMinus !== null && row.plusMinus >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
+                                {row.plusMinus === null ? '-' : `${row.plusMinus > 0 ? '+' : ''}${row.plusMinus.toFixed(0)}`}
+                              </td>
+                              {row.minuteCodes.map((code, idx) => {
+                                const display = code || '0';
+                                const cls =
+                                  display === '1'
+                                    ? 'bg-emerald-700/55 text-emerald-100'
+                                    : display === '2'
+                                    ? 'bg-emerald-400/70 text-slate-900 font-semibold'
+                                    : display === '3'
+                                    ? 'bg-amber-400/70 text-slate-900 font-semibold'
+                                    : 'bg-slate-700/45 text-slate-300';
+                                return (
+                                  <td
+                                    key={`rot-cell-${row.player}-${idx}`}
+                                    className={`px-1 py-1 text-center border-l border-slate-800/70 ${cls} ${idx % 10 === 0 ? 'border-slate-300/80' : ''}`}
+                                    title={
+                                      display === '1'
+                                        ? 'Pályán'
+                                        : display === '2'
+                                          ? 'Beállás'
+                                          : display === '3'
+                                            ? 'Lecsere'
+                                            : 'Nincs pályán'
+                                    }
+                                  >
+                                    &nbsp;
+                                  </td>
+                                );
+                              })}
+                              <td className="px-2 py-1 text-slate-300 whitespace-nowrap text-right tabular-nums">{row.subInMinutes.length > 0 ? row.subInMinutes.join(', ') : '-'}</td>
+                              <td className="px-2 py-1 text-slate-300 whitespace-nowrap text-right tabular-nums">{row.subOutMinutes.length > 0 ? row.subOutMinutes.join(', ') : '-'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  <div className="rounded-md border border-slate-800 bg-slate-950/35 p-3 space-y-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="text-sm text-slate-300 font-medium">5-ös felállások (Kosarstat nézet)</div>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="secondary"
+                        className="h-8"
+                        onClick={() => {
+                          setLineupAnyPlayerFilter(LINEUP_FILTER_ALL);
+                          setLineupPgFilter(LINEUP_FILTER_ALL);
+                          setLineupSgFilter(LINEUP_FILTER_ALL);
+                          setLineupSfFilter(LINEUP_FILTER_ALL);
+                          setLineupPfFilter(LINEUP_FILTER_ALL);
+                          setLineupCFilter(LINEUP_FILTER_ALL);
+                        }}
+                      >
+                        Szűrők törlése
+                      </Button>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                      <div className="flex items-center gap-2 min-w-max pb-1">
+                        <Select value={lineupAnyPlayerFilter} onValueChange={setLineupAnyPlayerFilter}>
+                          <SelectTrigger className="bg-slate-800 border-slate-700 h-8 text-xs min-w-44"><SelectValue placeholder="Bármely játékos" /></SelectTrigger>
+                          <SelectContent className="bg-slate-800 border-slate-700 text-slate-100">
+                            <SelectItem value={LINEUP_FILTER_ALL}>Bármely játékos</SelectItem>
+                            {comboPlayerOptions.map(name => (<SelectItem key={`lineup-any-${name}`} value={name}>{name}</SelectItem>))}
+                          </SelectContent>
+                        </Select>
+
+                        <Select value={lineupPgFilter} onValueChange={setLineupPgFilter}>
+                          <SelectTrigger className="bg-slate-800 border-slate-700 h-8 text-xs min-w-36"><SelectValue placeholder="PG" /></SelectTrigger>
+                          <SelectContent className="bg-slate-800 border-slate-700 text-slate-100">
+                            <SelectItem value={LINEUP_FILTER_ALL}>PG: mind</SelectItem>
+                            {lineupPositionOptions.pg.map(name => (<SelectItem key={`lineup-pg-${name}`} value={name}>{name}</SelectItem>))}
+                          </SelectContent>
+                        </Select>
+
+                        <Select value={lineupSgFilter} onValueChange={setLineupSgFilter}>
+                          <SelectTrigger className="bg-slate-800 border-slate-700 h-8 text-xs min-w-36"><SelectValue placeholder="SG" /></SelectTrigger>
+                          <SelectContent className="bg-slate-800 border-slate-700 text-slate-100">
+                            <SelectItem value={LINEUP_FILTER_ALL}>SG: mind</SelectItem>
+                            {lineupPositionOptions.sg.map(name => (<SelectItem key={`lineup-sg-${name}`} value={name}>{name}</SelectItem>))}
+                          </SelectContent>
+                        </Select>
+
+                        <Select value={lineupSfFilter} onValueChange={setLineupSfFilter}>
+                          <SelectTrigger className="bg-slate-800 border-slate-700 h-8 text-xs min-w-36"><SelectValue placeholder="SF" /></SelectTrigger>
+                          <SelectContent className="bg-slate-800 border-slate-700 text-slate-100">
+                            <SelectItem value={LINEUP_FILTER_ALL}>SF: mind</SelectItem>
+                            {lineupPositionOptions.sf.map(name => (<SelectItem key={`lineup-sf-${name}`} value={name}>{name}</SelectItem>))}
+                          </SelectContent>
+                        </Select>
+
+                        <Select value={lineupPfFilter} onValueChange={setLineupPfFilter}>
+                          <SelectTrigger className="bg-slate-800 border-slate-700 h-8 text-xs min-w-36"><SelectValue placeholder="PF" /></SelectTrigger>
+                          <SelectContent className="bg-slate-800 border-slate-700 text-slate-100">
+                            <SelectItem value={LINEUP_FILTER_ALL}>PF: mind</SelectItem>
+                            {lineupPositionOptions.pf.map(name => (<SelectItem key={`lineup-pf-${name}`} value={name}>{name}</SelectItem>))}
+                          </SelectContent>
+                        </Select>
+
+                        <Select value={lineupCFilter} onValueChange={setLineupCFilter}>
+                          <SelectTrigger className="bg-slate-800 border-slate-700 h-8 text-xs min-w-36"><SelectValue placeholder="C" /></SelectTrigger>
+                          <SelectContent className="bg-slate-800 border-slate-700 text-slate-100">
+                            <SelectItem value={LINEUP_FILTER_ALL}>C: mind</SelectItem>
+                            {lineupPositionOptions.c.map(name => (<SelectItem key={`lineup-c-${name}`} value={name}>{name}</SelectItem>))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+
+                    <div className="text-xs text-slate-500">
+                      Találatok: <span className="text-slate-300 font-medium">{filteredFiveManLineups.length}</span>
+                    </div>
+
+                    <div className="overflow-x-auto max-h-112">
+                      <table className="w-full text-xs border-collapse" style={{ minWidth: 980 }}>
+                        <thead>
+                          <tr className="text-slate-400 border-b border-slate-800/80">
+                            <th className="px-2 py-1 text-left">PG</th>
+                            <th className="px-2 py-1 text-left">SG</th>
+                            <th className="px-2 py-1 text-left">SF</th>
+                            <th className="px-2 py-1 text-left">PF</th>
+                            <th className="px-2 py-1 text-left">C</th>
+                            <th className="px-2 py-1 text-right">Min</th>
+                            <th className="px-2 py-1 text-right">Team PTS</th>
+                            <th className="px-2 py-1 text-right">Opp PTS</th>
+                            <th className="px-2 py-1 text-right">On +/-</th>
+                            <th className="px-2 py-1 text-right">On40</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {filteredFiveManLineups.length === 0 && (
+                            <tr>
+                              <td colSpan={10} className="px-2 py-4 text-center text-slate-500">
+                                Nincs találat a megadott szűrőkkel.
+                              </td>
+                            </tr>
+                          )}
+
+                          {filteredFiveManLineups.map((stint, idx) => (
+                            <tr key={`lineup-five-${idx}-${stint.players.join('|')}-${stint.seconds}`} className="border-t border-slate-800/70">
+                              <td className="px-2 py-1 text-slate-200 whitespace-nowrap">{stint.pg || '-'}</td>
+                              <td className="px-2 py-1 text-slate-200 whitespace-nowrap">{stint.sg || '-'}</td>
+                              <td className="px-2 py-1 text-slate-200 whitespace-nowrap">{stint.sf || '-'}</td>
+                              <td className="px-2 py-1 text-slate-200 whitespace-nowrap">{stint.pf || '-'}</td>
+                              <td className="px-2 py-1 text-slate-200 whitespace-nowrap">{stint.c || '-'}</td>
+                              <td className="px-2 py-1 text-slate-300 text-right whitespace-nowrap">{stint.minutesLabel}</td>
+                              <td className="px-2 py-1 text-slate-300 text-right whitespace-nowrap">{stint.teamPts}</td>
+                              <td className="px-2 py-1 text-slate-300 text-right whitespace-nowrap">{stint.oppPts}</td>
+                              <td className={`px-2 py-1 text-right whitespace-nowrap ${stint.plusMinus >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
+                                {stint.plusMinus > 0 ? '+' : ''}{stint.plusMinus}
+                              </td>
+                              <td className="px-2 py-1 text-slate-300 text-right whitespace-nowrap">
+                                {stint.on40 === null ? '-' : `${stint.on40 > 0 ? '+' : ''}${stint.on40.toFixed(1)}`}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  <div className="rounded-md border border-slate-800 bg-slate-950/35 p-3 space-y-3">
+                    <div className="text-sm text-slate-300 font-medium">Páros / hármas együttállás elemző</div>
+
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={selectedComboSize === 2 ? 'default' : 'secondary'}
+                        onClick={() => setSelectedComboSize(2)}
+                      >
+                        Páros
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={selectedComboSize === 3 ? 'default' : 'secondary'}
+                        onClick={() => setSelectedComboSize(3)}
+                      >
+                        Hármas
+                      </Button>
+                    </div>
+
+                    <div className={`grid gap-2 ${selectedComboSize === 2 ? 'md:grid-cols-2' : 'md:grid-cols-3'}`}>
+                      <Select value={selectedComboPlayerA} onValueChange={setSelectedComboPlayerA}>
+                        <SelectTrigger className="bg-slate-800 border-slate-700"><SelectValue placeholder="1. játékos" /></SelectTrigger>
+                        <SelectContent className="bg-slate-800 border-slate-700 text-slate-100">
+                          {comboPlayerOptions.map(name => (<SelectItem key={`combo-a-${name}`} value={name}>{name}</SelectItem>))}
+                        </SelectContent>
+                      </Select>
+
+                      <Select value={selectedComboPlayerB} onValueChange={setSelectedComboPlayerB}>
+                        <SelectTrigger className="bg-slate-800 border-slate-700"><SelectValue placeholder="2. játékos" /></SelectTrigger>
+                        <SelectContent className="bg-slate-800 border-slate-700 text-slate-100">
+                          {comboPlayerOptions.map(name => (<SelectItem key={`combo-b-${name}`} value={name}>{name}</SelectItem>))}
+                        </SelectContent>
+                      </Select>
+
+                      {selectedComboSize === 3 && (
+                        <Select value={selectedComboPlayerC} onValueChange={setSelectedComboPlayerC}>
+                          <SelectTrigger className="bg-slate-800 border-slate-700"><SelectValue placeholder="3. játékos" /></SelectTrigger>
+                          <SelectContent className="bg-slate-800 border-slate-700 text-slate-100">
+                            {comboPlayerOptions.map(name => (<SelectItem key={`combo-c-${name}`} value={name}>{name}</SelectItem>))}
+                          </SelectContent>
+                        </Select>
+                      )}
+                    </div>
+
+                    {selectedComboStat ? (
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2 text-xs">
+                        <div className="rounded bg-slate-900/50 px-2 py-2"><div className="text-slate-400">Együtt töltött idő</div><div className="text-slate-100">{selectedComboStat.minutesLabel}</div></div>
+                        <div className="rounded bg-slate-900/50 px-2 py-2"><div className="text-slate-400">+/-</div><div className={selectedComboStat.plusMinus >= 0 ? 'text-emerald-300' : 'text-rose-300'}>{selectedComboStat.plusMinus > 0 ? '+' : ''}{selectedComboStat.plusMinus.toFixed(1)}</div></div>
+                        <div className="rounded bg-slate-900/50 px-2 py-2"><div className="text-slate-400">Off hatékonyság (40p)</div><div className="text-slate-100">{selectedComboStat.offPer40.toFixed(1)}</div></div>
+                        <div className="rounded bg-slate-900/50 px-2 py-2"><div className="text-slate-400">Def hatékonyság (40p)</div><div className="text-slate-100">{selectedComboStat.defPer40.toFixed(1)}</div></div>
+                      </div>
+                    ) : (
+                      <div className="text-xs text-slate-500">Válassz érvényes {selectedComboSize === 2 ? 'párost' : 'hármast'} az aggregált mutatókhoz.</div>
+                    )}
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div>
+                        <div className="text-xs text-slate-400 mb-1">Leghatékonyabb együttállások (Net/40)</div>
+                        <div className="space-y-1">
+                          {(selectedComboSize === 2 ? activeKosarstatTeamAnalysis.pairStats : activeKosarstatTeamAnalysis.trioStats)
+                            .slice(0, 5)
+                            .map(item => (
+                              <div key={`best-net-${item.key}`} className="text-xs bg-slate-900/40 rounded px-2 py-1 flex items-center justify-between">
+                                <span className="text-slate-200 truncate pr-2">{item.players.join(' + ')}</span>
+                                <span className={item.netPer40 >= 0 ? 'text-emerald-300' : 'text-rose-300'}>{item.netPer40 > 0 ? '+' : ''}{item.netPer40.toFixed(1)}</span>
+                              </div>
+                            ))}
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="text-xs text-slate-400 mb-1">Legjobb védekező együttállások (legalacsonyabb Def/40)</div>
+                        <div className="space-y-1">
+                          {(selectedComboSize === 2 ? activeKosarstatTeamAnalysis.pairStats : activeKosarstatTeamAnalysis.trioStats)
+                            .slice()
+                            .sort((a, b) => a.defPer40 - b.defPer40)
+                            .slice(0, 5)
+                            .map(item => (
+                              <div key={`best-def-${item.key}`} className="text-xs bg-slate-900/40 rounded px-2 py-1 flex items-center justify-between">
+                                <span className="text-slate-200 truncate pr-2">{item.players.join(' + ')}</span>
+                                <span className="text-cyan-300">{item.defPer40.toFixed(1)}</span>
+                              </div>
+                            ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               )}
 

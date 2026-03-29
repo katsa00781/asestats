@@ -26,10 +26,19 @@ export type Database = {
           our_score: number
           opp_score: number
           result: 'win' | 'loss'
+          kosarstat_game_id: string | null
           created_at: string
           updated_at: string
         }
-        Insert: Omit<Database['public']['Tables']['games']['Row'], 'id' | 'created_at' | 'updated_at'>
+        Insert: {
+          date: string
+          opponent: string
+          home_away: 'home' | 'away'
+          our_score: number
+          opp_score: number
+          result: 'win' | 'loss'
+          kosarstat_game_id?: string | null
+        }
         Update: Partial<Database['public']['Tables']['games']['Insert']>
       }
       players: {

@@ -28,6 +28,7 @@ import { PlayersImport } from '@/components/PlayersImport';
 import { RoundImport } from '@/components/RoundImport';
 import { RosterImport } from '@/components/RosterImport';
 import { FixturesImport } from '@/components/FixturesImport';
+import { KosarstatPbpImport } from '@/components/KosarstatPbpImport';
 import type { PlayerTrend } from '@/lib/player-analysis';
 
 export type ShootingStats = {
@@ -124,6 +125,7 @@ export type TeamGame = {
   ourScore: number;
   oppScore: number;
   result: 'win' | 'loss';
+  kosarstatGameId?: string | null;
   players: GamePlayer[];
   opponentGameId?: string;
 };
@@ -198,6 +200,7 @@ type SupabaseGame = {
   our_score: number;
   opp_score: number;
   result: 'win' | 'loss';
+  kosarstat_game_id?: string | null;
   our_team_id?: string;
 };
 
@@ -727,6 +730,7 @@ export default function Home() {
           ourScore: g.our_score,
           oppScore: g.opp_score,
           result: g.result,
+          kosarstatGameId: g.kosarstat_game_id ?? null,
           players: [], // Ezt nem használjuk a TeamStatistics-ban
           opponentGameId,
           };
@@ -954,7 +958,6 @@ export default function Home() {
               allTeams={allTeams}
               currentSeasonId={selectedSeasonId}
               currentTeamId={selectedTeamId}
-              currentTeamPlayers={playersBySeason}
               games={games}
               playerGameStats={playerGameStats}
             />
@@ -1013,6 +1016,11 @@ export default function Home() {
 
           <TabsContent value="import">
             <div className="space-y-6">
+              <KosarstatPbpImport
+                onImportComplete={loadData}
+                selectedSeasonId={selectedSeasonId}
+                selectedSeasonName={allSeasons.find(s => s.id === selectedSeasonId)?.name}
+              />
               <FixturesImport
                 onImportComplete={loadData}
                 selectedSeasonId={selectedSeasonId}

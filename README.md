@@ -77,4 +77,30 @@ npm run hunbasket:rosters
 
 Fejlesztés közben az **Import** fülön egy külön „Hunbasket keret frissítés” kártya is elérhető, amely ugyanezt a Playwright folyamatot futtatja le (csak kiválasztod a szezont, opcionálisan megadsz csapat szűrőt/slugot, majd indítod a folyamatot és élőben látod a naplót).
 
-build
+## Kosarstat play-by-play import
+
+A Kosarstat meccs oldalak (game, game_lineups, es kapcsolodo oldalak) importjahoz kulon script keszult:
+
+```bash
+npx playwright install chromium   # egyszer szükséges
+npm run kosarstat:pbp
+```
+
+Elso futtatas elott futtasd le az adatbazison a `supabase-kosarstat-pbp-tables.sql` fajlt.
+
+A script a szezonos meccslistabol kinyeri a `game` azonositokat, vegigmegy az adott
+meccsek oldalain (`/games/game/?game=...`, `/games/game/game_lineups/?game=...`, stb.),
+es ket tablaba ment:
+
+- `kosarstat_game_pages_raw`: nyers oldal-szoveg meccs/page szinten
+- `kosarstat_game_page_tables`: tablak fejlec + sor JSON formaban
+
+Használható környezeti változók:
+
+- `KOSARSTAT_SEASON_CODE` (pl. `2526`)
+- `KOSARSTAT_SEASON_NAME` (pl. `2025/2026`)
+- `KOSARSTAT_SEASON_ID` (opcionalis direkt season id)
+- `KOSARSTAT_GAME_LIMIT` (opcionalis limit tesztfutashoz)
+- `KOSARSTAT_HEADLESS=false` (ha latni akarod a bongeszot)
+
+Következő szezonban elég a fenti szezon változókat átállítani.
