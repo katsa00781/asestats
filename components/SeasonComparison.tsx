@@ -8135,28 +8135,30 @@ export function SeasonComparison({
     })();
 
     const clutchIdentity = (() => {
-      const clutchRows = rows.filter(item => item.margin !== null && item.margin <= 5);
-      if (clutchRows.length === 0) {
+        const clutchRows = rows.filter(item => item.margin !== null && item.margin <= 5);
+        // Always return a block, but mark as low confidence if sample is 0
+        if (clutchRows.length === 0) {
+          return {
+            available: true,
+            games: 0,
+            confidence: 'alacsony',
+            usagePct: null as number | null,
+            tsPct: null as number | null,
+            tovPct: null as number | null,
+            astTo: null as number | null,
+            ppp: null as number | null,
+          };
+        }
         return {
-          available: false,
-          games: 0,
-          usagePct: null as number | null,
-          tsPct: null as number | null,
-          tovPct: null as number | null,
-          astTo: null as number | null,
-          ppp: null as number | null,
+          available: true,
+          games: clutchRows.length,
+          confidence: confidenceFromSample(clutchRows.length, 4, 8),
+          usagePct: roundValue(average(clutchRows.map(item => item.usageSharePct)), 1),
+          tsPct: roundValue(average(clutchRows.map(item => item.tsPct)), 1),
+          tovPct: roundValue(average(clutchRows.map(item => item.tovPct)), 1),
+          astTo: roundValue(average(clutchRows.map(item => item.astTo)), 2),
+          ppp: roundValue(average(clutchRows.map(item => item.ppp)), 3),
         };
-      }
-      return {
-        available: true,
-        games: clutchRows.length,
-        confidence: confidenceFromSample(clutchRows.length, 4, 8),
-        usagePct: roundValue(average(clutchRows.map(item => item.usageSharePct)), 1),
-        tsPct: roundValue(average(clutchRows.map(item => item.tsPct)), 1),
-        tovPct: roundValue(average(clutchRows.map(item => item.tovPct)), 1),
-        astTo: roundValue(average(clutchRows.map(item => item.astTo)), 2),
-        ppp: roundValue(average(clutchRows.map(item => item.ppp)), 3),
-      };
     })();
 
     const plusMinusContext = (() => {
@@ -9009,24 +9011,27 @@ export function SeasonComparison({
                     </div>
 
                     <div className="rounded-md border border-slate-800 bg-slate-900/50 p-3 space-y-1">
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-1.5">
-                          <div className="text-slate-200 font-medium">2) Clutch identitás</div>
-                          {renderThresholdTooltip(playerAdvancedInsights.thresholdHints.clutch)}
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-1.5">
+                            <div className="text-slate-200 font-medium">2) Clutch identitás</div>
+                            {renderThresholdTooltip(playerAdvancedInsights.thresholdHints.clutch)}
+                          </div>
+                          {'confidence' in playerAdvancedInsights.clutchIdentity && (
+                            <Badge className="bg-slate-800 text-slate-200 border border-slate-700">{playerAdvancedInsights.clutchIdentity.confidence}</Badge>
+                          )}
                         </div>
-                        {'confidence' in playerAdvancedInsights.clutchIdentity && (
-                          <Badge className="bg-slate-800 text-slate-200 border border-slate-700">{playerAdvancedInsights.clutchIdentity.confidence}</Badge>
+                        <div className={`text-[11px] ${getInsightToneClass(playerAdvancedInsights.blockVerdicts.clutch.tone)}`}> 
+                          {playerAdvancedInsights.blockVerdicts.clutch.text}
+                        </div>
+                        <div className="text-slate-300">Minta: {playerAdvancedInsights.clutchIdentity.games} szoros meccs</div>
+                        {playerAdvancedInsights.clutchIdentity.games === 0 && (
+                          <div className="text-rose-400 text-xs font-semibold">Nincs clutch minta – az adatok csak tájékoztató jellegűek.</div>
                         )}
-                      </div>
-                      <div className={`text-[11px] ${getInsightToneClass(playerAdvancedInsights.blockVerdicts.clutch.tone)}`}>
-                        {playerAdvancedInsights.blockVerdicts.clutch.text}
-                      </div>
-                      <div className="text-slate-300">Minta: {playerAdvancedInsights.clutchIdentity.games} szoros meccs</div>
-                      <div className="text-slate-300">Clutch USG proxy: {formatNullableNumber(playerAdvancedInsights.clutchIdentity.usagePct, 1, '%')}</div>
-                      <div className="text-slate-300">Clutch TS%: {formatNullableNumber(playerAdvancedInsights.clutchIdentity.tsPct, 1, '%')}</div>
-                      <div className="text-slate-300">Clutch TOV%: {formatNullableNumber(playerAdvancedInsights.clutchIdentity.tovPct, 1, '%')}</div>
-                      <div className="text-slate-300">Clutch AST/TO: {formatNullableNumber(playerAdvancedInsights.clutchIdentity.astTo, 2)}</div>
-                      <div className="text-slate-300">Clutch PPP: {formatNullableNumber(playerAdvancedInsights.clutchIdentity.ppp, 3)}</div>
+                        <div className="text-slate-300">Clutch USG proxy: {formatNullableNumber(playerAdvancedInsights.clutchIdentity.usagePct, 1, '%')}</div>
+                        <div className="text-slate-300">Clutch TS%: {formatNullableNumber(playerAdvancedInsights.clutchIdentity.tsPct, 1, '%')}</div>
+                        <div className="text-slate-300">Clutch TOV%: {formatNullableNumber(playerAdvancedInsights.clutchIdentity.tovPct, 1, '%')}</div>
+                        <div className="text-slate-300">Clutch AST/TO: {formatNullableNumber(playerAdvancedInsights.clutchIdentity.astTo, 2)}</div>
+                        <div className="text-slate-300">Clutch PPP: {formatNullableNumber(playerAdvancedInsights.clutchIdentity.ppp, 3)}</div>
                     </div>
 
                     <div className="rounded-md border border-slate-800 bg-slate-900/50 p-3 space-y-1">
