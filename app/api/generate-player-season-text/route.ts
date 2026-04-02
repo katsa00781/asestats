@@ -59,7 +59,15 @@ Haladó statisztikák feldolgozási elvek:
 Stíluskontroll:
 - Ne listázz mechanikusan számokat; a számokat mindig értelmezd.
 - Azonosíts legalább egy erősséget és legalább egy fejlesztendő területet az advancedStats alapján.
-- Ne írj ellentmondást: ha valamely blokk kockázatos, a zárás ne nevezze egyértelmű erősségnek ugyanazt a területet.`;
+- Ne írj ellentmondást: ha valamely blokk kockázatos, a zárás ne nevezze egyértelmű erősségnek ugyanazt a területet.
+
+Kritikus értelmezési szabályok:
+- Az analysis.skillScores és az advancedStats.seasonSummary skill-jellegű indexei benchmark-mutatók, nem nyers per-meccs volumenadatok.
+- Ne nevezz valakit elsődleges pontszerzőnek vagy go-to opciónak csak magas skill score alapján; ehhez nyers PPG/MPG/usage-kontekstus is kell.
+- Ha a clutch usage alacsony, ezt másodlagos vagy befejező szerepkörként írd le, ne closerként.
+- Ne találj ki transition, short-roll vagy egyéb specifikus játékszituációs gyengeséget, ha nincs rá explicit adat a bemenetben.
+- Fault-fegyelmet csak akkor említs konkrét javítandó pontként, ha van hozzá számszerű seasonSummary vagy improvement adat.
+- Ha a szezonos stabilitás gyenge, de a clutch blokk pozitív, ezt minta- és szerepkör-különbségként oldd fel, ne állíts be globális ellentmondásmentes stabilitást.`;
 
 type GeneratePlayerSeasonPayload = {
   seasonId: string;
@@ -70,6 +78,7 @@ type GeneratePlayerSeasonPayload = {
   generatedBy?: string | null;
   analysis: unknown;
   advancedStats?: unknown;
+  seasonSummary?: unknown;
   shotProfile?: unknown;
   recentGames?: unknown;
 };
@@ -83,6 +92,7 @@ const buildUserPrompt = (payload: GeneratePlayerSeasonPayload) => {
     playerName: payload.playerName,
     analysis: payload.analysis,
     advancedStats: payload.advancedStats ?? null,
+    seasonSummary: payload.seasonSummary ?? null,
     shotProfile: payload.shotProfile ?? null,
     recentGames: payload.recentGames ?? null,
   };
@@ -159,6 +169,7 @@ export async function POST(request: Request) {
           analysis_snapshot: {
             analysis: payload.analysis,
             advancedStats: payload.advancedStats ?? null,
+            seasonSummary: payload.seasonSummary ?? null,
             shotProfile: payload.shotProfile ?? null,
             recentGames: payload.recentGames ?? null,
           },

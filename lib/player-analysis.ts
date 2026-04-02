@@ -781,13 +781,13 @@ const buildImprovementPoints = (
   const highFouls = foulsPer36 >= 4;
 
   if (roles.includes('Roll Man') && lowAst) {
-    improvements.push('Rövid lefordulásos döntéshozatal és passzopciók fejlesztése.');
+    improvements.push(`Passzjáték és gyors döntések fejlesztése kevés gólpassztermelés mellett (AST/TO: ${round(astTo, 2)}).`);
   }
   if (ftBelowAvg) {
     improvements.push('Büntetődobás stabilitás javítása.');
   }
   if (highFouls) {
-    improvements.push('Fault fegyelem javítása, felesleges szabálytalanságok csökkentése.');
+    improvements.push(`Fault fegyelem javítása (${round(foulsPer36, 1)} fault/36), a felesleges szabálytalanságok csökkentésével.`);
   }
   if (low3PA && roles.includes('Stretch 5') === false && roles.includes('Stretch 4') === false) {
     improvements.push('Térnyitás növelése (legalább sarokból érkező fenyegetés).');
@@ -808,25 +808,91 @@ const buildSummary = (
 ) => {
   const intro = roles[0]?.role ? ROLE_INTROS[roles[0].role] : `${player.position} poszton szereplő játékos.`;
   const roleKeys = roles.map(role => role.role);
-  const strengths = buildStrengths(skills);
-  const limitations = buildLimitations(skills);
-
-  const primaryStrength = strengths[0] ? `${strengths[0]} terén kiemelkedő.` : '';
-  const secondaryStrength = strengths[1] ? `${strengths[1]} terén pozitív.` : '';
-  const limitation = limitations[0] ? `${limitations[0]} terén visszafogott.` : '';
+  const rankedSkills = (Object.entries(skills) as Array<[keyof SkillScores, number]>)
+    .sort((a, b) => b[1] - a[1]);
+  const topSkill = rankedSkills[0]?.[0] ?? null;
+  const secondSkill = rankedSkills[1]?.[0] ?? null;
+  const weakestSkill = rankedSkills[rankedSkills.length - 1]?.[0] ?? null;
 
   const valPct = getPercentile(benchmarks, player, 'val_per36');
   const usagePct = getPercentile(benchmarks, player, 'usage_proxy');
+
+  const describeStrength = (skill: keyof SkillScores | null, secondary = false) => {
+    if (!skill) return '';
+
+    switch (skill) {
+      case 'scoring':
+        if (usagePct < 40) {
+          return secondary
+            ? 'Pontszerzésben szerepköréhez mérten hatékony kiegészítő opció.'
+            : 'Pontszerzésben inkább hatékony befejező, mint elsődleges volumenforrás.';
+        }
+        return secondary
+          ? 'Pontszerzésben stabil második hullámos terhelést is elbír.'
+          : 'Pontszerzésben a posztjához képest erős volumen-hatékonyságot ad.';
+      case 'shooting':
+        return secondary
+          ? 'Dobásban használható másodlagos erősség.'
+          : 'Dobásminőség és kivitelezés terén erős profil.';
+      case 'playmaking':
+        return secondary
+          ? 'Játéképítésben kiegészítő előnyt ad.'
+          : 'Játéképítésben a szerepkörénél több kapcsolódó értéket termel.';
+      case 'rebounding':
+        return secondary
+          ? 'Lepattanózásban stabil kiegészítő érték.'
+          : 'Lepattanózásban a posztjához képest erős jelenlétet ad.';
+      case 'defense':
+        return secondary
+          ? 'Védekezésben használható kiegészítő érték.'
+          : 'Védekezésben a posztjához képest pozitív hatást ad.';
+      case 'efficiency':
+        return secondary
+          ? 'Hatékonyságban megbízható másodlagos erősség.'
+          : 'Hatékonyságban kiemelt erősség, kevés labdából is értéket termel.';
+      default:
+        return '';
+    }
+  };
+
+  const describeWeakness = (skill: keyof SkillScores | null) => {
+    if (!skill) return '';
+
+    switch (skill) {
+      case 'playmaking':
+        return player.position === 'PF' || player.position === 'C'
+          ? 'Játéképítésben inkább befejező magas, nem szervező típus.'
+          : 'Játéképítésben nem elsődleges szervező, passzjátéka limitáltabb.';
+      case 'shooting':
+        return 'Dobásban jelenleg nincs stabil, széles spektrumú fenyegetés.';
+      case 'defense':
+        return 'Védekezésben a nyers boxscore-hatás nem elég következetes.';
+      case 'rebounding':
+        return 'Lepattanózásban nincs állandó fölénye a saját posztján.';
+      case 'scoring':
+        return usagePct < 40
+          ? 'Pontszerzésben jelenleg inkább kiegészítő volumenű opció.'
+          : 'Pontszerzésben a volumen és a hatékonyság nem egyszerre kiugró.';
+      case 'efficiency':
+        return 'Hatékonyságban nincs minden területen stabil plusza.';
+      default:
+        return '';
+    }
+  };
+
+  const primaryStrength = describeStrength(topSkill, false);
+  const secondaryStrength = secondSkill && secondSkill !== topSkill ? describeStrength(secondSkill, true) : '';
+  const limitation = describeWeakness(weakestSkill);
 
   let valSentence = '';
   if (skills.scoring >= 70 && valPct < 40) {
     valSentence = 'Magas ponttermelés mellett a VAL hatékonysági mutató visszafogott.';
   } else if (usagePct < 40 && valPct >= 70) {
-    valSentence = 'Alacsony labdabirtoklási arány mellett is magas VAL érték; értékes kiegészítő szerep.';
+    valSentence = 'Alacsony labdabirtoklási arány mellett is erős VAL/36 értéket ad, ezért kiegészítő szerepben is hasznos.';
   } else if (valPct >= 75) {
-    valSentence = 'Kiemelkedő VAL mutatók, hatékony hozzájárulás.';
+    valSentence = 'VAL/36 alapú hozzájárulása a saját posztján a mezőny felső részébe esik.';
   } else {
-    valSentence = 'VAL mutatói a ligaátlag körül mozognak.';
+    valSentence = 'VAL/36 mutatója inkább a ligaátlag körüli vagy enyhén afeletti szintet jelzi.';
   }
 
   const twoAttempts = player.close.attempted + player.mid.attempted;
@@ -977,7 +1043,7 @@ const buildDetailedLimitations = (
   const isFrontcourt = player.position === 'PF' || player.position === 'C';
 
   if (lowAst && skills.playmaking <= 40) {
-    limitations.push('Játéképítés: nem másodlagos szervező, rövid lefordulásokból nehezen hoz döntést.');
+    limitations.push('Játéképítés: nem másodlagos szervező, inkább befejező vagy egyszerű továbbjátszó szerepkörben érzi jól magát.');
   }
   if (low3PA && !roleNames.includes('Stretch 5') && !roleNames.includes('Stretch 4')) {
     const spacingLabel = isFrontcourt

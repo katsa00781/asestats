@@ -51,6 +51,21 @@ export type PlayerSeasonStat = {
   roles: string[];
 };
 
+export type ShotZoneKey = 'rim' | 'paint' | 'mid' | 'corner3' | 'aboveBreak3';
+
+export type ShotZoneStats = {
+  attempts: number;
+  made: number;
+  pct: number;
+};
+
+export type ShotProfileSummary = {
+  attempts: number;
+  made: number;
+  fgPct: number;
+  zoneStats: Record<ShotZoneKey, ShotZoneStats>;
+};
+
 export type BenchmarkPercentiles = {
   P10: number;
   P25: number;
@@ -95,6 +110,9 @@ export type ScoutingReportLLMContext = {
     deltaValPer36: number;
     matchupFlag?: PositionComparison['matchupFlag'];
   }>;
+  confidenceReasons?: string[];
+  shotProfileNotes?: string[];
+  shotDefenseNotes?: string[];
 };
 
 export type AdvancedPlayerStat = {
@@ -157,6 +175,13 @@ export type CalibrationDiagnostics = {
   dimensions: CalibrationDimension[];
 };
 
+type KeyPlayerGroups = {
+  primaryScorers: string[];
+  primaryPlaymakers: string[];
+  stretchThreats: string[];
+  mismatchCandidates: string[];
+};
+
 export type ScoutingReport = {
   ownTeamId: string;
   ownTeamName: string;
@@ -169,6 +194,7 @@ export type ScoutingReport = {
     opponentPct: number;
     predictedWinner: 'own' | 'opponent' | 'even';
     confidence: 'Low' | 'Medium' | 'High';
+    confidenceReasons: string[];
   };
   positionComparison: PositionComparison[];
   profile: {
@@ -183,12 +209,8 @@ export type ScoutingReport = {
   };
   threats: string[];
   vulnerabilities: string[];
-  keyPlayers: {
-    primaryScorers: string[];
-    primaryPlaymakers: string[];
-    stretchThreats: string[];
-    mismatchCandidates: string[];
-  };
+  keyPlayers: KeyPlayerGroups;
+  ownKeyPlayers: KeyPlayerGroups;
   focusPoints: string[];
   xFactorContext?: PreGameXFactorContext;
   xFactorImpact?: XFactorImpact;
@@ -211,6 +233,19 @@ export type ScoutingReport = {
   };
   positionComparisonNote?: string;
   llmContext?: ScoutingReportLLMContext;
+  shotProfileContext?: {
+    ownZones: Array<{ label: string; rate: number; pct: number; rateDeltaVsLeague: number; pctDeltaVsLeague: number }>;
+    opponentZones: Array<{ label: string; rate: number; pct: number; rateDeltaVsLeague: number; pctDeltaVsLeague: number }>;
+    ownAllowedZones: Array<{ label: string; rate: number; pct: number; rateDeltaVsLeague: number; pctDeltaVsLeague: number }>;
+    opponentAllowedZones: Array<{ label: string; rate: number; pct: number; rateDeltaVsLeague: number; pctDeltaVsLeague: number }>;
+    ownTopZones: Array<{ label: string; rate: number; pct: number; rateDeltaVsLeague: number; pctDeltaVsLeague: number }>;
+    opponentTopZones: Array<{ label: string; rate: number; pct: number; rateDeltaVsLeague: number; pctDeltaVsLeague: number }>;
+    ownDefensePressureZones: Array<{ label: string; rate: number; pct: number; rateDeltaVsLeague: number; pctDeltaVsLeague: number }>;
+    opponentDefensePressureZones: Array<{ label: string; rate: number; pct: number; rateDeltaVsLeague: number; pctDeltaVsLeague: number }>;
+    clashZones: string[];
+    notes: string[];
+    defenseNotes: string[];
+  };
   summary: string;
 };
 
@@ -244,12 +279,37 @@ const round = (value: number, digits = 2) => {
 const clamp = (value: number, min: number, max: number) =>
   Math.min(Math.max(value, min), max);
 
+const average = (values: number[]) =>
+  values.length > 0 ? values.reduce((sum, value) => sum + value, 0) / values.length : 0;
+
+const stdDev = (values: number[]) => {
+  if (values.length <= 1) return 0;
+  const mean = average(values);
+  const variance = values.reduce((sum, value) => sum + Math.pow(value - mean, 2), 0) / values.length;
+  return Math.sqrt(variance);
+};
+
+const zScore = (value: number, pool: number[]) => {
+  const mean = average(pool);
+  const sd = stdDev(pool);
+  if (!Number.isFinite(value) || !Number.isFinite(sd) || sd <= 0.0001) return 0;
+  return (value - mean) / sd;
+};
+
 const POSITION_LABELS: Record<Position, string> = {
   PG: 'irányító',
   SG: 'dobóhátvéd',
   SF: 'kiscsatár',
   PF: 'erőcsatár',
   C: 'center',
+};
+
+const SHOT_ZONE_LABELS: Record<ShotZoneKey, string> = {
+  rim: 'Gyűrű',
+  paint: 'Festék',
+  mid: 'Középtáv',
+  corner3: 'Sarok tripla',
+  aboveBreak3: 'Egyéb tripla',
 };
 
 const BALL_HANDLER_ROLE_HINTS = new Set<string>([
@@ -580,6 +640,123 @@ const computePlayerUsage = (player: PlayerSeasonStat) => {
   return player.games > 0 ? possessionsUsed / player.games : 0;
 };
 
+const buildShotProfileContext = (
+  ownShotProfile?: ShotProfileSummary | null,
+  opponentShotProfile?: ShotProfileSummary | null,
+  leagueShotProfile?: ShotProfileSummary | null,
+  ownAllowedShotProfile?: ShotProfileSummary | null,
+  opponentAllowedShotProfile?: ShotProfileSummary | null
+) => {
+  if (!ownShotProfile || !opponentShotProfile || !leagueShotProfile) return undefined;
+
+  const summarize = (profile: ShotProfileSummary) => {
+    const totalAttempts = Math.max(profile.attempts, 1);
+    const leagueTotalAttempts = Math.max(leagueShotProfile.attempts, 1);
+
+    return (Object.keys(profile.zoneStats) as ShotZoneKey[])
+      .map(zone => {
+        const attempts = profile.zoneStats[zone].attempts;
+        const rate = (attempts / totalAttempts) * 100;
+        const pct = profile.zoneStats[zone].pct;
+        const leagueRate = (leagueShotProfile.zoneStats[zone].attempts / leagueTotalAttempts) * 100;
+        const leaguePct = leagueShotProfile.zoneStats[zone].pct;
+
+        return {
+          key: zone,
+          label: SHOT_ZONE_LABELS[zone],
+          attempts,
+          rate: round(rate, 1),
+          pct: round(pct, 1),
+          rateDeltaVsLeague: round(rate - leagueRate, 1),
+          pctDeltaVsLeague: round(pct - leaguePct, 1),
+        };
+      })
+      .sort((a, b) => {
+        const aScore = a.rateDeltaVsLeague * 0.7 + a.pctDeltaVsLeague * 0.3;
+        const bScore = b.rateDeltaVsLeague * 0.7 + b.pctDeltaVsLeague * 0.3;
+        return bScore - aScore;
+      });
+  };
+
+  const ownZones = summarize(ownShotProfile);
+  const opponentZones = summarize(opponentShotProfile);
+  const ownAllowedZones = ownAllowedShotProfile ? summarize(ownAllowedShotProfile) : [];
+  const opponentAllowedZones = opponentAllowedShotProfile ? summarize(opponentAllowedShotProfile) : [];
+  const ownTopZones = ownZones.filter(zone => zone.attempts >= 12).slice(0, 2);
+  const opponentTopZones = opponentZones.filter(zone => zone.attempts >= 12).slice(0, 2);
+  const ownDefensePressureZones = ownAllowedZones
+    .filter(zone => zone.attempts >= 12)
+    .sort((a, b) => a.rateDeltaVsLeague - b.rateDeltaVsLeague || a.pctDeltaVsLeague - b.pctDeltaVsLeague)
+    .slice(0, 2);
+  const opponentDefensePressureZones = opponentAllowedZones
+    .filter(zone => zone.attempts >= 12)
+    .sort((a, b) => a.rateDeltaVsLeague - b.rateDeltaVsLeague || a.pctDeltaVsLeague - b.pctDeltaVsLeague)
+    .slice(0, 2);
+  const clashZones = ownTopZones
+    .map(zone => zone.label)
+    .filter(label => opponentTopZones.some(item => item.label === label));
+
+  const notes: string[] = [];
+  const defenseNotes: string[] = [];
+  const ownBestEfficiency = ownZones.find(zone => zone.pctDeltaVsLeague >= 2 && zone.attempts >= 10) || null;
+  const opponentBestEfficiency = opponentZones.find(zone => zone.pctDeltaVsLeague >= 2 && zone.attempts >= 10) || null;
+
+  if (ownBestEfficiency) {
+    notes.push(`${ownBestEfficiency.label}: saját támadó zónaelőny (${ownBestEfficiency.pctDeltaVsLeague >= 0 ? '+' : ''}${ownBestEfficiency.pctDeltaVsLeague.toFixed(1)} pp liga fölött).`);
+  }
+  if (opponentBestEfficiency) {
+    notes.push(`${opponentBestEfficiency.label}: ellenfél elsődleges hatékony zónája (${opponentBestEfficiency.pctDeltaVsLeague >= 0 ? '+' : ''}${opponentBestEfficiency.pctDeltaVsLeague.toFixed(1)} pp liga fölött).`);
+  }
+  if (clashZones.length > 0) {
+    notes.push(`Zónaütközés: mindkét csapat hangsúlyosan támadja a következő területeket: ${clashZones.join(', ')}.`);
+  }
+
+  const ownBestAttackVsOpponentDefense = ownZones
+    .map(zone => {
+      const opponentAllowed = opponentAllowedZones.find(item => item.label === zone.label);
+      if (!opponentAllowed) return null;
+      return {
+        ...zone,
+        edge: round(zone.pctDeltaVsLeague - opponentAllowed.pctDeltaVsLeague, 1),
+      };
+    })
+    .filter((item): item is NonNullable<typeof item> => Boolean(item))
+    .sort((a, b) => b.edge - a.edge)[0] || null;
+
+  const opponentBestAttackVsOwnDefense = opponentZones
+    .map(zone => {
+      const ownAllowed = ownAllowedZones.find(item => item.label === zone.label);
+      if (!ownAllowed) return null;
+      return {
+        ...zone,
+        edge: round(zone.pctDeltaVsLeague - ownAllowed.pctDeltaVsLeague, 1),
+      };
+    })
+    .filter((item): item is NonNullable<typeof item> => Boolean(item))
+    .sort((a, b) => b.edge - a.edge)[0] || null;
+
+  if (ownBestAttackVsOpponentDefense && ownBestAttackVsOpponentDefense.edge >= 2) {
+    defenseNotes.push(`${ownBestAttackVsOpponentDefense.label}: saját támadás kedvező zóna-matchup az ellenfél engedett profiljához képest.`);
+  }
+  if (opponentBestAttackVsOwnDefense && opponentBestAttackVsOwnDefense.edge >= 2) {
+    defenseNotes.push(`${opponentBestAttackVsOwnDefense.label}: ellenfél támadási matchup-fenyegetés a saját engedett profilhoz mérten.`);
+  }
+
+  return {
+    ownZones,
+    opponentZones,
+    ownAllowedZones,
+    opponentAllowedZones,
+    ownTopZones,
+    opponentTopZones,
+    ownDefensePressureZones,
+    opponentDefensePressureZones,
+    clashZones,
+    notes: notes.slice(0, 3),
+    defenseNotes: defenseNotes.slice(0, 3),
+  };
+};
+
 const computeProxyPer = (player: PlayerSeasonStat) => {
   const minutes = Math.max(player.minutes || 0, 1);
   const pointsPer36 = (player.points / minutes) * 36;
@@ -774,14 +951,19 @@ const buildPositionComparison = (ownPlayers: PlayerSeasonStat[], opponentPlayers
 
 const identifyKeyPlayers = (players: PlayerSeasonStat[], teamUsageShare: number) => {
   const usageValues = players.map(computePlayerUsage).filter(v => Number.isFinite(v));
-  const mean = usageValues.reduce((sum, v) => sum + v, 0) / (usageValues.length || 1);
-  const variance = usageValues.reduce((sum, v) => sum + Math.pow(v - mean, 2), 0) / (usageValues.length || 1);
-  const sd = Math.sqrt(variance);
+  const valPer36Pool = players.map(player => {
+    const minutes = Math.max(player.minutes || 0, 1);
+    return (player.val / minutes) * 36;
+  });
+  const astPerGamePool = players.map(player => player.games > 0 ? player.ast / player.games : 0);
+  const astToPool = players.map(player => player.tov > 0 ? player.ast / player.tov : player.ast);
+  const threeVolumePool = players.map(player => player.games > 0 ? player.fga3 / player.games : 0);
+  const threePctPool = players.map(player => player.fga3 > 0 ? (player.fgm3 / player.fga3) * 100 : 0);
 
-  const primaryScorers: Array<{ name: string; score: number }> = [];
-  const primaryPlaymakers: Array<{ name: string; score: number }> = [];
-  const stretchThreats: Array<{ name: string; score: number }> = [];
-  const mismatchCandidates: Array<{ name: string; score: number }> = [];
+  const primaryScorers: Array<{ key: string; label: string; score: number }> = [];
+  const primaryPlaymakers: Array<{ key: string; label: string; score: number }> = [];
+  const stretchThreats: Array<{ key: string; label: string; score: number }> = [];
+  const mismatchCandidates: Array<{ key: string; label: string; score: number }> = [];
 
   const heightByPos = players.reduce((acc, player) => {
     const height = player.heightCm;
@@ -804,40 +986,54 @@ const identifyKeyPlayers = (players: PlayerSeasonStat[], teamUsageShare: number)
     const threePct = player.fga3 > 0 ? (player.fgm3 / player.fga3) * 100 : 0;
     const astTo = player.tov > 0 ? player.ast / player.tov : player.ast;
     const usage = computePlayerUsage(player);
+    const astPerGame = player.games > 0 ? player.ast / player.games : 0;
+    const threeVolume = player.games > 0 ? player.fga3 / player.games : 0;
+    const minutes = Math.max(player.minutes || 0, 1);
+    const valPer36 = (player.val / minutes) * 36;
     const primaryPos = getPlayerPositionBuckets(player)[0] ?? player.position;
     const posAvgHeight = avgHeight(primaryPos);
     const height = player.heightCm;
+    const usageNorm = zScore(usage, usageValues);
+    const valNorm = zScore(valPer36, valPer36Pool);
+    const astNorm = zScore(astPerGame, astPerGamePool);
+    const astToNorm = zScore(astTo, astToPool);
+    const threeVolumeNorm = zScore(threeVolume, threeVolumePool);
+    const threePctNorm = zScore(threePct, threePctPool);
 
-    if (usage > mean + sd) primaryScorers.push({ name: player.name, score: usage + player.val * 1.2 });
-    if (player.ast >= 3 && astTo >= 1.6) {
-      primaryPlaymakers.push({ name: player.name, score: player.ast * 1.6 + astTo * 2 });
+    if (usageNorm >= 0.35 || (usageNorm >= 0.1 && valNorm >= 0.35)) {
+      primaryScorers.push({ key: player.name, label: player.name, score: usageNorm * 0.65 + valNorm * 0.35 });
     }
-    if (player.fga3 >= 2 && threePct >= 38) {
-      stretchThreats.push({ name: player.name, score: player.fga3 * 2 + threePct });
+    if (astPerGame >= 2.5 && astTo >= 1.4) {
+      primaryPlaymakers.push({ key: player.name, label: player.name, score: astNorm * 0.6 + astToNorm * 0.4 });
     }
-    if (usage >= mean && player.val >= 10) {
-      mismatchCandidates.push({ name: player.name, score: player.val + usage * 0.4 });
+    if (threeVolume >= 1.5 && threePct >= 34) {
+      stretchThreats.push({ key: player.name, label: player.name, score: threeVolumeNorm * 0.55 + threePctNorm * 0.45 });
+    }
+    if (usageNorm >= 0 || valNorm >= 0.15) {
+      mismatchCandidates.push({ key: player.name, label: player.name, score: valNorm * 0.65 + usageNorm * 0.35 });
     }
     if (posAvgHeight != null && typeof height === 'number' && Number.isFinite(height) && height >= posAvgHeight + 5) {
-      mismatchCandidates.push({ name: `${player.name} (magassági előny)`, score: player.val + 8 });
+      mismatchCandidates.push({ key: player.name, label: `${player.name} (magassági előny)`, score: valNorm + 0.9 });
     }
   });
 
   if (teamUsageShare >= 0.55 && primaryScorers.length === 0) {
     const topUsage = players.slice().sort((a, b) => computePlayerUsage(b) - computePlayerUsage(a))[0];
-    if (topUsage) primaryScorers.push({ name: topUsage.name, score: computePlayerUsage(topUsage) });
+    if (topUsage) primaryScorers.push({ key: topUsage.name, label: topUsage.name, score: computePlayerUsage(topUsage) });
   }
 
-  const pickTop = (items: Array<{ name: string; score: number }>) => {
-    const unique = new Map<string, number>();
+  const pickTop = (items: Array<{ key: string; label: string; score: number }>) => {
+    const unique = new Map<string, { label: string; score: number }>();
     items.forEach(item => {
-      const current = unique.get(item.name) ?? -Infinity;
-      if (item.score > current) unique.set(item.name, item.score);
+      const current = unique.get(item.key);
+      if (!current || item.score > current.score) {
+        unique.set(item.key, { label: item.label, score: item.score });
+      }
     });
-    return Array.from(unique.entries())
-      .sort((a, b) => b[1] - a[1])
+    return Array.from(unique.values())
+      .sort((a, b) => b.score - a.score)
       .slice(0, 3)
-      .map(([name]) => name)
+      .map(item => item.label)
       .filter(Boolean);
   };
 
@@ -1376,10 +1572,24 @@ const buildFanSummary = (
     .map(item => POSITION_LABELS[item.position] ?? item.position)
     .slice(0, 3);
 
-  const headline = winProbability.predictedWinner === 'own'
-    ? `${ownTeamName} favorit, de fegyelmezett végrehajtás kell a stabil meccsképhez.`
+  const favoredPct = winProbability.predictedWinner === 'own'
+    ? winProbability.ownPct
     : winProbability.predictedWinner === 'opponent'
-      ? `${opponentTeamName} minimális előnyben, de jó ritmusváltással fordítható a matchup.`
+      ? winProbability.opponentPct
+      : 50;
+
+  const headline = winProbability.predictedWinner === 'own'
+    ? favoredPct >= 70
+      ? `${ownTeamName} erős favoritnak számít, de a matchup kulcsterületeit így is kontrollálni kell.`
+      : favoredPct >= 62
+        ? `${ownTeamName} világos előnyben van, de fegyelmezett végrehajtás kell a modell realizálásához.`
+        : `${ownTeamName} enyhe-mérsékelt előnyben van, a futások kezelése döntheti el a meccset.`
+    : winProbability.predictedWinner === 'opponent'
+      ? favoredPct >= 70
+        ? `${opponentTeamName} egyértelmű favorit, ezért magas fegyelmi szint és jó ritmusváltás kell a fordításhoz.`
+        : favoredPct >= 62
+          ? `${opponentTeamName} világos előnyben van, de a matchup kulcspontjain még billenthető a meccskép.`
+          : `${opponentTeamName} enyhe-mérsékelt előnyben van, jó ritmusváltással nyitva tartható a matchup.`
       : 'Kiegyenlített párharc várható, a kulcsfutások dönthetnek a végjátékban.';
 
   return {
@@ -1419,7 +1629,10 @@ const buildSummary = (
   riskScenarios: RiskScenario[] = [],
   fanSummary?: FanSummary,
   positionComparisonNote?: string,
-  injuryContext?: { own: string[]; opponent: string[] }
+  injuryContext?: { own: string[]; opponent: string[] },
+  confidenceReasons: string[] = [],
+  shotProfileNotes: string[] = [],
+  shotDefenseNotes: string[] = []
 ) => {
   const tempo = describeTempo(opponent.pace);
   const offense = profile.offense.length > 0 ? profile.offense.join(', ') : 'kiegyensúlyozott';
@@ -1454,6 +1667,9 @@ const buildSummary = (
     ? 'Bizonyosság: Közepes–alacsony'
     : confidenceMap[winProbability.confidence];
   const probabilityLine = `Eredmény-prognózis: Várható győztes: ${favoredLabel} | ${probabilityText} | ${probabilityConfidenceLabel}.`;
+  const confidenceReasonLine = confidenceReasons.length > 0
+    ? `Bizonyosság kontextusa: ${confidenceReasons.join(' • ')}.`
+    : '';
 
   const threatText = threats.length > 0
     ? threats.join('; ')
@@ -1502,6 +1718,13 @@ const buildSummary = (
   ].filter(part => part.length > 0);
   const positionSection = positionSectionParts.join(' ');
 
+  const shotProfileLine = shotProfileNotes.length > 0
+    ? `Dobástérkép-fókusz: ${shotProfileNotes.join(' • ')}.`
+    : '';
+  const shotDefenseLine = shotDefenseNotes.length > 0
+    ? `Dobástérkép-védekezés: ${shotDefenseNotes.join(' • ')}.`
+    : '';
+
   const focusLine = focusPoints.length > 0
     ? `Fókuszpontok (reakciók): ${focusPoints.join(' • ')}.`
     : '';
@@ -1516,7 +1739,7 @@ const buildSummary = (
 
   const xFactorLine = `X-faktor: Elsődleges: ${xFactors.primary.label}; Másodlagos: ${xFactors.secondary.label}.`;
   const xFactorImpactLine = xFactorImpact
-    ? `X-faktor becsült hatás: +${xFactorImpact.primaryDeltaPct}% (elsődleges), +${xFactorImpact.secondaryDeltaPct}% (másodlagos), együtt +${xFactorImpact.combinedDeltaPct}% a győzelmi esélyhez.`
+    ? `X-faktor modellált swing-potenciál: +${xFactorImpact.primaryDeltaPct}% (elsődleges), +${xFactorImpact.secondaryDeltaPct}% (másodlagos), együtt +${xFactorImpact.combinedDeltaPct}% kontrollált forgatókönyvben.`
     : '';
   const riskScenarioLine = riskScenarios.length > 0
     ? `Ha-bekövetkezik forgatókönyvek: ${riskScenarios.map(item => `${item.title} → ${item.instantResponse}`).join(' | ')}.`
@@ -1526,12 +1749,15 @@ const buildSummary = (
   const sections = [
     viewpointLine,
     probabilityLine,
+    confidenceReasonLine,
     `Kontextus: Az ellenfél ${tempo}, ${offense} támadást játszik, védekezése ${defense}. Domináns tengely: ${axisLabel}.`,
     `Fő veszélyek: ${threatText}.`,
     `Feltételes sebezhetőségek (ellenfél): ${vulnText}.`,
     `Saját kockázati pontok: ${ownRiskText}.`,
     injuryLine,
     positionSection,
+    shotProfileLine,
+    shotDefenseLine,
     focusLine,
     tempoLine,
     xFactorLine,
@@ -1587,6 +1813,7 @@ const computeWinProbability = (
   const ownPct = clamp(probability, 0.08, 0.92) * 100;
   const opponentPct = 100 - ownPct;
   const absDiff = Math.abs(adjustedDiff);
+  const confidenceReasons: string[] = [];
 
   let confidence: 'Low' | 'Medium' | 'High' = absDiff >= 16
     ? 'High'
@@ -1594,12 +1821,22 @@ const computeWinProbability = (
       ? 'Medium'
       : 'Low';
 
+  if (absDiff < 8) {
+    confidenceReasons.push('szűk rating-különbség');
+  }
+
   const minGames = Math.min(ownTeam.games || 0, opponentTeam.games || 0);
   if (minGames < 10 && confidence === 'High') {
     confidence = 'Medium';
   }
+  if (minGames < 10) {
+    confidenceReasons.push('korlátozott szezonminta');
+  }
   if (volatilityFactor < 1 && confidence === 'High') {
     confidence = 'Medium';
+  }
+  if (volatilityFactor < 1) {
+    confidenceReasons.push('magas tripla-variancia');
   }
 
   const predictedWinner: 'own' | 'opponent' | 'even' = absDiff < 2
@@ -1613,6 +1850,7 @@ const computeWinProbability = (
     opponentPct: round(opponentPct, 1),
     predictedWinner,
     confidence,
+    confidenceReasons,
   };
 };
 
@@ -1622,7 +1860,14 @@ export const analyzePreGameScouting = (
   ownTeam: TeamSeasonStat,
   leagueBenchmarks: LeagueTeamBenchmarks,
   ownPlayers: PlayerSeasonStat[] = [],
-  injuryContext?: { own: string[]; opponent: string[] }
+  injuryContext?: { own: string[]; opponent: string[] },
+  shotProfiles?: {
+    own?: ShotProfileSummary | null;
+    opponent?: ShotProfileSummary | null;
+    league?: ShotProfileSummary | null;
+    ownAllowed?: ShotProfileSummary | null;
+    opponentAllowed?: ShotProfileSummary | null;
+  }
 ): ScoutingReport => {
   const normalizedOpponent = normalizeTeamStats(opponentTeam);
   const normalizedOwn = normalizeTeamStats(ownTeam);
@@ -1630,7 +1875,9 @@ export const analyzePreGameScouting = (
   const opponentStyle = buildTeamStyle(normalizedOpponent, leagueBenchmarks);
   const ownStyle = buildTeamStyle(normalizedOwn, leagueBenchmarks);
   const usageShare = computeUsageConcentration(opponentPlayers);
+  const ownUsageShare = computeUsageConcentration(ownPlayers);
   const keyPlayers = identifyKeyPlayers(opponentPlayers, usageShare);
+  const ownKeyPlayers = identifyKeyPlayers(ownPlayers, ownUsageShare);
 
   const ownHeightByPos = ownPlayers.reduce((acc, player) => {
     const height = player.heightCm;
@@ -1683,6 +1930,13 @@ export const analyzePreGameScouting = (
   const { perimeterDelta, frontcourtDelta } = summarizePositionDeltas(positionComparison);
   const varianceDrivers = buildVarianceDrivers(normalizedOpponent, normalizedOwn, leagueBenchmarks, riskNotes.flags);
   const riskScenarios = buildRiskScenarios(riskNotes.flags, normalizedOpponent, normalizedOwn, leagueBenchmarks);
+  const shotProfileContext = buildShotProfileContext(
+    shotProfiles?.own,
+    shotProfiles?.opponent,
+    shotProfiles?.league,
+    shotProfiles?.ownAllowed,
+    shotProfiles?.opponentAllowed
+  );
   const scenarioOutcomes = buildScenarioOutcomes(
     winProbability,
     xFactorImpact,
@@ -1732,6 +1986,9 @@ export const analyzePreGameScouting = (
     matchupRealizationNote: matchupRealizationNote || undefined,
     riskNote: riskNotes.note || undefined,
     varianceDrivers,
+    confidenceReasons: winProbability.confidenceReasons,
+    shotProfileNotes: shotProfileContext?.notes,
+    shotDefenseNotes: shotProfileContext?.defenseNotes,
     positionDeltaSummary: {
       perimeterDelta,
       frontcourtDelta,
@@ -1782,6 +2039,7 @@ export const analyzePreGameScouting = (
       ...keyPlayers,
       mismatchCandidates: [...keyPlayers.mismatchCandidates, ...heightMismatchNotes].slice(0, 4),
     },
+    ownKeyPlayers,
     focusPoints,
     xFactorContext,
     xFactorImpact,
@@ -1789,6 +2047,7 @@ export const analyzePreGameScouting = (
     riskScenarios,
     fanSummary,
     calibrationDiagnostics,
+    shotProfileContext,
     advancedPlayers,
     advancedPlayersEligibility,
     riskFlags: riskNotes.flags,
@@ -1814,7 +2073,10 @@ export const analyzePreGameScouting = (
       riskScenarios,
       fanSummary,
       positionComparisonNote || '',
-      injuryContext
+      injuryContext,
+      winProbability.confidenceReasons,
+      shotProfileContext?.notes ?? [],
+      shotProfileContext?.defenseNotes ?? []
     ),
     injuryContext,
   };

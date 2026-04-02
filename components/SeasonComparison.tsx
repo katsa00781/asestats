@@ -686,6 +686,76 @@ const buildAggregatedKosarstatClutchContext = (
   };
 };
 
+const buildAggregatedKosarstatPlayerClutchContext = (
+  games: KosarstatParsedClutchGame[],
+  playerProfiles: NormalizedNameProfile[]
+) => {
+  const matchedGames = games
+    .map(game => {
+      const matchedPlayer = game.ownTeam.players.find(player => matchesNormalizedNameProfile(player.player, playerProfiles)) || null;
+      return matchedPlayer ? { game, player: matchedPlayer } : null;
+    })
+    .filter((item): item is { game: KosarstatParsedClutchGame; player: KosarstatClutchPlayerStat } => Boolean(item));
+
+  if (matchedGames.length === 0) {
+    return {
+      available: true,
+      games: 0,
+      sampleSeconds: 0,
+      sampleLabel: '00:00',
+      confidence: 'alacsony' as const,
+      usagePct: null as number | null,
+      tsPct: null as number | null,
+      tovPct: null as number | null,
+      astTo: null as number | null,
+      ppp: null as number | null,
+      sampleWarning: 'Nincs Kosarstat clutch minta ehhez a játékoshoz.' as string | null,
+      roleNote: null as string | null,
+    };
+  }
+
+  const totals = matchedGames.reduce(
+    (acc, item) => ({
+      points: acc.points + item.player.points,
+      assists: acc.assists + item.player.assists,
+      turnovers: acc.turnovers + item.player.turnovers,
+      ftAtt: acc.ftAtt + item.player.ftAtt,
+      fgAtt: acc.fgAtt + item.player.fgAtt,
+      usageBase: acc.usageBase + item.player.usageBase,
+      seconds: acc.seconds + item.player.seconds,
+      teamUsageBase: acc.teamUsageBase + item.game.ownTeam.totals.usageBase,
+    }),
+    { points: 0, assists: 0, turnovers: 0, ftAtt: 0, fgAtt: 0, usageBase: 0, seconds: 0, teamUsageBase: 0 }
+  );
+
+  const tsDen = 2 * (totals.fgAtt + 0.44 * totals.ftAtt);
+  const usagePct = totals.teamUsageBase > 0 ? roundValue((totals.usageBase / totals.teamUsageBase) * 100, 1) : null;
+  const tsPct = tsDen > 0 ? roundValue((totals.points / tsDen) * 100, 1) : null;
+  const tovPct = totals.usageBase > 0 ? roundValue((totals.turnovers / totals.usageBase) * 100, 1) : null;
+  const astTo = totals.turnovers > 0 ? roundValue(totals.assists / totals.turnovers, 2) : (totals.assists > 0 ? roundValue(totals.assists, 2) : null);
+  const ppp = totals.usageBase > 0 ? roundValue(totals.points / totals.usageBase, 3) : null;
+
+  return {
+    available: true,
+    games: matchedGames.length,
+    sampleSeconds: totals.seconds,
+    sampleLabel: formatSecondsAsMmSs(totals.seconds),
+    confidence: matchedGames.length >= 8 ? 'magas' as const : matchedGames.length >= 4 ? 'kozepes' as const : 'alacsony' as const,
+    usagePct,
+    tsPct,
+    tovPct,
+    astTo,
+    ppp,
+    sampleWarning: matchedGames.length < 10 ? 'Korlátozott Kosarstat clutch minta: az értelmezés inkább irányadó, mint végleges.' : null,
+    roleNote: (() => {
+      if (usagePct === null) return null;
+      if (usagePct < 15) return 'Clutch szerepben inkább befejező opció, nem elsődleges labdás vagy izolációs lezáró.';
+      if (usagePct >= 24) return 'Clutch szerepben érdemi labdás terhelést is kap.';
+      return 'Clutch szerepe vegyes: részben befejező, részben kapcsolódó labdás feladatokkal.';
+    })(),
+  };
+};
+
 const buildPostgamePbpContextFromKosarstatClutch = (
   tables: Array<{ headers: string[]; rows: unknown[][]; sourceTableDomId: string | null }>,
   metadata: { homeTeamName?: string | null; awayTeamName?: string | null },
@@ -1339,6 +1409,8 @@ type ShotRawRow = {
 };
 
 type ShotEventRow = {
+  raw_game_id?: string | null;
+  team_id?: string | null;
   player_id: string | null;
   x: number | null;
   y: number | null;
@@ -1488,6 +1560,15 @@ const SKILL_LABELS_HU: Record<string, string> = {
   rebounding: 'Lepattanózás',
   defense: 'Védekezés',
   efficiency: 'Hatékonyság',
+};
+
+const SKILL_SCORE_HELPERS_HU: Record<string, string> = {
+  scoring: 'Pozíciós benchmark-index, nem nyers PPG vagy usage%.',
+  shooting: 'Dobóhatékonyság és shot profile alapú index.',
+  playmaking: 'AST/36 és AST/TO alapú, nem klasszikus irányító-terhelés.',
+  rebounding: 'Lepattanótermelés a saját poszt benchmarkjaihoz mérve.',
+  defense: 'Boxscore-alapú védőindex: blokk, labdaszerzés, védőlepattanó.',
+  efficiency: 'VAL/36 és eFG összesített mutató.',
 };
 
 const RECENT_GAMES_WINDOW = 5;
@@ -2449,6 +2530,7 @@ export function SeasonComparison({
   const [kosarstatClutchImportNote, setKosarstatClutchImportNote] = useState<string | null>(null);
   const [seasonKosarstatClutch, setSeasonKosarstatClutch] = useState<PostgamePbpContext['clutch'] | null>(null);
   const [seasonKosarstatClutchGames, setSeasonKosarstatClutchGames] = useState(0);
+  const [seasonKosarstatParsedClutchGames, setSeasonKosarstatParsedClutchGames] = useState<KosarstatParsedClutchGame[]>([]);
   const [seasonKosarstatLineupTeam, setSeasonKosarstatLineupTeam] = useState<KosarstatTeamLineupAnalysis | null>(null);
   const [seasonKosarstatLineupGames, setSeasonKosarstatLineupGames] = useState(0);
   const [isLoadingKosarstatPostgame, setIsLoadingKosarstatPostgame] = useState(false);
@@ -2473,6 +2555,9 @@ export function SeasonComparison({
   const [selectedPostgameZone, setSelectedPostgameZone] = useState<'rim' | 'paint' | 'mid' | 'corner3' | 'aboveBreak3' | null>(null);
   const [selectedTrendPlayerId, setSelectedTrendPlayerId] = useState<string>('');
   const [teamSeasonShotRows, setTeamSeasonShotRows] = useState<ShotEventRow[]>([]);
+  const [opponentSeasonShotRows, setOpponentSeasonShotRows] = useState<ShotEventRow[]>([]);
+  const [teamAllowedSeasonShotRows, setTeamAllowedSeasonShotRows] = useState<ShotEventRow[]>([]);
+  const [opponentAllowedSeasonShotRows, setOpponentAllowedSeasonShotRows] = useState<ShotEventRow[]>([]);
   const [leagueSeasonShotRows, setLeagueSeasonShotRows] = useState<ShotEventRow[]>([]);
   const [playerSeasonShotRows, setPlayerSeasonShotRows] = useState<ShotEventRow[]>([]);
   const [standingsSnapshot, setStandingsSnapshot] = useState<StandingsSnapshotRow[]>([]);
@@ -2590,6 +2675,102 @@ export function SeasonComparison({
       cancelled = true;
     };
   }, [resolvedSeasonId, resolvedTeamId]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadOpponentSeasonShots = async () => {
+      if (!resolvedSeasonId || !selectedOpponentTeamId) {
+        if (!cancelled) setOpponentSeasonShotRows([]);
+        return;
+      }
+
+      try {
+        const { data, error } = await supabase
+          .from('hunbasket_shot_events' as never)
+          .select('player_id, x, y, is_successful, shot_side')
+          .eq('season_id', resolvedSeasonId)
+          .eq('team_id', selectedOpponentTeamId);
+
+        if (error || !Array.isArray(data)) {
+          if (!cancelled) setOpponentSeasonShotRows([]);
+          return;
+        }
+
+        if (!cancelled) {
+          setOpponentSeasonShotRows(data as ShotEventRow[]);
+        }
+      } catch {
+        if (!cancelled) setOpponentSeasonShotRows([]);
+      }
+    };
+
+    loadOpponentSeasonShots();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [resolvedSeasonId, selectedOpponentTeamId]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadAllowedSeasonShots = async (
+      teamId: string | null,
+      setter: (value: ShotEventRow[]) => void
+    ) => {
+      if (!resolvedSeasonId || !teamId) {
+        if (!cancelled) setter([]);
+        return;
+      }
+
+      try {
+        const { data: rawData, error: rawError } = await supabase
+          .from('hunbasket_shotchart_raw' as never)
+          .select('id, home_team_id, away_team_id')
+          .eq('season_id', resolvedSeasonId)
+          .or(`home_team_id.eq.${teamId},away_team_id.eq.${teamId}`);
+
+        if (rawError || !Array.isArray(rawData)) {
+          if (!cancelled) setter([]);
+          return;
+        }
+
+        const rawIds = (rawData as ShotRawRow[])
+          .map(row => String(row.id || ''))
+          .filter(Boolean);
+
+        if (rawIds.length === 0) {
+          if (!cancelled) setter([]);
+          return;
+        }
+
+        const { data: shotData, error: shotError } = await supabase
+          .from('hunbasket_shot_events' as never)
+          .select('raw_game_id, team_id, player_id, x, y, is_successful, shot_side')
+          .in('raw_game_id', rawIds)
+          .neq('team_id', teamId);
+
+        if (shotError || !Array.isArray(shotData)) {
+          if (!cancelled) setter([]);
+          return;
+        }
+
+        if (!cancelled) {
+          setter(shotData as ShotEventRow[]);
+        }
+      } catch {
+        if (!cancelled) setter([]);
+      }
+    };
+
+    loadAllowedSeasonShots(resolvedTeamId && resolvedTeamId !== 'all' ? resolvedTeamId : null, setTeamAllowedSeasonShotRows);
+    loadAllowedSeasonShots(selectedOpponentTeamId || null, setOpponentAllowedSeasonShotRows);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [resolvedSeasonId, resolvedTeamId, selectedOpponentTeamId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -3360,10 +3541,24 @@ export function SeasonComparison({
     let cancelled = false;
 
     const loadSeasonKosarstatClutch = async () => {
-      if (!resolvedSeasonId || !resolvedTeamId || resolvedTeamId === 'all' || !selectedTeamNameForPostgame) {
+      const fallbackPlayerTeam = allPlayers.find(player => (
+        String(player.seasonId ?? '') === String(resolvedSeasonId)
+        &&
+        String(player.id ?? '') === String(selectedPlayerId)
+        && player.isActive !== false
+      )) || null;
+      const effectiveTeamId = resolvedTeamId && resolvedTeamId !== 'all'
+        ? String(resolvedTeamId)
+        : String(fallbackPlayerTeam?.teamId ?? '');
+      const effectiveTeamName = (resolvedTeamId && resolvedTeamId !== 'all'
+        ? selectedTeamNameForPostgame
+        : fallbackPlayerTeam?.teamName) || '';
+
+      if (!resolvedSeasonId || !effectiveTeamId || !effectiveTeamName) {
         if (!cancelled) {
           setSeasonKosarstatClutch(null);
           setSeasonKosarstatClutchGames(0);
+          setSeasonKosarstatParsedClutchGames([]);
         }
         return;
       }
@@ -3372,7 +3567,7 @@ export function SeasonComparison({
         const activeSelectedTeamPlayerProfiles = allPlayers
           .filter(player => String(player.seasonId ?? '') === String(resolvedSeasonId))
           .filter(player => player.isActive !== false)
-          .filter(player => String(player.teamId ?? '') === String(resolvedTeamId))
+          .filter(player => String(player.teamId ?? '') === effectiveTeamId)
           .map(player => buildNormalizedNameProfile(player.name || ''))
           .filter(profile => Boolean(profile.key));
 
@@ -3388,11 +3583,12 @@ export function SeasonComparison({
           if (!cancelled) {
             setSeasonKosarstatClutch(null);
             setSeasonKosarstatClutchGames(0);
+            setSeasonKosarstatParsedClutchGames([]);
           }
           return;
         }
 
-        const teamNeedle = normalizeTeamKey(selectedTeamNameForPostgame);
+        const teamNeedle = normalizeTeamKey(effectiveTeamName);
         const candidateRows = (rawData as Array<{
           id?: string | null;
           kosarstat_game_id?: string | null;
@@ -3424,6 +3620,7 @@ export function SeasonComparison({
           if (!cancelled) {
             setSeasonKosarstatClutch(null);
             setSeasonKosarstatClutchGames(0);
+            setSeasonKosarstatParsedClutchGames([]);
           }
           return;
         }
@@ -3438,6 +3635,7 @@ export function SeasonComparison({
           if (!cancelled) {
             setSeasonKosarstatClutch(null);
             setSeasonKosarstatClutchGames(0);
+            setSeasonKosarstatParsedClutchGames([]);
           }
           return;
         }
@@ -3472,7 +3670,7 @@ export function SeasonComparison({
                 awayTeamName: row.away_team_name,
               },
               ownSide,
-              selectedTeamNameForPostgame
+              effectiveTeamName
             );
           })
           .filter((item): item is KosarstatParsedClutchGame => Boolean(item));
@@ -3480,11 +3678,13 @@ export function SeasonComparison({
         if (!cancelled) {
           setSeasonKosarstatClutch(buildAggregatedKosarstatClutchContext(parsedGames, activeSelectedTeamPlayerProfiles));
           setSeasonKosarstatClutchGames(parsedGames.length);
+          setSeasonKosarstatParsedClutchGames(parsedGames);
         }
       } catch {
         if (!cancelled) {
           setSeasonKosarstatClutch(null);
           setSeasonKosarstatClutchGames(0);
+          setSeasonKosarstatParsedClutchGames([]);
         }
       }
     };
@@ -3494,13 +3694,26 @@ export function SeasonComparison({
     return () => {
       cancelled = true;
     };
-  }, [allPlayers, resolvedSeasonId, resolvedTeamId, selectedTeamNameForPostgame]);
+  }, [allPlayers, resolvedSeasonId, resolvedTeamId, selectedPlayerId, selectedTeamNameForPostgame]);
 
   useEffect(() => {
     let cancelled = false;
 
     const loadSeasonKosarstatLineups = async () => {
-      if (!resolvedSeasonId || !resolvedTeamId || resolvedTeamId === 'all' || !selectedTeamNameForPostgame) {
+      const fallbackPlayerTeam = allPlayers.find(player => (
+        String(player.seasonId ?? '') === String(resolvedSeasonId)
+        &&
+        String(player.id ?? '') === String(selectedPlayerId)
+        && player.isActive !== false
+      )) || null;
+      const effectiveTeamId = resolvedTeamId && resolvedTeamId !== 'all'
+        ? String(resolvedTeamId)
+        : String(fallbackPlayerTeam?.teamId ?? '');
+      const effectiveTeamName = (resolvedTeamId && resolvedTeamId !== 'all'
+        ? selectedTeamNameForPostgame
+        : fallbackPlayerTeam?.teamName) || '';
+
+      if (!resolvedSeasonId || !effectiveTeamId || !effectiveTeamName) {
         if (!cancelled) {
           setSeasonKosarstatLineupTeam(null);
           setSeasonKosarstatLineupGames(0);
@@ -3512,7 +3725,7 @@ export function SeasonComparison({
         const activeSelectedTeamPlayerProfiles = allPlayers
           .filter(player => String(player.seasonId ?? '') === String(resolvedSeasonId))
           .filter(player => player.isActive !== false)
-          .filter(player => String(player.teamId ?? '') === String(resolvedTeamId))
+          .filter(player => String(player.teamId ?? '') === effectiveTeamId)
           .map(player => buildNormalizedNameProfile(player.name || ''))
           .filter(profile => Boolean(profile.key));
 
@@ -3584,7 +3797,7 @@ export function SeasonComparison({
           return { score };
         };
 
-        const teamNeedle = normalizeTeamKey(selectedTeamNameForPostgame);
+        const teamNeedle = normalizeTeamKey(effectiveTeamName);
         const candidateRows = (rawData as Array<{
           id?: string | null;
           kosarstat_game_id?: string | null;
@@ -3677,7 +3890,7 @@ export function SeasonComparison({
 
           const awayKey = normalizeTeamKey(String(best.row.away_team_name || ''));
           const ownSide: 'home' | 'away' = awayKey.includes(teamNeedle) || teamNeedle.includes(awayKey) ? 'away' : 'home';
-          const parsed = parseKosarstatLineupAnalysis(best.tables, gameId, selectedTeamNameForPostgame, ownSide);
+          const parsed = parseKosarstatLineupAnalysis(best.tables, gameId, effectiveTeamName, ownSide);
           const team = parsed?.selectedTeam || parsed?.homeTeam || parsed?.awayTeam;
           if (!team) return;
 
@@ -3743,7 +3956,7 @@ export function SeasonComparison({
 
         if (!cancelled) {
           setSeasonKosarstatLineupTeam(
-            buildAggregatedKosarstatLineupTeamAnalysis(filteredParsedTeams, selectedTeamNameForPostgame)
+            buildAggregatedKosarstatLineupTeamAnalysis(filteredParsedTeams, effectiveTeamName)
           );
           setSeasonKosarstatLineupGames(filteredParsedTeams.length);
         }
@@ -3760,7 +3973,7 @@ export function SeasonComparison({
     return () => {
       cancelled = true;
     };
-  }, [allPlayers, resolvedSeasonId, resolvedTeamId, selectedTeamNameForPostgame]);
+  }, [allPlayers, resolvedSeasonId, resolvedTeamId, selectedPlayerId, selectedTeamNameForPostgame]);
 
   useEffect(() => {
     const activeTeam =
@@ -4037,6 +4250,27 @@ export function SeasonComparison({
     if (teamSeasonShotPoints.length === 0) return null;
     return buildShotProfileSummary(teamSeasonShotPoints);
   }, [teamSeasonShotPoints]);
+
+  const opponentSeasonShotPoints = useMemo(() => toShotPoints(opponentSeasonShotRows), [opponentSeasonShotRows]);
+
+  const opponentSeasonShotSummary = useMemo<ShotProfileSummary | null>(() => {
+    if (opponentSeasonShotPoints.length === 0) return null;
+    return buildShotProfileSummary(opponentSeasonShotPoints);
+  }, [opponentSeasonShotPoints]);
+
+  const teamAllowedSeasonShotPoints = useMemo(() => toShotPoints(teamAllowedSeasonShotRows), [teamAllowedSeasonShotRows]);
+
+  const teamAllowedSeasonShotSummary = useMemo<ShotProfileSummary | null>(() => {
+    if (teamAllowedSeasonShotPoints.length === 0) return null;
+    return buildShotProfileSummary(teamAllowedSeasonShotPoints);
+  }, [teamAllowedSeasonShotPoints]);
+
+  const opponentAllowedSeasonShotPoints = useMemo(() => toShotPoints(opponentAllowedSeasonShotRows), [opponentAllowedSeasonShotRows]);
+
+  const opponentAllowedSeasonShotSummary = useMemo<ShotProfileSummary | null>(() => {
+    if (opponentAllowedSeasonShotPoints.length === 0) return null;
+    return buildShotProfileSummary(opponentAllowedSeasonShotPoints);
+  }, [opponentAllowedSeasonShotPoints]);
 
   const teamSeasonShotZoneRows = useMemo(() => {
     if (!teamSeasonShotSummary) return [] as Array<{ label: string; rate: number; pct: number; attempts: number }>;
@@ -4325,15 +4559,64 @@ export function SeasonComparison({
     return buildLeagueBenchmarks(raw);
   }, [league, seasonPlayers, resolvedSeasonId]);
 
-  const analysis = useMemo<PlayerAnalysis | null>(() => {
-    if (!benchmarks || !selectedPlayer || !resolvedSeasonId) return null;
-    const raw = selectedPlayerRows.length > 0
+  const selectedPlayerRaw = useMemo<RawPlayerSeasonStat | null>(() => {
+    if (!selectedPlayer || !resolvedSeasonId) return null;
+    return selectedPlayerRows.length > 0
       ? toRawStatFromGameRows(selectedPlayer, selectedPlayerRows, league, resolvedSeasonId)
       : toRawStat(selectedPlayer, league, resolvedSeasonId);
-    const normalized = normalizePlayerStats(raw);
+  }, [league, resolvedSeasonId, selectedPlayer, selectedPlayerRows]);
+
+  const selectedPlayerNormalized = useMemo(() => {
+    if (!selectedPlayerRaw) return null;
+    return normalizePlayerStats(selectedPlayerRaw);
+  }, [selectedPlayerRaw]);
+
+  const playerSeasonOverview = useMemo(() => {
+    if (!selectedPlayerRaw || !selectedPlayerNormalized) return null;
+
+    const games = selectedPlayerRaw.games || 0;
+    const fga = selectedPlayerNormalized.fga;
+    const fgm = selectedPlayerRaw.close.made + selectedPlayerRaw.mid.made + selectedPlayerRaw.three.made;
+    const tsDen = 2 * (selectedPlayerNormalized.fga + 0.44 * selectedPlayerNormalized.fta);
+    const tsPct = tsDen > 0 ? (selectedPlayerRaw.points / tsDen) * 100 : null;
+    const fgPct = fga > 0 ? (fgm / fga) * 100 : null;
+    const totalRebounds = selectedPlayerRaw.rebounds.total ?? (selectedPlayerRaw.rebounds.offensive + selectedPlayerRaw.rebounds.defensive);
+    const foulsPer36 = selectedPlayerRaw.minutes > 0 ? (selectedPlayerRaw.fouls.committed / selectedPlayerRaw.minutes) * 36 : null;
+
+    return {
+      games,
+      minutesPerGame: selectedPlayerNormalized.minutesPerGame,
+      pointsPerGame: games > 0 ? selectedPlayerRaw.points / games : 0,
+      reboundsPerGame: games > 0 ? totalRebounds / games : 0,
+      assistsPerGame: games > 0 ? selectedPlayerRaw.assists / games : 0,
+      blocksPerGame: games > 0 ? selectedPlayerRaw.blocks / games : 0,
+      stealsPerGame: games > 0 ? selectedPlayerRaw.steals / games : 0,
+      foulsPerGame: games > 0 ? selectedPlayerRaw.fouls.committed / games : 0,
+      fgPct,
+      twoPct: (() => {
+        const twoAttempts = selectedPlayerRaw.close.attempted + selectedPlayerRaw.mid.attempted;
+        const twoMade = selectedPlayerRaw.close.made + selectedPlayerRaw.mid.made;
+        return twoAttempts > 0 ? (twoMade / twoAttempts) * 100 : null;
+      })(),
+      threePct: selectedPlayerRaw.three.attempted > 0 ? (selectedPlayerRaw.three.made / selectedPlayerRaw.three.attempted) * 100 : null,
+      ftPct: selectedPlayerRaw.ft.attempted > 0 ? (selectedPlayerRaw.ft.made / selectedPlayerRaw.ft.attempted) * 100 : null,
+      tsPct,
+      valPer36: selectedPlayerNormalized.valPer36,
+      usageProxyPer36: selectedPlayerNormalized.usageProxyPer36,
+      astTo: selectedPlayerNormalized.astTo,
+      foulsPer36,
+      defRebPer36: selectedPlayerNormalized.defRebPer36,
+      blkPer36: selectedPlayerNormalized.blkPer36,
+      stlPer36: selectedPlayerNormalized.stlPer36,
+    };
+  }, [selectedPlayerNormalized, selectedPlayerRaw]);
+
+  const analysis = useMemo<PlayerAnalysis | null>(() => {
+    if (!benchmarks || !selectedPlayerRaw || !selectedPlayerNormalized) return null;
+    const normalized = selectedPlayerNormalized;
     if (!isEligibleSample(normalized)) return null;
-    return analyzePlayerSeason(raw, benchmarks);
-  }, [benchmarks, league, resolvedSeasonId, selectedPlayer, selectedPlayerRows]);
+    return analyzePlayerSeason(selectedPlayerRaw, benchmarks);
+  }, [benchmarks, selectedPlayerNormalized, selectedPlayerRaw]);
 
   const rolesByPlayerId = useMemo(() => {
     const map = new Map<string, string[]>();
@@ -6886,7 +7169,14 @@ export function SeasonComparison({
       pregameOwnTeam,
       pregameBenchmarks,
       pregameOwnPlayers,
-      pregameInjuryContext
+      pregameInjuryContext,
+      {
+        own: teamSeasonShotSummary,
+        opponent: opponentSeasonShotSummary,
+        league: leagueSeasonShotSummary,
+        ownAllowed: teamAllowedSeasonShotSummary,
+        opponentAllowed: opponentAllowedSeasonShotSummary,
+      }
     );
   }, [
     pregameBenchmarks,
@@ -6895,6 +7185,11 @@ export function SeasonComparison({
     pregameOpponentTeam,
     pregameOwnPlayers,
     pregameOwnTeam,
+    teamSeasonShotSummary,
+    opponentSeasonShotSummary,
+    teamAllowedSeasonShotSummary,
+    opponentAllowedSeasonShotSummary,
+    leagueSeasonShotSummary,
   ]);
 
   const pregameInjuryImpactEstimate = useMemo(() => {
@@ -6906,7 +7201,13 @@ export function SeasonComparison({
     );
 
     const summarizeMissing = (players: PlayerStats[]) => {
-      const totals = players.reduce(
+      const eligiblePlayers = players.filter(player => {
+        const games = Math.max(player.gamesPlayed || 0, 0);
+        const minutesPerGame = games > 0 ? (player.minutes || 0) / games : 0;
+        return games >= 4 && minutesPerGame >= 8;
+      });
+
+      const totals = eligiblePlayers.reduce(
         (acc, player) => {
           const games = Math.max(player.gamesPlayed || 0, 1);
           const minutesPerGame = (player.minutes || 0) / games;
@@ -6938,6 +7239,134 @@ export function SeasonComparison({
     resolvedTeamId,
     selectedOpponentTeamId,
   ]);
+
+  type PregameKeyPlayerFingerprint = {
+    playerId: string;
+    name: string;
+    positionLabel: string;
+    attempts: number;
+    fgPct: number;
+    profileNote: string;
+    sampleNote: string;
+    topZones: Array<{ label: string; rate: number }>;
+    zones: Array<{
+      key: ShotZoneKey;
+      label: string;
+      attempts: number;
+      rate: number;
+      pct: number;
+      rateDeltaVsLeague: number;
+      fillClass: string;
+    }>;
+  };
+
+  const buildPregameKeyPlayerFingerprints = (
+    keyPlayers: {
+      primaryScorers: string[];
+      primaryPlaymakers: string[];
+      stretchThreats: string[];
+      mismatchCandidates: string[];
+    } | null | undefined,
+    players: PlayerSeasonStat[],
+    shotRows: ShotEventRow[]
+  ) => {
+    if (!keyPlayers || !leagueSeasonShotSummary || shotRows.length === 0) {
+      return [] as PregameKeyPlayerFingerprint[];
+    }
+
+    const zoneDefinitions: Array<{ key: ShotZoneKey; label: string; fillClass: string }> = [
+      { key: 'rim', label: 'Gyűrű', fillClass: 'bg-emerald-400' },
+      { key: 'paint', label: 'Festék', fillClass: 'bg-lime-400' },
+      { key: 'mid', label: 'Középtáv', fillClass: 'bg-amber-400' },
+      { key: 'corner3', label: 'Sarok tripla', fillClass: 'bg-sky-400' },
+      { key: 'aboveBreak3', label: 'Egyéb tripla', fillClass: 'bg-violet-400' },
+    ];
+    const leagueTotal = Math.max(leagueSeasonShotSummary.attempts, 1);
+    const stripAnnotation = (value: string) => value.replace(/\s*\([^)]*\)\s*$/u, '').trim();
+    const keyPlayerLabels = [
+      ...keyPlayers.primaryScorers,
+      ...keyPlayers.primaryPlaymakers,
+      ...keyPlayers.stretchThreats,
+      ...keyPlayers.mismatchCandidates,
+    ]
+      .map(stripAnnotation)
+      .filter(Boolean);
+
+    const matchedPlayers = new Map<string, PlayerSeasonStat>();
+    keyPlayerLabels.forEach(label => {
+      const profiles = [buildNormalizedNameProfile(label)];
+      const player = players.find(candidate => matchesNormalizedNameProfile(candidate.name, profiles));
+      if (player && !matchedPlayers.has(player.playerId)) {
+        matchedPlayers.set(player.playerId, player);
+      }
+    });
+
+    return Array.from(matchedPlayers.values())
+      .map(player => {
+        const summary = buildShotProfileSummary(
+          toShotPoints(shotRows.filter(row => row.player_id === player.playerId))
+        );
+        if (summary.attempts <= 0) return null;
+
+        const totalAttempts = Math.max(summary.attempts, 1);
+        const zones = zoneDefinitions.map(zone => {
+          const stats = summary.zoneStats[zone.key];
+          const leagueRate = (leagueSeasonShotSummary.zoneStats[zone.key].attempts / leagueTotal) * 100;
+          const rate = (stats.attempts / totalAttempts) * 100;
+          return {
+            key: zone.key,
+            label: zone.label,
+            attempts: stats.attempts,
+            rate: roundValue(rate, 1),
+            pct: stats.pct,
+            rateDeltaVsLeague: roundValue(rate - leagueRate, 1),
+            fillClass: zone.fillClass,
+          };
+        });
+
+        const topZones = [...zones]
+          .filter(zone => zone.attempts > 0)
+          .sort((a, b) => b.rate - a.rate)
+          .slice(0, 2)
+          .map(zone => ({ label: zone.label, rate: zone.rate }));
+
+        const sampleNote = summary.attempts >= 25
+          ? 'stabil shotchart minta'
+          : summary.attempts >= 12
+            ? 'közepes shotchart minta'
+            : 'limitált shotchart minta';
+        const profileNote = topZones.length >= 2
+          ? `${topZones[0].label} + ${topZones[1].label} súlypont`
+          : topZones[0]
+            ? `${topZones[0].label} súlypont`
+            : 'vegyes dobásprofil';
+
+        return {
+          playerId: player.playerId,
+          name: player.name,
+          positionLabel: player.positionLabel || player.position,
+          attempts: summary.attempts,
+          fgPct: summary.fgPct,
+          profileNote,
+          sampleNote,
+          topZones,
+          zones,
+        };
+      })
+      .filter((player): player is PregameKeyPlayerFingerprint => Boolean(player))
+      .sort((a, b) => b.attempts - a.attempts)
+      .slice(0, 3);
+  };
+
+  const pregameOwnKeyPlayerFingerprints = useMemo(
+    () => buildPregameKeyPlayerFingerprints(pregameReport?.ownKeyPlayers, pregameOwnPlayers, teamSeasonShotRows),
+    [leagueSeasonShotSummary, pregameOwnPlayers, pregameReport, teamSeasonShotRows]
+  );
+
+  const pregameOpponentKeyPlayerFingerprints = useMemo(
+    () => buildPregameKeyPlayerFingerprints(pregameReport?.keyPlayers, pregameOpponentPlayers, opponentSeasonShotRows),
+    [leagueSeasonShotSummary, opponentSeasonShotRows, pregameOpponentPlayers, pregameReport]
+  );
 
   const pregameStyleMetricChartData = useMemo(() => {
     if (!pregameOwnTeam || !pregameOpponentTeam) return [] as Array<{
@@ -8669,6 +9098,7 @@ export function SeasonComparison({
           generatedBy: 'season-comparison-ui',
           analysis,
           advancedStats: playerAdvancedLlmContext,
+          seasonSummary: playerSeasonOverview,
           shotProfile: playerSeasonShotSummary
             ? {
                 attempts: playerSeasonShotSummary.attempts,
@@ -8747,6 +9177,7 @@ export function SeasonComparison({
           analysisSnapshot: {
             analysis,
             advancedStats: playerAdvancedLlmContext,
+            seasonSummary: playerSeasonOverview,
             shotProfile: playerSeasonShotSummary
               ? {
                   attempts: playerSeasonShotSummary.attempts,
@@ -9028,6 +9459,7 @@ export function SeasonComparison({
           expectedEfg: null as number | null,
           actualEfg: null as number | null,
           valueAdd: null as number | null,
+          note: null as string | null,
           zoneAdds: [] as Array<{ label: string; delta: number }>,
         };
       }
@@ -9068,39 +9500,32 @@ export function SeasonComparison({
         actualEfg,
         valueAdd: roundValue(actualEfg - expectedEfg, 1),
         interpretation: shotInterpretation(roundValue(actualEfg - expectedEfg, 1)),
+        note: roundValue(actualEfg - expectedEfg, 1) >= 8
+          ? 'A befejezési minőség jóval felülmúlja a dobásminőségből várható szintet; ez inkább elit befejező profilra utal, nem feltétlenül magas önteremtő volumenre.'
+          : roundValue(actualEfg - expectedEfg, 1) <= -8
+            ? 'A vállalt dobások minőségéhez képest gyengébb a befejezés, ezért a kivitelezés külön figyelmet igényel.'
+            : null,
         zoneAdds,
       };
     })();
 
     const clutchIdentity = (() => {
-        const clutchRows = rows.filter(item => item.margin !== null && item.margin <= 5);
-        // Always return a block, but mark as low confidence if sample is 0
-        if (clutchRows.length === 0) {
-          return {
-            available: true,
-            games: 0,
-            confidence: 'alacsony',
-            usagePct: null as number | null,
-            tsPct: null as number | null,
-            tovPct: null as number | null,
-            astTo: null as number | null,
-            ppp: null as number | null,
-          };
-        }
-        return {
-          available: true,
-          games: clutchRows.length,
-          confidence: confidenceFromSample(clutchRows.length, 4, 8),
-          usagePct: roundValue(average(clutchRows.map(item => item.usageSharePct)), 1),
-          tsPct: roundValue(average(clutchRows.map(item => item.tsPct)), 1),
-          tovPct: roundValue(average(clutchRows.map(item => item.tovPct)), 1),
-          astTo: roundValue(average(clutchRows.map(item => item.astTo)), 2),
-          ppp: roundValue(average(clutchRows.map(item => item.ppp)), 3),
-        };
+      const selectedPlayerProfiles = [
+        buildNormalizedNameProfile(selectedPlayer.name || ''),
+      ].filter(profile => Boolean(profile.key));
+
+      return buildAggregatedKosarstatPlayerClutchContext(
+        seasonKosarstatParsedClutchGames,
+        selectedPlayerProfiles
+      );
     })();
 
     const plusMinusContext = (() => {
-      const stints = activeKosarstatTeamAnalysis?.stints ?? [];
+      const selectedPlayerProfiles = [
+        buildNormalizedNameProfile(selectedPlayer.name || ''),
+      ].filter(profile => Boolean(profile.key));
+      const lineupSupportSource = seasonKosarstatLineupTeam ?? activeKosarstatTeamAnalysis;
+      const stints = lineupSupportSource?.stints ?? [];
       const withNet = stints
         .map(stint => ({
           ...stint,
@@ -9108,8 +9533,8 @@ export function SeasonComparison({
         }))
         .filter(stint => stint.netPer40 !== null && stint.seconds >= 60);
 
-      const on = withNet.filter(stint => stint.players.includes(selectedPlayer.name));
-      const off = withNet.filter(stint => !stint.players.includes(selectedPlayer.name));
+      const on = withNet.filter(stint => stint.players.some(player => matchesNormalizedNameProfile(player, selectedPlayerProfiles)));
+      const off = withNet.filter(stint => !stint.players.some(player => matchesNormalizedNameProfile(player, selectedPlayerProfiles)));
 
       const weighted = (pool: typeof withNet) => {
         const sec = pool.reduce((sum, item) => sum + item.seconds, 0);
@@ -9118,8 +9543,8 @@ export function SeasonComparison({
         return roundValue(weightedNet, 1);
       };
 
-      const topPairWithPlayer = (activeKosarstatTeamAnalysis?.pairStats ?? [])
-        .filter(pair => pair.players.includes(selectedPlayer.name) && pair.seconds >= 90)
+      const topPairWithPlayer = (lineupSupportSource?.pairStats ?? [])
+        .filter(pair => pair.players.some(player => matchesNormalizedNameProfile(player, selectedPlayerProfiles)) && pair.seconds >= 90)
         .sort((a, b) => b.netPer40 - a.netPer40)[0] ?? null;
 
       return {
@@ -9218,6 +9643,8 @@ export function SeasonComparison({
           strongPpp: null as number | null,
           weakPpp: null as number | null,
           tsDelta: null as number | null,
+          strongOpponents: [] as string[],
+          weakOpponents: [] as string[],
         };
       }
 
@@ -9240,6 +9667,8 @@ export function SeasonComparison({
         weakPpp,
         tsDelta: roundValue(strongTs - weakTs, 1),
         interpretation: matchupInterpretation(roundValue(strongTs - weakTs, 1)),
+        strongOpponents: Array.from(new Set(strongPool.map(item => String(item.row.games?.opponent || '')).filter(Boolean))).slice(0, 3),
+        weakOpponents: Array.from(new Set(weakPool.map(item => String(item.row.games?.opponent || '')).filter(Boolean))).slice(0, 3),
       };
     })();
 
@@ -9269,6 +9698,7 @@ export function SeasonComparison({
         normalLoadTs: normalTs,
         tsDrop: highTs !== null && normalTs !== null ? roundValue(highTs - normalTs, 1) : null,
         b2bTovPct: b2bTov,
+        note: highLoad.length === 0 ? 'Nincs érdemi 30+ perces minta, ezért a terhelési blokk korlátozottan értelmezhető.' : null,
       };
     })();
 
@@ -9394,7 +9824,7 @@ export function SeasonComparison({
 
     const thresholdHints = {
       shot: `Good: value add >= +1.5 pp | Risk: value add < -1.5 pp | Minta: ${shotQualityVsMaking.sampleAttempts ?? 0} kísérlet\nAktuális: ${formatNullableNumber(shotQualityVsMaking.valueAdd, 1, ' pp')} | Indok: ${toneReason(blockVerdicts.shot.tone)}`,
-      clutch: `Good: clutch TS - szezon TS >= +1.0 pp | Risk: <= -2.0 pp | Minta: ${clutchIdentity.games} szoros meccs\nAktuális: ${formatNullableNumber(clutchDeltaForHint, 1, ' pp')} | Indok: ${toneReason(blockVerdicts.clutch.tone)}`,
+      clutch: `Good: clutch TS - szezon TS >= +1.0 pp | Risk: <= -2.0 pp | Minta: ${clutchIdentity.games} Kosarstat clutch meccs\nAktuális: ${formatNullableNumber(clutchDeltaForHint, 1, ' pp')} | Indok: ${toneReason(blockVerdicts.clutch.tone)}`,
       impact: `Good: on/off delta >= +2.0 net/40 | Risk: < -2.0 net/40 | Minta: ${plusMinusContext.lineupMinutes.toFixed(1)} lineup perc\nAktuális: ${formatNullableNumber(plusMinusContext.delta, 1)} | Indok: ${toneReason(blockVerdicts.impact.tone)}`,
       role: `Good: legjobb szerepkör TS >= szezon TS +1.0 pp | Risk: <= -1.5 pp | Minta: BH ${roleEfficiency.ballHandlerSample} / OB ${roleEfficiency.offBallSample}\nAktuális: ${formatNullableNumber(roleTsDeltaForHint, 1, ' pp')} | Indok: ${toneReason(blockVerdicts.role.tone)}`,
       decision: `Good: index >= ${positionProfile.decisionGood} | Risk: < ${positionProfile.decisionRisk} | Pozíciós küszöb (${analysis.position})\nAktuális: ${decisionQuality.score.toFixed(1)} | Indok: ${toneReason(blockVerdicts.decision.tone)}`,
@@ -9429,6 +9859,7 @@ export function SeasonComparison({
     opponentQualityByTeamKey,
     playerGameStats,
     playerSeasonShotSummary,
+    seasonKosarstatParsedClutchGames,
     selectedPlayer,
     selectedPlayerRows,
   ]);
@@ -9450,6 +9881,7 @@ export function SeasonComparison({
         actualEfg: playerAdvancedInsights.shotQualityVsMaking.actualEfg,
         valueAdd: playerAdvancedInsights.shotQualityVsMaking.valueAdd,
         interpretation: playerAdvancedInsights.shotQualityVsMaking.interpretation ?? null,
+        note: playerAdvancedInsights.shotQualityVsMaking.note ?? null,
       },
       clutchIdentity: {
         confidence: playerAdvancedInsights.clutchIdentity.confidence ?? 'alacsony',
@@ -9459,6 +9891,8 @@ export function SeasonComparison({
         tovPct: playerAdvancedInsights.clutchIdentity.tovPct,
         astTo: playerAdvancedInsights.clutchIdentity.astTo,
         ppp: playerAdvancedInsights.clutchIdentity.ppp,
+        sampleWarning: playerAdvancedInsights.clutchIdentity.sampleWarning ?? null,
+        roleNote: playerAdvancedInsights.clutchIdentity.roleNote ?? null,
       },
       plusMinusContext: {
         confidence: playerAdvancedInsights.plusMinusContext.confidence ?? 'alacsony',
@@ -9498,6 +9932,8 @@ export function SeasonComparison({
         weakTs: playerAdvancedInsights.matchupSensitivity.weakTs,
         tsDelta: playerAdvancedInsights.matchupSensitivity.tsDelta,
         interpretation: playerAdvancedInsights.matchupSensitivity.interpretation ?? null,
+        strongOpponents: playerAdvancedInsights.matchupSensitivity.strongOpponents ?? [],
+        weakOpponents: playerAdvancedInsights.matchupSensitivity.weakOpponents ?? [],
       },
       fatigueLoad: {
         confidence: playerAdvancedInsights.fatigueLoad.confidence,
@@ -9507,11 +9943,13 @@ export function SeasonComparison({
         highLoadTs: playerAdvancedInsights.fatigueLoad.highLoadTs,
         normalLoadTs: playerAdvancedInsights.fatigueLoad.normalLoadTs,
         tsDrop: playerAdvancedInsights.fatigueLoad.tsDrop,
+        note: playerAdvancedInsights.fatigueLoad.note ?? null,
       },
+      seasonSummary: playerSeasonOverview,
       blockVerdicts: playerAdvancedInsights.blockVerdicts,
       coachingFocus: playerAdvancedInsights.coachingFocus,
     };
-  }, [playerAdvancedInsights]);
+  }, [playerAdvancedInsights, playerSeasonOverview]);
 
   const showPlayerSection = activeSection === 'player';
   const showTeamSection = activeSection === 'team';
@@ -9766,23 +10204,78 @@ export function SeasonComparison({
 
             <Card className="bg-slate-900 border-slate-800">
               <CardHeader>
+                <CardTitle className="text-slate-50">Szezonos alapkontekstus</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {playerSeasonOverview ? (
+                  <>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                      <div className="p-3 bg-slate-800/50 rounded-lg">
+                        <div className="text-xs text-slate-400">Meccs</div>
+                        <div className="text-slate-50 text-lg font-medium">{playerSeasonOverview.games}</div>
+                      </div>
+                      <div className="p-3 bg-slate-800/50 rounded-lg">
+                        <div className="text-xs text-slate-400">MPG</div>
+                        <div className="text-slate-50 text-lg font-medium">{playerSeasonOverview.minutesPerGame.toFixed(1)}</div>
+                      </div>
+                      <div className="p-3 bg-slate-800/50 rounded-lg">
+                        <div className="text-xs text-slate-400">PPG</div>
+                        <div className="text-slate-50 text-lg font-medium">{playerSeasonOverview.pointsPerGame.toFixed(1)}</div>
+                      </div>
+                      <div className="p-3 bg-slate-800/50 rounded-lg">
+                        <div className="text-xs text-slate-400">RPG</div>
+                        <div className="text-slate-50 text-lg font-medium">{playerSeasonOverview.reboundsPerGame.toFixed(1)}</div>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                      <div className="text-slate-300">AST: <span className="text-slate-100">{playerSeasonOverview.assistsPerGame.toFixed(1)}</span></div>
+                      <div className="text-slate-300">BLK: <span className="text-slate-100">{playerSeasonOverview.blocksPerGame.toFixed(1)}</span></div>
+                      <div className="text-slate-300">STL: <span className="text-slate-100">{playerSeasonOverview.stealsPerGame.toFixed(1)}</span></div>
+                      <div className="text-slate-300">Fault/meccs: <span className="text-slate-100">{playerSeasonOverview.foulsPerGame.toFixed(1)}</span></div>
+                      <div className="text-slate-300">FG%: <span className="text-slate-100">{formatNullableNumber(playerSeasonOverview.fgPct, 1, '%')}</span></div>
+                      <div className="text-slate-300">2P%: <span className="text-slate-100">{formatNullableNumber(playerSeasonOverview.twoPct, 1, '%')}</span></div>
+                      <div className="text-slate-300">3P%: <span className="text-slate-100">{formatNullableNumber(playerSeasonOverview.threePct, 1, '%')}</span></div>
+                      <div className="text-slate-300">FT%: <span className="text-slate-100">{formatNullableNumber(playerSeasonOverview.ftPct, 1, '%')}</span></div>
+                      <div className="text-slate-300">TS%: <span className="text-slate-100">{formatNullableNumber(playerSeasonOverview.tsPct, 1, '%')}</span></div>
+                      <div className="text-slate-300">VAL/36: <span className="text-slate-100">{playerSeasonOverview.valPer36.toFixed(1)}</span></div>
+                      <div className="text-slate-300">Usage proxy/36: <span className="text-slate-100">{playerSeasonOverview.usageProxyPer36.toFixed(1)}</span></div>
+                      <div className="text-slate-300">Fault/36: <span className="text-slate-100">{formatNullableNumber(playerSeasonOverview.foulsPer36, 1)}</span></div>
+                    </div>
+                    <div className="text-xs text-slate-500">
+                      Ezek nyers szezonos alapmutatók. A képesség pontszámok ettől külön, 0-100-as posztos benchmark-indexek, nem nyers PPG/usage mutatók.
+                    </div>
+                  </>
+                ) : (
+                  <div className="text-sm text-slate-400">Nincs elég szezonos adat az összesített kontextushoz.</div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card className="bg-slate-900 border-slate-800">
+              <CardHeader>
                 <CardTitle className="text-slate-50">Képesség pontszámok</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 {Object.entries(analysis.skillScores).map(([key, value]) => (
-                  <div key={key} className="flex items-center justify-between text-sm">
-                    <span className="text-slate-300">{SKILL_LABELS_HU[key] ?? key}</span>
-                    <div className="flex items-center gap-3">
-                      <div className="h-2 w-32 bg-slate-800 rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-emerald-500/80"
-                          style={{ width: `${value}%` }}
-                        />
+                  <div key={key} className="space-y-1">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-slate-300">{SKILL_LABELS_HU[key] ?? key}</span>
+                      <div className="flex items-center gap-3">
+                        <div className="h-2 w-32 bg-slate-800 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-emerald-500/80"
+                            style={{ width: `${value}%` }}
+                          />
+                        </div>
+                        <span className="text-slate-200 font-semibold w-10 text-right">{value}</span>
                       </div>
-                      <span className="text-slate-200 font-semibold w-10 text-right">{value}</span>
                     </div>
+                    <div className="text-[11px] text-slate-500">{SKILL_SCORE_HELPERS_HU[key] ?? 'Pozíciós benchmark-index.'}</div>
                   </div>
                 ))}
+                <div className="text-[11px] text-slate-500">
+                  A magas pontszám önmagában nem jelent elsődleges scorer vagy playmaker szerepet; a szezonos volumen- és usage-kontekstust mindig az alapkártyával együtt kell olvasni.
+                </div>
               </CardContent>
             </Card>
 
@@ -9941,6 +10434,9 @@ export function SeasonComparison({
                       {'interpretation' in playerAdvancedInsights.shotQualityVsMaking && (
                         <div className="text-slate-400">Értelmezés: {playerAdvancedInsights.shotQualityVsMaking.interpretation}</div>
                       )}
+                      {'note' in playerAdvancedInsights.shotQualityVsMaking && playerAdvancedInsights.shotQualityVsMaking.note && (
+                        <div className="text-slate-400">Kontextus: {playerAdvancedInsights.shotQualityVsMaking.note}</div>
+                      )}
                       {playerAdvancedInsights.shotQualityVsMaking.zoneAdds.length > 0 && (
                         <div className="text-slate-400">
                           Zóna delta: {playerAdvancedInsights.shotQualityVsMaking.zoneAdds.slice(0, 3).map(item => `${item.label} ${item.delta >= 0 ? '+' : ''}${item.delta.toFixed(1)}`).join(' • ')}
@@ -9961,15 +10457,21 @@ export function SeasonComparison({
                         <div className={`text-[11px] ${getInsightToneClass(playerAdvancedInsights.blockVerdicts.clutch.tone)}`}> 
                           {playerAdvancedInsights.blockVerdicts.clutch.text}
                         </div>
-                        <div className="text-slate-300">Minta: {playerAdvancedInsights.clutchIdentity.games} szoros meccs</div>
+                        <div className="text-slate-300">Minta: {playerAdvancedInsights.clutchIdentity.games} Kosarstat clutch meccs</div>
                         {playerAdvancedInsights.clutchIdentity.games === 0 && (
                           <div className="text-rose-400 text-xs font-semibold">Nincs clutch minta – az adatok csak tájékoztató jellegűek.</div>
                         )}
-                        <div className="text-slate-300">Clutch USG proxy: {formatNullableNumber(playerAdvancedInsights.clutchIdentity.usagePct, 1, '%')}</div>
+                        {'sampleWarning' in playerAdvancedInsights.clutchIdentity && playerAdvancedInsights.clutchIdentity.sampleWarning && (
+                          <div className="text-amber-300 text-xs font-semibold">{playerAdvancedInsights.clutchIdentity.sampleWarning}</div>
+                        )}
+                        <div className="text-slate-300">Clutch usage-share: {formatNullableNumber(playerAdvancedInsights.clutchIdentity.usagePct, 1, '%')}</div>
                         <div className="text-slate-300">Clutch TS%: {formatNullableNumber(playerAdvancedInsights.clutchIdentity.tsPct, 1, '%')}</div>
                         <div className="text-slate-300">Clutch TOV%: {formatNullableNumber(playerAdvancedInsights.clutchIdentity.tovPct, 1, '%')}</div>
                         <div className="text-slate-300">Clutch AST/TO: {formatNullableNumber(playerAdvancedInsights.clutchIdentity.astTo, 2)}</div>
                         <div className="text-slate-300">Clutch PPP: {formatNullableNumber(playerAdvancedInsights.clutchIdentity.ppp, 3)}</div>
+                        {'roleNote' in playerAdvancedInsights.clutchIdentity && playerAdvancedInsights.clutchIdentity.roleNote && (
+                          <div className="text-slate-400">Szerepkör-olvasat: {playerAdvancedInsights.clutchIdentity.roleNote}</div>
+                        )}
                     </div>
 
                     <div className="rounded-md border border-slate-800 bg-slate-900/50 p-3 space-y-1">
@@ -10084,6 +10586,12 @@ export function SeasonComparison({
                           {'interpretation' in playerAdvancedInsights.matchupSensitivity && (
                             <div className="text-slate-400">Értelmezés: {playerAdvancedInsights.matchupSensitivity.interpretation}</div>
                           )}
+                          {'strongOpponents' in playerAdvancedInsights.matchupSensitivity && playerAdvancedInsights.matchupSensitivity.strongOpponents?.length > 0 && (
+                            <div className="text-slate-400">Erős védelem minta: {playerAdvancedInsights.matchupSensitivity.strongOpponents.join(' • ')}</div>
+                          )}
+                          {'weakOpponents' in playerAdvancedInsights.matchupSensitivity && playerAdvancedInsights.matchupSensitivity.weakOpponents?.length > 0 && (
+                            <div className="text-slate-400">Gyengébb védelem minta: {playerAdvancedInsights.matchupSensitivity.weakOpponents.join(' • ')}</div>
+                          )}
                         </>
                       ) : (
                         <div className="text-slate-400">Nincs elég minta az ellenfél-minőség szerinti splithez.</div>
@@ -10111,6 +10619,9 @@ export function SeasonComparison({
                         TS különbség (high-load - normál): {formatNullableNumber(playerAdvancedInsights.fatigueLoad.tsDrop, 1, ' pp')}
                       </div>
                       <div className="text-slate-300">B2B TOV%: {formatNullableNumber(playerAdvancedInsights.fatigueLoad.b2bTovPct, 1, '%')}</div>
+                      {'note' in playerAdvancedInsights.fatigueLoad && playerAdvancedInsights.fatigueLoad.note && (
+                        <div className="text-slate-400">Megjegyzés: {playerAdvancedInsights.fatigueLoad.note}</div>
+                      )}
                     </div>
                     </div>
                   </TooltipProvider>
@@ -11658,6 +12169,8 @@ export function SeasonComparison({
             const ownProfile = pregameReport.ownTeamProfile;
             const opponentProfile = pregameReport.profile;
             const llmContext = pregameReport.llmContext;
+            const confidenceReasons = pregameReport.winProbability.confidenceReasons ?? [];
+            const shotProfileContext = pregameReport.shotProfileContext;
             const pressureWeight = pregamePressureWeight;
             const perimeterWeight = pregamePerimeterWeight;
             const paintWeight = Math.max(0, 100 - pressureWeight - perimeterWeight);
@@ -11706,6 +12219,49 @@ export function SeasonComparison({
               note: item.note,
             }));
 
+            const shotProfileChartData = shotProfileContext
+              ? shotProfileContext.ownZones.map(zone => {
+                  const opponentZone = shotProfileContext.opponentZones.find(item => item.label === zone.label);
+                  return {
+                    label: zone.label,
+                    ownRate: zone.rate,
+                    opponentRate: opponentZone?.rate ?? 0,
+                    ownPct: zone.pct,
+                    opponentPct: opponentZone?.pct ?? 0,
+                  };
+                })
+              : [];
+
+            const shotProfileHeatmapCells = shotProfileContext
+              ? shotProfileContext.ownZones.map(zone => ({
+                  label: zone.label,
+                  rateDelta: roundValue(zone.rateDeltaVsLeague - (shotProfileContext.opponentZones.find(item => item.label === zone.label)?.rateDeltaVsLeague ?? 0), 1),
+                  pctDelta: roundValue(zone.pctDeltaVsLeague - (shotProfileContext.opponentZones.find(item => item.label === zone.label)?.pctDeltaVsLeague ?? 0), 1),
+                  compositeDelta: roundValue(
+                    (zone.rateDeltaVsLeague - (shotProfileContext.opponentZones.find(item => item.label === zone.label)?.rateDeltaVsLeague ?? 0)) * 0.6
+                    + (zone.pctDeltaVsLeague - (shotProfileContext.opponentZones.find(item => item.label === zone.label)?.pctDeltaVsLeague ?? 0)) * 0.4,
+                    1
+                  ),
+                }))
+              : [];
+
+            const offenseDefenseZoneData = shotProfileContext
+              ? shotProfileContext.ownZones.map(zone => {
+                  const opponentAllowed = shotProfileContext.opponentAllowedZones.find(item => item.label === zone.label);
+                  const opponentOffense = shotProfileContext.opponentZones.find(item => item.label === zone.label);
+                  const ownAllowed = shotProfileContext.ownAllowedZones.find(item => item.label === zone.label);
+                  return {
+                    label: zone.label,
+                    ownOffensePct: zone.pct,
+                    opponentAllowedPct: opponentAllowed?.pct ?? 0,
+                    opponentOffensePct: opponentOffense?.pct ?? 0,
+                    ownAllowedPct: ownAllowed?.pct ?? 0,
+                    ownAttackEdge: roundValue(zone.pct - (opponentAllowed?.pct ?? 0), 1),
+                    opponentAttackEdge: roundValue((opponentOffense?.pct ?? 0) - (ownAllowed?.pct ?? 0), 1),
+                  };
+                })
+              : [];
+
             const focusWeightBars = [
               { label: 'Labdanyomás', value: pressureWeight, fill: '#f59e0b' },
               { label: 'Periméter', value: perimeterWeight, fill: '#38bdf8' },
@@ -11717,273 +12273,536 @@ export function SeasonComparison({
               festék: 'festék',
             };
             const formatDelta = (value: number) => `${value >= 0 ? '+' : ''}${value.toFixed(1)}`;
+            const topFocusPoints = prioritizedFocusPoints.slice(0, 5);
+            const secondaryFocusPoints = prioritizedFocusPoints.slice(5);
+            const pregameXAxisProps = {
+              stroke: '#94a3b8',
+              tick: { fill: '#94a3b8', fontSize: 10 },
+              interval: 0 as const,
+              angle: -18,
+              textAnchor: 'end' as const,
+              height: 56,
+              tickMargin: 10,
+            };
+            const zoneChartLabelMap: Record<string, string> = {
+              'Gyűrű': 'Gyűrű',
+              'Festék': 'Festék',
+              'Középtáv': 'Közép',
+              'Sarok tripla': 'Sarok 3',
+              'Egyéb tripla': 'Tripla',
+            };
+            const combinedKeyPlayerCards = (() => {
+              const rows: Array<{
+                teamKey: 'own' | 'opponent';
+                teamLabel: string;
+                accentClass: string;
+                card: (typeof pregameOwnKeyPlayerFingerprints)[number];
+              }> = [];
+              const maxLength = Math.max(
+                pregameOwnKeyPlayerFingerprints.length,
+                pregameOpponentKeyPlayerFingerprints.length
+              );
+
+              for (let index = 0; index < maxLength; index += 1) {
+                const ownCard = pregameOwnKeyPlayerFingerprints[index];
+                const opponentCard = pregameOpponentKeyPlayerFingerprints[index];
+                if (ownCard) {
+                  rows.push({
+                    teamKey: 'own',
+                    teamLabel: ownLabel,
+                    accentClass: 'border-emerald-800/50 bg-emerald-950/10',
+                    card: ownCard,
+                  });
+                }
+                if (opponentCard) {
+                  rows.push({
+                    teamKey: 'opponent',
+                    teamLabel: opponentLabel,
+                    accentClass: 'border-orange-800/50 bg-orange-950/10',
+                    card: opponentCard,
+                  });
+                }
+              }
+
+              return rows;
+            })();
 
             return (
-              <div className="space-y-4">
-                <div className="p-3 bg-slate-800/50 rounded-lg">
-                  <div className="flex flex-wrap items-center justify-between text-xs text-slate-400 mb-1">
-                    <span>Elemzés nézőpontja: {ownLabel}</span>
-                    <span>Ellenfél: {opponentLabel}</span>
-                  </div>
-                  <div className="text-sm text-slate-300 font-medium mb-2">Statisztikai esélyek (modell)</div>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-emerald-300">
-                      {ownLabel}: {pregameReport.winProbability.ownPct.toFixed(1)}%
-                    </span>
-                    <span className="text-slate-400">vs</span>
-                    <span className="text-orange-300">
-                      {opponentLabel}: {pregameReport.winProbability.opponentPct.toFixed(1)}%
-                    </span>
-                  </div>
-                  <div className="mt-2 h-2 w-full bg-slate-700 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-emerald-500"
-                      style={{ width: `${pregameReport.winProbability.ownPct}%` }}
-                    />
-                  </div>
-                  <div className="text-xs text-slate-400 mt-2">
-                    Eredmény-prognózis: {favoredTeamLabel} • Valószínűség: {probabilitySpread} • Bizonyosság: {probabilityConfidenceLabel}
+              <div className="space-y-5">
+                <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)] gap-4">
+                  <div className="p-4 bg-slate-800/50 rounded-lg space-y-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-400">
+                      <span>Elemzés nézőpontja: {ownLabel}</span>
+                      <span>Ellenfél: {opponentLabel}</span>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="text-sm text-slate-300 font-medium">Pregame összkép</div>
+                      <div className="flex flex-wrap items-end justify-between gap-3">
+                        <div>
+                          <div className="text-2xl font-semibold text-slate-50">{favoredTeamLabel}</div>
+                          <div className="text-sm text-slate-400">modellfavorit • {probabilitySpread}</div>
+                        </div>
+                        <div className="flex gap-2 text-xs">
+                          <div className="px-2 py-1 rounded-full border border-emerald-700/50 bg-emerald-950/30 text-emerald-200">
+                            {ownLabel}: {pregameReport.winProbability.ownPct.toFixed(1)}%
+                          </div>
+                          <div className="px-2 py-1 rounded-full border border-orange-700/50 bg-orange-950/30 text-orange-200">
+                            {opponentLabel}: {pregameReport.winProbability.opponentPct.toFixed(1)}%
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="h-2 w-full bg-slate-700 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-emerald-500"
+                        style={{ width: `${pregameReport.winProbability.ownPct}%` }}
+                      />
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+                      <div className="bg-slate-900/40 border border-slate-800 rounded-md px-3 py-2">
+                        <div className="text-slate-500 uppercase tracking-wide text-[10px]">Bizonyosság</div>
+                        <div className="text-slate-100 mt-1">{probabilityConfidenceLabel}</div>
+                      </div>
+                      <div className="bg-slate-900/40 border border-slate-800 rounded-md px-3 py-2">
+                        <div className="text-slate-500 uppercase tracking-wide text-[10px]">Domináns ellenfél-tengely</div>
+                        <div className="text-slate-100 mt-1">{axisLabelMap[llmContext?.opponentDominantAxis ?? 'periméter'] ?? 'periméter'}</div>
+                      </div>
+                      <div className="bg-slate-900/40 border border-slate-800 rounded-md px-3 py-2">
+                        <div className="text-slate-500 uppercase tracking-wide text-[10px]">Fő fókusz</div>
+                        <div className="text-slate-100 mt-1">{topFocusPoints[0] ?? 'Nincs kiemelt fókuszpont'}</div>
+                      </div>
+                    </div>
+                    <div className="text-sm text-slate-200 leading-relaxed whitespace-pre-line">{pregameReport.summary}</div>
+                    {confidenceReasons.length > 0 && (
+                      <div className="text-xs text-amber-200 bg-amber-900/20 border border-amber-700/40 rounded-md px-3 py-2">
+                        Bizonyosság oka: {confidenceReasons.join(' • ')}
+                      </div>
+                    )}
                     {(effectiveTeamAnalysis?.leagueProfile.clusterPeers?.length ?? 0) > 0 && (
                       <div className="text-xs text-slate-500">
                         Klaszter-társak: {effectiveTeamAnalysis?.leagueProfile.clusterPeers.join(', ')}
                       </div>
                     )}
                   </div>
+
+                  <div className="space-y-4">
+                    {fanSummary && (
+                      <div className="p-3 bg-slate-800/50 rounded-lg space-y-3">
+                        <div className="text-sm text-slate-300 font-medium">Szurkolói gyorskép</div>
+                        <div className="text-sm text-slate-100">{fanSummary.headline}</div>
+                        <div className="grid grid-cols-1 gap-2 text-sm">
+                          <div className="bg-slate-900/40 border border-slate-800 rounded-md p-2">
+                            <div className="text-xs uppercase tracking-wide text-slate-500 mb-1">Előnyeink</div>
+                            {fanSummary.keyEdges.length > 0 ? fanSummary.keyEdges.map(item => (
+                              <div key={`fan-edge-${item}`} className="text-slate-200">• {item}</div>
+                            )) : <div className="text-slate-500">Nincs kiemelt előny.</div>}
+                          </div>
+                          <div className="bg-slate-900/40 border border-slate-800 rounded-md p-2">
+                            <div className="text-xs uppercase tracking-wide text-slate-500 mb-1">Fő kockázatok</div>
+                            {fanSummary.majorRisks.length > 0 ? fanSummary.majorRisks.map(item => (
+                              <div key={`fan-risk-${item}`} className="text-slate-200">• {item}</div>
+                            )) : <div className="text-slate-500">Nincs kiemelt kockázat.</div>}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {(pregameInjuryImpactEstimate.own.valPer36 > 0 || pregameInjuryImpactEstimate.opponent.valPer36 > 0) && (
+                      <div className="p-3 bg-slate-800/50 rounded-lg space-y-2">
+                        <div className="text-sm text-slate-300 font-medium">Hiányzások becsült hatása</div>
+                        <div className="text-xs text-slate-500">Csak legalább 4 meccses és 8 perc/meccs mintájú játékosokkal számolva.</div>
+                        <div className="grid grid-cols-1 gap-3 text-sm">
+                          <div className="bg-slate-900/40 border border-slate-800 rounded-md p-2">
+                            <div className="text-xs uppercase tracking-wide text-slate-500 mb-1">Saját kiesés</div>
+                            <div className="text-rose-200">-{pregameInjuryImpactEstimate.own.valPer36.toFixed(1)} VAL/36</div>
+                            <div className="text-rose-200">-{pregameInjuryImpactEstimate.own.pointsPer36.toFixed(1)} pont/36</div>
+                            {pregameInjuryImpactEstimate.own.coreNames.length > 0 && (
+                              <div className="text-xs text-slate-300 mt-1">
+                                Kulcs kiesők: {pregameInjuryImpactEstimate.own.coreNames.join(', ')}
+                              </div>
+                            )}
+                          </div>
+                          <div className="bg-slate-900/40 border border-slate-800 rounded-md p-2">
+                            <div className="text-xs uppercase tracking-wide text-slate-500 mb-1">Ellenfél kiesés</div>
+                            <div className="text-emerald-200">-{pregameInjuryImpactEstimate.opponent.valPer36.toFixed(1)} VAL/36</div>
+                            <div className="text-emerald-200">-{pregameInjuryImpactEstimate.opponent.pointsPer36.toFixed(1)} pont/36</div>
+                            {pregameInjuryImpactEstimate.opponent.coreNames.length > 0 && (
+                              <div className="text-xs text-slate-300 mt-1">
+                                Kulcs kiesők: {pregameInjuryImpactEstimate.opponent.coreNames.join(', ')}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
-                <div className="text-sm text-slate-200 leading-relaxed whitespace-pre-line">{pregameReport.summary}</div>
+                <div className="text-xs uppercase tracking-[0.18em] text-slate-500 px-1">Matchup réteg</div>
 
-                {fanSummary && (
-                  <div className="p-3 bg-slate-800/50 rounded-lg space-y-3">
-                    <div className="text-sm text-slate-300 font-medium">Szurkolói gyorskép</div>
-                    <div className="text-sm text-slate-100">{fanSummary.headline}</div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                      <div className="bg-slate-900/40 border border-slate-800 rounded-md p-2">
-                        <div className="text-xs uppercase tracking-wide text-slate-500 mb-1">Előnyeink</div>
-                        {fanSummary.keyEdges.length > 0 ? fanSummary.keyEdges.map(item => (
-                          <div key={`fan-edge-${item}`} className="text-slate-200">• {item}</div>
-                        )) : <div className="text-slate-500">Nincs kiemelt előny.</div>}
-                      </div>
-                      <div className="bg-slate-900/40 border border-slate-800 rounded-md p-2">
-                        <div className="text-xs uppercase tracking-wide text-slate-500 mb-1">Fő kockázatok</div>
-                        {fanSummary.majorRisks.length > 0 ? fanSummary.majorRisks.map(item => (
-                          <div key={`fan-risk-${item}`} className="text-slate-200">• {item}</div>
-                        )) : <div className="text-slate-500">Nincs kiemelt kockázat.</div>}
-                      </div>
-                      <div className="bg-slate-900/40 border border-slate-800 rounded-md p-2">
-                        <div className="text-xs uppercase tracking-wide text-slate-500 mb-1">Meccsterv</div>
-                        {fanSummary.gamePlan.length > 0 ? fanSummary.gamePlan.map(item => (
-                          <div key={`fan-plan-${item}`} className="text-slate-200">• {item}</div>
-                        )) : <div className="text-slate-500">Nincs kiemelt meccsterv.</div>}
-                      </div>
-                      <div className="bg-slate-900/40 border border-slate-800 rounded-md p-2">
-                        <div className="text-xs uppercase tracking-wide text-slate-500 mb-1">B terv</div>
-                        {fanSummary.fallbackPlan.length > 0 ? fanSummary.fallbackPlan.map(item => (
-                          <div key={`fan-fallback-${item}`} className="text-slate-200">• {item}</div>
-                        )) : <div className="text-slate-500">Nincs kiemelt fallback.</div>}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {(pregameInjuryImpactEstimate.own.valPer36 > 0 || pregameInjuryImpactEstimate.opponent.valPer36 > 0) && (
-                  <div className="p-3 bg-slate-800/50 rounded-lg space-y-2">
-                    <div className="text-sm text-slate-300 font-medium">Hiányzások becsült hatása</div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                      <div className="bg-slate-900/40 border border-slate-800 rounded-md p-2">
-                        <div className="text-xs uppercase tracking-wide text-slate-500 mb-1">Saját kiesés</div>
-                        <div className="text-rose-200">-{pregameInjuryImpactEstimate.own.valPer36.toFixed(1)} VAL/36</div>
-                        <div className="text-rose-200">-{pregameInjuryImpactEstimate.own.pointsPer36.toFixed(1)} pont/36</div>
-                        {pregameInjuryImpactEstimate.own.coreNames.length > 0 && (
-                          <div className="text-xs text-slate-300 mt-1">
-                            Kulcs kiesők: {pregameInjuryImpactEstimate.own.coreNames.join(', ')}
-                          </div>
-                        )}
-                      </div>
-                      <div className="bg-slate-900/40 border border-slate-800 rounded-md p-2">
-                        <div className="text-xs uppercase tracking-wide text-slate-500 mb-1">Ellenfél kiesés</div>
-                        <div className="text-emerald-200">-{pregameInjuryImpactEstimate.opponent.valPer36.toFixed(1)} VAL/36</div>
-                        <div className="text-emerald-200">-{pregameInjuryImpactEstimate.opponent.pointsPer36.toFixed(1)} pont/36</div>
-                        {pregameInjuryImpactEstimate.opponent.coreNames.length > 0 && (
-                          <div className="text-xs text-slate-300 mt-1">
-                            Kulcs kiesők: {pregameInjuryImpactEstimate.opponent.coreNames.join(', ')}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {(ownProfile || opponentProfile || llmContext) && (
+                {(ownProfile || opponentProfile) && (
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                    {(ownProfile || opponentProfile) && (
-                      <div className="p-3 bg-slate-800/50 rounded-lg space-y-3">
-                        <div className="text-sm text-slate-300 font-medium">Játékstílus összevetés</div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          <div>
-                            <div className="flex items-center justify-between text-xs text-slate-400">
-                              <span>{ownLabel}</span>
-                              <span>Tempó: {ownProfile?.tempo ?? 'n.a.'}</span>
-                            </div>
-                            {ownProfile ? (
-                              <div className="mt-2 space-y-2 text-sm">
-                                <div>
-                                  <div className="text-[11px] uppercase tracking-wide text-slate-500">Támadás</div>
-                                  <div className="mt-1 flex flex-wrap gap-1">
-                                    {ownProfile.offense.length > 0 ? (
-                                      ownProfile.offense.map(item => (
-                                        <Badge
-                                          key={`own-offense-${item}`}
-                                          className="bg-sky-600/20 text-sky-200 border border-sky-700/40"
-                                        >
-                                          {item}
-                                        </Badge>
-                                      ))
-                                    ) : (
-                                      <span className="text-xs text-slate-500">Nincs adat</span>
-                                    )}
-                                  </div>
-                                </div>
-                                <div>
-                                  <div className="text-[11px] uppercase tracking-wide text-slate-500">Védekezés</div>
-                                  <div className="mt-1 flex flex-wrap gap-1">
-                                    {ownProfile.defense.length > 0 ? (
-                                      ownProfile.defense.map(item => (
-                                        <Badge
-                                          key={`own-defense-${item}`}
-                                          className="bg-emerald-600/20 text-emerald-200 border border-emerald-700/40"
-                                        >
-                                          {item}
-                                        </Badge>
-                                      ))
-                                    ) : (
-                                      <span className="text-xs text-slate-500">Nincs adat</span>
-                                    )}
-                                  </div>
+                    <div className="p-3 bg-slate-800/50 rounded-lg space-y-3 lg:col-span-2">
+                      <div className="text-sm text-slate-300 font-medium">Játékstílus összevetés</div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <div className="flex items-center justify-between text-xs text-slate-400">
+                            <span>{ownLabel}</span>
+                            <span>Tempó: {ownProfile?.tempo ?? 'n.a.'}</span>
+                          </div>
+                          {ownProfile ? (
+                            <div className="mt-2 space-y-2 text-sm">
+                              <div>
+                                <div className="text-[11px] uppercase tracking-wide text-slate-500">Támadás</div>
+                                <div className="mt-1 flex flex-wrap gap-1">
+                                  {ownProfile.offense.length > 0 ? (
+                                    ownProfile.offense.map(item => (
+                                      <Badge
+                                        key={`own-offense-${item}`}
+                                        className="bg-sky-600/20 text-sky-200 border border-sky-700/40"
+                                      >
+                                        {item}
+                                      </Badge>
+                                    ))
+                                  ) : (
+                                    <span className="text-xs text-slate-500">Nincs adat</span>
+                                  )}
                                 </div>
                               </div>
-                            ) : (
-                              <div className="mt-2 text-xs text-slate-500">Ehhez a csapathoz még nincs profil adat.</div>
-                            )}
-                          </div>
-                          <div>
-                            <div className="flex items-center justify-between text-xs text-slate-400">
-                              <span>{opponentLabel}</span>
-                              <span>Tempó: {opponentProfile?.tempo ?? 'n.a.'}</span>
-                            </div>
-                            {opponentProfile ? (
-                              <div className="mt-2 space-y-2 text-sm">
-                                <div>
-                                  <div className="text-[11px] uppercase tracking-wide text-slate-500">Támadás</div>
-                                  <div className="mt-1 flex flex-wrap gap-1">
-                                    {opponentProfile.offense.length > 0 ? (
-                                      opponentProfile.offense.map(item => (
-                                        <Badge
-                                          key={`opp-offense-${item}`}
-                                          className="bg-orange-600/20 text-orange-200 border border-orange-700/40"
-                                        >
-                                          {item}
-                                        </Badge>
-                                      ))
-                                    ) : (
-                                      <span className="text-xs text-slate-500">Nincs adat</span>
-                                    )}
-                                  </div>
-                                </div>
-                                <div>
-                                  <div className="text-[11px] uppercase tracking-wide text-slate-500">Védekezés</div>
-                                  <div className="mt-1 flex flex-wrap gap-1">
-                                    {opponentProfile.defense.length > 0 ? (
-                                      opponentProfile.defense.map(item => (
-                                        <Badge
-                                          key={`opp-defense-${item}`}
-                                          className="bg-emerald-600/20 text-emerald-200 border border-emerald-700/40"
-                                        >
-                                          {item}
-                                        </Badge>
-                                      ))
-                                    ) : (
-                                      <span className="text-xs text-slate-500">Nincs adat</span>
-                                    )}
-                                  </div>
+                              <div>
+                                <div className="text-[11px] uppercase tracking-wide text-slate-500">Védekezés</div>
+                                <div className="mt-1 flex flex-wrap gap-1">
+                                  {ownProfile.defense.length > 0 ? (
+                                    ownProfile.defense.map(item => (
+                                      <Badge
+                                        key={`own-defense-${item}`}
+                                        className="bg-emerald-600/20 text-emerald-200 border border-emerald-700/40"
+                                      >
+                                        {item}
+                                      </Badge>
+                                    ))
+                                  ) : (
+                                    <span className="text-xs text-slate-500">Nincs adat</span>
+                                  )}
                                 </div>
                               </div>
-                            ) : (
-                              <div className="mt-2 text-xs text-slate-500">Ehhez az ellenfélhez nincs profil adat.</div>
-                            )}
-                          </div>
+                            </div>
+                          ) : (
+                            <div className="mt-2 text-xs text-slate-500">Ehhez a csapathoz még nincs profil adat.</div>
+                          )}
                         </div>
+                        <div>
+                          <div className="flex items-center justify-between text-xs text-slate-400">
+                            <span>{opponentLabel}</span>
+                            <span>Tempó: {opponentProfile?.tempo ?? 'n.a.'}</span>
+                          </div>
+                          {opponentProfile ? (
+                            <div className="mt-2 space-y-2 text-sm">
+                              <div>
+                                <div className="text-[11px] uppercase tracking-wide text-slate-500">Támadás</div>
+                                <div className="mt-1 flex flex-wrap gap-1">
+                                  {opponentProfile.offense.length > 0 ? (
+                                    opponentProfile.offense.map(item => (
+                                      <Badge
+                                        key={`opp-offense-${item}`}
+                                        className="bg-orange-600/20 text-orange-200 border border-orange-700/40"
+                                      >
+                                        {item}
+                                      </Badge>
+                                    ))
+                                  ) : (
+                                    <span className="text-xs text-slate-500">Nincs adat</span>
+                                  )}
+                                </div>
+                              </div>
+                              <div>
+                                <div className="text-[11px] uppercase tracking-wide text-slate-500">Védekezés</div>
+                                <div className="mt-1 flex flex-wrap gap-1">
+                                  {opponentProfile.defense.length > 0 ? (
+                                    opponentProfile.defense.map(item => (
+                                      <Badge
+                                        key={`opp-defense-${item}`}
+                                        className="bg-emerald-600/20 text-emerald-200 border border-emerald-700/40"
+                                      >
+                                        {item}
+                                      </Badge>
+                                    ))
+                                  ) : (
+                                    <span className="text-xs text-slate-500">Nincs adat</span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="mt-2 text-xs text-slate-500">Ehhez az ellenfélhez nincs profil adat.</div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div className="space-y-4">
+                  {shotProfileContext && (
+                    <div className="p-3 bg-slate-800/50 rounded-lg space-y-3">
+                    <div className="text-sm text-slate-300 font-medium">Dobástérkép matchup</div>
+                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                      <div className="bg-slate-900/40 border border-slate-800 rounded-md p-2">
+                        <div className="text-xs uppercase tracking-wide text-slate-500 mb-2">Zónaarány összevetés</div>
+                        <ResponsiveContainer width="100%" height={244}>
+                          <BarChart data={shotProfileChartData} margin={{ top: 8, right: 8, left: 8, bottom: 22 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                            <XAxis
+                              dataKey="label"
+                              {...pregameXAxisProps}
+                              angle={-28}
+                              height={68}
+                              tickFormatter={(value: string | number) => zoneChartLabelMap[String(value)] ?? String(value)}
+                            />
+                            <YAxis stroke="#94a3b8" tick={{ fontSize: 10 }} />
+                            <Tooltip
+                              contentStyle={{
+                                backgroundColor: '#0f172a',
+                                border: '1px solid #475569',
+                                borderRadius: '8px',
+                                color: '#f1f5f9',
+                              }}
+                            />
+                            <Legend wrapperStyle={{ color: '#94a3b8' }} />
+                            <Bar dataKey="ownRate" name={`${ownLabel} zónaarány`} fill="#10b981" radius={[6, 6, 0, 0]} />
+                            <Bar dataKey="opponentRate" name={`${opponentLabel} zónaarány`} fill="#f97316" radius={[6, 6, 0, 0]} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                        <div className="text-xs text-slate-500 mt-1">A sávok a szezonos dobásmegoszlást mutatják zónánként.</div>
+                      </div>
+                      <div className="bg-slate-900/40 border border-slate-800 rounded-md p-2">
+                        <div className="text-xs uppercase tracking-wide text-slate-500 mb-2">Liga-delta heatmap</div>
+                        <PostgameZoneHeatmapChart cells={shotProfileHeatmapCells} />
+                        <div className="text-xs text-slate-500 mt-1">Pozitív érték: saját oldal relatív zónaelőnye erősebb, mint az ellenfélé ugyanabban a zónában.</div>
+                      </div>
+                    </div>
+                    <div className="bg-slate-900/40 border border-slate-800 rounded-md p-2">
+                      <div className="text-xs uppercase tracking-wide text-slate-500 mb-2">Offense vs defense zóna-matchup</div>
+                      <ResponsiveContainer width="100%" height={252}>
+                        <BarChart data={offenseDefenseZoneData} margin={{ top: 8, right: 8, left: 8, bottom: 14 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                          <XAxis dataKey="label" {...pregameXAxisProps} />
+                          <YAxis stroke="#94a3b8" tick={{ fontSize: 10 }} />
+                          <Tooltip
+                            contentStyle={{
+                              backgroundColor: '#0f172a',
+                              border: '1px solid #475569',
+                              borderRadius: '8px',
+                              color: '#f1f5f9',
+                            }}
+                          />
+                          <Legend wrapperStyle={{ color: '#94a3b8' }} />
+                          <Bar dataKey="ownAttackEdge" name={`${ownLabel} támadás vs ${opponentLabel} engedett`} fill="#10b981" radius={[6, 6, 0, 0]} />
+                          <Bar dataKey="opponentAttackEdge" name={`${opponentLabel} támadás vs ${ownLabel} engedett`} fill="#f97316" radius={[6, 6, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                      <div className="text-xs text-slate-500 mt-1">A pozitív érték zónaszinten kedvezőbb támadás-védekezés matchupot jelez az adott oldalon.</div>
+                    </div>
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 text-sm">
+                      <div className="bg-slate-900/40 border border-slate-800 rounded-md p-2">
+                        <div className="text-xs uppercase tracking-wide text-slate-500 mb-2">Saját zónafegyverek</div>
+                        {shotProfileContext.ownTopZones.length > 0 ? shotProfileContext.ownTopZones.map(zone => (
+                          <div key={`own-shot-zone-${zone.label}`} className="flex items-center justify-between py-1 border-b border-slate-800 last:border-0">
+                            <div>
+                              <div className="text-slate-100">{zone.label}</div>
+                              <div className="text-xs text-slate-400">Arány: {zone.rate.toFixed(1)}% • Hatékonyság: {zone.pct.toFixed(1)}%</div>
+                            </div>
+                            <div className="text-right text-xs">
+                              <div className={zone.rateDeltaVsLeague >= 0 ? 'text-emerald-300' : 'text-rose-300'}>
+                                {zone.rateDeltaVsLeague >= 0 ? '+' : ''}{zone.rateDeltaVsLeague.toFixed(1)} pp ráta
+                              </div>
+                              <div className={zone.pctDeltaVsLeague >= 0 ? 'text-emerald-300' : 'text-rose-300'}>
+                                {zone.pctDeltaVsLeague >= 0 ? '+' : ''}{zone.pctDeltaVsLeague.toFixed(1)} pp liga vs
+                              </div>
+                            </div>
+                          </div>
+                        )) : <div className="text-slate-500">Nincs elég saját shot-profile minta.</div>}
+                      </div>
+                      <div className="bg-slate-900/40 border border-slate-800 rounded-md p-2">
+                        <div className="text-xs uppercase tracking-wide text-slate-500 mb-2">Ellenfél zónafegyverek</div>
+                        {shotProfileContext.opponentTopZones.length > 0 ? shotProfileContext.opponentTopZones.map(zone => (
+                          <div key={`opp-shot-zone-${zone.label}`} className="flex items-center justify-between py-1 border-b border-slate-800 last:border-0">
+                            <div>
+                              <div className="text-slate-100">{zone.label}</div>
+                              <div className="text-xs text-slate-400">Arány: {zone.rate.toFixed(1)}% • Hatékonyság: {zone.pct.toFixed(1)}%</div>
+                            </div>
+                            <div className="text-right text-xs">
+                              <div className={zone.rateDeltaVsLeague >= 0 ? 'text-orange-300' : 'text-slate-400'}>
+                                {zone.rateDeltaVsLeague >= 0 ? '+' : ''}{zone.rateDeltaVsLeague.toFixed(1)} pp ráta
+                              </div>
+                              <div className={zone.pctDeltaVsLeague >= 0 ? 'text-orange-300' : 'text-slate-400'}>
+                                {zone.pctDeltaVsLeague >= 0 ? '+' : ''}{zone.pctDeltaVsLeague.toFixed(1)} pp liga vs
+                              </div>
+                            </div>
+                          </div>
+                        )) : <div className="text-slate-500">Nincs elég ellenfél shot-profile minta.</div>}
+                      </div>
+                    </div>
+                    {(shotProfileContext.notes.length > 0 || shotProfileContext.defenseNotes.length > 0 || shotProfileContext.clashZones.length > 0) && (
+                      <div className="bg-slate-900/40 border border-slate-800 rounded-md p-2 space-y-1">
+                        {shotProfileContext.notes.map(note => (
+                          <div key={note} className="text-xs text-slate-300">• {note}</div>
+                        ))}
+                        {shotProfileContext.defenseNotes.map(note => (
+                          <div key={note} className="text-xs text-amber-200">• {note}</div>
+                        ))}
+                        {shotProfileContext.clashZones.length > 0 && (
+                          <div className="text-xs text-amber-200">
+                            Közös hangsúlyzónák: {shotProfileContext.clashZones.join(', ')}
+                          </div>
+                        )}
                       </div>
                     )}
-                    {llmContext && (
-                      <div className="p-3 bg-slate-800/50 rounded-lg space-y-2">
-                        <div className="text-sm text-slate-300 font-medium">LLM bemeneti kontextus</div>
-                        <div className="text-xs text-slate-400">
-                          Tempó: {ownLabel} → {llmContext.ownTempoDescriptor}, {opponentLabel} → {llmContext.opponentTempoDescriptor}
-                        </div>
-                        <div className="text-xs text-slate-400">
-                          Domináns tengely (ellenfél): {axisLabelMap[llmContext.opponentDominantAxis] ?? llmContext.opponentDominantAxis}
-                        </div>
-                        {llmContext.varianceDrivers.length > 0 ? (
-                          <div className="text-xs text-slate-400">
-                            Varianciát okozó tényezők: <span className="text-slate-200">{llmContext.varianceDrivers.join(' + ')}</span>
+                    </div>
+                  )}
+
+                  <div className="space-y-4">
+                    <div className="p-3 bg-slate-800/50 rounded-lg">
+                      <div className="text-sm text-slate-300 font-medium mb-2">Kulcsjátékosok</div>
+                      <div className="grid grid-cols-1 2xl:grid-cols-2 gap-3 mb-4">
+                        {[
+                          {
+                            key: 'own',
+                            title: ownLabel,
+                            accentClass: 'border-emerald-800/50 bg-emerald-950/10',
+                            groups: pregameReport.ownKeyPlayers,
+                          },
+                          {
+                            key: 'opponent',
+                            title: opponentLabel,
+                            accentClass: 'border-orange-800/50 bg-orange-950/10',
+                            groups: pregameReport.keyPlayers,
+                          },
+                        ].map(section => (
+                          <div key={section.key} className={`rounded-md border p-3 space-y-2 ${section.accentClass}`}>
+                            <div className="text-xs uppercase tracking-wide text-slate-400">{section.title}</div>
+                            <div className="text-xs text-slate-300">Pontfelelősök: <span className="text-slate-100">{section.groups.primaryScorers.join(', ') || '-'}</span></div>
+                            <div className="text-xs text-slate-300">Szervezők: <span className="text-slate-100">{section.groups.primaryPlaymakers.join(', ') || '-'}</span></div>
+                            <div className="text-xs text-slate-300">Stretch: <span className="text-slate-100">{section.groups.stretchThreats.join(', ') || '-'}</span></div>
+                            <div className="text-xs text-slate-300">Mismatch: <span className="text-slate-100">{section.groups.mismatchCandidates.join(', ') || '-'}</span></div>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-4">
+                        {combinedKeyPlayerCards.map(item => {
+                          const player = item.card;
+                          return (
+                            <div key={`${item.teamKey}-${player.playerId}`} className={`rounded-md border p-3 space-y-2 ${item.accentClass}`}>
+                              <div className="flex items-start justify-between gap-2">
+                                <div>
+                                  <div className="text-[11px] uppercase tracking-wide text-slate-500">{item.teamLabel}</div>
+                                  <div className="text-sm font-medium text-slate-100">{player.name}</div>
+                                  <div className="text-[11px] text-slate-500">{player.positionLabel} • {player.attempts} kísérlet</div>
+                                </div>
+                                <div className="text-right">
+                                  <div className="text-[11px] text-slate-500">FG%</div>
+                                  <div className="text-sm text-amber-200">{player.fgPct.toFixed(1)}%</div>
+                                </div>
+                              </div>
+                              <div className="flex flex-wrap gap-1">
+                                {player.topZones.map(zone => (
+                                  <Badge
+                                    key={`${item.teamKey}-${player.playerId}-${zone.label}`}
+                                    variant="secondary"
+                                    className="border border-slate-700 bg-slate-800/70 text-[11px] text-slate-200"
+                                  >
+                                    {zone.label} {zone.rate.toFixed(0)}%
+                                  </Badge>
+                                ))}
+                              </div>
+                              <div className="text-[11px] text-slate-400">{player.profileNote} • {player.sampleNote}</div>
+                              <div className="space-y-2">
+                                {player.zones.map(zone => (
+                                  <div key={`${item.teamKey}-${player.playerId}-${zone.key}`} className="space-y-1">
+                                    <div className="flex items-center justify-between text-[11px]">
+                                      <span className="text-slate-300">{zone.label}</span>
+                                      <span className="text-slate-500">{zone.attempts} kís.</span>
+                                    </div>
+                                    <div className="h-2 rounded-full bg-slate-800 overflow-hidden">
+                                      <div
+                                        className={`${zone.fillClass} h-full rounded-full`}
+                                        style={{ width: `${zone.attempts > 0 ? Math.max(zone.rate, 6) : 0}%` }}
+                                      />
+                                    </div>
+                                    <div className="flex items-center justify-between text-[11px]">
+                                      <span className="text-slate-500">Ráta {zone.rate.toFixed(1)}% • FG {zone.pct.toFixed(1)}%</span>
+                                      <span className={zone.rateDeltaVsLeague >= 0 ? 'text-emerald-300' : 'text-rose-300'}>
+                                        {zone.rateDeltaVsLeague >= 0 ? '+' : ''}{zone.rateDeltaVsLeague.toFixed(1)} pp liga
+                                      </span>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                      <div className="p-3 bg-slate-800/50 rounded-lg">
+                        <div className="text-sm text-slate-300 font-medium mb-2">Fókuszpontok</div>
+                        {topFocusPoints.length > 0 ? (
+                          <div className="space-y-2">
+                            {topFocusPoints.map(item => <div key={item} className="text-sm text-slate-200">• {item}</div>)}
+                            {secondaryFocusPoints.length > 0 && (
+                              <div className="pt-2 border-t border-slate-800 text-xs text-slate-500">
+                                További pontok: {secondaryFocusPoints.join(' • ')}
+                              </div>
+                            )}
                           </div>
                         ) : (
-                          <div className="text-xs text-slate-500">Nincs kiemelt variancia-forrás.</div>
-                        )}
-                        {llmContext.tempoControlNote && (
-                          <div className="text-xs text-amber-200">{llmContext.tempoControlNote}</div>
-                        )}
-                        {llmContext.matchupRealizationNote && (
-                          <div className="text-xs text-amber-200">{llmContext.matchupRealizationNote}</div>
-                        )}
-                        {llmContext.riskNote && (
-                          <div className="text-xs text-rose-200">{llmContext.riskNote}</div>
-                        )}
-                        <div className="grid grid-cols-2 gap-2 text-xs text-slate-300">
-                          <div className="bg-slate-900/40 border border-slate-800 rounded-md px-2 py-1">
-                            <div className="text-[10px] uppercase tracking-wide text-slate-500">Periméter delta</div>
-                            <div className="font-mono text-sm">
-                              {formatDelta(llmContext.positionDeltaSummary.perimeterDelta)} VAL/36
-                            </div>
-                          </div>
-                          <div className="bg-slate-900/40 border border-slate-800 rounded-md px-2 py-1">
-                            <div className="text-[10px] uppercase tracking-wide text-slate-500">Belső poszt delta</div>
-                            <div className="font-mono text-sm">
-                              {formatDelta(llmContext.positionDeltaSummary.frontcourtDelta)} VAL/36
-                            </div>
-                          </div>
-                        </div>
-                        {llmContext.significantMatchups.length > 0 && (
-                          <div className="pt-1">
-                            <div className="text-xs text-slate-400 font-medium">Jelentős párosítások</div>
-                            <div className="mt-1 space-y-1">
-                              {llmContext.significantMatchups.map(item => (
-                                <div
-                                  key={item.position}
-                                  className="flex items-center justify-between bg-slate-900/40 border border-slate-800 rounded-md px-2 py-1"
-                                >
-                                  <span className="text-slate-200">{POSITION_LABELS[item.position] ?? item.position}</span>
-                                  <span className={item.deltaValPer36 >= 0 ? 'text-emerald-300' : 'text-rose-300'}>
-                                    {formatDelta(item.deltaValPer36)} VAL/36
-                                  </span>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
+                          <div className="text-sm text-slate-400">Nincs kiemelt fókuszpont.</div>
                         )}
                       </div>
-                    )}
-                  </div>
-                )}
 
+                      <div className="p-3 bg-slate-800/50 rounded-lg">
+                        <div className="text-sm text-slate-300 font-medium mb-2">Kockázati térkép</div>
+                        <div className="grid grid-cols-1 gap-3 text-sm">
+                          <div>
+                            <div className="text-xs uppercase tracking-wide text-slate-500 mb-1">Fő veszélyek</div>
+                            {pregameReport.threats.length > 0 ? (
+                              pregameReport.threats.map(item => <div key={item} className="text-slate-200">• {item}</div>)
+                            ) : (
+                              <div className="text-slate-400">Kiegyensúlyozott fegyvertár, extrém veszély nélkül.</div>
+                            )}
+                          </div>
+                          <div>
+                            <div className="text-xs uppercase tracking-wide text-slate-500 mb-1">Feltételes sebezhetőségek</div>
+                            {pregameReport.vulnerabilities.length > 0 ? (
+                              pregameReport.vulnerabilities.map(item => <div key={item} className="text-slate-200">• {item}</div>)
+                            ) : (
+                              <div className="text-slate-400">Matchupfüggő, rendszerszintű rés nem látszik.</div>
+                            )}
+                          </div>
+                          <div>
+                            <div className="text-xs uppercase tracking-wide text-slate-500 mb-1">Saját kockázati pontok</div>
+                            {riskFlags.length > 0 ? (
+                              riskFlags.map(item => <div key={item} className="text-slate-200">• {item}</div>)
+                            ) : (
+                              <div className="text-slate-400">Általános faultterhelés- és lepattanó-kontroll figyelmeztetés, konkrét riasztás nélkül.</div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="text-xs uppercase tracking-[0.18em] text-slate-500 px-1">Interaktív modellezés</div>
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                   <div className="p-3 bg-slate-800/50 rounded-lg">
                     <div className="text-sm text-slate-300 font-medium mb-2">Támadó-védő profil mutatók</div>
-                    <ResponsiveContainer width="100%" height={230}>
-                      <BarChart data={pregameStyleMetricChartData} margin={{ left: 8, right: 8 }}>
+                    <ResponsiveContainer width="100%" height={248}>
+                      <BarChart data={pregameStyleMetricChartData} margin={{ top: 8, right: 8, left: 8, bottom: 12 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                        <XAxis dataKey="label" stroke="#94a3b8" tick={{ fontSize: 10 }} />
+                        <XAxis dataKey="label" {...pregameXAxisProps} />
                         <YAxis stroke="#94a3b8" tick={{ fontSize: 10 }} />
                         <Tooltip
                           contentStyle={{
@@ -12034,10 +12853,10 @@ export function SeasonComparison({
                       <div className="flex justify-between"><span>Festék kontroll (auto)</span><span>{paintWeight}%</span></div>
                     </div>
 
-                    <ResponsiveContainer width="100%" height={120}>
-                      <BarChart data={focusWeightBars} layout="vertical" margin={{ left: 10, right: 10 }}>
+                    <ResponsiveContainer width="100%" height={128}>
+                      <BarChart data={focusWeightBars} layout="vertical" margin={{ top: 6, right: 10, left: 18, bottom: 6 }}>
                         <XAxis type="number" domain={[0, 100]} stroke="#94a3b8" tick={{ fontSize: 10 }} />
-                        <YAxis dataKey="label" type="category" stroke="#94a3b8" tick={{ fontSize: 10 }} width={90} />
+                        <YAxis dataKey="label" type="category" stroke="#94a3b8" tick={{ fontSize: 10 }} width={108} />
                         <Tooltip
                           contentStyle={{
                             backgroundColor: '#0f172a',
@@ -12059,10 +12878,10 @@ export function SeasonComparison({
                 {scenarioChartData.length > 0 && (
                   <div className="p-3 bg-slate-800/50 rounded-lg space-y-3">
                     <div className="text-sm text-slate-300 font-medium">Forgatókönyv-modellezés</div>
-                    <ResponsiveContainer width="100%" height={220}>
-                      <BarChart data={scenarioChartData} margin={{ left: 8, right: 8 }}>
+                    <ResponsiveContainer width="100%" height={248}>
+                      <BarChart data={scenarioChartData} margin={{ top: 8, right: 8, left: 8, bottom: 14 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                        <XAxis dataKey="label" stroke="#94a3b8" tick={{ fontSize: 10 }} />
+                        <XAxis dataKey="label" {...pregameXAxisProps} />
                         <YAxis stroke="#94a3b8" tick={{ fontSize: 10 }} domain={[0, 100]} />
                         <Tooltip
                           contentStyle={{
@@ -12113,10 +12932,10 @@ export function SeasonComparison({
                       </div>
                     </div>
                     <ResponsiveContainer width="100%" height={240}>
-                      <BarChart data={calibrationChartData} layout="vertical" margin={{ left: 10, right: 10 }}>
+                      <BarChart data={calibrationChartData} layout="vertical" margin={{ top: 8, right: 10, left: 18, bottom: 8 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
                         <XAxis type="number" domain={[0, 100]} stroke="#94a3b8" tick={{ fontSize: 10 }} />
-                        <YAxis dataKey="label" type="category" stroke="#94a3b8" tick={{ fontSize: 10 }} width={170} />
+                        <YAxis dataKey="label" type="category" stroke="#94a3b8" tick={{ fontSize: 10 }} width={188} />
                         <Tooltip
                           contentStyle={{
                             backgroundColor: '#0f172a',
@@ -12158,9 +12977,9 @@ export function SeasonComparison({
                   return (
                     <>
                       <ResponsiveContainer width="100%" height={240}>
-                        <BarChart data={positionComparisonChart} margin={{ left: 8, right: 8 }}>
+                        <BarChart data={positionComparisonChart} margin={{ top: 8, right: 8, left: 8, bottom: 12 }}>
                           <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                          <XAxis dataKey="label" stroke="#94a3b8" tick={{ fontSize: 10 }} />
+                          <XAxis dataKey="label" {...pregameXAxisProps} />
                           <YAxis stroke="#94a3b8" tick={{ fontSize: 10 }} />
                           <Tooltip
                             contentStyle={{
@@ -12223,35 +13042,6 @@ export function SeasonComparison({
                 })()}
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
-                    <div className="text-sm text-slate-300 font-medium mb-2">Fő veszélyek</div>
-                    {pregameReport.threats.length > 0 ? (
-                      pregameReport.threats.map(item => <div key={item} className="text-sm text-slate-200">• {item}</div>)
-                    ) : (
-                      <div className="text-sm text-slate-400">Kiegyensúlyozott fegyvertár, extrém veszély nélkül.</div>
-                    )}
-                  </div>
-                  <div>
-                    <div className="text-sm text-slate-300 font-medium mb-2">Feltételes sebezhetőségek (ellenfél)</div>
-                    {pregameReport.vulnerabilities.length > 0 ? (
-                      pregameReport.vulnerabilities.map(item => <div key={item} className="text-sm text-slate-200">• {item}</div>)
-                    ) : (
-                      <div className="text-sm text-slate-400">Matchupfüggő, rendszerszintű rés nem látszik.</div>
-                    )}
-                  </div>
-                  <div>
-                    <div className="text-sm text-slate-300 font-medium mb-2">Saját kockázati pontok</div>
-                    {riskFlags.length > 0 ? (
-                      riskFlags.map(item => <div key={item} className="text-sm text-slate-200">• {item}</div>)
-                    ) : (
-                      <div className="text-sm text-slate-400">
-                        Általános faultterhelés- és lepattanó-kontroll figyelmeztetés, konkrét riasztás nélkül.
-                      </div>
-                    )}
-                  </div>
-                </div>
-
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                   <div className="p-3 bg-slate-800/50 rounded-lg">
                     <div className="text-sm text-slate-300 font-medium mb-2">Kockázati forgatókönyvek (mi történik, ha...)</div>
@@ -12277,6 +13067,7 @@ export function SeasonComparison({
                     <div className="text-sm text-slate-300 font-medium mb-2">X-faktor számszerűsítés</div>
                     {xFactorImpact ? (
                       <div className="space-y-2">
+                        <div className="text-xs text-slate-500">Ezek a számok swing-potenciált mutatnak kontrollált forgatókönyvben, nem garantált nyereséget.</div>
                         <div className="bg-slate-900/40 border border-slate-800 rounded-md px-3 py-2 text-sm text-slate-200">
                           Elsődleges x-faktor hatás: <span className="text-emerald-300">+{xFactorImpact.primaryDeltaPct.toFixed(1)}%</span>
                         </div>
@@ -12286,6 +13077,14 @@ export function SeasonComparison({
                         <div className="bg-slate-900/40 border border-slate-800 rounded-md px-3 py-2 text-sm text-slate-200">
                           Kombinált modellhatás: <span className="text-emerald-300">+{xFactorImpact.combinedDeltaPct.toFixed(1)}%</span>
                         </div>
+                        {adjustedScenarioOutcomes.find(item => item.key === 'controlled_tempo') && (
+                          <div className="bg-emerald-950/20 border border-emerald-800/40 rounded-md px-3 py-2 text-xs text-emerald-200">
+                            Jelenlegi fókuszsúlyok mellett a kontrollált forgatókönyv tényleges modell-eltolása: {(() => {
+                              const controlledScenario = adjustedScenarioOutcomes.find(item => item.key === 'controlled_tempo');
+                              return `${controlledScenario && controlledScenario.deltaVsBase >= 0 ? '+' : ''}${controlledScenario?.deltaVsBase.toFixed(1)} pp vs alap`;
+                            })()}
+                          </div>
+                        )}
                       </div>
                     ) : (
                       <div className="text-sm text-slate-400">Nincs számszerűsíthető x-faktor hatás.</div>
@@ -12321,24 +13120,6 @@ export function SeasonComparison({
                     </div>
                   </div>
                 )}
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <div className="text-sm text-slate-300 font-medium mb-2">Kulcsjátékosok</div>
-                    <div className="text-sm text-slate-200">Pontfelelősök: {pregameReport.keyPlayers.primaryScorers.join(', ') || '-'}</div>
-                    <div className="text-sm text-slate-200">Elsődleges szervezők: {pregameReport.keyPlayers.primaryPlaymakers.join(', ') || '-'}</div>
-                    <div className="text-sm text-slate-200">Stretch fenyegetések: {pregameReport.keyPlayers.stretchThreats.join(', ') || '-'}</div>
-                    <div className="text-sm text-slate-200">Mismatch jelöltek: {pregameReport.keyPlayers.mismatchCandidates.join(', ') || '-'}</div>
-                  </div>
-                  <div>
-                    <div className="text-sm text-slate-300 font-medium mb-2">Fókuszpontok</div>
-                    {prioritizedFocusPoints.length > 0 ? (
-                      prioritizedFocusPoints.map(item => <div key={item} className="text-sm text-slate-200">• {item}</div>)
-                    ) : (
-                      <div className="text-sm text-slate-400">Nincs kiemelt fókuszpont.</div>
-                    )}
-                  </div>
-                </div>
 
                 {advancedPlayers && (
                   <div className="p-3 bg-slate-800/50 rounded-lg space-y-3">
