@@ -3,6 +3,22 @@
         "/^python3 - <<'PY'\nfrom pathlib import Path\npath = Path\\('components/SeasonComparison\\.tsx'\\)\ntext = path\\.read_text\\(\\)\nold = \"    team\\.roster\\.push\\(\\{\\\\n      playerId: player\\.id,\\\\n      name: player\\.name,\\\\n      position: positionInfo\\.position,\\\\n      positionBuckets: positionInfo\\.positionBuckets,\\\\n      positionLabel: player\\.position \\?\\? null,\\\\n      rawPosition: player\\.position \\?\\? null,\\\\n      minutes: player\\.minutes \\|\\| 0,\\\\n      usageProxy,\\\\n      heightCm: player\\.height \\|\\| undefined,\\\\n      roles: rolesByPlayerId\\.get\\(player\\.id\\) \\?\\? \\[\\],\\\\n    \\}\\);\\\\n\"\nnew = \"    team\\.roster\\.push\\(\\{\\\\n      playerId: player\\.id,\\\\n      name: player\\.name,\\\\n      position: positionInfo\\.position,\\\\n      positionBuckets: positionInfo\\.positionBuckets,\\\\n      positionLabel: player\\.position \\?\\? null,\\\\n      rawPosition: player\\.position \\?\\? null,\\\\n      isActive: player\\.isActive !== false,\\\\n      minutes: player\\.minutes \\|\\| 0,\\\\n      usageProxy,\\\\n      heightCm: player\\.height \\|\\| undefined,\\\\n      roles: rolesByPlayerId\\.get\\(player\\.id\\) \\?\\? \\[\\],\\\\n    \\}\\);\\\\n\"\nif old not in text:\n    raise SystemExit\\('team roster push pattern missing'\\)\ntext = text\\.replace\\(old, new, 1\\)\npath\\.write_text\\(text\\)\nPY$/": {
             "approve": true,
             "matchCommandLine": true
+        },
+        "/^set -a && source \\.env\\.local && set \\+a && node \\.tmp-lineup-diagnostic\\.js$/": {
+            "approve": true,
+            "matchCommandLine": true
+        },
+        "/^set -a && source \\.env\\.local && set \\+a && node -e 'const \\{createClient\\}=require\\(\"@supabase/supabase-js\"\\); const supabase=createClient\\(process\\.env\\.NEXT_PUBLIC_SUPABASE_URL,process\\.env\\.SUPABASE_SERVICE_ROLE_KEY\\); \\(async\\(\\)=>\\{ const seasonId=\"d80abb1c-e7b7-4290-88bd-62c9df93bf6f\"; const teamId=\"ff4710a9-e2b2-49fc-904f-37f8356ed5f8\"; const \\{data,error\\}=await supabase\\.from\\(\"players\"\\)\\.select\\(\"name,is_active,team_id,season_id\"\\)\\.eq\\(\"season_id\",seasonId\\)\\.eq\\(\"team_id\",teamId\\)\\.ilike\\(\"name\",\"%Geringer%\"\\); if\\(error\\) throw error; console\\.log\\(JSON\\.stringify\\(data,null,2\\)\\); \\}\\)\\(\\)\\.catch\\(err=>\\{ console\\.error\\(err\\); process\\.exit\\(1\\); \\}\\);'$/": {
+            "approve": true,
+            "matchCommandLine": true
+        },
+        "/^set -a && source \\.env\\.local && set \\+a && node -e 'const \\{createClient\\}=require\\(\"@supabase/supabase-js\"\\); const supabase=createClient\\(process\\.env\\.NEXT_PUBLIC_SUPABASE_URL,process\\.env\\.SUPABASE_SERVICE_ROLE_KEY\\); \\(async\\(\\)=>\\{ const \\{data,error\\}=await supabase\\.from\\(\"players\"\\)\\.select\\(\"name,is_active,team_id,season_id,teams\\(name\\)\"\\)\\.or\\(\"name\\.ilike\\.%Geringer%,name\\.ilike\\.%Géringer%\"\\); if\\(error\\) throw error; console\\.log\\(JSON\\.stringify\\(data,null,2\\)\\); \\}\\)\\(\\)\\.catch\\(err=>\\{ console\\.error\\(err\\); process\\.exit\\(1\\); \\}\\);'$/": {
+            "approve": true,
+            "matchCommandLine": true
+        },
+        "/^set -a && source \\.env\\.local && set \\+a && node -e 'const \\{createClient\\}=require\\(\"@supabase/supabase-js\"\\); const supabase=createClient\\(process\\.env\\.NEXT_PUBLIC_SUPABASE_URL,process\\.env\\.SUPABASE_SERVICE_ROLE_KEY\\); \\(async\\(\\)=>\\{ const seasonId=\"d80abb1c-e7b7-4290-88bd-62c9df93bf6f\"; const teamId=\"ff4710a9-e2b2-49fc-904f-37f8356ed5f8\"; const \\{data,error\\}=await supabase\\.from\\(\"players\"\\)\\.select\\(\"name,is_active\"\\)\\.eq\\(\"season_id\",seasonId\\)\\.eq\\(\"team_id\",teamId\\)\\.order\\(\"name\"\\); if\\(error\\) throw error; console\\.log\\(JSON\\.stringify\\(data,null,2\\)\\); \\}\\)\\(\\)\\.catch\\(err=>\\{ console\\.error\\(err\\); process\\.exit\\(1\\); \\}\\);'$/": {
+            "approve": true,
+            "matchCommandLine": true
         }
     }
 }
