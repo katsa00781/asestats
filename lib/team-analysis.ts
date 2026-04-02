@@ -1,4 +1,5 @@
 import { normalizeRoleKeys, type RoleKey } from './player-analysis';
+import { DEFENSE_STYLE_LABELS, OFFENSE_STYLE_LABELS } from './style-vocabulary';
 
 import type { Position } from './positions';
 export type { Position };
@@ -924,7 +925,7 @@ const getClusterLabel = (inputs: {
 
   if (paceScore >= 70 && pressureScore >= 60) return 'Transition-heavy';
   if (paceScore >= 60 && twoRateScore >= 60) return 'Gyors, belső fókuszú';
-  if (paceScore <= 40 && threeRateScore >= 60) return 'Lassú, periméter-orientált';
+  if (paceScore <= 40 && threeRateScore >= 60) return 'Lassú, periméter-fókuszú';
   if (paceScore <= 45 && assistScore >= 60) return 'Halfcourt, playmaker-domináns';
   if (pressureScore >= 70 && paceScore <= 55) return 'Defense-first';
 
@@ -932,7 +933,7 @@ const getClusterLabel = (inputs: {
   if (maxScore === pressureScore) return 'Defense-first';
   if (maxScore === paceScore) return 'Transition-heavy';
   if (maxScore === twoRateScore) return 'Gyors, belső fókuszú';
-  if (maxScore === threeRateScore) return 'Lassú, periméter-orientált';
+  if (maxScore === threeRateScore) return 'Lassú, periméter-fókuszú';
   return 'Halfcourt, playmaker-domináns';
 };
 
@@ -957,29 +958,29 @@ const detectTeamStyle = (team: NormalizedTeamStats, benchmarks: LeagueTeamBenchm
     && (scoreAbove(benchmarks, team, 'stl_per_game', 60)
       || (team.hasOpponentTo && scoreAbove(benchmarks, team, 'opp_to_rate', 60)))
   ) {
-    offense.push('Gyorsindítás-orientált');
+    offense.push(OFFENSE_STYLE_LABELS.transition);
   }
   if (scoreBelow(benchmarks, team, 'pace', 40) && scoreAbove(benchmarks, team, 'assist_rate', 60)) {
-    offense.push('Félpályás támadás');
+    offense.push(OFFENSE_STYLE_LABELS.halfcourt);
   }
   if (scoreAbove(benchmarks, team, 'three_rate', 60) && scoreAbove(benchmarks, team, 'three_pct', 60)) {
-    offense.push('Periméter-orientált');
+    offense.push(OFFENSE_STYLE_LABELS.perimeter);
   }
   if (scoreAbove(benchmarks, team, 'two_rate', 70) && scoreAbove(benchmarks, team, 'ft_rate', 60) && scoreBelow(benchmarks, team, 'three_rate', 45)) {
-    offense.push('Belső fókuszú');
+    offense.push(OFFENSE_STYLE_LABELS.interior);
   }
 
   if (team.hasOpponentTo && scoreAbove(benchmarks, team, 'stl_per_game', 60) && scoreAbove(benchmarks, team, 'opp_to_rate', 60)) {
-    defense.push('Agresszív védekezés');
+    defense.push(DEFENSE_STYLE_LABELS.pressure);
   }
   if (scoreBelow(benchmarks, team, 'fouls_per_game', 40) && scoreBelow(benchmarks, team, 'pace', 40)) {
-    defense.push('Konzervatív védekezés');
+    defense.push(DEFENSE_STYLE_LABELS.disciplined);
   }
   if (team.hasOpponentShooting && scoreAbove(benchmarks, team, 'blk_per_game', 60) && performanceAbove(benchmarks, team, 'opp2_pct', 60)) {
-    defense.push('Gyűrűvédő');
+    defense.push(DEFENSE_STYLE_LABELS.rim);
   }
   if (team.hasOpponentShooting && performanceAbove(benchmarks, team, 'opp3_pct', 60)) {
-    defense.push('Periméter-fókuszú');
+    defense.push(DEFENSE_STYLE_LABELS.perimeter);
   }
 
   return { offense, defense };

@@ -16,6 +16,15 @@ type UpdateItem = {
 const updates: UpdateItem[] = [
   {
     date: '2026. április 2.',
+    version: '1.7.6',
+    category: 'improvement',
+    icon: <BarChart3 className="w-5 h-5" />,
+    title: 'Pregame stíluslogika egységesítés és hatékonysági sandbox',
+    description:
+      'A pregame elemzés tempó- és játéksílus-logikája most már a szezonos csapatelemzéssel azonos percentilis alapú értelmezést használ, így eltűntek a korábbi ellentmondások. Egységes stílusszótár került a pregame és team analysis flow-k mögé, javultak a hiányos offense/defense fallbackek, a GPT prompt pedig jobban kezeli a periméter-fenyegetést és nem talál ki nem adott küszöbértékeket. Emellett bekerült egy új expected possessions alapú hatékonysági sandbox is, ahol a 2P%, 3P%, FT%, posszám, triplaarány, FT rate, TO% és támadólepattanó-bónusz együtt modellezhető a várható ponttermeléshez.',
+  },
+  {
+    date: '2026. április 2.',
     version: '1.7.5',
     category: 'improvement',
     icon: <BarChart3 className="w-5 h-5" />,

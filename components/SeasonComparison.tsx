@@ -1441,6 +1441,49 @@ type ShotProfileSummary = {
   zoneStats: Record<ShotZoneKey, ShotZoneStats>;
 };
 
+type PregameEfficiencyBaseline = {
+  teamId: string;
+  teamName: string;
+  games: number;
+  actualPointsPerGame: number;
+  possessions: number;
+  fga: number;
+  twoPA: number;
+  threePA: number;
+  fta: number;
+  tov: number;
+  oreb: number;
+  twoPct: number;
+  threePct: number;
+  ftPct: number;
+  threeSharePct: number;
+  ftRatePct: number;
+  tovRatePct: number;
+  orebBonusPct: number;
+  efg: number;
+  ppp: number;
+  expectedPoints: number;
+};
+
+type PregameEfficiencyInputs = {
+  ownPossessions: number;
+  ownThreeSharePct: number;
+  ownFtRatePct: number;
+  ownTovRatePct: number;
+  ownOrebBonusPct: number;
+  ownTwoPct: number;
+  ownThreePct: number;
+  ownFtPct: number;
+  opponentPossessions: number;
+  opponentThreeSharePct: number;
+  opponentFtRatePct: number;
+  opponentTovRatePct: number;
+  opponentOrebBonusPct: number;
+  opponentTwoPct: number;
+  opponentThreePct: number;
+  opponentFtPct: number;
+};
+
 type ProjectionRow = {
   team: string;
   currentWins: number;
@@ -1621,6 +1664,113 @@ const stdDev = (values: number[]) => {
 };
 
 const clamp01 = (value: number) => Math.max(0, Math.min(1, value));
+
+const clampPercent = (value: number, min = 0, max = 100) => Math.max(min, Math.min(max, value));
+
+const buildPregameEfficiencyBaseline = (team: PregameTeamSeasonStat): PregameEfficiencyBaseline => {
+  const games = Math.max(team.games || 1, 1);
+  const twoPA = (team.fga2 || 0) / games;
+  const threePA = (team.fga3 || 0) / games;
+  const fta = (team.fta || 0) / games;
+  const tov = (team.tov || 0) / games;
+  const oreb = (team.oreb || 0) / games;
+  const fga = twoPA + threePA;
+  const possessions = Math.max(fga + 0.44 * fta + tov - oreb, 0.1);
+  const twoPct = team.fga2 > 0 ? ((team.fgm2 || 0) / team.fga2) * 100 : 0;
+  const threePct = team.fga3 > 0 ? ((team.fgm3 || 0) / team.fga3) * 100 : 0;
+  const ftPct = team.fta > 0 ? ((team.ftm || 0) / team.fta) * 100 : 0;
+  const threeSharePct = fga > 0 ? (threePA / fga) * 100 : 0;
+  const ftRatePct = fga > 0 ? (fta / fga) * 100 : 0;
+  const tovRatePct = possessions > 0 ? (tov / possessions) * 100 : 0;
+  const orebBonusPct = possessions > 0 ? (oreb / possessions) * 100 : 0;
+  const made2 = twoPA * (twoPct / 100);
+  const made3 = threePA * (threePct / 100);
+  const expectedPoints = made2 * 2 + made3 * 3 + fta * (ftPct / 100);
+  const efg = fga > 0 ? ((made2 + 1.5 * made3) / fga) * 100 : 0;
+  const ppp = possessions > 0 ? expectedPoints / possessions : 0;
+
+  return {
+    teamId: team.teamId,
+    teamName: team.teamName,
+    games,
+    actualPointsPerGame: (team.pointsFor || 0) / games,
+    possessions: roundValue(possessions, 1),
+    fga: roundValue(fga, 1),
+    twoPA: roundValue(twoPA, 1),
+    threePA: roundValue(threePA, 1),
+    fta: roundValue(fta, 1),
+    tov: roundValue(tov, 1),
+    oreb: roundValue(oreb, 1),
+    twoPct: roundValue(twoPct, 1),
+    threePct: roundValue(threePct, 1),
+    ftPct: roundValue(ftPct, 1),
+    threeSharePct: roundValue(threeSharePct, 1),
+    ftRatePct: roundValue(ftRatePct, 1),
+    tovRatePct: roundValue(tovRatePct, 1),
+    orebBonusPct: roundValue(orebBonusPct, 1),
+    efg: roundValue(efg, 1),
+    ppp: roundValue(ppp, 3),
+    expectedPoints: roundValue(expectedPoints, 1),
+  };
+};
+
+const projectPregameEfficiency = (
+  baseline: PregameEfficiencyBaseline,
+  inputs: {
+    possessions: number;
+    threeSharePct: number;
+    ftRatePct: number;
+    tovRatePct: number;
+    orebBonusPct: number;
+    twoPct: number;
+    threePct: number;
+    ftPct: number;
+  }
+) => {
+  const possessions = Math.max(inputs.possessions, 1);
+  const threeSharePct = clampPercent(inputs.threeSharePct, 10, 70);
+  const ftRatePct = clampPercent(inputs.ftRatePct, 5, 80);
+  const tovRatePct = clampPercent(inputs.tovRatePct, 5, 30);
+  const orebBonusPct = clampPercent(inputs.orebBonusPct, 0, 20);
+  const twoPct = clampPercent(inputs.twoPct);
+  const threePct = clampPercent(inputs.threePct);
+  const ftPct = clampPercent(inputs.ftPct);
+  const ftRate = ftRatePct / 100;
+  const tov = possessions * (tovRatePct / 100);
+  const oreb = possessions * (orebBonusPct / 100);
+  const fga = Math.max((possessions - tov + oreb) / (1 + 0.44 * ftRate), 0);
+  const threePA = fga * (threeSharePct / 100);
+  const twoPA = Math.max(fga - threePA, 0);
+  const fta = fga * ftRate;
+  const made2 = twoPA * (twoPct / 100);
+  const made3 = threePA * (threePct / 100);
+  const expectedPoints = made2 * 2 + made3 * 3 + fta * (ftPct / 100);
+  const totalFga = twoPA + threePA;
+  const efg = totalFga > 0 ? ((made2 + 1.5 * made3) / totalFga) * 100 : 0;
+  const ppp = possessions > 0 ? expectedPoints / possessions : 0;
+
+  return {
+    possessions: roundValue(possessions, 1),
+    fga: roundValue(fga, 1),
+    twoPA: roundValue(twoPA, 1),
+    threePA: roundValue(threePA, 1),
+    fta: roundValue(fta, 1),
+    tov: roundValue(tov, 1),
+    oreb: roundValue(oreb, 1),
+    threeSharePct: roundValue(threeSharePct, 1),
+    ftRatePct: roundValue(ftRatePct, 1),
+    tovRatePct: roundValue(tovRatePct, 1),
+    orebBonusPct: roundValue(orebBonusPct, 1),
+    twoPct: roundValue(twoPct, 1),
+    threePct: roundValue(threePct, 1),
+    ftPct: roundValue(ftPct, 1),
+    expectedPoints: roundValue(expectedPoints, 1),
+    efg: roundValue(efg, 1),
+    ppp: roundValue(ppp, 3),
+    deltaPoints: roundValue(expectedPoints - baseline.expectedPoints, 1),
+    deltaEfg: roundValue(efg - baseline.efg, 1),
+  };
+};
 
 const probabilityLabel = (value: number): 'Magas' | 'Közepes' | 'Alacsony' => {
   if (value >= 0.68 || value <= 0.32) return 'Magas';
@@ -2496,6 +2646,24 @@ export function SeasonComparison({
   const [pregameOpponentInjuries, setPregameOpponentInjuries] = useState<string[]>([]);
   const [pregamePressureWeight, setPregamePressureWeight] = useState(34);
   const [pregamePerimeterWeight, setPregamePerimeterWeight] = useState(33);
+  const [pregameEfficiencyInputs, setPregameEfficiencyInputs] = useState<PregameEfficiencyInputs>({
+    ownPossessions: 70,
+    ownThreeSharePct: 35,
+    ownFtRatePct: 25,
+    ownTovRatePct: 14,
+    ownOrebBonusPct: 5,
+    ownTwoPct: 50,
+    ownThreePct: 33,
+    ownFtPct: 75,
+    opponentPossessions: 70,
+    opponentThreeSharePct: 35,
+    opponentFtRatePct: 25,
+    opponentTovRatePct: 14,
+    opponentOrebBonusPct: 5,
+    opponentTwoPct: 50,
+    opponentThreePct: 33,
+    opponentFtPct: 75,
+  });
   const [showOwnInjuryPicker, setShowOwnInjuryPicker] = useState(false);
   const [showOpponentInjuryPicker, setShowOpponentInjuryPicker] = useState(false);
   const [pregameText, setPregameText] = useState('');
@@ -7191,6 +7359,72 @@ export function SeasonComparison({
     opponentAllowedSeasonShotSummary,
     leagueSeasonShotSummary,
   ]);
+
+  const pregameEfficiencyBaseline = useMemo(() => {
+    if (!pregameOwnTeam || !pregameOpponentTeam) return null;
+    return {
+      own: buildPregameEfficiencyBaseline(pregameOwnTeam),
+      opponent: buildPregameEfficiencyBaseline(pregameOpponentTeam),
+    };
+  }, [pregameOpponentTeam, pregameOwnTeam]);
+
+  useEffect(() => {
+    if (!pregameEfficiencyBaseline) return;
+    setPregameEfficiencyInputs({
+      ownPossessions: pregameEfficiencyBaseline.own.possessions,
+      ownThreeSharePct: pregameEfficiencyBaseline.own.threeSharePct,
+      ownFtRatePct: pregameEfficiencyBaseline.own.ftRatePct,
+      ownTovRatePct: pregameEfficiencyBaseline.own.tovRatePct,
+      ownOrebBonusPct: pregameEfficiencyBaseline.own.orebBonusPct,
+      ownTwoPct: pregameEfficiencyBaseline.own.twoPct,
+      ownThreePct: pregameEfficiencyBaseline.own.threePct,
+      ownFtPct: pregameEfficiencyBaseline.own.ftPct,
+      opponentPossessions: pregameEfficiencyBaseline.opponent.possessions,
+      opponentThreeSharePct: pregameEfficiencyBaseline.opponent.threeSharePct,
+      opponentFtRatePct: pregameEfficiencyBaseline.opponent.ftRatePct,
+      opponentTovRatePct: pregameEfficiencyBaseline.opponent.tovRatePct,
+      opponentOrebBonusPct: pregameEfficiencyBaseline.opponent.orebBonusPct,
+      opponentTwoPct: pregameEfficiencyBaseline.opponent.twoPct,
+      opponentThreePct: pregameEfficiencyBaseline.opponent.threePct,
+      opponentFtPct: pregameEfficiencyBaseline.opponent.ftPct,
+    });
+  }, [pregameEfficiencyBaseline]);
+
+  const pregameEfficiencyModel = useMemo(() => {
+    if (!pregameEfficiencyBaseline) return null;
+    const own = projectPregameEfficiency(pregameEfficiencyBaseline.own, {
+      possessions: pregameEfficiencyInputs.ownPossessions,
+      threeSharePct: pregameEfficiencyInputs.ownThreeSharePct,
+      ftRatePct: pregameEfficiencyInputs.ownFtRatePct,
+      tovRatePct: pregameEfficiencyInputs.ownTovRatePct,
+      orebBonusPct: pregameEfficiencyInputs.ownOrebBonusPct,
+      twoPct: pregameEfficiencyInputs.ownTwoPct,
+      threePct: pregameEfficiencyInputs.ownThreePct,
+      ftPct: pregameEfficiencyInputs.ownFtPct,
+    });
+    const opponent = projectPregameEfficiency(pregameEfficiencyBaseline.opponent, {
+      possessions: pregameEfficiencyInputs.opponentPossessions,
+      threeSharePct: pregameEfficiencyInputs.opponentThreeSharePct,
+      ftRatePct: pregameEfficiencyInputs.opponentFtRatePct,
+      tovRatePct: pregameEfficiencyInputs.opponentTovRatePct,
+      orebBonusPct: pregameEfficiencyInputs.opponentOrebBonusPct,
+      twoPct: pregameEfficiencyInputs.opponentTwoPct,
+      threePct: pregameEfficiencyInputs.opponentThreePct,
+      ftPct: pregameEfficiencyInputs.opponentFtPct,
+    });
+
+    return {
+      own,
+      opponent,
+      netExpectedPoints: roundValue(own.expectedPoints - opponent.expectedPoints, 1),
+      netDeltaVsBaseline: roundValue(
+        (own.expectedPoints - opponent.expectedPoints)
+          - (pregameEfficiencyBaseline.own.expectedPoints - pregameEfficiencyBaseline.opponent.expectedPoints),
+        1
+      ),
+      opponentSuppression: roundValue(pregameEfficiencyBaseline.opponent.expectedPoints - opponent.expectedPoints, 1),
+    };
+  }, [pregameEfficiencyBaseline, pregameEfficiencyInputs]);
 
   const pregameInjuryImpactEstimate = useMemo(() => {
     const ownMissing = activeSeasonPlayers.filter(
@@ -12171,6 +12405,12 @@ export function SeasonComparison({
             const llmContext = pregameReport.llmContext;
             const confidenceReasons = pregameReport.winProbability.confidenceReasons ?? [];
             const shotProfileContext = pregameReport.shotProfileContext;
+            const efficiencyBaseline = pregameEfficiencyBaseline;
+            const efficiencyModel = pregameEfficiencyModel;
+            const ownOffenseLabels = ownProfile?.offense?.length ? ownProfile.offense : ['Kiegyensúlyozott támadás'];
+            const ownDefenseLabels = ownProfile?.defense?.length ? ownProfile.defense : ['Korlátozott védőprofil adat'];
+            const opponentOffenseLabels = opponentProfile?.offense?.length ? opponentProfile.offense : ['Kiegyensúlyozott támadás'];
+            const opponentDefenseLabels = opponentProfile?.defense?.length ? opponentProfile.defense : ['Korlátozott védőprofil adat'];
             const pressureWeight = pregamePressureWeight;
             const perimeterWeight = pregamePerimeterWeight;
             const paintWeight = Math.max(0, 100 - pressureWeight - perimeterWeight);
@@ -12455,35 +12695,27 @@ export function SeasonComparison({
                               <div>
                                 <div className="text-[11px] uppercase tracking-wide text-slate-500">Támadás</div>
                                 <div className="mt-1 flex flex-wrap gap-1">
-                                  {ownProfile.offense.length > 0 ? (
-                                    ownProfile.offense.map(item => (
-                                      <Badge
-                                        key={`own-offense-${item}`}
-                                        className="bg-sky-600/20 text-sky-200 border border-sky-700/40"
-                                      >
-                                        {item}
-                                      </Badge>
-                                    ))
-                                  ) : (
-                                    <span className="text-xs text-slate-500">Nincs adat</span>
-                                  )}
+                                  {ownOffenseLabels.map(item => (
+                                    <Badge
+                                      key={`own-offense-${item}`}
+                                      className="bg-sky-600/20 text-sky-200 border border-sky-700/40"
+                                    >
+                                      {item}
+                                    </Badge>
+                                  ))}
                                 </div>
                               </div>
                               <div>
                                 <div className="text-[11px] uppercase tracking-wide text-slate-500">Védekezés</div>
                                 <div className="mt-1 flex flex-wrap gap-1">
-                                  {ownProfile.defense.length > 0 ? (
-                                    ownProfile.defense.map(item => (
-                                      <Badge
-                                        key={`own-defense-${item}`}
-                                        className="bg-emerald-600/20 text-emerald-200 border border-emerald-700/40"
-                                      >
-                                        {item}
-                                      </Badge>
-                                    ))
-                                  ) : (
-                                    <span className="text-xs text-slate-500">Nincs adat</span>
-                                  )}
+                                  {ownDefenseLabels.map(item => (
+                                    <Badge
+                                      key={`own-defense-${item}`}
+                                      className="bg-emerald-600/20 text-emerald-200 border border-emerald-700/40"
+                                    >
+                                      {item}
+                                    </Badge>
+                                  ))}
                                 </div>
                               </div>
                             </div>
@@ -12501,35 +12733,27 @@ export function SeasonComparison({
                               <div>
                                 <div className="text-[11px] uppercase tracking-wide text-slate-500">Támadás</div>
                                 <div className="mt-1 flex flex-wrap gap-1">
-                                  {opponentProfile.offense.length > 0 ? (
-                                    opponentProfile.offense.map(item => (
-                                      <Badge
-                                        key={`opp-offense-${item}`}
-                                        className="bg-orange-600/20 text-orange-200 border border-orange-700/40"
-                                      >
-                                        {item}
-                                      </Badge>
-                                    ))
-                                  ) : (
-                                    <span className="text-xs text-slate-500">Nincs adat</span>
-                                  )}
+                                  {opponentOffenseLabels.map(item => (
+                                    <Badge
+                                      key={`opp-offense-${item}`}
+                                      className="bg-orange-600/20 text-orange-200 border border-orange-700/40"
+                                    >
+                                      {item}
+                                    </Badge>
+                                  ))}
                                 </div>
                               </div>
                               <div>
                                 <div className="text-[11px] uppercase tracking-wide text-slate-500">Védekezés</div>
                                 <div className="mt-1 flex flex-wrap gap-1">
-                                  {opponentProfile.defense.length > 0 ? (
-                                    opponentProfile.defense.map(item => (
-                                      <Badge
-                                        key={`opp-defense-${item}`}
-                                        className="bg-emerald-600/20 text-emerald-200 border border-emerald-700/40"
-                                      >
-                                        {item}
-                                      </Badge>
-                                    ))
-                                  ) : (
-                                    <span className="text-xs text-slate-500">Nincs adat</span>
-                                  )}
+                                  {opponentDefenseLabels.map(item => (
+                                    <Badge
+                                      key={`opp-defense-${item}`}
+                                      className="bg-emerald-600/20 text-emerald-200 border border-emerald-700/40"
+                                    >
+                                      {item}
+                                    </Badge>
+                                  ))}
                                 </div>
                               </div>
                             </div>
@@ -12874,6 +13098,269 @@ export function SeasonComparison({
                     </ResponsiveContainer>
                   </div>
                 </div>
+
+                {efficiencyBaseline && efficiencyModel && (
+                  <div className="p-3 bg-slate-800/50 rounded-lg space-y-4">
+                    <div className="flex items-center justify-between gap-3 flex-wrap">
+                      <div>
+                        <div className="text-sm text-slate-300 font-medium">Hatékonysági sandbox</div>
+                        <div className="text-xs text-slate-500 mt-1">
+                          Szezonos 2PA, 3PA és FTA volumen mellett modellezi, mennyit mozdít a ponttermelésen a dobáshatékonyság változása.
+                        </div>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="h-8 border-slate-700 bg-slate-900/40 text-slate-200"
+                        onClick={() => setPregameEfficiencyInputs({
+                          ownPossessions: efficiencyBaseline.own.possessions,
+                          ownThreeSharePct: efficiencyBaseline.own.threeSharePct,
+                          ownFtRatePct: efficiencyBaseline.own.ftRatePct,
+                          ownTovRatePct: efficiencyBaseline.own.tovRatePct,
+                          ownOrebBonusPct: efficiencyBaseline.own.orebBonusPct,
+                          ownTwoPct: efficiencyBaseline.own.twoPct,
+                          ownThreePct: efficiencyBaseline.own.threePct,
+                          ownFtPct: efficiencyBaseline.own.ftPct,
+                          opponentPossessions: efficiencyBaseline.opponent.possessions,
+                          opponentThreeSharePct: efficiencyBaseline.opponent.threeSharePct,
+                          opponentFtRatePct: efficiencyBaseline.opponent.ftRatePct,
+                          opponentTovRatePct: efficiencyBaseline.opponent.tovRatePct,
+                          opponentOrebBonusPct: efficiencyBaseline.opponent.orebBonusPct,
+                          opponentTwoPct: efficiencyBaseline.opponent.twoPct,
+                          opponentThreePct: efficiencyBaseline.opponent.threePct,
+                          opponentFtPct: efficiencyBaseline.opponent.ftPct,
+                        })}
+                      >
+                        Alaphelyzet visszaállítása
+                      </Button>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+                      <div className="rounded-lg border border-slate-800 bg-slate-900/40 px-3 py-2">
+                        <div className="text-slate-500 uppercase tracking-wide">Várható nettó pontkülönbség</div>
+                        <div className={`mt-1 text-lg font-semibold ${efficiencyModel.netExpectedPoints >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
+                          {efficiencyModel.netExpectedPoints >= 0 ? '+' : ''}{efficiencyModel.netExpectedPoints.toFixed(1)}
+                        </div>
+                        <div className="text-slate-500">fix volumen, állított hatékonyság</div>
+                      </div>
+                      <div className="rounded-lg border border-slate-800 bg-slate-900/40 px-3 py-2">
+                        <div className="text-slate-500 uppercase tracking-wide">Ellenfél pontcsökkentés</div>
+                        <div className="mt-1 text-lg font-semibold text-cyan-300">{efficiencyModel.opponentSuppression.toFixed(1)}</div>
+                        <div className="text-slate-500">pont/meccs a bázishoz képest</div>
+                      </div>
+                      <div className="rounded-lg border border-slate-800 bg-slate-900/40 px-3 py-2">
+                        <div className="text-slate-500 uppercase tracking-wide">Nettó eltolás</div>
+                        <div className={`mt-1 text-lg font-semibold ${efficiencyModel.netDeltaVsBaseline >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
+                          {efficiencyModel.netDeltaVsBaseline >= 0 ? '+' : ''}{efficiencyModel.netDeltaVsBaseline.toFixed(1)}
+                        </div>
+                        <div className="text-slate-500">pont/meccs a bázis sandboxhoz képest</div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                      {[
+                        {
+                          label: ownLabel,
+                          toneClass: 'accent-emerald-400',
+                          baseline: efficiencyBaseline.own,
+                          projection: efficiencyModel.own,
+                          values: {
+                            possessions: pregameEfficiencyInputs.ownPossessions,
+                            threeSharePct: pregameEfficiencyInputs.ownThreeSharePct,
+                            ftRatePct: pregameEfficiencyInputs.ownFtRatePct,
+                            tovRatePct: pregameEfficiencyInputs.ownTovRatePct,
+                            orebBonusPct: pregameEfficiencyInputs.ownOrebBonusPct,
+                            twoPct: pregameEfficiencyInputs.ownTwoPct,
+                            threePct: pregameEfficiencyInputs.ownThreePct,
+                            ftPct: pregameEfficiencyInputs.ownFtPct,
+                          },
+                          onPossessions: (value: number) => setPregameEfficiencyInputs(current => ({ ...current, ownPossessions: value })),
+                          onThreeSharePct: (value: number) => setPregameEfficiencyInputs(current => ({ ...current, ownThreeSharePct: value })),
+                          onFtRatePct: (value: number) => setPregameEfficiencyInputs(current => ({ ...current, ownFtRatePct: value })),
+                          onTovRatePct: (value: number) => setPregameEfficiencyInputs(current => ({ ...current, ownTovRatePct: value })),
+                          onOrebBonusPct: (value: number) => setPregameEfficiencyInputs(current => ({ ...current, ownOrebBonusPct: value })),
+                          onTwoPct: (value: number) => setPregameEfficiencyInputs(current => ({ ...current, ownTwoPct: value })),
+                          onThreePct: (value: number) => setPregameEfficiencyInputs(current => ({ ...current, ownThreePct: value })),
+                          onFtPct: (value: number) => setPregameEfficiencyInputs(current => ({ ...current, ownFtPct: value })),
+                        },
+                        {
+                          label: opponentLabel,
+                          toneClass: 'accent-orange-400',
+                          baseline: efficiencyBaseline.opponent,
+                          projection: efficiencyModel.opponent,
+                          values: {
+                            possessions: pregameEfficiencyInputs.opponentPossessions,
+                            threeSharePct: pregameEfficiencyInputs.opponentThreeSharePct,
+                            ftRatePct: pregameEfficiencyInputs.opponentFtRatePct,
+                            tovRatePct: pregameEfficiencyInputs.opponentTovRatePct,
+                            orebBonusPct: pregameEfficiencyInputs.opponentOrebBonusPct,
+                            twoPct: pregameEfficiencyInputs.opponentTwoPct,
+                            threePct: pregameEfficiencyInputs.opponentThreePct,
+                            ftPct: pregameEfficiencyInputs.opponentFtPct,
+                          },
+                          onPossessions: (value: number) => setPregameEfficiencyInputs(current => ({ ...current, opponentPossessions: value })),
+                          onThreeSharePct: (value: number) => setPregameEfficiencyInputs(current => ({ ...current, opponentThreeSharePct: value })),
+                          onFtRatePct: (value: number) => setPregameEfficiencyInputs(current => ({ ...current, opponentFtRatePct: value })),
+                          onTovRatePct: (value: number) => setPregameEfficiencyInputs(current => ({ ...current, opponentTovRatePct: value })),
+                          onOrebBonusPct: (value: number) => setPregameEfficiencyInputs(current => ({ ...current, opponentOrebBonusPct: value })),
+                          onTwoPct: (value: number) => setPregameEfficiencyInputs(current => ({ ...current, opponentTwoPct: value })),
+                          onThreePct: (value: number) => setPregameEfficiencyInputs(current => ({ ...current, opponentThreePct: value })),
+                          onFtPct: (value: number) => setPregameEfficiencyInputs(current => ({ ...current, opponentFtPct: value })),
+                        },
+                      ].map(teamSandbox => (
+                        <div key={teamSandbox.label} className="rounded-lg border border-slate-800 bg-slate-900/40 p-3 space-y-3">
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <div className="text-sm font-medium text-slate-100">{teamSandbox.label}</div>
+                              <div className="text-xs text-slate-500 mt-1">
+                                  Bázis: {teamSandbox.baseline.possessions.toFixed(1)} poss • {teamSandbox.baseline.twoPA.toFixed(1)} 2PA • {teamSandbox.baseline.threePA.toFixed(1)} 3PA • {teamSandbox.baseline.fta.toFixed(1)} FTA
+                              </div>
+                            </div>
+                            <div className="text-right text-xs text-slate-400">
+                              <div>Valós PPG: {teamSandbox.baseline.actualPointsPerGame.toFixed(1)}</div>
+                                <div>Bázis PPP: {teamSandbox.baseline.ppp.toFixed(3)}</div>
+                            </div>
+                          </div>
+
+                          <div className="space-y-2 text-xs text-slate-300">
+                              <label className="block">
+                                <div className="flex justify-between mb-1"><span>Possz./meccs</span><span>{teamSandbox.values.possessions.toFixed(1)}</span></div>
+                                <input
+                                  type="range"
+                                  min={55}
+                                  max={85}
+                                  step={0.5}
+                                  value={teamSandbox.values.possessions}
+                                  onChange={event => teamSandbox.onPossessions(Number(event.target.value))}
+                                  className={`w-full ${teamSandbox.toneClass}`}
+                                />
+                              </label>
+                              <label className="block">
+                                <div className="flex justify-between mb-1"><span>3PA arány</span><span>{teamSandbox.values.threeSharePct.toFixed(1)}%</span></div>
+                                <input
+                                  type="range"
+                                  min={15}
+                                  max={65}
+                                  step={0.5}
+                                  value={teamSandbox.values.threeSharePct}
+                                  onChange={event => teamSandbox.onThreeSharePct(clampPercent(Number(event.target.value), 15, 65))}
+                                  className={`w-full ${teamSandbox.toneClass}`}
+                                />
+                                <div className="mt-1 text-[11px] text-slate-500">
+                                  2PA arány automatikusan: {(100 - teamSandbox.values.threeSharePct).toFixed(1)}%
+                                </div>
+                              </label>
+                              <label className="block">
+                                <div className="flex justify-between mb-1"><span>FT rate</span><span>{teamSandbox.values.ftRatePct.toFixed(1)}%</span></div>
+                                <input
+                                  type="range"
+                                  min={10}
+                                  max={55}
+                                  step={0.5}
+                                  value={teamSandbox.values.ftRatePct}
+                                  onChange={event => teamSandbox.onFtRatePct(clampPercent(Number(event.target.value), 10, 55))}
+                                  className={`w-full ${teamSandbox.toneClass}`}
+                                />
+                              </label>
+                              <label className="block">
+                                <div className="flex justify-between mb-1"><span>TO%</span><span>{teamSandbox.values.tovRatePct.toFixed(1)}%</span></div>
+                                <input
+                                  type="range"
+                                  min={7}
+                                  max={25}
+                                  step={0.5}
+                                  value={teamSandbox.values.tovRatePct}
+                                  onChange={event => teamSandbox.onTovRatePct(clampPercent(Number(event.target.value), 7, 25))}
+                                  className={`w-full ${teamSandbox.toneClass}`}
+                                />
+                              </label>
+                              <label className="block">
+                                <div className="flex justify-between mb-1"><span>OREB bónusz</span><span>{teamSandbox.values.orebBonusPct.toFixed(1)}%</span></div>
+                                <input
+                                  type="range"
+                                  min={0}
+                                  max={15}
+                                  step={0.5}
+                                  value={teamSandbox.values.orebBonusPct}
+                                  onChange={event => teamSandbox.onOrebBonusPct(clampPercent(Number(event.target.value), 0, 15))}
+                                  className={`w-full ${teamSandbox.toneClass}`}
+                                />
+                              </label>
+                            <label className="block">
+                              <div className="flex justify-between mb-1"><span>2P%</span><span>{teamSandbox.values.twoPct.toFixed(1)}%</span></div>
+                              <input
+                                type="range"
+                                min={35}
+                                max={75}
+                                step={0.5}
+                                value={teamSandbox.values.twoPct}
+                                onChange={event => teamSandbox.onTwoPct(clampPercent(Number(event.target.value), 35, 75))}
+                                className={`w-full ${teamSandbox.toneClass}`}
+                              />
+                            </label>
+                            <label className="block">
+                              <div className="flex justify-between mb-1"><span>3P%</span><span>{teamSandbox.values.threePct.toFixed(1)}%</span></div>
+                              <input
+                                type="range"
+                                min={20}
+                                max={50}
+                                step={0.5}
+                                value={teamSandbox.values.threePct}
+                                onChange={event => teamSandbox.onThreePct(clampPercent(Number(event.target.value), 20, 50))}
+                                className={`w-full ${teamSandbox.toneClass}`}
+                              />
+                            </label>
+                            <label className="block">
+                              <div className="flex justify-between mb-1"><span>FT%</span><span>{teamSandbox.values.ftPct.toFixed(1)}%</span></div>
+                              <input
+                                type="range"
+                                min={55}
+                                max={90}
+                                step={0.5}
+                                value={teamSandbox.values.ftPct}
+                                onChange={event => teamSandbox.onFtPct(clampPercent(Number(event.target.value), 55, 90))}
+                                className={`w-full ${teamSandbox.toneClass}`}
+                              />
+                            </label>
+                          </div>
+
+                          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 text-xs">
+                            <div className="rounded-md border border-slate-800 bg-slate-950/30 px-3 py-2">
+                              <div className="text-slate-500">Várható pont</div>
+                              <div className="mt-1 text-slate-100 font-medium">{teamSandbox.projection.expectedPoints.toFixed(1)}</div>
+                              <div className={teamSandbox.projection.deltaPoints >= 0 ? 'text-emerald-300' : 'text-rose-300'}>
+                                {teamSandbox.projection.deltaPoints >= 0 ? '+' : ''}{teamSandbox.projection.deltaPoints.toFixed(1)} vs bázis
+                              </div>
+                            </div>
+                            <div className="rounded-md border border-slate-800 bg-slate-950/30 px-3 py-2">
+                              <div className="text-slate-500">Származtatott eFG%</div>
+                              <div className="mt-1 text-slate-100 font-medium">{teamSandbox.projection.efg.toFixed(1)}%</div>
+                              <div className={teamSandbox.projection.deltaEfg >= 0 ? 'text-emerald-300' : 'text-rose-300'}>
+                                {teamSandbox.projection.deltaEfg >= 0 ? '+' : ''}{teamSandbox.projection.deltaEfg.toFixed(1)} pp vs bázis
+                              </div>
+                            </div>
+                            <div className="rounded-md border border-slate-800 bg-slate-950/30 px-3 py-2">
+                              <div className="text-slate-500">PPP</div>
+                              <div className="mt-1 text-slate-100 font-medium">{teamSandbox.projection.ppp.toFixed(3)}</div>
+                              <div className="text-slate-500">{teamSandbox.projection.possessions.toFixed(1)} poss alapján</div>
+                            </div>
+                            <div className="rounded-md border border-slate-800 bg-slate-950/30 px-3 py-2">
+                              <div className="text-slate-500">Kísérletmix</div>
+                              <div className="mt-1 text-slate-100 font-medium">{teamSandbox.projection.twoPA.toFixed(1)} / {teamSandbox.projection.threePA.toFixed(1)}</div>
+                              <div className="text-slate-500">
+                                2PA / 3PA • {(100 - teamSandbox.projection.threeSharePct).toFixed(1)}% / {teamSandbox.projection.threeSharePct.toFixed(1)}%
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="text-xs text-slate-500 leading-relaxed">
+                      Ez a blokk továbbra sem teljes meccs-előrejelzés, hanem expected possessions sandbox. A ponttermelés a possz./meccs, a 3PA arány, a FT rate, a TO% és az OREB bónusz alapján számolt várható dobásvolumenből épül fel, így már a lehetőségek és a hatékonyság együtt mozgatják a kimenetet.
+                    </div>
+                  </div>
+                )}
 
                 {scenarioChartData.length > 0 && (
                   <div className="p-3 bg-slate-800/50 rounded-lg space-y-3">

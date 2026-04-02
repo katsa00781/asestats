@@ -161,12 +161,12 @@ export const terminologySections: TerminologySection[] = [
         conditions: ['2P arány ≥ ligaátlag', 'Pontok ≥ 55%-a 2P-ből'],
       },
       {
-        term: 'Periméter-orientált támadás',
+        term: 'Periméter-fókuszú támadás',
         definition:
           'A scoring elsődlegesen hárompontos dobásokból és periméter-döntésekből származik.',
       },
       {
-        term: 'Festék-orientált támadás',
+        term: 'Belső fókuszú támadás',
         definition:
           'A támadás elsődlegesen a kosár körül generál előnyt, a periméter kiegészítő szerepet tölt be.',
       },
@@ -311,6 +311,10 @@ export const terminologySections: TerminologySection[] = [
       {
         term: 'Kiegyensúlyozott védekezés',
         definition: 'Nincs kiemelkedő gyenge pont sem periméteren, sem a festékben.',
+      },
+      {
+        term: 'Korlátozott védőprofil adat',
+        definition: 'A közvetlen ellenfél-dobóprofil hiánya miatt a védekezési címkék csak részben értelmezhetők.',
       },
       {
         term: 'Periméter-sérülékeny védekezés',

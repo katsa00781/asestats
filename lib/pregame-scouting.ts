@@ -1,4 +1,5 @@
 import { parsePositionBuckets, type Position } from './positions';
+import { DEFENSE_STYLE_LABELS, OFFENSE_STYLE_LABELS, finalizeDefenseStyle, finalizeOffenseStyle } from './style-vocabulary';
 export type { Position };
 
 export type TeamSeasonStat = {
@@ -23,6 +24,17 @@ export type TeamSeasonStat = {
   blk: number;
   fouls: number;
   val: number;
+  opponent?: {
+    fga2: number;
+    fgm2: number;
+    fga3: number;
+    fgm3: number;
+    fta: number;
+    ftm: number;
+    oreb: number;
+    dreb: number;
+    tov: number;
+  };
 };
 
 export type PlayerSeasonStat = {
@@ -356,18 +368,47 @@ const SIGNIFICANT_MATCHUP_DELTA = 10;
 
 type TempoBand = 'high' | 'medium' | 'low';
 
-const getTempoBand = (pace: number): TempoBand => {
-  if (pace >= 70) return 'high';
-  if (pace <= 60) return 'low';
+type TeamStyleProfile = {
+  tempo: string;
+  offense: string[];
+  defense: string[];
+};
+
+const getTempoScore = (team: NormalizedTeamStats, benchmarks: LeagueTeamBenchmarks) =>
+  getPercentileScore(benchmarks, team, 'pace');
+
+const getTempoBand = (team: NormalizedTeamStats, benchmarks: LeagueTeamBenchmarks): TempoBand => {
+  const paceScore = getTempoScore(team, benchmarks);
+  if (paceScore >= 65) return 'high';
+  if (paceScore <= 35) return 'low';
   return 'medium';
 };
 
-const describeTempo = (pace: number) => {
-  const tempoBand = getTempoBand(pace);
-  if (tempoBand === 'high') return 'gyors tempójú';
-  if (tempoBand === 'low') return 'lassú tempójú';
+const describeTempo = (team: NormalizedTeamStats, benchmarks: LeagueTeamBenchmarks) => {
+  const paceScore = getTempoScore(team, benchmarks);
+  if (paceScore >= 85) return 'rendkívül gyors tempójú';
+  if (paceScore >= 65) return 'gyors tempójú';
+  if (paceScore <= 15) return 'rendkívül lassú tempójú';
+  if (paceScore <= 35) return 'lassú tempójú';
   return 'közepes tempójú';
 };
+
+const getTempoLevelLabel = (team: NormalizedTeamStats, benchmarks: LeagueTeamBenchmarks) => {
+  const tempoBand = getTempoBand(team, benchmarks);
+  if (tempoBand === 'high') return 'Magas';
+  if (tempoBand === 'low') return 'Alacsony';
+  return 'Közepes';
+};
+
+const finalizeTeamProfile = (
+  tempo: string,
+  style: ReturnType<typeof buildTeamStyle>,
+  options?: { defensiveDataLimited?: boolean }
+): TeamStyleProfile => ({
+  tempo,
+  offense: finalizeOffenseStyle(style.offense),
+  defense: finalizeDefenseStyle(style.defense, options?.defensiveDataLimited),
+});
 
 const summarizePositionDeltas = (positionComparison: PositionComparison[]) => {
   const perimeterDelta = positionComparison
@@ -484,12 +525,44 @@ export const normalizeTeamStats = (raw: TeamSeasonStat): NormalizedTeamStats => 
   const games = raw.games || 1;
   const fga = raw.fga2 + raw.fga3;
   const fgm = raw.fgm2 + raw.fgm3;
-  const possessionsTotal = fga + 0.44 * raw.fta + raw.tov - raw.oreb;
-  const possessionsPerGame = games > 0 ? possessionsTotal / games : 0;
-  const pace = Math.max(possessionsPerGame, 0);
+  const opponent = raw.opponent ?? {
+    fga2: 0,
+    fgm2: 0,
+    fga3: 0,
+    fgm3: 0,
+    fta: 0,
+    ftm: 0,
+    oreb: 0,
+    dreb: 0,
+    tov: 0,
+  };
+  const computePossessions = (
+    fga2: number,
+    fga3: number,
+    fta: number,
+    oreb: number,
+    tov: number
+  ) => {
+    const totalFga = fga2 + fga3;
+    const attempts = totalFga + 0.44 * fta + tov;
+    const possessions = attempts - oreb;
+    return Math.max(possessions, 0);
+  };
+
+  const teamPossessions = computePossessions(raw.fga2, raw.fga3, raw.fta, raw.oreb, raw.tov);
+  const opponentPossessions = computePossessions(
+    opponent.fga2,
+    opponent.fga3,
+    opponent.fta,
+    opponent.oreb,
+    opponent.tov
+  );
+  const teamPossessionsPerGame = games > 0 ? teamPossessions / games : 0;
+  const opponentPossessionsPerGame = games > 0 ? opponentPossessions / games : 0;
+  const pace = Math.max((teamPossessionsPerGame + opponentPossessionsPerGame) / 2, 0);
   const assistRate = fga > 0 ? raw.ast / fga : 0;
   const turnoverRate = pace > 0 ? (raw.tov / games) / pace : 0;
-  const orebRate = (raw.oreb + raw.dreb) > 0 ? raw.oreb / (raw.oreb + raw.dreb) : 0;
+  const orebRate = (raw.oreb + opponent.dreb) > 0 ? raw.oreb / (raw.oreb + opponent.dreb) : 0;
   const twoRate = fga > 0 ? raw.fga2 / fga : 0;
   const threeRate = fga > 0 ? raw.fga3 / fga : 0;
   const threePct = raw.fga3 > 0 ? (raw.fgm3 / raw.fga3) * 100 : 0;
@@ -599,37 +672,60 @@ const getDominantAxis = (team: NormalizedTeamStats, benchmarks: LeagueTeamBenchm
   const paceScore = getPercentileScore(benchmarks, team, 'pace');
   const twoRateScore = getPercentileScore(benchmarks, team, 'two_rate');
   const threeRateScore = getPercentileScore(benchmarks, team, 'three_rate');
+  const threePctScore = getPercentileScore(benchmarks, team, 'three_pct');
   const ftRateScore = getPercentileScore(benchmarks, team, 'ft_rate');
+  const perimeterScore = Math.max(threeRateScore, round(threeRateScore * 0.7 + threePctScore * 0.3, 1));
+  const paintScore = Math.max(twoRateScore, round(twoRateScore * 0.75 + ftRateScore * 0.25, 1));
 
-  if (paceScore >= 70) return 'transition';
-  if (threeRateScore >= 60) return 'periméter';
-  if (twoRateScore >= 60 || ftRateScore >= 60) return 'festék';
+  if (paceScore >= 75 && paceScore >= perimeterScore + 8 && paceScore >= paintScore + 8) return 'transition';
+  if (perimeterScore >= 58 && perimeterScore >= paintScore + 3) return 'periméter';
+  if (paintScore >= 60 && paintScore >= perimeterScore + 3) return 'festék';
 
-  const maxScore = Math.max(paceScore, twoRateScore, threeRateScore);
+  const maxScore = Math.max(paceScore, perimeterScore, paintScore);
   if (maxScore === paceScore) return 'transition';
-  if (maxScore === threeRateScore) return 'periméter';
+  if (maxScore === perimeterScore) return 'periméter';
   return 'festék';
 };
 
 const buildTeamStyle = (team: NormalizedTeamStats, benchmarks: LeagueTeamBenchmarks) => {
   const offense: string[] = [];
   const defense: string[] = [];
-  const tempoBand = getTempoBand(team.pace);
+  const tempoBand = getTempoBand(team, benchmarks);
+  const paceScore = getPercentileScore(benchmarks, team, 'pace');
+  const assistScore = getPercentileScore(benchmarks, team, 'assist_rate');
+  const twoRateScore = getPercentileScore(benchmarks, team, 'two_rate');
+  const threeRateScore = getPercentileScore(benchmarks, team, 'three_rate');
+  const threePctScore = getPercentileScore(benchmarks, team, 'three_pct');
+  const ftRateScore = getPercentileScore(benchmarks, team, 'ft_rate');
 
-  if (tempoBand === 'high') offense.push('Gyorsindítás-orientált');
-  if (tempoBand === 'low' && scoreAbove(benchmarks, team, 'assist_rate', 60)) {
-    offense.push('Félpályás támadás');
+  if (tempoBand === 'high') offense.push(OFFENSE_STYLE_LABELS.transition);
+  if (tempoBand === 'low' && assistScore >= 60) {
+    offense.push(OFFENSE_STYLE_LABELS.halfcourt);
   }
-  if (scoreAbove(benchmarks, team, 'three_rate', 60) && scoreAbove(benchmarks, team, 'three_pct', 60)) {
-    offense.push('Periméter-orientált');
+  if ((threeRateScore >= 60 && threePctScore >= 60) || threeRateScore >= 70) {
+    offense.push(OFFENSE_STYLE_LABELS.perimeter);
   }
-  if (scoreAbove(benchmarks, team, 'two_rate', 60) && scoreAbove(benchmarks, team, 'ft_rate', 60)) {
-    offense.push('Festék-orientált');
+  if (
+    twoRateScore >= 70
+    && ftRateScore >= 60
+    && threeRateScore <= 45
+  ) {
+    offense.push(OFFENSE_STYLE_LABELS.interior);
   }
 
-  if (scoreAbove(benchmarks, team, 'stl_per_game', 60)) defense.push('Labdanyomás');
-  if (scoreAbove(benchmarks, team, 'blk_per_game', 60)) defense.push('Festékvédelem');
-  if (scoreBelow(benchmarks, team, 'fouls_per_game', 40)) defense.push('Kevés faultos védekezés');
+  if (offense.length === 0) {
+    if (threeRateScore >= 58) {
+      offense.push(OFFENSE_STYLE_LABELS.perimeter);
+    } else if (paceScore <= 40 && assistScore >= 50) {
+      offense.push(OFFENSE_STYLE_LABELS.halfcourt);
+    } else if (twoRateScore >= 60 || ftRateScore >= 60) {
+      offense.push(OFFENSE_STYLE_LABELS.interior);
+    }
+  }
+
+  if (scoreAbove(benchmarks, team, 'stl_per_game', 60)) defense.push(DEFENSE_STYLE_LABELS.pressure);
+  if (scoreAbove(benchmarks, team, 'blk_per_game', 60)) defense.push(DEFENSE_STYLE_LABELS.rim);
+  if (scoreBelow(benchmarks, team, 'fouls_per_game', 40)) defense.push(DEFENSE_STYLE_LABELS.disciplined);
 
   return { offense, defense };
 };
@@ -1178,9 +1274,9 @@ const buildTempoControlNote = (
   const dominantAxis = getDominantAxis(opponent, benchmarks);
   if (dominantAxis !== 'transition') return '';
 
-  if (getTempoBand(opponent.pace) !== 'high') return '';
+  if (getTempoBand(opponent, benchmarks) !== 'high') return '';
 
-  return getTempoBand(ownTeam.pace) === 'low'
+  return getTempoBand(ownTeam, benchmarks) === 'low'
     ? 'Kontrollált tempó kockázat: átmeneti játékot preferáló ellenfél, futások megfékezése kulcs.'
     : 'Tempó-futás kontroll: futások kezelése és defenzív egyensúly fenntartása kiemelt feladat.';
 };
@@ -1400,7 +1496,7 @@ const buildRiskScenarios = (
     });
   }
 
-  if (getTempoBand(ownTeam.pace) === 'low' && getTempoBand(opponent.pace) === 'high') {
+  if (getTempoBand(ownTeam, benchmarks) === 'low' && getTempoBand(opponent, benchmarks) === 'high') {
     scenarios.push({
       title: 'Tempó-szétcsúszás',
       trigger: 'A meccs a saját tempó felett pörög két negyeden át.',
@@ -1634,7 +1730,7 @@ const buildSummary = (
   shotProfileNotes: string[] = [],
   shotDefenseNotes: string[] = []
 ) => {
-  const tempo = describeTempo(opponent.pace);
+  const tempo = describeTempo(opponent, benchmarks);
   const offense = profile.offense.length > 0 ? profile.offense.join(', ') : 'kiegyensúlyozott';
   const defense = profile.defense.length > 0 ? profile.defense.join(', ') : 'kiegyensúlyozott';
   const dominantAxis = getDominantAxis(opponent, benchmarks);
@@ -1974,8 +2070,18 @@ export const analyzePreGameScouting = (
     own: getAdvancedEligibility(ownTeam.games || normalizedOwn.games || 1),
     opponent: getAdvancedEligibility(opponentTeam.games || normalizedOpponent.games || 1),
   };
-  const opponentTempoDescriptor = describeTempo(normalizedOpponent.pace);
-  const ownTempoDescriptor = describeTempo(normalizedOwn.pace);
+  const opponentTempoDescriptor = describeTempo(normalizedOpponent, leagueBenchmarks);
+  const ownTempoDescriptor = describeTempo(normalizedOwn, leagueBenchmarks);
+  const opponentProfile = finalizeTeamProfile(
+    getTempoLevelLabel(normalizedOpponent, leagueBenchmarks),
+    opponentStyle,
+    { defensiveDataLimited: opponentStyle.defense.length === 0 }
+  );
+  const ownTeamProfile = finalizeTeamProfile(
+    getTempoLevelLabel(normalizedOwn, leagueBenchmarks),
+    ownStyle,
+    { defensiveDataLimited: ownStyle.defense.length === 0 }
+  );
   const dominantAxis = getDominantAxis(normalizedOpponent, leagueBenchmarks);
   const significantMatchups = buildSignificantMatchups(positionComparison);
   const llmContext: ScoutingReportLLMContext = {
@@ -2015,24 +2121,8 @@ export const analyzePreGameScouting = (
     season: opponentTeam.season,
     winProbability,
     positionComparison,
-    profile: {
-      tempo: getTempoBand(normalizedOpponent.pace) === 'high'
-        ? 'Magas'
-        : getTempoBand(normalizedOpponent.pace) === 'low'
-          ? 'Alacsony'
-          : 'Közepes',
-      offense: opponentStyle.offense,
-      defense: opponentStyle.defense,
-    },
-    ownTeamProfile: {
-      tempo: getTempoBand(normalizedOwn.pace) === 'high'
-        ? 'Magas'
-        : getTempoBand(normalizedOwn.pace) === 'low'
-          ? 'Alacsony'
-          : 'Közepes',
-      offense: ownStyle.offense,
-      defense: ownStyle.defense,
-    },
+    profile: opponentProfile,
+    ownTeamProfile,
     threats,
     vulnerabilities,
     keyPlayers: {

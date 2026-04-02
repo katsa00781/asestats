@@ -33,6 +33,7 @@ Kötelező szabályok:
 - Ha nincs konkrét küszöb, esemény vagy játékos-szintű trigger a strukturált inputban, akkor ne írj ilyet a szövegbe.
 - Az x-faktor százalékokat swing-potenciálként kezeld, ne garantált hatásként.
 - A dobástérkép vagy shot-profile megállapításokat csak zónaszintű megfogalmazásban használd, ne találj ki nem adott védekezési engedési adatot.
+- Ha az ellenfél tripla-volumene vagy periméteres shot-profile-ja erős, ezt ne szorítsd háttérbe pusztán azért, mert a gyűrűnél is hatékony; ilyenkor a periméter-fenyegetést és a festékharcot együtt, súlyozottan írd le.
 - Magyar kosárlabda-szaknyelvet használj, angol zsargont kerüld.
 - A szöveg legyen leíró, olvasmányos, logikusan felépített.
 - Folyamatos, értelmes magyar mondatokban írj, ne kulcsszó-listákkal.
@@ -65,7 +66,7 @@ SZERKEZET:
 
 4. Taktikai válaszok
    - [CSAPAT] válasza [ELLENFÉL] fő veszélyeire (fókuszpontok alapján)
-   - Küszöbértékek ahol rendelkezésre állnak (pl. "<25 tripla-kísérlet")
+  - Küszöbértéket vagy trigger-számot csak akkor írj, ha az explicit szerepel a strukturált inputban
 
 5. X-faktorok operacionalizálása
   - Elsődleges: csak a strukturált inputból származó matchup-tengely és swing-potenciál
@@ -87,6 +88,7 @@ SZERKEZET:
   - Nevezd meg a legfontosabb saját és ellenfél zónát.
   - Csak a megadott zónákat és liga-deltákat használd.
   - Ne írj olyan védekezési következtetést, amire nincs explicit adat.
+  - Ha az ellenfél magas tripla-volumennel dolgozik vagy a fő zónái között tripla-zóna szerepel, ne nevezd a festéket kizárólagos fő csatatérnek, hacsak a strukturált input nem ezt támasztja alá egyértelműen.
 
 STÍLUS ELVÁRÁS:
 - Írj 12-16 mondatot, rövid bekezdésekben.
@@ -101,6 +103,7 @@ TILOS:
 - Névtelen X-faktorok ("a periméterjátékos" – ki?)
 - Ellentmondás a strukturált adatokkal (ellenőrizd irányító-matchup előjelét!)
 - Olyan következtetés, ami nincs alátámasztva a strukturált mezőkben.
+- Olyan küszöbérték vagy darabszám, ami csak példa lenne, de nincs ténylegesen megadva az inputban.
 - Nyers JSON-részletek visszamásolása a válaszba.
 
 STRUKTURÁLT ADATOK (változtatás nélkül dolgozz velük):
