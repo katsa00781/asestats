@@ -92,6 +92,7 @@ export type TeamBenchmarkMeta = {
   frontcourtPresenceP10: number;
   frontcourtPresenceP90: number;
   clusterCounts: Record<string, number>;
+  clusterMembers: Record<string, Array<{ teamId: string; teamName: string }>>;
 };
 
 export type TeamBenchmarks = Record<string, BenchmarkPercentiles> & {
@@ -130,6 +131,7 @@ export type TeamAnalysis = {
     flags: RosterFlags;
     avgHeightByPosition: Record<Position, number | null>;
     avgHeightOverall: number | null;
+    hasReliableHeightData: boolean;
     positionPlayers: Record<Position, string[]>;
     totalMinutes: number;
   };
@@ -146,11 +148,28 @@ export type TeamAnalysis = {
     clusterLabel: string;
     clusterCount: number | null;
     teamCount: number | null;
+    clusterPeers: string[];
     opponentStatsComplete: boolean;
   };
+  defensiveProfile?: {
+    availability: 'full' | 'proxy' | 'limited';
+    rimProtection: string;
+    perimeterDefense: string;
+    rebounding: string;
+    foulDiscipline: string;
+    notes: string[];
+  } | null;
+  formProfile?: {
+    available: boolean;
+    trendLabel: string;
+    volatilityIndex: number | null;
+    volatilityLabel: string | null;
+    notes: string[];
+  } | null;
   clutchProfile?: {
     available: boolean;
     sampleSize: number;
+    sampleLabel?: string | null;
     ortg: number | null;
     drtg: number | null;
     net: number | null;
@@ -232,6 +251,8 @@ const round = (value: number, digits = 2) => {
 
 const clamp = (value: number, min: number, max: number) =>
   Math.min(Math.max(value, min), max);
+
+const LOWER_BETTER_STATS = new Set(['turnover_rate', 'opp2_pct', 'opp3_pct', 'fouls_per_game']);
 
 
 const ROLE_CATALOG = [
@@ -461,6 +482,166 @@ const quantile = (sorted: number[], percentile: number) => {
   return sorted[base];
 };
 
+const getPerformanceScore = (
+  benchmarks: LeagueTeamBenchmarks,
+  team: NormalizedTeamStats,
+  stat: string
+) => {
+  const rawScore = getPercentileScore(benchmarks, team, stat);
+  return LOWER_BETTER_STATS.has(stat) ? 100 - rawScore : rawScore;
+};
+
+const getTempoDescriptor = (paceScore: number) => {
+  if (paceScore <= 15) {
+    return {
+      label: 'rendkívül lassú tempójú',
+      note: 'Ez kontrollált félpályás ritmust ad, de hátrányból nehezebb tempót váltani.',
+    };
+  }
+  if (paceScore <= 35) {
+    return {
+      label: 'lassú tempójú',
+      note: 'Ez inkább félpályás döntéshozatalt erősít, mint tranzíciós nyomást.',
+    };
+  }
+  if (paceScore >= 85) {
+    return {
+      label: 'rendkívül gyors tempójú',
+      note: 'Ez sok nyílt pályás helyzetet generál, de nagyobb varianciával jár.',
+    };
+  }
+  if (paceScore >= 65) {
+    return {
+      label: 'gyors tempójú',
+      note: 'A csapat ritmusa kedvez a korai támadásoknak és a tranzíciós pontoknak.',
+    };
+  }
+  return {
+    label: 'közepes tempójú',
+    note: 'A ritmusuk rugalmas, nem kizárólag félpályás vagy tranzíciós identitású.',
+  };
+};
+
+const getShotProfileDescriptor = (team: NormalizedTeamStats, benchmarks: LeagueTeamBenchmarks) => {
+  const twoRateScore = getPercentileScore(benchmarks, team, 'two_rate');
+  const threeRateScore = getPercentileScore(benchmarks, team, 'three_rate');
+  const threePctScore = getPercentileScore(benchmarks, team, 'three_pct');
+
+  if (Math.abs(team.twoRate - team.threeRate) <= 0.08) {
+    if (threePctScore >= 75 && threeRateScore <= 40) {
+      return 'Kiegyensúlyozott belső-külső megoszlás, elit triplaminőséggel, de konzervatív külső volumennel.';
+    }
+    return 'Kiegyensúlyozott belső-külső támadási profil.';
+  }
+
+  if (twoRateScore >= 70 && team.ftRate >= 0.3) {
+    return 'Belső hangsúlyú támadási profil, gyűrű- és fault-nyomással.';
+  }
+
+  if (threeRateScore >= 65 && threePctScore >= 60) {
+    return 'Periméter-hangsúlyú támadási profil, hatékony külső kivitelezéssel.';
+  }
+
+  if (threePctScore >= 75 && threeRateScore <= 40) {
+    return 'Szelektív shot profile: a tripla minősége erős, a volumene visszafogott.';
+  }
+
+  return twoRateScore > threeRateScore
+    ? 'Enyhén belső orientációjú támadási profil.'
+    : 'Enyhén periméter orientációjú támadási profil.';
+};
+
+const getPlaymakingDescriptor = (
+  team: NormalizedTeamStats,
+  benchmarks: LeagueTeamBenchmarks,
+  roster: ReturnType<typeof buildRosterSummary>
+) => {
+  const assistScore = getPercentileScore(benchmarks, team, 'assist_rate');
+  const leagueMeta = getLeagueMeta(benchmarks, team);
+  const usageScore = leagueMeta
+    ? percentileFromThresholds(roster.top2UsageShare, leagueMeta.usageP10, leagueMeta.usageP90)
+    : 50;
+  const offensiveHubCount = roster.roleCounts['Offensive Hub'] || 0;
+
+  if (assistScore >= 60 && usageScore <= 35) {
+    return 'Committee-based playmaking: nincs domináns high-usage hub, a labdajáratás kollektív.';
+  }
+  if (assistScore >= 60 && offensiveHubCount > 0) {
+    return 'A támadó kapcsolódás stabil, van hub-jellegű összekötő pont a rendszerben.';
+  }
+  if (assistScore <= 40 && offensiveHubCount === 0) {
+    return 'A támadó kapcsolódás sérülékenyebb, kevés a stabil összekötő playmaking pont.';
+  }
+  return 'A playmaking inkább vegyes modellre épül, nem egyetlen első opcióra.';
+};
+
+const buildDefensiveProfile = (
+  team: NormalizedTeamStats,
+  benchmarks: LeagueTeamBenchmarks,
+  roster: ReturnType<typeof buildRosterSummary>
+): NonNullable<TeamAnalysis['defensiveProfile']> => {
+  const rimProtectionScore = team.hasOpponentShooting
+    ? getPerformanceScore(benchmarks, team, 'opp2_pct')
+    : null;
+  const perimeterDefenseScore = team.hasOpponentShooting
+    ? getPerformanceScore(benchmarks, team, 'opp3_pct')
+    : null;
+  const foulDisciplineScore = getPerformanceScore(benchmarks, team, 'fouls_per_game');
+  const rimProtectors = roster.roleCounts['Rim Protector'] || 0;
+  const defensiveGuards = roster.roleCounts['Defensive Guard'] || 0;
+  const frontcourtShare = roster.positionMinutesShare.PF + roster.positionMinutesShare.C;
+
+  const availability: 'full' | 'proxy' | 'limited' = team.hasOpponentShooting
+    ? 'full'
+    : roster.totalMinutes > 0
+      ? 'proxy'
+      : 'limited';
+
+  const rimProtection = rimProtectionScore !== null
+    ? rimProtectionScore >= 60
+      ? 'Erős gyűrűvédekezés'
+      : rimProtectionScore <= 40
+        ? 'Sebezhető gyűrűvédekezés'
+        : 'Közepes gyűrűvédekezés'
+    : rimProtectors >= 2
+      ? 'Proxy alapján erősnek tűnő gyűrűvédekezés'
+      : 'A gyűrűvédekezés csak proxy alapon becsülhető';
+
+  const perimeterDefense = perimeterDefenseScore !== null
+    ? perimeterDefenseScore >= 60
+      ? 'Stabil perimétervédekezés'
+      : perimeterDefenseScore <= 40
+        ? 'Sebezhető perimétervédekezés'
+        : 'Közepes perimétervédekezés'
+    : defensiveGuards >= 2
+      ? 'Proxy alapján vállalható perimétervédekezés'
+      : 'A perimétervédekezés bizonytalanabb';
+
+  const rebounding = frontcourtShare >= 38
+    ? 'A lepattanóprofil csak rotációs proxy alapján becsülhető'
+    : 'A lepattanóprofil bizonytalan, közvetlen védőlepattanó-kontextus nélkül';
+
+  const foulDiscipline = foulDisciplineScore >= 60
+    ? 'Fegyelmezett fault-menedzsment'
+    : foulDisciplineScore <= 40
+      ? 'Fault-terhelés kockázat'
+      : 'Közepes fault-discipline';
+
+  const notes: string[] = [];
+  if (!team.hasOpponentShooting) notes.push('Opponent shooting adatok hiányában a védőprofil részben proxy mutatókból épül.');
+  if (rimProtectors >= 2) notes.push('A rosterben több rim protector opció is van.');
+  if (defensiveGuards === 0) notes.push('Dedikált defensive guard hiányában a periméter-matchupok érzékenyebbek lehetnek.');
+
+  return {
+    availability,
+    rimProtection,
+    perimeterDefense,
+    rebounding,
+    foulDiscipline,
+    notes,
+  };
+};
+
 const getStatValue = (team: NormalizedTeamStats, stat: string) => {
   switch (stat) {
     case 'pace':
@@ -655,6 +836,7 @@ export const buildTeamBenchmarks = (teams: TeamSeasonStat[]): LeagueTeamBenchmar
       result[league][season] = statBenchmarks;
 
       const clusterCounts: Record<string, number> = {};
+      const clusterMembers: Record<string, Array<{ teamId: string; teamName: string }>> = {};
       rosterSummaries.forEach(entry => {
         const paceScore = getPercentileScore(result, entry.team, 'pace');
         const twoRateScore = getPercentileScore(result, entry.team, 'two_rate');
@@ -673,6 +855,8 @@ export const buildTeamBenchmarks = (teams: TeamSeasonStat[]): LeagueTeamBenchmar
           pressureScore,
         });
         clusterCounts[cluster] = (clusterCounts[cluster] ?? 0) + 1;
+        if (!clusterMembers[cluster]) clusterMembers[cluster] = [];
+        clusterMembers[cluster].push({ teamId: entry.team.teamId, teamName: entry.team.teamName });
       });
       statBenchmarks._meta = {
         teamCount: pool.length,
@@ -684,6 +868,7 @@ export const buildTeamBenchmarks = (teams: TeamSeasonStat[]): LeagueTeamBenchmar
         frontcourtPresenceP10,
         frontcourtPresenceP90,
         clusterCounts,
+        clusterMembers,
       };
       result[league][season] = statBenchmarks;
     });
@@ -738,7 +923,7 @@ const getClusterLabel = (inputs: {
   const { paceScore, twoRateScore, threeRateScore, assistScore, usageScore, pressureScore } = inputs;
 
   if (paceScore >= 70 && pressureScore >= 60) return 'Transition-heavy';
-  if (paceScore >= 60 && twoRateScore >= 60) return 'Gyors, festék-orientált';
+  if (paceScore >= 60 && twoRateScore >= 60) return 'Gyors, belső fókuszú';
   if (paceScore <= 40 && threeRateScore >= 60) return 'Lassú, periméter-orientált';
   if (paceScore <= 45 && assistScore >= 60) return 'Halfcourt, playmaker-domináns';
   if (pressureScore >= 70 && paceScore <= 55) return 'Defense-first';
@@ -746,7 +931,7 @@ const getClusterLabel = (inputs: {
   const maxScore = Math.max(paceScore, twoRateScore, threeRateScore, assistScore, usageScore, pressureScore);
   if (maxScore === pressureScore) return 'Defense-first';
   if (maxScore === paceScore) return 'Transition-heavy';
-  if (maxScore === twoRateScore) return 'Gyors, festék-orientált';
+  if (maxScore === twoRateScore) return 'Gyors, belső fókuszú';
   if (maxScore === threeRateScore) return 'Lassú, periméter-orientált';
   return 'Halfcourt, playmaker-domináns';
 };
@@ -756,6 +941,12 @@ const scoreAbove = (benchmarks: LeagueTeamBenchmarks, team: NormalizedTeamStats,
 
 const scoreBelow = (benchmarks: LeagueTeamBenchmarks, team: NormalizedTeamStats, stat: string, score: number) =>
   getPercentileScore(benchmarks, team, stat) <= score;
+
+const performanceAbove = (benchmarks: LeagueTeamBenchmarks, team: NormalizedTeamStats, stat: string, score: number) =>
+  getPerformanceScore(benchmarks, team, stat) >= score;
+
+const performanceBelow = (benchmarks: LeagueTeamBenchmarks, team: NormalizedTeamStats, stat: string, score: number) =>
+  getPerformanceScore(benchmarks, team, stat) <= score;
 
 const detectTeamStyle = (team: NormalizedTeamStats, benchmarks: LeagueTeamBenchmarks): TeamStyle => {
   const offense: string[] = [];
@@ -774,8 +965,8 @@ const detectTeamStyle = (team: NormalizedTeamStats, benchmarks: LeagueTeamBenchm
   if (scoreAbove(benchmarks, team, 'three_rate', 60) && scoreAbove(benchmarks, team, 'three_pct', 60)) {
     offense.push('Periméter-orientált');
   }
-  if (scoreAbove(benchmarks, team, 'two_rate', 60) && scoreAbove(benchmarks, team, 'ft_rate', 60)) {
-    offense.push('Festék-orientált');
+  if (scoreAbove(benchmarks, team, 'two_rate', 70) && scoreAbove(benchmarks, team, 'ft_rate', 60) && scoreBelow(benchmarks, team, 'three_rate', 45)) {
+    offense.push('Belső fókuszú');
   }
 
   if (team.hasOpponentTo && scoreAbove(benchmarks, team, 'stl_per_game', 60) && scoreAbove(benchmarks, team, 'opp_to_rate', 60)) {
@@ -784,10 +975,10 @@ const detectTeamStyle = (team: NormalizedTeamStats, benchmarks: LeagueTeamBenchm
   if (scoreBelow(benchmarks, team, 'fouls_per_game', 40) && scoreBelow(benchmarks, team, 'pace', 40)) {
     defense.push('Konzervatív védekezés');
   }
-  if (team.hasOpponentShooting && scoreAbove(benchmarks, team, 'blk_per_game', 60) && scoreBelow(benchmarks, team, 'opp2_pct', 40)) {
+  if (team.hasOpponentShooting && scoreAbove(benchmarks, team, 'blk_per_game', 60) && performanceAbove(benchmarks, team, 'opp2_pct', 60)) {
     defense.push('Gyűrűvédő');
   }
-  if (team.hasOpponentShooting && scoreBelow(benchmarks, team, 'opp3_pct', 40)) {
+  if (team.hasOpponentShooting && performanceAbove(benchmarks, team, 'opp3_pct', 60)) {
     defense.push('Periméter-fókuszú');
   }
 
@@ -852,20 +1043,26 @@ const buildRosterSummary = (team: NormalizedTeamStats) => {
   };
 
   normalizedRoster.forEach(player => {
+    const validHeight = typeof player.heightCm === 'number' && Number.isFinite(player.heightCm)
+      ? player.heightCm >= 175 && player.heightCm <= 235
+        ? player.heightCm
+        : null
+      : null;
+
     const allocations = getPositionAllocation(player);
     allocations.forEach(allocation => {
       const weightedMinutes = (player.minutes || 0) * allocation.share;
       positionMinutesShare[allocation.position] += weightedMinutes;
       positionPlayers[allocation.position].push({ name: player.name, minutes: weightedMinutes });
 
-      if (player.heightCm && Number.isFinite(player.heightCm)) {
-        heightTotals[allocation.position].sum += player.heightCm * allocation.share;
+      if (validHeight !== null) {
+        heightTotals[allocation.position].sum += validHeight * allocation.share;
         heightTotals[allocation.position].count += allocation.share;
       }
     });
 
-    if (player.heightCm && Number.isFinite(player.heightCm)) {
-      heightSum += player.heightCm;
+    if (validHeight !== null) {
+      heightSum += validHeight;
       heightCount += 1;
     }
 
@@ -899,7 +1096,7 @@ const buildRosterSummary = (team: NormalizedTeamStats) => {
     weakReboundingPresence: bigShare < 0.35,
   };
 
-  const avgHeightByPosition = (Object.keys(heightTotals) as Position[]).reduce(
+  const rawAvgHeightByPosition = (Object.keys(heightTotals) as Position[]).reduce(
     (acc, pos) => {
       const entry = heightTotals[pos];
       acc[pos] = entry.count > 0 ? round(entry.sum / entry.count, 1) : null;
@@ -914,7 +1111,15 @@ const buildRosterSummary = (team: NormalizedTeamStats) => {
     } as Record<Position, number | null>
   );
 
-  const avgHeightOverall = heightCount > 0 ? round(heightSum / heightCount, 1) : null;
+  const rawAvgHeightOverall = heightCount > 0 ? round(heightSum / heightCount, 1) : null;
+  const hasReliableHeightData = heightCount >= 4
+    && rawAvgHeightOverall !== null
+    && rawAvgHeightOverall >= 188
+    && rawAvgHeightOverall <= 220;
+  const avgHeightByPosition = hasReliableHeightData
+    ? rawAvgHeightByPosition
+    : { PG: null, SG: null, SF: null, PF: null, C: null } as Record<Position, number | null>;
+  const avgHeightOverall = hasReliableHeightData ? rawAvgHeightOverall : null;
 
   const positionPlayerNames = (Object.keys(positionPlayers) as Position[]).reduce(
     (acc, pos) => {
@@ -940,6 +1145,7 @@ const buildRosterSummary = (team: NormalizedTeamStats) => {
     flags,
     avgHeightByPosition,
     avgHeightOverall,
+    hasReliableHeightData,
     positionPlayers: positionPlayerNames,
     totalMinutes,
   };
@@ -957,7 +1163,7 @@ const buildRosterInsights = (
   const bigShare = roster.positionMinutesShare.PF + roster.positionMinutesShare.C;
 
   if (bigShare >= 60) {
-    insights.push('Erősen magas poszt-orientált (festékdomináns) struktúra.');
+    insights.push('Erősen frontcourt-nehéz rotáció, ami matchup-specifikus méretelőnyt és mobilitási kompromisszumot is hozhat.');
   }
   if (guardShare <= 20) {
     insights.push('Kevés guard perc, a periméter-kezdeményezés korlátozott lehet.');
@@ -971,6 +1177,9 @@ const buildRosterInsights = (
     + (roster.roleCounts['Secondary Playmaker'] || 0);
   if (creators <= 1) {
     insights.push('Kevés elsődleges/second playmaker, támadás könnyen beszűkülhet.');
+  }
+  if (creators >= 2 && getPercentileScore(benchmarks, team, 'assist_rate') >= 60) {
+    insights.push('A labdajáratás inkább megosztott playmakingre épül, nem egyetlen domináns creatorra.');
   }
 
   const rollMen = roster.roleCounts['Roll Man'] || 0;
@@ -986,38 +1195,46 @@ const buildRosterInsights = (
   if (rimProtectors >= 2) {
     insights.push('Festékvédekezésben több rim protector opció.');
   }
-
-  const avgPG = roster.avgHeightByPosition.PG;
-  const avgSG = roster.avgHeightByPosition.SG;
-  const avgC = roster.avgHeightByPosition.C;
-
-  if (avgPG && avgPG >= 190) {
-    insights.push('Magas irányító rotáció (posztátlag alapján).');
+  if ((roster.roleCounts['Glue Guy'] || 0) >= 3) {
+    insights.push('Glue Guy szerepben redundancia látszik, ami percek és labda nélküli feladatok ütközését okozhatja.');
   }
-  if (avgSG && avgSG >= 193) {
-    insights.push('Magas dobóhátvéd sor, periméteren méretelőny lehet.');
-  }
-  if (avgC && avgC <= 204) {
-    insights.push('Relatíve alacsony center rotáció, magas poszton mismatch kockázat.');
+  if ((roster.roleCounts['Scoring Wing'] || 0) === 0 && getPercentileScore(benchmarks, team, 'three_pct') >= 70) {
+    insights.push('Wing scoring minőség van, de inkább spot-up és labdajáratás utáni helyzetekből, nem tiszta self-creationből.');
   }
 
   const leagueMeta = getLeagueMeta(benchmarks, team);
-  if (leagueMeta?.avgHeightOverall && roster.avgHeightOverall) {
-    if (roster.avgHeightOverall > leagueMeta.avgHeightOverall + 3) {
-      insights.push('Liga-szintű méretelőny.');
-    }
-  }
+  if (roster.hasReliableHeightData) {
+    const avgPG = roster.avgHeightByPosition.PG;
+    const avgSG = roster.avgHeightByPosition.SG;
+    const avgC = roster.avgHeightByPosition.C;
 
-  if (leagueMeta?.avgHeightByPosition?.SG && avgSG) {
-    if (avgSG > leagueMeta.avgHeightByPosition.SG + 3) {
-      insights.push('Periméter méretelőny ligaszinten.');
+    if (avgPG && avgPG >= 190) {
+      insights.push('Magas irányító rotáció (posztátlag alapján).');
     }
-  }
+    if (avgSG && avgSG >= 193) {
+      insights.push('Magas dobóhátvéd sor, periméteren méretelőny lehet.');
+    }
+    if (avgC && avgC <= 204) {
+      insights.push('Relatíve alacsony center rotáció, magas poszton mismatch kockázat.');
+    }
 
-  if (leagueMeta?.avgHeightOverall) {
-    const frontcourtAvg = getFrontcourtAvgHeight(roster);
-    if (frontcourtAvg && frontcourtAvg < leagueMeta.avgHeightOverall - 3) {
-      insights.push('Frontcourt mérethátrány.');
+    if (leagueMeta?.avgHeightOverall && roster.avgHeightOverall) {
+      if (roster.avgHeightOverall > leagueMeta.avgHeightOverall + 3) {
+        insights.push('Liga-szintű méretelőny.');
+      }
+    }
+
+    if (leagueMeta?.avgHeightByPosition?.SG && avgSG) {
+      if (avgSG > leagueMeta.avgHeightByPosition.SG + 3) {
+        insights.push('Periméter méretelőny ligaszinten.');
+      }
+    }
+
+    if (leagueMeta?.avgHeightOverall) {
+      const frontcourtAvg = getFrontcourtAvgHeight(roster);
+      if (frontcourtAvg && frontcourtAvg < leagueMeta.avgHeightOverall - 3) {
+        insights.push('Frontcourt mérethátrány.');
+      }
     }
   }
 
@@ -1034,8 +1251,8 @@ const buildRosterInsights = (
 };
 
 const strengthLabels: Record<string, string> = {
-  pace: 'Magas tempó',
   assist_rate: 'Magas assziszt-arány',
+  turnover_rate: 'Labdabiztonság',
   oreb_rate: 'Erős támadólepattanózás',
   two_rate: 'Magas 2P-arány',
   three_rate: 'Magas triplavolumen',
@@ -1049,7 +1266,6 @@ const strengthLabels: Record<string, string> = {
 };
 
 const limitationLabels: Record<string, string> = {
-  pace: 'Alacsony tempó',
   assist_rate: 'Alacsony assziszt-arány',
   turnover_rate: 'Magas eladott labda arány',
   oreb_rate: 'Gyenge támadólepattanózás',
@@ -1064,30 +1280,44 @@ const limitationLabels: Record<string, string> = {
 };
 
 const buildStrengths = (team: NormalizedTeamStats, benchmarks: LeagueTeamBenchmarks) => {
-  return Object.keys(strengthLabels)
+  const strengths = Object.keys(strengthLabels)
     .filter(stat => {
       if (stat === 'oreb_rate' && !team.hasOpponentReb) return false;
       if ((stat === 'opp2_pct' || stat === 'opp3_pct') && !team.hasOpponentShooting) return false;
       if (stat === 'opp_to_rate' && !team.hasOpponentTo) return false;
-      return scoreAbove(benchmarks, team, stat, 60);
+      return performanceAbove(benchmarks, team, stat, 60);
     })
     .map(stat => strengthLabels[stat])
     .slice(0, 4);
+
+  if (getPercentileScore(benchmarks, team, 'pace') >= 80) {
+    strengths.unshift('Magas tempó');
+  }
+
+  return strengths.slice(0, 4);
 };
 
 const buildLimitations = (team: NormalizedTeamStats, benchmarks: LeagueTeamBenchmarks) => {
-  return Object.keys(limitationLabels)
+  const limitations = Object.keys(limitationLabels)
     .filter(stat => {
       if (stat === 'oreb_rate' && !team.hasOpponentReb) return false;
       if ((stat === 'opp2_pct' || stat === 'opp3_pct') && !team.hasOpponentShooting) return false;
       if (stat === 'opp_to_rate' && !team.hasOpponentTo) return false;
-      return scoreBelow(benchmarks, team, stat, 40);
+      return performanceBelow(benchmarks, team, stat, 40);
     })
     .map(stat => limitationLabels[stat])
     .slice(0, 4);
+
+  if (getPercentileScore(benchmarks, team, 'pace') <= 20) {
+    limitations.unshift('Rendkívül lassú tempó');
+  }
+
+  return limitations.slice(0, 4);
 };
 
 const buildRiskPriorities = (
+  team: NormalizedTeamStats,
+  benchmarks: LeagueTeamBenchmarks,
   roster: ReturnType<typeof buildRosterSummary>,
   limitations: string[]
 ) => {
@@ -1144,11 +1374,27 @@ const buildRiskPriorities = (
     'Energy Big': 'energia/lepattanó limit',
   };
 
+  const assistScore = getPercentileScore(benchmarks, team, 'assist_rate');
+  const threeRateScore = getPercentileScore(benchmarks, team, 'three_rate');
+  const threePctScore = getPercentileScore(benchmarks, team, 'three_pct');
+  const leagueMeta = getLeagueMeta(benchmarks, team);
+  const usageScore = leagueMeta
+    ? percentileFromThresholds(roster.top2UsageShare, leagueMeta.usageP10, leagueMeta.usageP90)
+    : 50;
+
   ROLE_CATALOG.forEach(role => {
     if ((roster.roleCounts[role] ?? 0) === 0) {
+      if (role === 'Offensive Hub' && assistScore >= 60 && usageScore <= 35) return;
+      if (role === 'Scoring Wing' && threePctScore >= 70) {
+        risks.push({
+          label: 'Wing self-creation limit → spot-up minőség van, izolációs önteremtés kevésbé',
+          weight: threeRateScore <= 40 ? 2 : 1,
+        });
+        return;
+      }
       risks.push({
         label: `${role} hiány → ${roleRiskDetails[role] ?? 'taktikai opció nem elérhető'}`,
-        weight: 3,
+        weight: role === 'Offensive Hub' ? 2 : 3,
       });
     }
   });
@@ -1163,7 +1409,7 @@ const buildRiskPriorities = (
     'Magas eladott labda arány': { detail: 'labdabiztonság kockázat', weight: 2 },
     'Alacsony assziszt-arány': { detail: 'támadási flow limit', weight: 2 },
     'Alacsony VAL': { detail: 'összteljesítmény limit', weight: 2 },
-    'Alacsony tempó': { detail: 'context-függő matchup kockázat', weight: 1 },
+    'Rendkívül lassú tempó': { detail: 'matchup-függő tempókényszer kockázat', weight: 1 },
     'Festék sebezhető': { detail: 'rim defense kockázat', weight: 1 },
     'Periméter sebezhető': { detail: 'perimétervédekezés kockázat', weight: 1 },
   };
@@ -1193,26 +1439,37 @@ const buildSummary = (
   benchmarks: LeagueTeamBenchmarks
 ) => {
   const paceScore = getPercentileScore(benchmarks, team, 'pace');
-  const tempo = paceScore >= 65 ? 'magas tempójú' : paceScore <= 35 ? 'alacsony tempójú' : 'közepes tempójú';
+  const tempo = getTempoDescriptor(paceScore);
   const offense = style.offense[0] ?? 'kiegyensúlyozott támadás';
-  const defense = style.defense[0] ?? 'kiegyensúlyozott védekezés';
+  const shotProfile = getShotProfileDescriptor(team, benchmarks);
+  const playmakingProfile = getPlaymakingDescriptor(team, benchmarks, roster);
+  const defensiveProfile = buildDefensiveProfile(team, benchmarks, roster);
+  const defense = style.defense[0] ?? (defensiveProfile.availability === 'full'
+    ? 'kiegyensúlyozott védekezés'
+    : 'korlátozottan értékelhető védekezés');
+  const turnoverProfile = performanceAbove(benchmarks, team, 'turnover_rate', 60)
+    ? 'A labdabiztonság csapatszinten stabil.'
+    : performanceBelow(benchmarks, team, 'turnover_rate', 40)
+      ? 'A labdabiztonság csapatszinten sérülékenyebb.'
+      : 'A labdabiztonság közepes szinten áll.';
 
   const rosterNotes: string[] = [];
   if (roster.flags.scorerDependency) rosterNotes.push('magas a top2 usage koncentráció');
   if (roster.flags.lowPlaymakingDepth) rosterNotes.push('kevés a playmaking mélység');
   if (roster.flags.weakReboundingPresence) rosterNotes.push('korlátozott a magas posztok jelenléte');
 
+  const hasRiskPriorities = rosterInsights.some(item => /^Legmagasabb kockázat:|^1\./.test(item));
   const rosterSentence = rosterNotes.length > 0
     ? `Roster szempontból ${rosterNotes.join(', ')}.`
-    : 'Roster szempontból nincs kiugró kockázat.';
+    : hasRiskPriorities
+      ? 'Roster szempontból vannak kezelendő szerepkockázatok.'
+      : 'Roster szempontból nincs kiugró kockázat.';
 
   const rosterInsightSentence = rosterInsights.length > 0
-    ? ` ${rosterInsights.join(' ')}`
+    ? ` ${rosterInsights.slice(0, 2).join(' ')}`
     : '';
 
-  const defenseNote = team.hasOpponentShooting && team.hasOpponentTo
-    ? ''
-    : ' Opponent statisztikák hiányosak, védekezési profil korlátozott.';
+  const defenseNote = defensiveProfile.notes.length > 0 ? ` ${defensiveProfile.notes.join(' ')}` : '';
 
   const leagueMeta = getLeagueMeta(benchmarks, team);
   const percentileNotes: string[] = [];
@@ -1246,7 +1503,7 @@ const buildSummary = (
   const frontcourtScore = leagueMeta
     ? percentileFromThresholds(frontcourtPresence, leagueMeta.frontcourtPresenceP10, leagueMeta.frontcourtPresenceP90)
     : 50;
-  percentileNotes.push(`REB per poszt ${percentileLabel(frontcourtScore).toLowerCase()} (${round(frontcourtScore, 0)}. percentilis).`);
+  percentileNotes.push(`Frontcourt jelenlét ${percentileLabel(frontcourtScore).toLowerCase()} (${round(frontcourtScore, 0)}. percentilis).`);
 
   const cluster = getClusterLabel({
     paceScore,
@@ -1261,7 +1518,7 @@ const buildSummary = (
     ? `A csapat a liga '${cluster}' klaszterébe tartozik (${clusterCount}/${leagueMeta.teamCount} csapat).`
     : `A csapat a liga '${cluster}' klaszterébe tartozik.`;
 
-  return `A csapat ${tempo}, ${offense} fókuszú támadást játszik. Védekezésben ${defense} karakterű. ${rosterSentence}${rosterInsightSentence} ${percentileNotes.join(' ')} ${clusterNote}${defenseNote}`;
+  return `A csapat ${tempo.label}, ${offense.toLowerCase()} fókuszú támadást játszik. ${tempo.note} ${shotProfile} ${playmakingProfile} ${turnoverProfile} Védekezésben ${defense.toLowerCase()} karakterű, különösen ${defensiveProfile.rimProtection.toLowerCase()} és ${defensiveProfile.perimeterDefense.toLowerCase()} olvasható ki. ${rosterSentence}${rosterInsightSentence} ${percentileNotes.join(' ')} ${clusterNote}${defenseNote}`;
 };
 
 const buildLeagueProfile = (
@@ -1297,6 +1554,11 @@ const buildLeagueProfile = (
     usageScore,
     pressureScore,
   });
+
+  const clusterPeers = (leagueMeta?.clusterMembers?.[clusterLabel] ?? [])
+    .filter(entry => entry.teamId !== team.teamId)
+    .map(entry => entry.teamName)
+    .slice(0, 4);
 
   return {
     entries: [
@@ -1351,7 +1613,7 @@ const buildLeagueProfile = (
       },
       {
         key: 'frontcourt_presence',
-        label: 'REB per poszt',
+        label: 'Frontcourt jelenlét',
         percentile: round(displayPercentile(frontcourtScore), 0),
         value: frontcourtPresence,
         tier: percentileLabel(frontcourtScore),
@@ -1360,6 +1622,7 @@ const buildLeagueProfile = (
     clusterLabel,
     clusterCount: leagueMeta?.clusterCounts?.[clusterLabel] ?? null,
     teamCount: leagueMeta?.teamCount ?? null,
+    clusterPeers,
     opponentStatsComplete: team.hasOpponentShooting && team.hasOpponentTo,
   };
 };
@@ -1392,7 +1655,7 @@ export const analyzeTeamSeason = (
     const clusterTag = `Liga-klaszter: ${clusterLabel}`;
     if (!style.offense.includes(clusterTag)) style.offense.push(clusterTag);
   }
-  const riskPriorities = buildRiskPriorities(rosterSummary, limitations);
+  const riskPriorities = buildRiskPriorities(normalized, benchmarks, rosterSummary, limitations);
   const rosterInsights = [
     ...buildRosterInsights(normalized, benchmarks, rosterSummary),
     ...riskPriorities,
@@ -1410,6 +1673,8 @@ export const analyzeTeamSeason = (
     rosterInsights,
     riskPriorities: riskPriorities.slice(1),
     leagueProfile,
+    defensiveProfile: buildDefensiveProfile(normalized, benchmarks, rosterSummary),
+    formProfile: null,
     clutchProfile: null,
     shotMapProfile: null,
     lineupProfile: null,
