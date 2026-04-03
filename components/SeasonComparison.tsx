@@ -7932,7 +7932,7 @@ export function SeasonComparison({
 
       const usedSlots = new Set<Position>();
       const workingAssignments: Array<{ playerId: string; name: string; role: Position }> = [];
-      let bestAssignments: Array<{ playerId: string; name: string; role: Position }> | null = null;
+      let bestAssignments: Array<{ playerId: string; name: string; role: Position }> = [];
       let bestScore = Number.NEGATIVE_INFINITY;
 
       const walk = (index: number, score: number) => {
@@ -7957,8 +7957,8 @@ export function SeasonComparison({
       };
 
       walk(0, 0);
-      if (!bestAssignments || bestAssignments.length !== players.length) return null;
-      return lineupSlots.flatMap(slot => bestAssignments?.find(item => item.role === slot) ?? []);
+      if (bestAssignments.length !== players.length) return null;
+      return lineupSlots.flatMap(slot => bestAssignments.find(item => item.role === slot) ?? []);
     };
 
     const playerMatches = (player: PlayerSeasonStat, positions: Position[]) =>
