@@ -1662,6 +1662,11 @@ const getSampleConfidenceBadgeClass = (confidence: 'alacsony' | 'kozepes' | 'mag
   return 'bg-slate-800 text-slate-300 border border-slate-700';
 };
 
+const normalizeSampleConfidence = (confidence: string | undefined): 'alacsony' | 'kozepes' | 'magas' => {
+  if (confidence === 'magas' || confidence === 'kozepes' || confidence === 'alacsony') return confidence;
+  return 'alacsony';
+};
+
 const formatSampleConfidenceLabel = (confidence: 'alacsony' | 'kozepes' | 'magas') => {
   if (confidence === 'magas') return 'Minta: magas';
   if (confidence === 'kozepes') return 'Minta: közepes';
@@ -11416,7 +11421,7 @@ export function SeasonComparison({
                           {renderThresholdTooltip(playerAdvancedInsights.thresholdHints.shot)}
                         </div>
                         {'confidence' in playerAdvancedInsights.shotQualityVsMaking && (
-                          <Badge className={getSampleConfidenceBadgeClass(playerAdvancedInsights.shotQualityVsMaking.confidence ?? 'alacsony')}>{formatSampleConfidenceLabel(playerAdvancedInsights.shotQualityVsMaking.confidence ?? 'alacsony')}</Badge>
+                          <Badge className={getSampleConfidenceBadgeClass(normalizeSampleConfidence(playerAdvancedInsights.shotQualityVsMaking.confidence))}>{formatSampleConfidenceLabel(normalizeSampleConfidence(playerAdvancedInsights.shotQualityVsMaking.confidence))}</Badge>
                         )}
                       </div>
                       <div className={`text-[11px] ${getInsightToneClass(playerAdvancedInsights.blockVerdicts.shot.tone)}`}>
@@ -11447,7 +11452,7 @@ export function SeasonComparison({
                             {renderThresholdTooltip(playerAdvancedInsights.thresholdHints.clutch)}
                           </div>
                           {'confidence' in playerAdvancedInsights.clutchIdentity && (
-                            <Badge className={getSampleConfidenceBadgeClass(playerAdvancedInsights.clutchIdentity.confidence)}>{formatSampleConfidenceLabel(playerAdvancedInsights.clutchIdentity.confidence)}</Badge>
+                            <Badge className={getSampleConfidenceBadgeClass(normalizeSampleConfidence(playerAdvancedInsights.clutchIdentity.confidence))}>{formatSampleConfidenceLabel(normalizeSampleConfidence(playerAdvancedInsights.clutchIdentity.confidence))}</Badge>
                           )}
                         </div>
                         <div className={`text-[11px] ${getInsightToneClass(playerAdvancedInsights.blockVerdicts.clutch.tone)}`}> 
@@ -11477,7 +11482,7 @@ export function SeasonComparison({
                           {renderThresholdTooltip(playerAdvancedInsights.thresholdHints.impact)}
                         </div>
                         {'confidence' in playerAdvancedInsights.plusMinusContext && (
-                          <Badge className={getSampleConfidenceBadgeClass(playerAdvancedInsights.plusMinusContext.confidence)}>{formatSampleConfidenceLabel(playerAdvancedInsights.plusMinusContext.confidence)}</Badge>
+                          <Badge className={getSampleConfidenceBadgeClass(normalizeSampleConfidence(playerAdvancedInsights.plusMinusContext.confidence))}>{formatSampleConfidenceLabel(normalizeSampleConfidence(playerAdvancedInsights.plusMinusContext.confidence))}</Badge>
                         )}
                       </div>
                       <div className={`text-[11px] ${getInsightToneClass(playerAdvancedInsights.blockVerdicts.impact.tone)}`}>
@@ -11503,7 +11508,7 @@ export function SeasonComparison({
                           {renderThresholdTooltip(playerAdvancedInsights.thresholdHints.role)}
                         </div>
                         {'confidence' in playerAdvancedInsights.roleEfficiency && (
-                          <Badge className={getSampleConfidenceBadgeClass(playerAdvancedInsights.roleEfficiency.confidence)}>{formatSampleConfidenceLabel(playerAdvancedInsights.roleEfficiency.confidence)}</Badge>
+                          <Badge className={getSampleConfidenceBadgeClass(normalizeSampleConfidence(playerAdvancedInsights.roleEfficiency.confidence))}>{formatSampleConfidenceLabel(normalizeSampleConfidence(playerAdvancedInsights.roleEfficiency.confidence))}</Badge>
                         )}
                       </div>
                       <div className={`text-[11px] ${getInsightToneClass(playerAdvancedInsights.blockVerdicts.role.tone)}`}>
@@ -11525,7 +11530,7 @@ export function SeasonComparison({
                           {renderThresholdTooltip(playerAdvancedInsights.thresholdHints.decision)}
                         </div>
                         {'confidence' in playerAdvancedInsights.decisionQuality && (
-                          <Badge className={getSampleConfidenceBadgeClass(playerAdvancedInsights.decisionQuality.confidence)}>{formatSampleConfidenceLabel(playerAdvancedInsights.decisionQuality.confidence)}</Badge>
+                          <Badge className={getSampleConfidenceBadgeClass(normalizeSampleConfidence(playerAdvancedInsights.decisionQuality.confidence))}>{formatSampleConfidenceLabel(normalizeSampleConfidence(playerAdvancedInsights.decisionQuality.confidence))}</Badge>
                         )}
                       </div>
                       <div className={`text-[11px] ${getInsightToneClass(playerAdvancedInsights.blockVerdicts.decision.tone)}`}>
@@ -11544,7 +11549,7 @@ export function SeasonComparison({
                           {renderThresholdTooltip(playerAdvancedInsights.thresholdHints.stability)}
                         </div>
                         {'confidence' in playerAdvancedInsights.stability && (
-                          <Badge className={getSampleConfidenceBadgeClass(playerAdvancedInsights.stability.confidence)}>{formatSampleConfidenceLabel(playerAdvancedInsights.stability.confidence)}</Badge>
+                          <Badge className={getSampleConfidenceBadgeClass(normalizeSampleConfidence(playerAdvancedInsights.stability.confidence))}>{formatSampleConfidenceLabel(normalizeSampleConfidence(playerAdvancedInsights.stability.confidence))}</Badge>
                         )}
                       </div>
                       <div className={`text-[11px] ${getInsightToneClass(playerAdvancedInsights.blockVerdicts.stability.tone)}`}>
@@ -11566,7 +11571,7 @@ export function SeasonComparison({
                           {renderThresholdTooltip(playerAdvancedInsights.thresholdHints.matchup)}
                         </div>
                         {'confidence' in playerAdvancedInsights.matchupSensitivity && (
-                          <Badge className={getSampleConfidenceBadgeClass(playerAdvancedInsights.matchupSensitivity.confidence)}>{formatSampleConfidenceLabel(playerAdvancedInsights.matchupSensitivity.confidence)}</Badge>
+                          <Badge className={getSampleConfidenceBadgeClass(normalizeSampleConfidence(playerAdvancedInsights.matchupSensitivity.confidence))}>{formatSampleConfidenceLabel(normalizeSampleConfidence(playerAdvancedInsights.matchupSensitivity.confidence))}</Badge>
                         )}
                       </div>
                       <div className={`text-[11px] ${getInsightToneClass(playerAdvancedInsights.blockVerdicts.matchup.tone)}`}>
@@ -11601,7 +11606,7 @@ export function SeasonComparison({
                           {renderThresholdTooltip(playerAdvancedInsights.thresholdHints.fatigue)}
                         </div>
                         {'confidence' in playerAdvancedInsights.fatigueLoad && (
-                          <Badge className={getSampleConfidenceBadgeClass(playerAdvancedInsights.fatigueLoad.confidence)}>{formatSampleConfidenceLabel(playerAdvancedInsights.fatigueLoad.confidence)}</Badge>
+                          <Badge className={getSampleConfidenceBadgeClass(normalizeSampleConfidence(playerAdvancedInsights.fatigueLoad.confidence))}>{formatSampleConfidenceLabel(normalizeSampleConfidence(playerAdvancedInsights.fatigueLoad.confidence))}</Badge>
                         )}
                       </div>
                       <div className={`text-[11px] ${getInsightToneClass(playerAdvancedInsights.blockVerdicts.fatigue.tone)}`}>
