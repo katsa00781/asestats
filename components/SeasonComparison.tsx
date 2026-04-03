@@ -13672,8 +13672,13 @@ export function SeasonComparison({
                       </div>
                       <div className="bg-slate-900/40 border border-slate-800 rounded-md p-2">
                         <div className="text-xs uppercase tracking-wide text-slate-500 mb-2">Liga-delta heatmap</div>
-                        <PostgameZoneHeatmapChart cells={shotProfileHeatmapCells} />
-                        <div className="text-xs text-slate-500 mt-1">Pozitív érték: saját oldal relatív zónaelőnye erősebb, mint az ellenfélé ugyanabban a zónában.</div>
+                        <PostgameZoneHeatmapChart
+                          cells={shotProfileHeatmapCells}
+                          interpretation="relative"
+                          perspectiveLabel={ownLabel}
+                          opponentLabel={opponentLabel}
+                        />
+                        <div className="text-xs text-slate-500 mt-1">Pozitív érték: saját liga-delta mínusz ellenfél liga-delta ugyanabban a zónában. Ezért lehet piros akkor is, ha az ellenfél ligaátlag felett dob az adott zónából.</div>
                       </div>
                     </div>
                     <div className="bg-slate-900/40 border border-slate-800 rounded-md p-2">

@@ -22,6 +22,9 @@ type ZoneHeatCell = {
 
 type PostgameZoneHeatmapChartProps = {
   cells: ZoneHeatCell[];
+  interpretation?: 'relative' | 'absolute';
+  perspectiveLabel?: string;
+  opponentLabel?: string;
 };
 
 const rows = [
@@ -36,7 +39,12 @@ const colorFromDelta = (value: number) => {
   return `rgba(244, 63, 94, ${alpha.toFixed(3)})`;
 };
 
-export function PostgameZoneHeatmapChart({ cells }: PostgameZoneHeatmapChartProps) {
+export function PostgameZoneHeatmapChart({
+  cells,
+  interpretation = 'absolute',
+  perspectiveLabel,
+  opponentLabel,
+}: PostgameZoneHeatmapChartProps) {
   const chartData = useMemo<ChartData<'bubble'>>(() => {
     const points = cells.flatMap((cell, xIndex) => {
       return rows.map((row, rowIndex) => {
@@ -121,10 +129,23 @@ export function PostgameZoneHeatmapChart({ cells }: PostgameZoneHeatmapChartProp
             const sign = raw.value > 0 ? '+' : '';
             return `${raw.zoneLabel} • ${raw.metricLabel}: ${sign}${raw.value.toFixed(1)} pp`;
           },
+          afterLabel(context) {
+            if (interpretation !== 'relative') return undefined;
+            const own = perspectiveLabel ?? 'Saját oldal';
+            const opp = opponentLabel ?? 'ellenfél oldal';
+            const raw = context.raw as { value: number };
+            const direction = raw.value >= 0
+              ? `pozitív: ${own} relatív zónaelőny`
+              : `negatív: ${opp} relatív zónaelőny`;
+            return [
+              `Mutató: ${own} liga-delta - ${opp} liga-delta`,
+              direction,
+            ];
+          },
         },
       },
     },
-  }), [cells]);
+  }), [cells, interpretation, perspectiveLabel, opponentLabel]);
 
   return <div className="h-62.5"><Bubble data={chartData} options={options} /></div>;
 }
