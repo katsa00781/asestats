@@ -12,7 +12,7 @@ export const DEFENSE_STYLE_LABELS = {
   perimeter: 'Perimétervédelem',
   disciplined: 'Kevés faultos védekezés',
   balanced: 'Kiegyensúlyozott védekezés',
-  limited: 'Korlátozott védőprofil adat',
+  limited: 'Nincs kiugró védőszignatúra',
 } as const;
 
 export const finalizeOffenseStyle = (styles: string[]) =>

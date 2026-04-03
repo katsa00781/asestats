@@ -7494,6 +7494,33 @@ export function SeasonComparison({
     }>;
   };
 
+  type PregameOptimalLineupCandidate = {
+    key: string;
+    players: PlayerSeasonStat[];
+    names: string[];
+    roleAssignments: Array<{ playerId: string; name: string; role: Position }>;
+    totalScore: number;
+    exactSampleMinutes: number;
+    exactNetPer40: number | null;
+    pairSampleMinutes: number;
+    trioSampleMinutes: number;
+    certainty: 'high' | 'medium' | 'low';
+    reasons: string[];
+  };
+
+  type PregameOptimalLineupResult = {
+    best: PregameOptimalLineupCandidate;
+    alternates: PregameOptimalLineupCandidate[];
+    candidateCount: number;
+    sourceGames: number;
+    matchupWeights: {
+      perimeter: number;
+      paint: number;
+      ballSecurity: number;
+    };
+    headline: string;
+  };
+
   const buildPregameKeyPlayerFingerprints = (
     keyPlayers: {
       primaryScorers: string[];
@@ -7601,6 +7628,703 @@ export function SeasonComparison({
     () => buildPregameKeyPlayerFingerprints(pregameReport?.keyPlayers, pregameOpponentPlayers, opponentSeasonShotRows),
     [leagueSeasonShotSummary, opponentSeasonShotRows, pregameOpponentPlayers, pregameReport]
   );
+
+  const pregameHeadToHeadSummary = useMemo(() => {
+    const ownName = pregameOwnTeam?.teamName;
+    const opponentName = pregameOpponentTeam?.teamName;
+    if (!ownName || !opponentName) {
+      return {
+        games: 0,
+        ownWins: 0,
+        opponentWins: 0,
+        ownAvgPoints: 0,
+        opponentAvgPoints: 0,
+        note: 'Első találkozó a szezonban.',
+      };
+    }
+
+    const ownKey = normalizeTeamKey(ownName);
+    const opponentKey = normalizeTeamKey(opponentName);
+    if (!ownKey || !opponentKey || ownKey === opponentKey) {
+      return {
+        games: 0,
+        ownWins: 0,
+        opponentWins: 0,
+        ownAvgPoints: 0,
+        opponentAvgPoints: 0,
+        note: 'Nincs értelmezhető head-to-head minta.',
+      };
+    }
+
+    const [teamAKey, teamBKey] = [ownKey, opponentKey].sort((a, b) => a.localeCompare(b));
+    const h2h = headToHeadByPair.get(`${teamAKey}__${teamBKey}`);
+    if (!h2h || h2h.games === 0) {
+      return {
+        games: 0,
+        ownWins: 0,
+        opponentWins: 0,
+        ownAvgPoints: 0,
+        opponentAvgPoints: 0,
+        note: 'Első találkozó a szezonban.',
+      };
+    }
+
+    const ownIsTeamA = h2h.teamAKey === ownKey;
+    const ownWins = ownIsTeamA ? h2h.teamAWins : h2h.teamBWins;
+    const opponentWins = ownIsTeamA ? h2h.teamBWins : h2h.teamAWins;
+    const ownPoints = ownIsTeamA ? h2h.teamAPoints : h2h.teamBPoints;
+    const opponentPoints = ownIsTeamA ? h2h.teamBPoints : h2h.teamAPoints;
+    const ownAvgPoints = ownPoints / Math.max(1, h2h.games);
+    const opponentAvgPoints = opponentPoints / Math.max(1, h2h.games);
+
+    return {
+      games: h2h.games,
+      ownWins,
+      opponentWins,
+      ownAvgPoints: roundValue(ownAvgPoints, 1),
+      opponentAvgPoints: roundValue(opponentAvgPoints, 1),
+      note: `${ownName} ${ownWins}-${opponentWins} a szezonos H2H-ban, átlagpontok: ${ownAvgPoints.toFixed(1)}-${opponentAvgPoints.toFixed(1)}.`,
+    };
+  }, [headToHeadByPair, pregameOpponentTeam, pregameOwnTeam]);
+
+  const pregameKeyMatchups = useMemo(() => {
+    if (!pregameReport) {
+      return [] as Array<{
+        title: string;
+        edge: 'own' | 'opponent' | 'even';
+        ownPlayer: string;
+        opponentPlayer: string;
+        summary: string;
+        tacticalNote: string;
+      }>;
+    }
+
+    const ownFingerprints = new Map(pregameOwnKeyPlayerFingerprints.map(player => [player.playerId, player]));
+    const opponentFingerprints = new Map(pregameOpponentKeyPlayerFingerprints.map(player => [player.playerId, player]));
+    const playerBuckets = (player: PlayerSeasonStat) => {
+      if (player.positionBuckets?.length) return player.positionBuckets as Position[];
+      return [player.position as Position];
+    };
+    const playerMatches = (player: PlayerSeasonStat, positions: Position[]) =>
+      playerBuckets(player).some(position => positions.includes(position));
+
+    const pickLeader = (
+      players: PlayerSeasonStat[],
+      positions: Position[],
+      mode: 'balanced' | 'wing' | 'playmaker' = 'balanced'
+    ) => {
+      const filtered = players
+        .filter(player => playerMatches(player, positions))
+        .map(player => {
+          const minutes = Math.max(player.minutes || 0, 1);
+          const games = Math.max(player.games || 0, 1);
+          const valPer36 = (player.val / minutes) * 36;
+          const pointsPer36 = (player.points / minutes) * 36;
+          const fgAttempts = player.fga2 + player.fga3;
+          const fgPct = fgAttempts > 0 ? ((player.fgm2 + player.fgm3) / fgAttempts) * 100 : 0;
+          const threePct = player.fga3 > 0 ? (player.fgm3 / player.fga3) * 100 : 0;
+          const threeVolume = player.fga3 / games;
+          const astTo = player.tov > 0 ? player.ast / player.tov : player.ast;
+
+          let score = valPer36 * 0.55 + pointsPer36 * 0.2 + threePct * 0.08;
+          if (mode === 'wing') score += threeVolume * 3.4 + threePct * 0.3;
+          if (mode === 'playmaker') score += (player.ast / games) * 2.4 + astTo * 2.1;
+
+          return {
+            player,
+            valPer36: roundValue(valPer36, 1),
+            pointsPer36: roundValue(pointsPer36, 1),
+            fgPct: roundValue(fgPct, 1),
+            threePct: roundValue(threePct, 1),
+            threeVolume: roundValue(threeVolume, 1),
+            astTo: roundValue(astTo, 2),
+            score,
+          };
+        })
+        .sort((a, b) => b.score - a.score || b.valPer36 - a.valPer36);
+
+      return filtered[0] ?? null;
+    };
+
+    const buildZoneSnippet = (
+      playerId: string,
+      fingerprints: Map<string, (typeof pregameOwnKeyPlayerFingerprints)[number]>
+    ) => {
+      const fingerprint = fingerprints.get(playerId);
+      if (!fingerprint || fingerprint.topZones.length === 0) return '';
+      const zone = fingerprint.topZones[0];
+      return `${zone.label} ${zone.rate.toFixed(0)}%-os súlyponttal`;
+    };
+
+    const buildMatchup = (
+      title: string,
+      ownLeader: ReturnType<typeof pickLeader>,
+      opponentLeader: ReturnType<typeof pickLeader>,
+      tacticalNoteBuilder: (own: NonNullable<typeof ownLeader>, opponent: NonNullable<typeof opponentLeader>, edge: 'own' | 'opponent' | 'even') => string,
+      summaryBuilder: (own: NonNullable<typeof ownLeader>, opponent: NonNullable<typeof opponentLeader>) => string
+    ) => {
+      if (!ownLeader || !opponentLeader) return null;
+      const delta = roundValue(ownLeader.valPer36 - opponentLeader.valPer36, 1);
+      const edge: 'own' | 'opponent' | 'even' = delta >= 2 ? 'own' : delta <= -2 ? 'opponent' : 'even';
+      return {
+        title,
+        edge,
+        ownPlayer: ownLeader.player.name,
+        opponentPlayer: opponentLeader.player.name,
+        summary: summaryBuilder(ownLeader, opponentLeader),
+        tacticalNote: tacticalNoteBuilder(ownLeader, opponentLeader, edge),
+      };
+    };
+
+    const ownPg = pickLeader(pregameOwnPlayers, ['PG'], 'playmaker');
+    const opponentPg = pickLeader(pregameOpponentPlayers, ['PG'], 'playmaker');
+    const ownWing = pickLeader(pregameOwnPlayers, ['SG', 'SF'], 'wing');
+    const opponentWing = pickLeader(pregameOpponentPlayers, ['SG', 'SF'], 'wing');
+    const ownCenter = pickLeader(pregameOwnPlayers, ['C', 'PF'], 'balanced');
+    const opponentCenter = pickLeader(pregameOpponentPlayers, ['C', 'PF'], 'balanced');
+
+    return [
+      buildMatchup(
+        'Irányító csata',
+        ownPg,
+        opponentPg,
+        (own, opponent, edge) => edge === 'opponent'
+          ? `${opponent.player.name} szervezését első passzon kell lassítani; ${own.player.name} labdabiztonsága és AST/TO mutatója tarthatja kontroll alatt a matchupot.`
+          : `${own.player.name} döntéshozatala és tempókontrollja csökkentheti az ellenfél futásainak számát.`,
+        (own, opponent) => {
+          const ownZone = buildZoneSnippet(own.player.playerId, ownFingerprints);
+          const opponentZone = buildZoneSnippet(opponent.player.playerId, opponentFingerprints);
+          return `${own.player.name} ${own.valPer36.toFixed(1)} VAL/36 és ${own.astTo.toFixed(2)} AST/TO, míg ${opponent.player.name} ${opponent.valPer36.toFixed(1)} VAL/36-t hoz. ${ownZone ? `${own.player.name} profilja: ${ownZone}. ` : ''}${opponentZone ? `${opponent.player.name} profilja: ${opponentZone}.` : ''}`.trim();
+        }
+      ),
+      buildMatchup(
+        'Wing csata',
+        ownWing,
+        opponentWing,
+        (_own, opponent, edge) => edge === 'opponent'
+          ? `${opponent.player.name} tiszta külső helyzeteit kell elvenni; a rotáló closeout és a második kilépés fontosabb, mint az egyéni izoláció.`
+          : 'A wing-előny csak akkor vált pontelőnnyé, ha a spacingből jövő triplahelyzetek valóban megérkeznek.',
+        (own, opponent) => `${own.player.name} ${own.threePct.toFixed(1)}% 3P és ${own.threeVolume.toFixed(1)} tripla/meccs, szemben ${opponent.player.name} ${opponent.threePct.toFixed(1)}%-os triplájával. ${buildZoneSnippet(own.player.playerId, ownFingerprints) ? `${own.player.name}: ${buildZoneSnippet(own.player.playerId, ownFingerprints)}. ` : ''}${buildZoneSnippet(opponent.player.playerId, opponentFingerprints) ? `${opponent.player.name}: ${buildZoneSnippet(opponent.player.playerId, opponentFingerprints)}.` : ''}`.trim(),
+      ),
+      buildMatchup(
+        'Center csata',
+        ownCenter,
+        opponentCenter,
+        (_own, opponent, edge) => edge === 'opponent'
+          ? `${opponent.player.name} ellen korai segítség és gyengeoldali visszazárás kell; az izolált posztvédekezés önmagában kevés lehet.`
+          : 'A belső matchup akkor tartható kézben, ha a festékérintésekből nem lesz gyors foulterhelés.',
+        (own, opponent) => `${own.player.name} ${own.valPer36.toFixed(1)} VAL/36 és ${own.fgPct.toFixed(1)}% FG, míg ${opponent.player.name} ${opponent.valPer36.toFixed(1)} VAL/36-t és ${opponent.fgPct.toFixed(1)}% FG-t hoz.`,
+      ),
+    ].filter((item): item is NonNullable<typeof item> => Boolean(item));
+  }, [pregameOpponentKeyPlayerFingerprints, pregameOpponentPlayers, pregameOwnKeyPlayerFingerprints, pregameOwnPlayers, pregameReport]);
+
+  const pregameOptimalLineup = useMemo<PregameOptimalLineupResult | null>(() => {
+    if (!pregameReport || pregameOwnPlayers.length < 5) return null;
+
+    const lineupSlots: Position[] = ['PG', 'SG', 'SF', 'PF', 'C'];
+
+    const getBuckets = (player: PlayerSeasonStat): Position[] => {
+      if (player.positionBuckets?.length) return player.positionBuckets as Position[];
+      return [player.position as Position];
+    };
+
+    const getEligibleSlots = (player: PlayerSeasonStat): Position[] => {
+      const buckets = getBuckets(player);
+      const slots = new Set<Position>();
+
+      buckets.forEach(bucket => {
+        if (bucket === 'PG') {
+          slots.add('PG');
+          slots.add('SG');
+        }
+        if (bucket === 'SG') {
+          slots.add('SG');
+          slots.add('SF');
+        }
+        if (bucket === 'SF') {
+          slots.add('SF');
+          slots.add('PF');
+        }
+        if (bucket === 'PF') slots.add('PF');
+        if (bucket === 'C') slots.add('C');
+      });
+
+      const assistsPerGame = player.ast / Math.max(player.games || 1, 1);
+      if (assistsPerGame >= 4.5 && (slots.has('SG') || buckets.includes('SG'))) {
+        slots.add('PG');
+      }
+
+      return lineupSlots.filter(slot => slots.has(slot));
+    };
+
+    const assignLineupRoles = (players: PlayerSeasonStat[]) => {
+      const orderedPlayers = [...players].sort((a, b) => {
+        const aEligible = getEligibleSlots(a).length;
+        const bEligible = getEligibleSlots(b).length;
+        if (aEligible !== bEligible) return aEligible - bEligible;
+        return (playerMinutesById.get(b.playerId)?.seconds ?? b.minutes ?? 0) - (playerMinutesById.get(a.playerId)?.seconds ?? a.minutes ?? 0);
+      });
+
+      const usedSlots = new Set<Position>();
+      const assignments: Array<{ playerId: string; name: string; role: Position }> = [];
+
+      const walk = (index: number): boolean => {
+        if (index >= orderedPlayers.length) return true;
+        const player = orderedPlayers[index];
+        const eligibleSlots = getEligibleSlots(player);
+        for (const slot of eligibleSlots) {
+          if (usedSlots.has(slot)) continue;
+          usedSlots.add(slot);
+          assignments.push({ playerId: player.playerId, name: player.name, role: slot });
+          if (walk(index + 1)) return true;
+          assignments.pop();
+          usedSlots.delete(slot);
+        }
+        return false;
+      };
+
+      if (!walk(0) || assignments.length !== players.length) return null;
+      return lineupSlots.flatMap(slot => assignments.find(item => item.role === slot) ?? []);
+    };
+
+    const playerMatches = (player: PlayerSeasonStat, positions: Position[]) =>
+      getBuckets(player).some(position => positions.includes(position));
+
+    const combinations = <T,>(items: T[], size: number): T[][] => {
+      const result: T[][] = [];
+      const walk = (start: number, current: T[]) => {
+        if (current.length === size) {
+          result.push([...current]);
+          return;
+        }
+        for (let index = start; index < items.length; index += 1) {
+          current.push(items[index]);
+          walk(index + 1, current);
+          current.pop();
+        }
+      };
+      walk(0, []);
+      return result;
+    };
+
+    const matchNamesToPlayers = (names: string[]) => {
+      const matched: PlayerSeasonStat[] = [];
+      const used = new Set<string>();
+      for (const name of names) {
+        const profiles = [buildNormalizedNameProfile(name)];
+        const player = pregameOwnPlayers.find(candidate => (
+          !used.has(candidate.playerId) && matchesNormalizedNameProfile(candidate.name, profiles)
+        ));
+        if (!player) return null;
+        used.add(player.playerId);
+        matched.push(player);
+      }
+      return matched;
+    };
+
+    const lineupKey = (players: PlayerSeasonStat[]) =>
+      [...players].map(player => player.playerId).sort((a, b) => a.localeCompare(b)).join('|');
+
+    const comboKey = (players: PlayerSeasonStat[]) =>
+      [...players].map(player => player.playerId).sort((a, b) => a.localeCompare(b)).join('|');
+
+    const confidenceFromEvidence = (minutes: number): 'high' | 'medium' | 'low' => (
+      minutes >= 18 ? 'high' : minutes >= 8 ? 'medium' : 'low'
+    );
+
+    const metricBase = pregameOwnPlayers.map(player => {
+      const minutes = Math.max(player.minutes || 0, 1);
+      const games = Math.max(player.games || 0, 1);
+      const valPer36 = (player.val / minutes) * 36;
+      const astPerGame = player.ast / games;
+      const tovPerGame = player.tov / games;
+      const astTo = player.tov > 0 ? player.ast / player.tov : player.ast;
+      const threePct = player.fga3 > 0 ? (player.fgm3 / player.fga3) * 100 : 0;
+      const threeVolume = player.fga3 / games;
+      const reboundsPer36 = ((player.oreb + player.dreb) / minutes) * 36;
+      const blkPer36 = (player.blk / minutes) * 36;
+      const stlPer36 = (player.stl / minutes) * 36;
+      return {
+        player,
+        valPer36,
+        astPerGame,
+        tovPerGame,
+        astTo,
+        threePct,
+        threeVolume,
+        reboundsPer36,
+        blkPer36,
+        stlPer36,
+      };
+    });
+
+    const zScore = (value: number, pool: number[]) => {
+      const filtered = pool.filter(item => Number.isFinite(item));
+      if (filtered.length < 2) return 0;
+      const mean = average(filtered);
+      const sd = stdDev(filtered);
+      if (!Number.isFinite(sd) || sd <= 0.0001) return 0;
+      return (value - mean) / sd;
+    };
+
+    const valPool = metricBase.map(item => item.valPer36);
+    const spacingPool = metricBase.map(item => item.threeVolume * Math.max(item.threePct - 26, 0));
+    const creationPool = metricBase.map(item => item.astPerGame * 1.8 + item.astTo * 1.1 - item.tovPerGame * 0.8);
+    const rimPool = metricBase.map(item => item.reboundsPer36 * 0.35 + item.blkPer36 * 2.2);
+    const securityPool = metricBase.map(item => item.astTo * 1.5 + item.stlPer36 * 0.8 - item.tovPerGame * 0.6);
+
+    const metricByPlayerId = new Map(metricBase.map(item => {
+      const spacingRaw = item.threeVolume * Math.max(item.threePct - 26, 0);
+      const creationRaw = item.astPerGame * 1.8 + item.astTo * 1.1 - item.tovPerGame * 0.8;
+      const rimRaw = item.reboundsPer36 * 0.35 + item.blkPer36 * 2.2;
+      const securityRaw = item.astTo * 1.5 + item.stlPer36 * 0.8 - item.tovPerGame * 0.6;
+      return [item.player.playerId, {
+        talent: zScore(item.valPer36, valPool),
+        spacing: zScore(spacingRaw, spacingPool),
+        creation: zScore(creationRaw, creationPool),
+        rim: zScore(rimRaw, rimPool),
+        security: zScore(securityRaw, securityPool),
+        rawThreePct: item.threePct,
+        rawThreeVolume: item.threeVolume,
+      }] as const;
+    }));
+
+    const opponentPerimeterNeed = clamp01(
+      (pregameReport.llmContext?.opponentDominantAxis === 'periméter' ? 0.3 : 0)
+      + ((pregameReport.profile.offense ?? []).some(item => /periméter/i.test(item)) ? 0.2 : 0)
+      + ((pregameReport.shotProfileContext?.opponentTopZones ?? []).some(zone => /tripla/i.test(zone.label)) ? 0.2 : 0)
+      + (pregameReport.focusPoints.some(item => /periméter|tripla|closeout/i.test(item)) ? 0.2 : 0)
+    );
+    const centerDelta = pregameReport.positionComparison.find(item => item.position === 'C')?.deltaValPer36 ?? 0;
+    const opponentPaintNeed = clamp01(
+      (pregameReport.llmContext?.opponentDominantAxis === 'festék' ? 0.25 : 0)
+      + ((pregameReport.shotProfileContext?.clashZones ?? []).includes('Gyűrű') ? 0.25 : 0)
+      + (centerDelta <= -4 ? 0.25 : 0)
+      + (pregameReport.focusPoints.some(item => /festék|betörés|lepattanó/i.test(item)) ? 0.15 : 0)
+    );
+    const ballSecurityNeed = clamp01(
+      ((pregameReport.profile.defense ?? []).some(item => /labdanyomás/i.test(item)) ? 0.35 : 0)
+      + (pregameReport.focusPoints.some(item => /labdabiztonság|nyomás|letámadás/i.test(item)) ? 0.25 : 0)
+      + (pregameReport.calibrationDiagnostics?.dimensions.some(item => item.key === 'ball_pressure' && item.score >= 55) ? 0.2 : 0)
+    );
+    const boundedPerimeterNeed = roundValue(opponentPerimeterNeed * 0.75, 2);
+    const boundedPaintNeed = roundValue(opponentPaintNeed * 0.75, 2);
+    const boundedBallSecurityNeed = roundValue(ballSecurityNeed * 0.75, 2);
+
+    const naturalCenters = pregameOwnPlayers
+      .filter(player => getBuckets(player).includes('C'))
+      .map(player => {
+        const metric = metricByPlayerId.get(player.playerId);
+        return {
+          player,
+          score: metric
+            ? metric.talent * 1.2 + metric.rim * (1.45 + boundedPaintNeed * 1.35) + metric.security * 0.15 + metric.spacing * 0.05
+            : -99,
+        };
+      })
+      .sort((a, b) => b.score - a.score);
+
+    const topCenter = naturalCenters[0] ?? null;
+
+    const lineupSource = seasonKosarstatLineupTeam;
+    const playerMinutesById = new Map<string, { seconds: number; on40: number | null }>();
+    const exactLineupByKey = new Map<string, { seconds: number; netPer40: number }>();
+    const pairByKey = new Map<string, { seconds: number; netPer40: number }>();
+    const trioByKey = new Map<string, { seconds: number; netPer40: number }>();
+    const incumbentStarterIds = new Set<string>();
+
+    if (lineupSource) {
+      lineupSource.playerMinutes.forEach(item => {
+        const matched = pregameOwnPlayers.find(player => matchesNormalizedNameProfile(item.player, [buildNormalizedNameProfile(player.name)]));
+        if (!matched) return;
+        playerMinutesById.set(matched.playerId, { seconds: item.seconds, on40: item.on40 });
+      });
+
+      lineupSource.stints.forEach(stint => {
+        if (stint.players.length !== 5 || stint.seconds <= 0) return;
+        const matched = matchNamesToPlayers(stint.players);
+        if (!matched || matched.length !== 5) return;
+        exactLineupByKey.set(lineupKey(matched), {
+          seconds: stint.seconds,
+          netPer40: stint.on40 ?? (stint.seconds > 0 ? (stint.plusMinus * 2400) / stint.seconds : 0),
+        });
+      });
+
+      lineupSource.pairStats.forEach(item => {
+        const matched = matchNamesToPlayers(item.players);
+        if (!matched || matched.length !== 2) return;
+        pairByKey.set(comboKey(matched), { seconds: item.seconds, netPer40: item.netPer40 });
+      });
+
+      lineupSource.trioStats.forEach(item => {
+        const matched = matchNamesToPlayers(item.players);
+        if (!matched || matched.length !== 3) return;
+        trioByKey.set(comboKey(matched), { seconds: item.seconds, netPer40: item.netPer40 });
+      });
+
+      const matchedStarters = matchNamesToPlayers(lineupSource.starters);
+      matchedStarters?.forEach(player => incumbentStarterIds.add(player.playerId));
+    }
+
+    const availablePlayersSorted = [...pregameOwnPlayers].sort((a, b) => {
+      const aLineupSeconds = playerMinutesById.get(a.playerId)?.seconds ?? 0;
+      const bLineupSeconds = playerMinutesById.get(b.playerId)?.seconds ?? 0;
+      if (bLineupSeconds !== aLineupSeconds) return bLineupSeconds - aLineupSeconds;
+      if ((b.minutes || 0) !== (a.minutes || 0)) return (b.minutes || 0) - (a.minutes || 0);
+      return (b.val || 0) - (a.val || 0);
+    });
+
+    const candidatePool = availablePlayersSorted.slice(0, Math.min(Math.max(7, pregameOwnPlayers.length), 9));
+    const strictValidity = (players: PlayerSeasonStat[]) => {
+      const roleAssignments = assignLineupRoles(players);
+      if (!roleAssignments) return false;
+      const backcourt = players.filter(player => playerMatches(player, ['PG', 'SG'])).length;
+      const frontcourt = players.filter(player => playerMatches(player, ['PF', 'C'])).length;
+      const wings = players.filter(player => playerMatches(player, ['SG', 'SF'])).length;
+      const handlers = players.filter(player => playerMatches(player, ['PG']) || ((player.games || 0) > 0 && (player.ast / Math.max(player.games, 1)) >= 2.5)).length;
+      return backcourt >= 2 && frontcourt >= 2 && wings >= 1 && handlers >= 1;
+    };
+    const relaxedValidity = (players: PlayerSeasonStat[]) => {
+      if (!assignLineupRoles(players)) return false;
+      const backcourt = players.filter(player => playerMatches(player, ['PG', 'SG'])).length;
+      const frontcourt = players.filter(player => playerMatches(player, ['PF', 'C'])).length;
+      return backcourt >= 1 && frontcourt >= 1;
+    };
+
+    const candidateMap = new Map<string, PlayerSeasonStat[]>();
+    combinations(candidatePool, 5)
+      .filter(strictValidity)
+      .forEach(players => candidateMap.set(lineupKey(players), players));
+
+    if (candidateMap.size === 0) {
+      combinations(candidatePool, 5)
+        .filter(relaxedValidity)
+        .forEach(players => candidateMap.set(lineupKey(players), players));
+    }
+
+    if (lineupSource?.starters?.length === 5) {
+      const matchedStarters = matchNamesToPlayers(lineupSource.starters);
+      if (matchedStarters && matchedStarters.length === 5) {
+        candidateMap.set(lineupKey(matchedStarters), matchedStarters);
+      }
+    }
+
+    [...exactLineupByKey.keys()].forEach(key => {
+      if (candidateMap.has(key)) return;
+      const players = pregameOwnPlayers.filter(player => key.split('|').includes(player.playerId));
+      if (players.length === 5) candidateMap.set(key, players);
+    });
+
+    const evaluated = Array.from(candidateMap.values()).map(players => {
+      const roleAssignments = assignLineupRoles(players);
+      if (!roleAssignments) return null;
+      const exactLineup = exactLineupByKey.get(lineupKey(players)) ?? null;
+      const exactSampleMinutes = exactLineup ? exactLineup.seconds / 60 : 0;
+      const exactComponent = exactLineup
+        ? exactLineup.netPer40 * (exactLineup.seconds / (exactLineup.seconds + 420))
+        : 0;
+
+      const pairSamples = combinations(players, 2)
+        .map(pair => pairByKey.get(comboKey(pair)) ?? null)
+        .filter((item): item is { seconds: number; netPer40: number } => Boolean(item));
+      const trioSamples = combinations(players, 3)
+        .map(trio => trioByKey.get(comboKey(trio)) ?? null)
+        .filter((item): item is { seconds: number; netPer40: number } => Boolean(item));
+
+      const pairSampleMinutes = pairSamples.reduce((sum, item) => sum + item.seconds, 0) / 60;
+      const trioSampleMinutes = trioSamples.reduce((sum, item) => sum + item.seconds, 0) / 60;
+      const pairComponent = pairSamples.length > 0
+        ? average(pairSamples.map(item => item.netPer40 * (item.seconds / (item.seconds + 240)))) * 0.7
+        : 0;
+      const trioComponent = trioSamples.length > 0
+        ? average(trioSamples.map(item => item.netPer40 * (item.seconds / (item.seconds + 180)))) * 0.5
+        : 0;
+
+      const assignedRoleByPlayerId = new Map(roleAssignments.map(item => [item.playerId, item.role] as const));
+      const playerFitComponent = average(players.map(player => {
+        const metric = metricByPlayerId.get(player.playerId);
+        const assignedRole = assignedRoleByPlayerId.get(player.playerId);
+        if (!metric || !assignedRole) return 0;
+
+        if (assignedRole === 'PG') {
+          return (
+            metric.talent * 1.05
+            + metric.creation * (0.8 + boundedBallSecurityNeed)
+            + metric.security * (0.65 + boundedBallSecurityNeed * 0.8)
+            + metric.spacing * (0.15 + boundedPerimeterNeed * 0.35)
+            + metric.rim * 0.05
+          );
+        }
+
+        if (assignedRole === 'SG') {
+          return (
+            metric.talent * 1.05
+            + metric.spacing * (0.75 + boundedPerimeterNeed)
+            + metric.creation * (0.28 + boundedBallSecurityNeed * 0.45)
+            + metric.security * 0.2
+            + metric.rim * 0.05
+          );
+        }
+
+        if (assignedRole === 'SF') {
+          return (
+            metric.talent * 1.1
+            + metric.spacing * (0.5 + boundedPerimeterNeed * 0.6)
+            + metric.creation * 0.22
+            + metric.security * 0.2
+            + metric.rim * (0.2 + boundedPaintNeed * 0.2)
+          );
+        }
+
+        if (assignedRole === 'PF') {
+          return (
+            metric.talent * 1.12
+            + metric.spacing * (0.28 + boundedPerimeterNeed * 0.35)
+            + metric.creation * 0.08
+            + metric.security * 0.12
+            + metric.rim * (0.75 + boundedPaintNeed * 0.65)
+          );
+        }
+
+        return (
+          metric.talent * 1.2
+          + metric.spacing * 0.05
+          + metric.creation * 0.05
+          + metric.security * 0.16
+          + metric.rim * (1.25 + boundedPaintNeed * 1.25)
+        );
+      })) * 1.95;
+
+      const spacingCount = players.filter(player => {
+        const metric = metricByPlayerId.get(player.playerId);
+        return (metric?.rawThreePct ?? 0) >= 33 && (metric?.rawThreeVolume ?? 0) >= 1.2;
+      }).length;
+      const handlerCount = players.filter(player => playerMatches(player, ['PG']) || ((player.ast / Math.max(player.games || 1, 1)) >= 2.5)).length;
+      const bigCount = players.filter(player => playerMatches(player, ['PF', 'C'])).length;
+      const incumbentOverlap = players.filter(player => incumbentStarterIds.has(player.playerId)).length;
+      const lineupMinutes = players.reduce((sum, player) => sum + (playerMinutesById.get(player.playerId)?.seconds ?? 0), 0) / 60;
+      const assignedCenter = roleAssignments.find(item => item.role === 'C');
+      const assignedCenterMetric = assignedCenter ? metricByPlayerId.get(assignedCenter.playerId) : null;
+      const centerAnchorBonus = (() => {
+        if (!assignedCenter || !topCenter) return 0;
+        if (assignedCenter.playerId === topCenter.player.playerId) return 1.4 + boundedPaintNeed * 0.8;
+        const assignedScore = assignedCenterMetric
+          ? assignedCenterMetric.talent * 1.2 + assignedCenterMetric.rim * (1.35 + boundedPaintNeed * 1.2)
+          : -99;
+        const gap = topCenter.score - assignedScore;
+        if (gap >= 1.1) return -2.4;
+        if (gap >= 0.6) return -1.4;
+        if (gap >= 0.25) return -0.7;
+        return -0.15;
+      })();
+
+      let structureBonus = 0;
+      if (spacingCount >= 2) structureBonus += 0.7 + boundedPerimeterNeed * 1.1;
+      if (handlerCount >= 2) structureBonus += 0.45 + boundedBallSecurityNeed * 0.9;
+      if (bigCount >= 2) structureBonus += 0.4 + boundedPaintNeed * 0.95;
+      if (strictValidity(players)) structureBonus += 0.4;
+      structureBonus += centerAnchorBonus;
+
+      const continuityBonus = (() => {
+        let bonus = 0;
+        if (incumbentStarterIds.size > 0) {
+          if (incumbentOverlap >= 5) bonus += 2.2;
+          else if (incumbentOverlap === 4) bonus += 1.5;
+          else if (incumbentOverlap === 3) bonus += 0.7;
+          else if (incumbentOverlap <= 2) bonus -= 0.8;
+        }
+        if (lineupMinutes >= 95) bonus += 1.1;
+        else if (lineupMinutes >= 75) bonus += 0.7;
+        else if (lineupMinutes <= 35) bonus -= 0.5;
+        return bonus;
+      })();
+
+      const totalScore = roundValue(
+        exactComponent * 1.1 + pairComponent + trioComponent + playerFitComponent + structureBonus + continuityBonus,
+        2
+      );
+
+      const evidenceMinutes = exactSampleMinutes + pairSampleMinutes * 0.18 + trioSampleMinutes * 0.14;
+      const certainty = confidenceFromEvidence(evidenceMinutes);
+
+      const reasons: string[] = [];
+      if (exactSampleMinutes >= 4) reasons.push(`van közvetlen szezonos ötösminta (${exactSampleMinutes.toFixed(1)} perc)`);
+      if (pairSampleMinutes >= 14) reasons.push(`erős páros szinergiák támasztják (${pairSampleMinutes.toFixed(1)} párosperc)`);
+      if (incumbentOverlap >= 4) reasons.push('közel marad a megszokott kezdőszerkezethez, ezért rotációsan reálisabb');
+      if (assignedCenter?.playerId === topCenter?.player.playerId) reasons.push(`${assignedCenter.name} a legerősebb természetes center-profil, ezért a modell a 5-ös helyet hozzá húzza`);
+      if (opponentPerimeterNeed >= 0.55 && spacingCount >= 2) reasons.push('jobban nyitja a pályát a periméterfókuszú matchupban');
+      if (ballSecurityNeed >= 0.55 && handlerCount >= 2) reasons.push('stabilabb labdakezelést ad nyomás ellen');
+      if (opponentPaintNeed >= 0.55 && bigCount >= 2) reasons.push('több festékfizikalitást és lepattanót hoz');
+      if (reasons.length === 0) reasons.push('a kis mintát egyéni profil és rész-szinergiák felé shrinkeli a modell');
+
+      return {
+        key: lineupKey(players),
+        players,
+        names: roleAssignments.map(item => item.name),
+        roleAssignments,
+        totalScore,
+        exactSampleMinutes: roundValue(exactSampleMinutes, 1),
+        exactNetPer40: exactLineup ? roundValue(exactLineup.netPer40, 1) : null,
+        pairSampleMinutes: roundValue(pairSampleMinutes, 1),
+        trioSampleMinutes: roundValue(trioSampleMinutes, 1),
+        certainty,
+        reasons: reasons.slice(0, 3),
+      } satisfies PregameOptimalLineupCandidate;
+    })
+      .filter((item): item is PregameOptimalLineupCandidate => Boolean(item))
+      .sort((a, b) => b.totalScore - a.totalScore || b.exactSampleMinutes - a.exactSampleMinutes || b.pairSampleMinutes - a.pairSampleMinutes);
+
+    if (evaluated.length === 0) return null;
+
+    const strongestCenterLineup = topCenter
+      ? evaluated.find(item => item.roleAssignments.some(role => role.role === 'C' && role.playerId === topCenter.player.playerId)) ?? null
+      : null;
+
+    const centerOverrideCandidate = (() => {
+      if (!topCenter || !strongestCenterLineup) return null;
+      const provisionalBest = evaluated[0];
+      const provisionalCenter = provisionalBest.roleAssignments.find(role => role.role === 'C');
+      if (!provisionalCenter || provisionalCenter.playerId === topCenter.player.playerId) return null;
+
+      const scoreGap = provisionalBest.totalScore - strongestCenterLineup.totalScore;
+      const exactMinutesGap = provisionalBest.exactSampleMinutes - strongestCenterLineup.exactSampleMinutes;
+      const pairMinutesGap = provisionalBest.pairSampleMinutes - strongestCenterLineup.pairSampleMinutes;
+      const trioMinutesGap = provisionalBest.trioSampleMinutes - strongestCenterLineup.trioSampleMinutes;
+
+      const hasStrongExactEvidence = provisionalBest.exactSampleMinutes >= 8 && exactMinutesGap >= 5;
+      const hasStrongSynergyEdge = pairMinutesGap >= 18 || trioMinutesGap >= 12;
+      const hasClearOverallEdge = scoreGap >= 3.2;
+
+      if (hasClearOverallEdge && hasStrongExactEvidence && hasStrongSynergyEdge) {
+        return null;
+      }
+
+      return strongestCenterLineup;
+    })();
+
+    const best = centerOverrideCandidate ?? evaluated[0];
+    const alternates = evaluated.filter(item => item.key !== best.key).slice(0, 2);
+    const primaryNeed = opponentPerimeterNeed >= opponentPaintNeed && opponentPerimeterNeed >= ballSecurityNeed
+      ? 'periméter'
+      : opponentPaintNeed >= ballSecurityNeed
+        ? 'festék'
+        : 'labdabiztonság';
+
+    return {
+      best,
+      alternates,
+      candidateCount: evaluated.length,
+      sourceGames: seasonKosarstatLineupGames,
+      matchupWeights: {
+        perimeter: roundValue(boundedPerimeterNeed * 100, 0),
+        paint: roundValue(boundedPaintNeed * 100, 0),
+        ballSecurity: roundValue(boundedBallSecurityNeed * 100, 0),
+      },
+      headline: centerOverrideCandidate
+        ? `A modell elsődleges matchup-fókusza most a ${primaryNeed}, de a legerősebb természetes center csak erős mintabeli fölénnyel szorítható ki, ezért itt a center-prior felülírta a puszta rotációs kényelmet.`
+        : `A modell elsődleges matchup-fókusza most a ${primaryNeed}, de a valós rotációhoz közeli szerkezetet és a megszokott kezdők priorját is külön visszasúlyozza.`
+    };
+  }, [pregameOwnPlayers, pregameReport, seasonKosarstatLineupGames, seasonKosarstatLineupTeam]);
 
   const pregameStyleMetricChartData = useMemo(() => {
     if (!pregameOwnTeam || !pregameOpponentTeam) return [] as Array<{
@@ -9152,6 +9876,13 @@ export function SeasonComparison({
         body: JSON.stringify({
           gameId: selectedGame?.id ?? selectedGameId ?? null,
           pregameReport,
+          headToHeadSummary: pregameHeadToHeadSummary,
+          keyMatchups: pregameKeyMatchups,
+          focusPriority: {
+            pressure: pregamePressureWeight,
+            perimeter: pregamePerimeterWeight,
+            paint: Math.max(0, 100 - pregamePressureWeight - pregamePerimeterWeight),
+          },
           ownTeamId: ownTeamIdPayload,
           ownTeamName: ownTeamNamePayload,
           opponentTeamId: opponentTeamIdPayload,
@@ -12408,9 +13139,9 @@ export function SeasonComparison({
             const efficiencyBaseline = pregameEfficiencyBaseline;
             const efficiencyModel = pregameEfficiencyModel;
             const ownOffenseLabels = ownProfile?.offense?.length ? ownProfile.offense : ['Kiegyensúlyozott támadás'];
-            const ownDefenseLabels = ownProfile?.defense?.length ? ownProfile.defense : ['Korlátozott védőprofil adat'];
+            const ownDefenseLabels = ownProfile?.defense?.length ? ownProfile.defense : ['Nincs kiugró védőszignatúra'];
             const opponentOffenseLabels = opponentProfile?.offense?.length ? opponentProfile.offense : ['Kiegyensúlyozott támadás'];
-            const opponentDefenseLabels = opponentProfile?.defense?.length ? opponentProfile.defense : ['Korlátozott védőprofil adat'];
+            const opponentDefenseLabels = opponentProfile?.defense?.length ? opponentProfile.defense : ['Nincs kiugró védőszignatúra'];
             const pressureWeight = pregamePressureWeight;
             const perimeterWeight = pregamePerimeterWeight;
             const paintWeight = Math.max(0, 100 - pressureWeight - perimeterWeight);
@@ -12433,9 +13164,9 @@ export function SeasonComparison({
             const adjustedScenarioOutcomes = (pregameReport.scenarioOutcomes ?? []).map(scenario => {
               let interactiveDelta = 0;
               if (scenario.key === 'controlled_tempo') {
-                interactiveDelta = (paintWeight - 33) * 0.06 + (pressureWeight - 33) * 0.03 + (perimeterWeight - 33) * 0.02;
+                interactiveDelta = (perimeterWeight - 33) * 0.17 + (paintWeight - 33) * 0.05 + (pressureWeight - 33) * 0.03;
               } else if (scenario.key === 'high_variance') {
-                interactiveDelta = (pressureWeight - 33) * 0.04 - (perimeterWeight - 33) * 0.06;
+                interactiveDelta = (perimeterWeight - 33) * 0.12 + (paintWeight - 33) * 0.02 - (pressureWeight - 33) * 0.04;
               }
               const ownPct = Math.max(8, Math.min(92, scenario.ownPct + interactiveDelta));
               const opponentPct = 100 - ownPct;
@@ -12457,6 +13188,7 @@ export function SeasonComparison({
               label: item.label,
               score: item.score,
               note: item.note,
+              context: item.context,
             }));
 
             const shotProfileChartData = shotProfileContext
@@ -12507,6 +13239,28 @@ export function SeasonComparison({
               { label: 'Periméter', value: perimeterWeight, fill: '#38bdf8' },
               { label: 'Festék', value: paintWeight, fill: '#10b981' },
             ];
+            const overallIntensityLabel = calibrationDiagnostics
+              ? calibrationDiagnostics.overallIntensity >= 70
+                ? 'Magas'
+                : calibrationDiagnostics.overallIntensity >= 45
+                  ? 'Közepes'
+                  : 'Alacsony'
+              : null;
+            const recommendedFocusPreset = (() => {
+              const strongestDimension = [...(calibrationDiagnostics?.dimensions ?? [])]
+                .sort((a, b) => b.score - a.score)[0];
+              if (!strongestDimension) return null;
+              if (strongestDimension.key === 'perimeter_pressure') {
+                return { label: 'Periméter-prioritás', pressure: 25, perimeter: 50, paint: 25 };
+              }
+              if (strongestDimension.key === 'ball_pressure') {
+                return { label: 'Labdanyomás-prioritás', pressure: 45, perimeter: 30, paint: 25 };
+              }
+              if (strongestDimension.key === 'paint_edge') {
+                return { label: 'Festék-prioritás', pressure: 25, perimeter: 30, paint: 45 };
+              }
+              return { label: 'Kiegyensúlyozott', pressure: 33, perimeter: 34, paint: 33 };
+            })();
             const axisLabelMap: Record<'transition' | 'periméter' | 'festék', string> = {
               transition: 'átmeneti játék',
               periméter: 'periméter',
@@ -12515,6 +13269,8 @@ export function SeasonComparison({
             const formatDelta = (value: number) => `${value >= 0 ? '+' : ''}${value.toFixed(1)}`;
             const topFocusPoints = prioritizedFocusPoints.slice(0, 5);
             const secondaryFocusPoints = prioritizedFocusPoints.slice(5);
+            const controlledScenario = adjustedScenarioOutcomes.find(item => item.key === 'controlled_tempo') ?? null;
+            const highVarianceScenario = adjustedScenarioOutcomes.find(item => item.key === 'high_variance') ?? null;
             const pregameXAxisProps = {
               stroke: '#94a3b8',
               tick: { fill: '#94a3b8', fontSize: 10 },
@@ -12619,8 +13375,9 @@ export function SeasonComparison({
                       </div>
                     )}
                     {(effectiveTeamAnalysis?.leagueProfile.clusterPeers?.length ?? 0) > 0 && (
-                      <div className="text-xs text-slate-500">
-                        Klaszter-társak: {effectiveTeamAnalysis?.leagueProfile.clusterPeers.join(', ')}
+                      <div className="text-xs text-slate-500 space-y-1">
+                        <div>Klaszter-társak: {effectiveTeamAnalysis?.leagueProfile.clusterPeers.join(', ')}</div>
+                        <div>Ez stílusrokonságot jelez, nem közvetlen H2H- vagy eredménybizonyítékot.</div>
                       </div>
                     )}
                   </div>
@@ -12643,6 +13400,84 @@ export function SeasonComparison({
                               <div key={`fan-risk-${item}`} className="text-slate-200">• {item}</div>
                             )) : <div className="text-slate-500">Nincs kiemelt kockázat.</div>}
                           </div>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="p-3 bg-slate-800/50 rounded-lg space-y-2">
+                      <div className="text-sm text-slate-300 font-medium">Head-to-head</div>
+                      {pregameHeadToHeadSummary.games > 0 ? (
+                        <>
+                          <div className="text-sm text-slate-100">
+                            {ownLabel} vs {opponentLabel}: {pregameHeadToHeadSummary.ownWins}-{pregameHeadToHeadSummary.opponentWins}
+                          </div>
+                          <div className="text-xs text-slate-400">
+                            Átlagpontok: {pregameHeadToHeadSummary.ownAvgPoints.toFixed(1)} - {pregameHeadToHeadSummary.opponentAvgPoints.toFixed(1)}
+                            {' '}({pregameHeadToHeadSummary.games} meccs)
+                          </div>
+                        </>
+                      ) : (
+                        <div className="text-sm text-slate-400">Első találkozó a szezonban.</div>
+                      )}
+                    </div>
+
+                    {pregameOptimalLineup && (
+                      <div className="p-3 bg-slate-800/50 rounded-lg space-y-3">
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <div className="text-sm text-slate-300 font-medium">Ajánlott kezdő ötös az ellenfél ellen</div>
+                          <div className={`text-[11px] px-2 py-1 rounded-full border ${
+                            pregameOptimalLineup.best.certainty === 'high'
+                              ? 'border-emerald-700/50 bg-emerald-950/30 text-emerald-200'
+                              : pregameOptimalLineup.best.certainty === 'medium'
+                                ? 'border-amber-700/50 bg-amber-950/30 text-amber-200'
+                                : 'border-slate-700 bg-slate-900/40 text-slate-300'
+                          }`}>
+                            Bizonyosság: {pregameOptimalLineup.best.certainty === 'high' ? 'magas' : pregameOptimalLineup.best.certainty === 'medium' ? 'közepes' : 'alacsony'}
+                          </div>
+                        </div>
+                        <div className="text-xs text-slate-400">{pregameOptimalLineup.headline}</div>
+                        <div className="flex flex-wrap gap-2">
+                          {pregameOptimalLineup.best.roleAssignments.map(item => (
+                            <Badge key={`pregame-optimal-${item.playerId}-${item.role}`} variant="secondary" className="bg-sky-900/30 text-sky-100 border border-sky-700/50">
+                              {item.role}: {item.name}
+                            </Badge>
+                          ))}
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs">
+                          <div className="rounded-md border border-slate-800 bg-slate-900/40 px-3 py-2">
+                            <div className="text-slate-500">Közvetlen ötösminta</div>
+                            <div className="text-slate-100 mt-1">{pregameOptimalLineup.best.exactSampleMinutes.toFixed(1)} perc</div>
+                            <div className="text-slate-500">{pregameOptimalLineup.best.exactNetPer40 !== null ? `${pregameOptimalLineup.best.exactNetPer40 >= 0 ? '+' : ''}${pregameOptimalLineup.best.exactNetPer40.toFixed(1)} net/40` : 'nincs direkt ötösminta'}</div>
+                          </div>
+                          <div className="rounded-md border border-slate-800 bg-slate-900/40 px-3 py-2">
+                            <div className="text-slate-500">Páros / trió háttér</div>
+                            <div className="text-slate-100 mt-1">{pregameOptimalLineup.best.pairSampleMinutes.toFixed(1)} / {pregameOptimalLineup.best.trioSampleMinutes.toFixed(1)} perc</div>
+                            <div className="text-slate-500">szinergia-shrinkage a kis mintára</div>
+                          </div>
+                          <div className="rounded-md border border-slate-800 bg-slate-900/40 px-3 py-2">
+                            <div className="text-slate-500">Matchup-súlyok</div>
+                            <div className="text-slate-100 mt-1">Periméter {pregameOptimalLineup.matchupWeights.perimeter}%</div>
+                            <div className="text-slate-400">Festék {pregameOptimalLineup.matchupWeights.paint}% • Labdabiztonság {pregameOptimalLineup.matchupWeights.ballSecurity}%</div>
+                          </div>
+                        </div>
+                        <div className="space-y-1 text-xs text-slate-300">
+                          {pregameOptimalLineup.best.reasons.map(reason => (
+                            <div key={`pregame-optimal-reason-${reason}`}>• {reason}</div>
+                          ))}
+                        </div>
+                        {pregameOptimalLineup.alternates.length > 0 && (
+                          <div className="rounded-md border border-slate-800 bg-slate-900/40 px-3 py-2 space-y-2">
+                            <div className="text-xs uppercase tracking-wide text-slate-500">Alternatív kezdő variációk</div>
+                            {pregameOptimalLineup.alternates.map(option => (
+                              <div key={`pregame-alt-${option.key}`} className="text-xs text-slate-300">
+                                <span className="text-slate-100">{option.roleAssignments.map(item => `${item.role}: ${item.name}`).join(', ')}</span>
+                                {' '}• {option.reasons[0] ?? 'alternatív szerkezeti válasz'}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        <div className="text-[11px] text-slate-500">
+                          Forrás: {pregameOptimalLineup.sourceGames > 0 ? `${pregameOptimalLineup.sourceGames} aggregált Kosarstat lineup-meccs` : 'egyéni és matchup profil'} • {pregameOptimalLineup.candidateCount} vizsgált ötös.
                         </div>
                       </div>
                     )}
@@ -12967,6 +13802,33 @@ export function SeasonComparison({
                           );
                         })}
                       </div>
+
+                      {pregameKeyMatchups.length > 0 && (
+                        <div className="mt-4 space-y-2">
+                          <div className="text-sm text-slate-300 font-medium">Kritikus párosítások</div>
+                          <div className="grid grid-cols-1 xl:grid-cols-3 gap-3">
+                            {pregameKeyMatchups.map(item => (
+                              <div key={`${item.title}-${item.ownPlayer}-${item.opponentPlayer}`} className="rounded-md border border-slate-800 bg-slate-900/40 p-3 space-y-2">
+                                <div className="flex items-center justify-between gap-2">
+                                  <div className="text-sm text-slate-100 font-medium">{item.title}</div>
+                                  <div className={`text-[11px] px-2 py-1 rounded-full border ${
+                                    item.edge === 'own'
+                                      ? 'border-emerald-700/50 bg-emerald-950/30 text-emerald-200'
+                                      : item.edge === 'opponent'
+                                        ? 'border-rose-700/50 bg-rose-950/30 text-rose-200'
+                                        : 'border-slate-700 bg-slate-800 text-slate-300'
+                                  }`}>
+                                    {item.edge === 'own' ? 'Saját él' : item.edge === 'opponent' ? 'Ellenfél él' : 'Kiegyenlített'}
+                                  </div>
+                                </div>
+                                <div className="text-xs text-slate-400">{item.ownPlayer} vs {item.opponentPlayer}</div>
+                                <div className="text-xs text-slate-300">{item.summary}</div>
+                                <div className="text-xs text-amber-200">Taktikai kulcs: {item.tacticalNote}</div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
@@ -13000,7 +13862,14 @@ export function SeasonComparison({
                           <div>
                             <div className="text-xs uppercase tracking-wide text-slate-500 mb-1">Feltételes sebezhetőségek</div>
                             {pregameReport.vulnerabilities.length > 0 ? (
-                              pregameReport.vulnerabilities.map(item => <div key={item} className="text-slate-200">• {item}</div>)
+                              <>
+                                {pregameReport.vulnerabilities.map(item => <div key={item} className="text-slate-200">• {item}</div>)}
+                                {pregameReport.vulnerabilities.includes('Kevés büntető') && (
+                                  <div className="text-xs text-amber-200 mt-1">
+                                    Exploit: agresszív festéktámadás és korai belső érintések, hogy a meccs ne csak tripla-varianciára üljön fel.
+                                  </div>
+                                )}
+                              </>
                             ) : (
                               <div className="text-slate-400">Matchupfüggő, rendszerszintű rés nem látszik.</div>
                             )}
@@ -13048,7 +13917,7 @@ export function SeasonComparison({
 
                   <div className="p-3 bg-slate-800/50 rounded-lg space-y-3">
                     <div className="text-sm text-slate-300 font-medium">Interaktív fókusz prioritás</div>
-                    <div className="text-xs text-slate-400">Súlyozd a meccsterv hangsúlyait, a forgatókönyvek azonnal frissülnek.</div>
+                    <div className="text-xs text-slate-400">Súlyozd a meccsterv hangsúlyait; a kontrollált és a magas varianciás forgatókönyv azonnal újraszámolódik.</div>
                     <div className="space-y-2 text-xs text-slate-300">
                       <label className="block">
                         <div className="flex justify-between mb-1"><span>Labdanyomás</span><span>{pressureWeight}%</span></div>
@@ -13075,6 +13944,21 @@ export function SeasonComparison({
                         />
                       </label>
                       <div className="flex justify-between"><span>Festék kontroll (auto)</span><span>{paintWeight}%</span></div>
+                    </div>
+                    <div className="rounded-md border border-slate-800 bg-slate-900/40 px-3 py-2 text-xs text-slate-300 space-y-1">
+                      <div>Slider-hatás: labdanyomás emelése a press, visszazárás és TO-kontroll hangsúlyát növeli.</div>
+                      <div>Periméter kontroll emelése a closeout-fegyelmet és a tiszta triplahelyzetek elvételét priorizálja.</div>
+                      <div>Festék kontroll emelése a help-rotációt, rim protectiont és belső segítséget tolja előtérbe.</div>
+                      {recommendedFocusPreset && (
+                        <div className="text-amber-200">
+                          Ajánlott preset ehhez a matchuphoz: {recommendedFocusPreset.label} ({recommendedFocusPreset.pressure}-{recommendedFocusPreset.perimeter}-{recommendedFocusPreset.paint}).
+                        </div>
+                      )}
+                      {(controlledScenario || highVarianceScenario) && (
+                        <div className="text-slate-400">
+                          Aktuális hatás: kontrollált forgatókönyv {controlledScenario ? `${controlledScenario.deltaVsBase >= 0 ? '+' : ''}${controlledScenario.deltaVsBase.toFixed(1)} pp` : 'n.a.'}, magas variancia {highVarianceScenario ? `${highVarianceScenario.deltaVsBase >= 0 ? '+' : ''}${highVarianceScenario.deltaVsBase.toFixed(1)} pp` : 'n.a.'} az alapmodellhez képest.
+                        </div>
+                      )}
                     </div>
 
                     <ResponsiveContainer width="100%" height={128}>
@@ -13418,6 +14302,9 @@ export function SeasonComparison({
                         Össz-intenzitás: {calibrationDiagnostics.overallIntensity.toFixed(1)}
                       </div>
                     </div>
+                    <div className="text-xs text-slate-400">
+                      {calibrationDiagnostics.scaleLabel ?? '0-100 matchup-intenzitás skála'} • {overallIntensityLabel ? `${overallIntensityLabel} nehézségű matchup.` : ''} {calibrationDiagnostics.summary ?? ''}
+                    </div>
                     <ResponsiveContainer width="100%" height={240}>
                       <BarChart data={calibrationChartData} layout="vertical" margin={{ top: 8, right: 10, left: 18, bottom: 8 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
@@ -13441,8 +14328,18 @@ export function SeasonComparison({
                         </Bar>
                       </BarChart>
                     </ResponsiveContainer>
-                    <div className="text-xs text-slate-400">
-                      Ez a blokk mutatja, hogy a modell mely matchup-tengelyeket tekinti a legfontosabbnak a jelenlegi párosításban.
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 text-xs">
+                      {calibrationChartData.map(item => (
+                        <div key={`calibration-detail-${item.label}`} className="rounded-md border border-slate-800 bg-slate-900/40 px-3 py-2">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-slate-200">{item.label}</span>
+                            <span className={item.score >= 70 ? 'text-rose-300' : item.score >= 45 ? 'text-amber-300' : 'text-emerald-300'}>
+                              {item.score.toFixed(1)} • {item.note}
+                            </span>
+                          </div>
+                          {item.context && <div className="text-slate-500 mt-1">{item.context}</div>}
+                        </div>
+                      ))}
                     </div>
                   </div>
                 )}
@@ -13579,34 +14476,32 @@ export function SeasonComparison({
                   </div>
                 </div>
 
-                {(pregameReport.injuryContext?.own?.length || pregameReport.injuryContext?.opponent?.length) && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <div className="text-sm text-slate-300 font-medium mb-2">Saját sérültek</div>
-                      {pregameReport.injuryContext?.own?.length ? (
-                        pregameReport.injuryContext.own.map(name => (
-                          <div key={`own-injury-${name}`} className="text-sm text-slate-200">
-                            • {name}
-                          </div>
-                        ))
-                      ) : (
-                        <div className="text-sm text-slate-400">Nincs megjelölt kihagyó.</div>
-                      )}
-                    </div>
-                    <div>
-                      <div className="text-sm text-slate-300 font-medium mb-2">Ellenfél sérültek</div>
-                      {pregameReport.injuryContext?.opponent?.length ? (
-                        pregameReport.injuryContext.opponent.map(name => (
-                          <div key={`opp-injury-${name}`} className="text-sm text-slate-200">
-                            • {name}
-                          </div>
-                        ))
-                      ) : (
-                        <div className="text-sm text-slate-400">Nincs megjelölt kihagyó.</div>
-                      )}
-                    </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <div className="text-sm text-slate-300 font-medium mb-2">Saját sérültek / hiányzók</div>
+                    {pregameReport.injuryContext?.own?.length ? (
+                      pregameReport.injuryContext.own.map(name => (
+                        <div key={`own-injury-${name}`} className="text-sm text-slate-200">
+                          • {name}
+                        </div>
+                      ))
+                    ) : (
+                      <div className="text-sm text-slate-400">Nincs megjelölt kihagyó.</div>
+                    )}
                   </div>
-                )}
+                  <div>
+                    <div className="text-sm text-slate-300 font-medium mb-2">Ellenfél sérültek / hiányzók</div>
+                    {pregameReport.injuryContext?.opponent?.length ? (
+                      pregameReport.injuryContext.opponent.map(name => (
+                        <div key={`opp-injury-${name}`} className="text-sm text-slate-200">
+                          • {name}
+                        </div>
+                      ))
+                    ) : (
+                      <div className="text-sm text-slate-400">Nincs megjelölt kihagyó.</div>
+                    )}
+                  </div>
+                </div>
 
                 {advancedPlayers && (
                   <div className="p-3 bg-slate-800/50 rounded-lg space-y-3">
@@ -13695,7 +14590,7 @@ export function SeasonComparison({
                         {isGeneratingPregameText ? 'Pre-game értékelés készítése…' : 'Pre-game GPT értékelés'}
                       </Button>
                       <div className="text-xs text-slate-400">
-                        Szigorúan adat-alapú, 6–10 mondatos összefoglaló készül.
+                        Szigorúan adat-alapú, 6 rövid bekezdéses összefoglaló készül.
                       </div>
                     </div>
                     {pregameSaveStatus && (

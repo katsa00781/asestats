@@ -26,7 +26,7 @@ const MAX_RESPONSE_MS = 45_000;
 const OPENAI_URL = process.env.OPENAI_API_URL ?? 'https://api.openai.com/v1/chat/completions';
 const OPENAI_MODEL = process.env.OPENAI_MODEL ?? 'gpt-4.1-mini';
 
-const SYSTEM_PROMPT = `Te a klub elemzője vagy, aki szurkolóbarát, közérthető, mégis szakmai pre-game értékelést ír.
+const SYSTEM_PROMPT = `Te a klub elemzője vagy, aki szurkolóbarát, könnyen olvasható, mégis adatalapú pre-game értékelést ír.
 Kötelező szabályok:
 - Kizárólag a kapott, algoritmus által számolt adatokból dolgozhatsz.
 - Nem találhatsz ki új mutatót, százalékot, előnyt vagy kockázatot.
@@ -35,9 +35,14 @@ Kötelező szabályok:
 - A dobástérkép vagy shot-profile megállapításokat csak zónaszintű megfogalmazásban használd, ne találj ki nem adott védekezési engedési adatot.
 - Ha az ellenfél tripla-volumene vagy periméteres shot-profile-ja erős, ezt ne szorítsd háttérbe pusztán azért, mert a gyűrűnél is hatékony; ilyenkor a periméter-fenyegetést és a festékharcot együtt, súlyozottan írd le.
 - Magyar kosárlabda-szaknyelvet használj, angol zsargont kerüld.
-- A szöveg legyen leíró, olvasmányos, logikusan felépített.
+- A szöveg legyen leíró, olvasmányos, könnyen követhető és inkább szurkolói olvasásra optimalizált.
 - Folyamatos, értelmes magyar mondatokban írj, ne kulcsszó-listákkal.
-- Ha új mezők vannak (scenarioOutcomes, xFactorImpact, riskScenarios, calibrationDiagnostics, advancedPlayers), azokat természetes nyelven építsd be.`;
+- Ha új mezők vannak (scenarioOutcomes, xFactorImpact, riskScenarios, calibrationDiagnostics, advancedPlayers), azokat természetes nyelven építsd be.
+- A végső szöveg pontosan 6 rövid bekezdésből álljon.
+- Kerüld a redundanciát: ugyanazt a periméter-, tripla- vagy festékveszélyt csak egyszer nevezd meg fő kockázatként, később már csak következményként hivatkozz rá.
+- Ne legyen túl scouting-jellegű: kevesebb zsúfolt statnév, több egyszerű következtetés és meccsképre fordított magyarázat.
+- Ha technikai mutatót említesz, azonnal fordítsd le közérthető jelentésre is.
+- Törekedj kb. 260-340 szóra.`;
 
 const USER_PROMPT_TEMPLATE = `KONTEXTUS:
 - Elemzés nézőpontja: [CSAPAT_NEVE] (esélyük: X%)
@@ -83,6 +88,7 @@ SZERKEZET:
 8. Haladó játékosmutatók (kötelező, ha van advancedPlayers)
   - Nevesíts 1-1 saját és ellenfél játékost PER*/WS* alapon.
   - Röviden jelezd, hogy perc-küszöb szűrés után kerültek be (marginális percek kizárva).
+  - Kötelező figyelmeztetés: a PER* / WS* saját proxy, nem hivatalos NBA mutató.
 
 9. Dobástérkép / shot-profile (kötelező, ha van shotProfileContext)
   - Nevezd meg a legfontosabb saját és ellenfél zónát.
@@ -90,13 +96,20 @@ SZERKEZET:
   - Ne írj olyan védekezési következtetést, amire nincs explicit adat.
   - Ha az ellenfél magas tripla-volumennel dolgozik vagy a fő zónái között tripla-zóna szerepel, ne nevezd a festéket kizárólagos fő csatatérnek, hacsak a strukturált input nem ezt támasztja alá egyértelműen.
 
+10. Extra kontextus (ha van extraContext)
+  - headToHeadSummary.games > 0 esetén 1 rövid mondatban építsd be a H2H-t.
+  - Ha headToHeadSummary.games = 0, írd le, hogy ez az első találkozó a szezonban.
+  - keyMatchups esetén legalább 2 konkrét párosítást nevezz meg.
+  - focusPriority esetén röviden jelezd, melyik hangsúly dominál a meccstervben.
+
 STÍLUS ELVÁRÁS:
-- Írj 12-16 mondatot, rövid bekezdésekben.
+- Írj pontosan 6 rövid bekezdést.
 - Legyen olvasmányos, szurkolóbarát, de ne bulváros.
+- Írj úgy, mintha egy meccs elé készülő érdeklődő szurkolónak magyaráznál, nem edzői stábnak.
 - Adj rövid, közérthető magyarázatot arra, miért fontos egy-egy statisztikai jel.
 - Mondatszintű, összefüggő elemzést adj: legyen bevezetés, közép és lezárás.
 - Használj magyar szaknyelvet: tempó, labdanyomás, visszarendeződés, festékvédekezés, faultterhelés, lepattanóharc.
-- Kerüld a gépies felsorolást és a sablonos ismétlést.
+- Kerüld a gépies felsorolást, a sablonos ismétlést és a túl sűrű stat-halmazást.
 
 TILOS:
 - Általános kijelentések játékstílus nélkül ("gyors csapat" – miből derül ki?)
@@ -112,6 +125,27 @@ STRUKTURÁLT ADATOK (változtatás nélkül dolgozz velük):
 type PregameTextPayload = {
   gameId?: string | null;
   pregameReport: ScoutingReport;
+  headToHeadSummary?: {
+    games: number;
+    ownWins: number;
+    opponentWins: number;
+    ownAvgPoints: number;
+    opponentAvgPoints: number;
+    note: string;
+  } | null;
+  keyMatchups?: Array<{
+    title: string;
+    edge: 'own' | 'opponent' | 'even';
+    ownPlayer: string;
+    opponentPlayer: string;
+    summary: string;
+    tacticalNote: string;
+  }>;
+  focusPriority?: {
+    pressure: number;
+    perimeter: number;
+    paint: number;
+  } | null;
   ownTeamName?: string | null;
   opponentTeamName?: string | null;
   ownTeamId?: string | null;
@@ -142,6 +176,11 @@ const buildUserPrompt = (payload: PregameTextPayload) => {
     ownTeamName: resolveOwnTeamName(payload),
     opponentTeamName: resolveOpponentTeamName(payload),
     report: payload.pregameReport,
+    extraContext: {
+      headToHeadSummary: payload.headToHeadSummary ?? null,
+      keyMatchups: payload.keyMatchups ?? [],
+      focusPriority: payload.focusPriority ?? null,
+    },
   };
   return USER_PROMPT_TEMPLATE.replace(
     '{{PRE_GAME_ANALYSIS_OBJECT}}',

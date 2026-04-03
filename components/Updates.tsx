@@ -15,6 +15,15 @@ type UpdateItem = {
 
 const updates: UpdateItem[] = [
   {
+    date: '2026. április 3.',
+    version: '1.7.7',
+    category: 'improvement',
+    icon: <BarChart3 className="w-5 h-5" />,
+    title: 'Pregame mélyítés: pontosabb matchup-kép és szigorúbb kezdőötös-ajánló',
+    description:
+      'A pregame nézet új head-to-head összegzést, kritikus játékos-párosításokat, részletesebb kalibrációs magyarázatot és szurkolóbarátabb, pontosan 6 rövid bekezdéses GPT értékelést kapott. Emellett elkészült az ellenfélfüggő ajánlott kezdő ötös blokk is, amely szerepkiosztással, lineup/páros/trió mintákkal és matchup-súlyokkal indokolja a javaslatot. A logika külön szigorítást kapott a center posztra: a legerősebb természetes center most már csak valóban erős szezonos lineup-bizonyíték mellett szorítható ki a kezdőből.',
+  },
+  {
     date: '2026. április 2.',
     version: '1.7.6',
     category: 'improvement',

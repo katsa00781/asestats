@@ -180,10 +180,13 @@ export type CalibrationDimension = {
   label: string;
   score: number;
   note: string;
+  context?: string;
 };
 
 export type CalibrationDiagnostics = {
   overallIntensity: number;
+  scaleLabel?: string;
+  summary?: string;
   dimensions: CalibrationDimension[];
 };
 
@@ -806,6 +809,12 @@ const buildShotProfileContext = (
   if (clashZones.length > 0) {
     notes.push(`Zónaütközés: mindkét csapat hangsúlyosan támadja a következő területeket: ${clashZones.join(', ')}.`);
   }
+  if (clashZones.includes('Gyűrű')) {
+    defenseNotes.push('Gyűrű-zónaütközés: a mérkőzés gerince a festékharc lehet, ezért help-védekezés és korai visszarendeződés is kritikus.');
+  }
+  if (clashZones.includes('Sarok tripla') || clashZones.includes('Egyéb tripla')) {
+    defenseNotes.push('Periméter-zónaütközés: a closeout-fegyelem és a tiszta triplahelyzetek limitálása közvetlenül swingeli a varianciát.');
+  }
 
   const ownBestAttackVsOpponentDefense = ownZones
     .map(zone => {
@@ -1223,6 +1232,9 @@ const buildFocusPoints = (
   if (scoreBelow(benchmarks, opponent, 'two_rate', 40) && scoreAbove(benchmarks, ownTeam, 'two_rate', 60)) {
     focus.push('Festékelőny erőltetése (ellenfél alacsony 2P-fókusz)');
   }
+  if (scoreBelow(benchmarks, opponent, 'ft_rate', 40) && scoreAbove(benchmarks, ownTeam, 'two_rate', 55)) {
+    focus.push('Festéktámadásból büntetők kiharcolása, drive-and-kick és korai belső érintések erőltetése');
+  }
 
   if (scoreAbove(benchmarks, opponent, 'stl_per_game', 60) && scoreAbove(benchmarks, ownTeam, 'turnover_rate', 50)) {
     focus.push('Labdabiztonság vs labdanyomás, egyszerűsített döntések, letámadás-bontó sémák');
@@ -1308,25 +1320,40 @@ const buildCriticalMatchupNote = (
   winProbability: ScoutingReport['winProbability'],
   ownTeamName: string
 ) => {
-  if (winProbability.predictedWinner !== 'own') return '';
-  const critical = positionComparison.find(item => item.matchupFlag === 'critical_disadvantage');
-  if (!critical) return '';
+  const biggestNegative = positionComparison
+    .filter(item => item.deltaValPer36 <= -2)
+    .sort((a, b) => a.deltaValPer36 - b.deltaValPer36)[0];
+  const biggestPositive = positionComparison
+    .filter(item => item.deltaValPer36 >= 2)
+    .sort((a, b) => b.deltaValPer36 - a.deltaValPer36)[0];
 
-  const compensatingPositions = positionComparison
-    .filter(item => item.deltaValPer36 >= 5)
-    .map(item => POSITION_LABELS[item.position] ?? item.position);
+  if (!biggestNegative && !biggestPositive) return '';
 
-  const joinLabels = (labels: string[]) => {
-    if (labels.length === 0) return '';
-    if (labels.length === 1) return labels[0];
-    return labels.join('-');
-  };
+  const parts: string[] = [];
 
-  const compensationCore = compensatingPositions.length > 0
-    ? `${joinLabels(compensatingPositions)} posztjain mutatkozó fölénye`
-    : 'rendszerszintű szervezettsége';
+  if (biggestNegative) {
+    parts.push(
+      `a ${POSITION_LABELS[biggestNegative.position]} poszton van a legnagyobb rés (${biggestNegative.deltaValPer36} VAL/36)`
+    );
+  }
 
-  return `Megjegyzés: a ${POSITION_LABELS[critical.position]} poszt jelentős matchup-hátránya (${critical.deltaValPer36} VAL/36), amelyet ${ownTeamName} ${compensationCore} részben kompenzál.`;
+  if (biggestPositive) {
+    parts.push(
+      `${ownTeamName} legerősebb visszaütési pontja a ${POSITION_LABELS[biggestPositive.position]} poszt (${biggestPositive.deltaValPer36 >= 0 ? '+' : ''}${biggestPositive.deltaValPer36} VAL/36)`
+    );
+  }
+
+  if (biggestNegative && biggestPositive) {
+    if (Math.abs(biggestNegative.deltaValPer36) > biggestPositive.deltaValPer36 + 2) {
+      parts.push('ez részben kompenzálható, de a nettó matchup-mérleg még mindig inkább az ellenfél felé billen');
+    } else {
+      parts.push('ez magyarázza, hogy egy önmagában kellemetlen poszthátrány nem feltétlenül döntő, ha más tengelyeken van visszaütési pont');
+    }
+  } else if (biggestNegative && winProbability.predictedWinner === 'own') {
+    parts.push('a modell így is az összképet favorizálja, de ez a rés érzékeny pont marad');
+  }
+
+  return parts.length > 0 ? `Megjegyzés: ${parts.join(', ')}.` : '';
 };
 
 const buildXFactors = (
@@ -1482,7 +1509,7 @@ const buildRiskScenarios = (
     scenarios.push({
       title: 'Kontrollált alapforgatókönyv',
       trigger: 'Nincs kiugró kockázati trigger.',
-      instantResponse: 'Ritmusváltás csak időkérés után, stabil rotáció fenntartása.',
+      instantResponse: 'Félpályás ritmuskontroll, stabil kezdő rotáció és tudatosan időzített timeout a spacing resethez.',
       estimatedOwnSwingPct: dynamicSwing(0.9, Math.max(oppFtScore, oppOrebScore, oppStlScore), 2.8),
     });
   }
@@ -1582,7 +1609,7 @@ const buildCalibrationDiagnostics = (
   const paintScore = round(
     (getPercentileScore(benchmarks, ownTeam, 'two_rate') +
       getPercentileScore(benchmarks, ownTeam, 'ft_rate') +
-      (100 - getPercentileScore(benchmarks, opponent, 'oreb_rate'))) / 3,
+      (100 - getPercentileScore(benchmarks, opponent, 'fouls_per_game'))) / 3,
     1
   );
   const tempoScore = round(
@@ -1604,9 +1631,9 @@ const buildCalibrationDiagnostics = (
   );
 
   const scoreToNote = (score: number) => {
-    if (score >= 70) return 'Magas intenzitás';
-    if (score >= 45) return 'Közepes intenzitás';
-    return 'Alacsony intenzitás';
+    if (score >= 70) return 'Magas';
+    if (score >= 45) return 'Közepes';
+    return 'Alacsony';
   };
 
   const dimensions: CalibrationDimension[] = [
@@ -1615,30 +1642,37 @@ const buildCalibrationDiagnostics = (
       label: 'Periméter nyomás',
       score: perimeterScore,
       note: scoreToNote(perimeterScore),
+      context: `Ellenfél 3P-profil: ${opponent.threePct.toFixed(1)}% tripla, ${(opponent.threeRate * 100).toFixed(1)}% triplaarány.`,
     },
     {
       key: 'ball_pressure',
       label: 'Labdanyomás / TO-kockázat',
       score: pressureScore,
       note: scoreToNote(pressureScore),
+      context: `Labdanyomás olvasat: ${(opponent.games > 0 ? opponent.stl / opponent.games : 0).toFixed(1)} labdaszerzés/meccs vs ${(ownTeam.turnoverRate * 100).toFixed(1)}% saját TO%.`,
     },
     {
       key: 'paint_edge',
-      label: 'Festék- és faultelőny potenciál',
+      label: 'Festék-faultelőny',
       score: paintScore,
       note: scoreToNote(paintScore),
+      context: `Festékből generálható faultnyomás: ${(ownTeam.ftRate * 100).toFixed(1)}% saját FT rate vs ${(opponent.games > 0 ? opponent.fouls / opponent.games : 0).toFixed(1)} fault/meccs ellenféloldalon.`,
     },
     {
       key: 'tempo_gap',
       label: 'Tempó-eltérés',
       score: tempoScore,
       note: scoreToNote(tempoScore),
+      context: `Tempóprofil: saját ${ownTeam.pace.toFixed(1)} poss/meccs vs ellenfél ${opponent.pace.toFixed(1)} poss/meccs.`,
     },
     {
       key: 'volatility',
       label: 'Variancia-kitettség',
       score: volatilityScore,
       note: scoreToNote(volatilityScore),
+      context: varianceDrivers.length > 0
+        ? `Varianciaforrások: ${varianceDrivers.join(', ')}${riskFlags.length > 0 ? ` | kockázati zászlók: ${riskFlags.join(', ')}` : ''}.`
+        : 'Nincs kiugró varianciaforrás vagy extra kockázati zászló.',
     },
   ];
 
@@ -1647,8 +1681,12 @@ const buildCalibrationDiagnostics = (
     1
   );
 
+  const overallLabel = scoreToNote(overallIntensity);
+
   return {
     overallIntensity,
+    scaleLabel: '0-100 matchup-intenzitás skála',
+    summary: `${overallLabel} nehézségű matchup; a magasabb értékek azok a tengelyek, ahol a párosítás leginkább kilengést okozhat.`,
     dimensions,
   };
 };
@@ -1677,14 +1715,14 @@ const buildFanSummary = (
   const headline = winProbability.predictedWinner === 'own'
     ? favoredPct >= 70
       ? `${ownTeamName} erős favoritnak számít, de a matchup kulcsterületeit így is kontrollálni kell.`
-      : favoredPct >= 62
+      : favoredPct >= 60
         ? `${ownTeamName} világos előnyben van, de fegyelmezett végrehajtás kell a modell realizálásához.`
         : `${ownTeamName} enyhe-mérsékelt előnyben van, a futások kezelése döntheti el a meccset.`
     : winProbability.predictedWinner === 'opponent'
       ? favoredPct >= 70
         ? `${opponentTeamName} egyértelmű favorit, ezért magas fegyelmi szint és jó ritmusváltás kell a fordításhoz.`
-        : favoredPct >= 62
-          ? `${opponentTeamName} világos előnyben van, de a matchup kulcspontjain még billenthető a meccskép.`
+        : favoredPct >= 60
+          ? `${opponentTeamName} jelentős előnyben van, ezért kontrollált tempó és a legerősebb saját tengelyek maximalizálása kell a meccs nyitva tartásához.`
           : `${opponentTeamName} enyhe-mérsékelt előnyben van, jó ritmusváltással nyitva tartható a matchup.`
       : 'Kiegyenlített párharc várható, a kulcsfutások dönthetnek a végjátékban.';
 
