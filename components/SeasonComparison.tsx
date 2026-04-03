@@ -11416,7 +11416,7 @@ export function SeasonComparison({
                           {renderThresholdTooltip(playerAdvancedInsights.thresholdHints.shot)}
                         </div>
                         {'confidence' in playerAdvancedInsights.shotQualityVsMaking && (
-                          <Badge className={getSampleConfidenceBadgeClass(playerAdvancedInsights.shotQualityVsMaking.confidence)}>{formatSampleConfidenceLabel(playerAdvancedInsights.shotQualityVsMaking.confidence)}</Badge>
+                          <Badge className={getSampleConfidenceBadgeClass(playerAdvancedInsights.shotQualityVsMaking.confidence ?? 'alacsony')}>{formatSampleConfidenceLabel(playerAdvancedInsights.shotQualityVsMaking.confidence ?? 'alacsony')}</Badge>
                         )}
                       </div>
                       <div className={`text-[11px] ${getInsightToneClass(playerAdvancedInsights.blockVerdicts.shot.tone)}`}>
