@@ -365,7 +365,7 @@ const selectPlayersForPosition = (players: PlayerSeasonStat[], position: Positio
   return players.filter(player => playerMatchesPosition(player, 'SG'));
 };
 
-const CRITICAL_MATCHUP_DELTA = -20;
+const CRITICAL_MATCHUP_DELTA = -12;
 const CLEAR_ADVANTAGE_DELTA = 12;
 const SIGNIFICANT_MATCHUP_DELTA = 10;
 
@@ -1161,7 +1161,7 @@ const buildThreats = (team: NormalizedTeamStats, benchmarks: LeagueTeamBenchmark
   if (scoreAbove(benchmarks, team, 'assist_rate', 60)) {
     threats.push('Szervezett labdajáratás → rotációs bontás veszély');
   }
-  if (scoreAbove(benchmarks, team, 'efg', 60)) {
+  if (scoreAbove(benchmarks, team, 'efg', 60) && !scoreAbove(benchmarks, team, 'three_pct', 60)) {
     threats.push('Hatékony dobás → félpályás megállítás nehezebb');
   }
   if (scoreAbove(benchmarks, team, 'two_rate', 60) && scoreAbove(benchmarks, team, 'ft_rate', 60)) {
@@ -1505,15 +1505,6 @@ const buildRiskScenarios = (
     });
   }
 
-  if (scenarios.length === 0) {
-    scenarios.push({
-      title: 'Kontrollált alapforgatókönyv',
-      trigger: 'Nincs kiugró kockázati trigger.',
-      instantResponse: 'Félpályás ritmuskontroll, stabil kezdő rotáció és tudatosan időzített timeout a spacing resethez.',
-      estimatedOwnSwingPct: dynamicSwing(0.9, Math.max(oppFtScore, oppOrebScore, oppStlScore), 2.8),
-    });
-  }
-
   if (scoreAbove(benchmarks, opponent, 'three_rate', 60) && scoreAbove(benchmarks, opponent, 'three_pct', 60)) {
     scenarios.push({
       title: 'Periméter-run veszély',
@@ -1529,6 +1520,15 @@ const buildRiskScenarios = (
       trigger: 'A meccs a saját tempó felett pörög két negyeden át.',
       instantResponse: 'Támadóidő mélyebb kihasználása, támadólepattanó-visszafogás, korai visszarendeződés.',
       estimatedOwnSwingPct: dynamicSwing(1.8, paceGap, 5.2),
+    });
+  }
+
+  if (scenarios.length === 0) {
+    scenarios.push({
+      title: 'Kontrollált alapforgatókönyv',
+      trigger: 'Nincs kiugró kockázati trigger.',
+      instantResponse: 'Félpályás ritmuskontroll, stabil kezdő rotáció és tudatosan időzített timeout a spacing resethez.',
+      estimatedOwnSwingPct: dynamicSwing(0.9, Math.max(oppFtScore, oppOrebScore, oppStlScore), 2.8),
     });
   }
 
@@ -1736,7 +1736,10 @@ const buildFanSummary = (
     ].slice(0, 3),
     majorRisks: [
       ...threats.slice(0, 2).map(item => item.endsWith('.') ? item : `${item}.`),
-      ...riskScenarios.slice(0, 1).map(item => `${item.title}: ${item.trigger}`),
+      ...riskScenarios
+        .filter(item => item.title !== 'Kontrollált alapforgatókönyv')
+        .slice(0, 1)
+        .map(item => `${item.title}: ${item.trigger}`),
     ].slice(0, 3),
     gamePlan: focusPoints.slice(0, 3),
     fallbackPlan: riskScenarios.slice(0, 2).map(item => item.instantResponse),
