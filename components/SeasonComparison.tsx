@@ -7848,6 +7848,9 @@ export function SeasonComparison({
     const getEligibleSlots = (player: PlayerSeasonStat): Position[] => {
       const buckets = getBuckets(player);
       const slots = new Set<Position>();
+      const games = Math.max(player.games || 1, 1);
+      const reboundsPerGame = (player.oreb + player.dreb) / games;
+      const wingLikeProfile = (player.heightCm ?? 0) >= 194 || reboundsPerGame >= 4.2;
 
       buckets.forEach(bucket => {
         if (bucket === 'PG') {
@@ -7856,7 +7859,9 @@ export function SeasonComparison({
         }
         if (bucket === 'SG') {
           slots.add('SG');
-          slots.add('SF');
+          if (wingLikeProfile && !buckets.includes('PG')) {
+            slots.add('SF');
+          }
         }
         if (bucket === 'SF') {
           slots.add('SF');
@@ -7879,29 +7884,81 @@ export function SeasonComparison({
         const aEligible = getEligibleSlots(a).length;
         const bEligible = getEligibleSlots(b).length;
         if (aEligible !== bEligible) return aEligible - bEligible;
-        return (playerMinutesById.get(b.playerId)?.seconds ?? b.minutes ?? 0) - (playerMinutesById.get(a.playerId)?.seconds ?? a.minutes ?? 0);
+        return (b.minutes || 0) - (a.minutes || 0);
       });
 
-      const usedSlots = new Set<Position>();
-      const assignments: Array<{ playerId: string; name: string; role: Position }> = [];
+      const slotFitScore = (player: PlayerSeasonStat, slot: Position) => {
+        const buckets = getBuckets(player);
+        const games = Math.max(player.games || 1, 1);
+        const pointsPer36 = ((player.points || 0) / Math.max(player.minutes || 1, 1)) * 36;
+        const assistsPerGame = (player.ast || 0) / games;
+        const reboundsPerGame = ((player.oreb || 0) + (player.dreb || 0)) / games;
+        const threeVolume = (player.fga3 || 0) / games;
+        const threePct = player.fga3 > 0 ? (player.fgm3 / player.fga3) * 100 : 0;
+        const height = player.heightCm ?? 0;
 
-      const walk = (index: number): boolean => {
-        if (index >= orderedPlayers.length) return true;
+        let score = 0;
+        if (buckets.includes(slot)) score += 2.2;
+
+        if (slot === 'PG' && buckets.includes('SG')) score += assistsPerGame >= 4 ? 1.0 : 0.35;
+        if (slot === 'SG' && buckets.includes('PG')) score += assistsPerGame >= 3 ? 0.7 : 0.4;
+        if (slot === 'SF' && buckets.includes('SG')) score += (height >= 194 || reboundsPerGame >= 4.2) ? 0.65 : -0.4;
+        if (slot === 'PF' && buckets.includes('SF')) score += reboundsPerGame >= 4 ? 0.7 : 0.25;
+        if (slot === 'C' && buckets.includes('PF')) score += (height >= 201 || reboundsPerGame >= 6) ? 0.55 : -0.8;
+
+        if (slot === 'PG') {
+          score += assistsPerGame * 0.22;
+          score += pointsPer36 >= 12 ? 0.15 : -0.1;
+        }
+        if (slot === 'SG') {
+          score += pointsPer36 * 0.16 + threeVolume * 0.22;
+          score += threePct >= 34 ? 0.4 : -0.2;
+        }
+        if (slot === 'SF') {
+          score += pointsPer36 * 0.12 + reboundsPerGame * 0.2;
+          score += height >= 195 ? 0.35 : -0.25;
+        }
+        if (slot === 'PF') {
+          score += reboundsPerGame * 0.25;
+          score += height >= 198 ? 0.3 : 0;
+        }
+        if (slot === 'C') {
+          score += reboundsPerGame * 0.38;
+          score += height >= 202 ? 0.35 : -0.35;
+        }
+
+        return score;
+      };
+
+      const usedSlots = new Set<Position>();
+      const workingAssignments: Array<{ playerId: string; name: string; role: Position }> = [];
+      let bestAssignments: Array<{ playerId: string; name: string; role: Position }> | null = null;
+      let bestScore = Number.NEGATIVE_INFINITY;
+
+      const walk = (index: number, score: number) => {
+        if (index >= orderedPlayers.length) {
+          if (workingAssignments.length === players.length && score > bestScore) {
+            bestScore = score;
+            bestAssignments = [...workingAssignments];
+          }
+          return;
+        }
+
         const player = orderedPlayers[index];
         const eligibleSlots = getEligibleSlots(player);
         for (const slot of eligibleSlots) {
           if (usedSlots.has(slot)) continue;
           usedSlots.add(slot);
-          assignments.push({ playerId: player.playerId, name: player.name, role: slot });
-          if (walk(index + 1)) return true;
-          assignments.pop();
+          workingAssignments.push({ playerId: player.playerId, name: player.name, role: slot });
+          walk(index + 1, score + slotFitScore(player, slot));
+          workingAssignments.pop();
           usedSlots.delete(slot);
         }
-        return false;
       };
 
-      if (!walk(0) || assignments.length !== players.length) return null;
-      return lineupSlots.flatMap(slot => assignments.find(item => item.role === slot) ?? []);
+      walk(0, 0);
+      if (!bestAssignments || bestAssignments.length !== players.length) return null;
+      return lineupSlots.flatMap(slot => bestAssignments?.find(item => item.role === slot) ?? []);
     };
 
     const playerMatches = (player: PlayerSeasonStat, positions: Position[]) =>
@@ -7928,9 +7985,14 @@ export function SeasonComparison({
       const matched: PlayerSeasonStat[] = [];
       const used = new Set<string>();
       for (const name of names) {
-        const profiles = [buildNormalizedNameProfile(name)];
+        const nameProfile = buildNormalizedNameProfile(name);
         const player = pregameOwnPlayers.find(candidate => (
-          !used.has(candidate.playerId) && matchesNormalizedNameProfile(candidate.name, profiles)
+          !used.has(candidate.playerId)
+          && (
+            // Kosarstat lineup names and season roster names can differ in token length/order.
+            matchesNormalizedNameProfile(candidate.name, [nameProfile])
+            || matchesNormalizedNameProfile(name, [buildNormalizedNameProfile(candidate.name)])
+          )
         ));
         if (!player) return null;
         used.add(player.playerId);
@@ -7953,6 +8015,7 @@ export function SeasonComparison({
       const minutes = Math.max(player.minutes || 0, 1);
       const games = Math.max(player.games || 0, 1);
       const valPer36 = (player.val / minutes) * 36;
+      const pointsPer36 = (player.points / minutes) * 36;
       const astPerGame = player.ast / games;
       const tovPerGame = player.tov / games;
       const astTo = player.tov > 0 ? player.ast / player.tov : player.ast;
@@ -7964,6 +8027,7 @@ export function SeasonComparison({
       return {
         player,
         valPer36,
+        pointsPer36,
         astPerGame,
         tovPerGame,
         astTo,
@@ -7985,6 +8049,7 @@ export function SeasonComparison({
     };
 
     const valPool = metricBase.map(item => item.valPer36);
+    const scoringPool = metricBase.map(item => item.pointsPer36);
     const spacingPool = metricBase.map(item => item.threeVolume * Math.max(item.threePct - 26, 0));
     const creationPool = metricBase.map(item => item.astPerGame * 1.8 + item.astTo * 1.1 - item.tovPerGame * 0.8);
     const rimPool = metricBase.map(item => item.reboundsPer36 * 0.35 + item.blkPer36 * 2.2);
@@ -7997,6 +8062,7 @@ export function SeasonComparison({
       const securityRaw = item.astTo * 1.5 + item.stlPer36 * 0.8 - item.tovPerGame * 0.6;
       return [item.player.playerId, {
         talent: zScore(item.valPer36, valPool),
+        scoring: zScore(item.pointsPer36, scoringPool),
         spacing: zScore(spacingRaw, spacingPool),
         creation: zScore(creationRaw, creationPool),
         rim: zScore(rimRaw, rimPool),
@@ -8137,8 +8203,9 @@ export function SeasonComparison({
       if (!roleAssignments) return null;
       const exactLineup = exactLineupByKey.get(lineupKey(players)) ?? null;
       const exactSampleMinutes = exactLineup ? exactLineup.seconds / 60 : 0;
+      const cappedExactNetPer40 = exactLineup ? Math.min(Math.max(exactLineup.netPer40, -35), 35) : 0;
       const exactComponent = exactLineup
-        ? exactLineup.netPer40 * (exactLineup.seconds / (exactLineup.seconds + 420))
+        ? cappedExactNetPer40 * (exactLineup.seconds / (exactLineup.seconds + 900)) * 0.9
         : 0;
 
       const pairSamples = combinations(players, 2)
@@ -8166,6 +8233,7 @@ export function SeasonComparison({
         if (assignedRole === 'PG') {
           return (
             metric.talent * 1.05
+            + metric.scoring * 0.2
             + metric.creation * (0.8 + boundedBallSecurityNeed)
             + metric.security * (0.65 + boundedBallSecurityNeed * 0.8)
             + metric.spacing * (0.15 + boundedPerimeterNeed * 0.35)
@@ -8176,8 +8244,9 @@ export function SeasonComparison({
         if (assignedRole === 'SG') {
           return (
             metric.talent * 1.05
+            + metric.scoring * (0.55 + boundedPerimeterNeed * 0.4)
             + metric.spacing * (0.75 + boundedPerimeterNeed)
-            + metric.creation * (0.28 + boundedBallSecurityNeed * 0.45)
+            + metric.creation * (0.18 + boundedBallSecurityNeed * 0.28)
             + metric.security * 0.2
             + metric.rim * 0.05
           );
@@ -8186,6 +8255,7 @@ export function SeasonComparison({
         if (assignedRole === 'SF') {
           return (
             metric.talent * 1.1
+            + metric.scoring * (0.45 + boundedPerimeterNeed * 0.25)
             + metric.spacing * (0.5 + boundedPerimeterNeed * 0.6)
             + metric.creation * 0.22
             + metric.security * 0.2
@@ -8229,8 +8299,20 @@ export function SeasonComparison({
           ? assignedCenterMetric.talent * 1.2 + assignedCenterMetric.rim * (1.35 + boundedPaintNeed * 1.2)
           : -99;
         const gap = topCenter.score - assignedScore;
+        const tacticalFitEdge = assignedCenterMetric
+          ? (assignedCenterMetric.spacing * (0.45 + boundedPerimeterNeed)
+            + assignedCenterMetric.security * (0.25 + boundedBallSecurityNeed * 0.8))
+          : 0;
+        const topCenterMetric = metricByPlayerId.get(topCenter.player.playerId);
+        const topTacticalFit = topCenterMetric
+          ? (topCenterMetric.spacing * (0.45 + boundedPerimeterNeed)
+            + topCenterMetric.security * (0.25 + boundedBallSecurityNeed * 0.8))
+          : 0;
+        const tacticalGap = tacticalFitEdge - topTacticalFit;
         if (gap >= 1.1) return -2.4;
+        if (gap >= 0.6 && tacticalGap >= 0.45) return -0.45;
         if (gap >= 0.6) return -1.4;
+        if (gap >= 0.25 && tacticalGap >= 0.35) return -0.25;
         if (gap >= 0.25) return -0.7;
         return -0.15;
       })();
@@ -8241,6 +8323,42 @@ export function SeasonComparison({
       if (bigCount >= 2) structureBonus += 0.4 + boundedPaintNeed * 0.95;
       if (strictValidity(players)) structureBonus += 0.4;
       structureBonus += centerAnchorBonus;
+
+      const lineupBalancePenalty = (() => {
+        const pgRole = roleAssignments.find(item => item.role === 'PG') ?? null;
+        const sgRole = roleAssignments.find(item => item.role === 'SG') ?? null;
+        const sfRole = roleAssignments.find(item => item.role === 'SF') ?? null;
+        if (!pgRole || !sgRole) return 0;
+
+        const pgPlayer = players.find(player => player.playerId === pgRole.playerId) || null;
+        const sgPlayer = players.find(player => player.playerId === sgRole.playerId) || null;
+        if (!pgPlayer || !sgPlayer) return 0;
+
+        const pgMetric = metricByPlayerId.get(pgRole.playerId);
+        const sgMetric = metricByPlayerId.get(sgRole.playerId);
+        const sfMetric = sfRole ? metricByPlayerId.get(sfRole.playerId) : null;
+        if (!pgMetric || !sgMetric) return 0;
+
+        const dualPgBackcourt = getBuckets(pgPlayer).includes('PG') && getBuckets(sgPlayer).includes('PG');
+        const lowScoringBackcourt = (pgMetric.scoring + sgMetric.scoring) <= -0.25;
+        const lowSpacingBackcourt = (pgMetric.spacing + sgMetric.spacing) <= -0.2;
+        const sfCanCarryScoring = Boolean(sfMetric && (sfMetric.scoring >= 0.35 || sfMetric.spacing >= 0.35));
+        const smallBackcourt = (pgPlayer.heightCm ?? 0) > 0
+          && (sgPlayer.heightCm ?? 0) > 0
+          && (pgPlayer.heightCm ?? 0) <= 191
+          && (sgPlayer.heightCm ?? 0) <= 191;
+
+        let penalty = 0;
+        if (dualPgBackcourt && lowScoringBackcourt && lowSpacingBackcourt && !sfCanCarryScoring) {
+          penalty -= 1.8 + boundedPerimeterNeed * 0.9;
+        } else if (dualPgBackcourt && lowScoringBackcourt && !sfCanCarryScoring) {
+          penalty -= 1.0 + boundedPerimeterNeed * 0.55;
+        }
+        if (smallBackcourt && boundedPerimeterNeed >= 0.45) {
+          penalty -= 0.45;
+        }
+        return penalty;
+      })();
 
       const continuityBonus = (() => {
         let bonus = 0;
@@ -8257,7 +8375,7 @@ export function SeasonComparison({
       })();
 
       const totalScore = roundValue(
-        exactComponent * 1.1 + pairComponent + trioComponent + playerFitComponent + structureBonus + continuityBonus,
+        exactComponent * 1.1 + pairComponent + trioComponent + playerFitComponent + structureBonus + continuityBonus + lineupBalancePenalty,
         2
       );
 
@@ -8268,7 +8386,6 @@ export function SeasonComparison({
       if (exactSampleMinutes >= 4) reasons.push(`van közvetlen szezonos ötösminta (${exactSampleMinutes.toFixed(1)} perc)`);
       if (pairSampleMinutes >= 14) reasons.push(`erős páros szinergiák támasztják (${pairSampleMinutes.toFixed(1)} párosperc)`);
       if (incumbentOverlap >= 4) reasons.push('közel marad a megszokott kezdőszerkezethez, ezért rotációsan reálisabb');
-      if (assignedCenter?.playerId === topCenter?.player.playerId) reasons.push(`${assignedCenter.name} a legerősebb természetes center-profil, ezért a modell a 5-ös helyet hozzá húzza`);
       if (opponentPerimeterNeed >= 0.55 && spacingCount >= 2) reasons.push('jobban nyitja a pályát a periméterfókuszú matchupban');
       if (ballSecurityNeed >= 0.55 && handlerCount >= 2) reasons.push('stabilabb labdakezelést ad nyomás ellen');
       if (opponentPaintNeed >= 0.55 && bigCount >= 2) reasons.push('több festékfizikalitást és lepattanót hoz');
@@ -8312,7 +8429,24 @@ export function SeasonComparison({
       const hasStrongSynergyEdge = pairMinutesGap >= 18 || trioMinutesGap >= 12;
       const hasClearOverallEdge = scoreGap >= 3.2;
 
+      const centerTacticalScore = (candidate: PregameOptimalLineupCandidate) => {
+        const centerRole = candidate.roleAssignments.find(role => role.role === 'C');
+        if (!centerRole) return -99;
+        const metric = metricByPlayerId.get(centerRole.playerId);
+        if (!metric) return -99;
+        return metric.spacing * (0.55 + boundedPerimeterNeed * 1.1)
+          + metric.security * (0.25 + boundedBallSecurityNeed * 0.9)
+          + metric.talent * 0.35;
+      };
+
+      const tacticalScoreGap = centerTacticalScore(provisionalBest) - centerTacticalScore(strongestCenterLineup);
+      const hasTacticalCenterEdge = tacticalScoreGap >= 0.5 && scoreGap >= 1.4;
+      const hasAdequateEvidenceForTacticalEdge = provisionalBest.exactSampleMinutes >= 6 || provisionalBest.pairSampleMinutes >= 55 || provisionalBest.trioSampleMinutes >= 30;
+
       if (hasClearOverallEdge && hasStrongExactEvidence && hasStrongSynergyEdge) {
+        return null;
+      }
+      if (hasTacticalCenterEdge && hasAdequateEvidenceForTacticalEdge) {
         return null;
       }
 
@@ -13323,6 +13457,37 @@ export function SeasonComparison({
               'Sarok tripla': 'Sarok 3',
               'Egyéb tripla': 'Tripla',
             };
+            const pregameOptimalLineupNarrative = (() => {
+              if (!pregameOptimalLineup) return '';
+
+              const best = pregameOptimalLineup.best;
+              const roleMap = new Map(best.roleAssignments.map(item => [item.role, item.name] as const));
+              const primaryAxis = pregameOptimalLineup.matchupWeights.perimeter >= pregameOptimalLineup.matchupWeights.paint
+                && pregameOptimalLineup.matchupWeights.perimeter >= pregameOptimalLineup.matchupWeights.ballSecurity
+                ? 'periméter'
+                : pregameOptimalLineup.matchupWeights.paint >= pregameOptimalLineup.matchupWeights.ballSecurity
+                  ? 'festék'
+                  : 'labdabiztonság';
+
+              const evidenceLine = best.exactSampleMinutes >= 10
+                ? `A közvetlen ötösminta már használható méretű (${best.exactSampleMinutes.toFixed(1)} perc), ezért nem csak profil-, hanem konkrét lineup-bizonyíték is támogatja a döntést.`
+                : best.exactSampleMinutes >= 4
+                  ? `Van közvetlen ötösminta (${best.exactSampleMinutes.toFixed(1)} perc), de a modell ezt páros/trió szinergiával együtt értelmezi a kis minta miatt.`
+                  : 'Közvetlen ötösminta limitált, ezért a rendszer főleg szerepkiosztási fitre és páros/trió szinergiára támaszkodik.';
+
+              const roleLine = [
+                roleMap.get('PG') ? `A labdás irányítás fő felelőse ${roleMap.get('PG')}.` : '',
+                roleMap.get('SG') ? `${roleMap.get('SG')} második labdás/scorer tengelyt ad a backcourtban.` : '',
+                roleMap.get('SF') ? `${roleMap.get('SF')} wing-kapcsoló szerepben stabilizálja a szerkezetet.` : '',
+                roleMap.get('C') ? `${roleMap.get('C')} adja a belső védelmi és lepattanó alapot.` : '',
+              ].filter(Boolean).join(' ');
+
+              const reasonLine = best.reasons.length > 0
+                ? `Fő döntési tényezők: ${best.reasons.slice(0, 2).join('; ')}.`
+                : '';
+
+              return `Szöveges indoklás: az ajánlott ötös a ${primaryAxis}-fókuszú matchupra optimalizál, miközben a valós rotációs stabilitást is megtartja. ${evidenceLine} ${roleLine} ${reasonLine}`.trim();
+            })();
             const combinedKeyPlayerCards = (() => {
               const rows: Array<{
                 teamKey: 'own' | 'opponent';
@@ -13501,6 +13666,11 @@ export function SeasonComparison({
                             <div key={`pregame-optimal-reason-${reason}`}>• {reason}</div>
                           ))}
                         </div>
+                        {pregameOptimalLineupNarrative && (
+                          <div className="rounded-md border border-slate-800 bg-slate-900/40 px-3 py-2 text-xs text-slate-200 leading-relaxed">
+                            {pregameOptimalLineupNarrative}
+                          </div>
+                        )}
                         {pregameOptimalLineup.alternates.length > 0 && (
                           <div className="rounded-md border border-slate-800 bg-slate-900/40 px-3 py-2 space-y-2">
                             <div className="text-xs uppercase tracking-wide text-slate-500">Alternatív kezdő variációk</div>
