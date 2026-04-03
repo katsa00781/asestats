@@ -101,6 +101,11 @@ SZERKEZET:
   - Ha headToHeadSummary.games = 0, írd le, hogy ez az első találkozó a szezonban.
   - keyMatchups esetén legalább 2 konkrét párosítást nevezz meg.
   - focusPriority esetén röviden jelezd, melyik hangsúly dominál a meccstervben.
+  - extraContext.tacticalRefinements.lineupContext esetén a kezdő ötös szerepkiosztása az elsődleges igazodási pont; az irányító matchupot ehhez igazítsd, ne írj ellent a javasolt kezdőnek.
+  - extraContext.tacticalRefinements.vulnerabilityPlaybook esetén a "Kevés büntető" pontot számmal és legalább 2 konkrét taktikai akcióval írd le.
+  - extraContext.tacticalRefinements.headToHeadInsight esetén a H2H ne csak eredmény legyen: írj 1 tanulságot és 1 veszélyt a legutóbbi meccsből.
+  - extraContext.tacticalRefinements.scenarioGuidance esetén a kontrollált alapforgatókönyvet a megadott konkrét triggerekből írd le, ne a "nincs kiugró trigger" formulával.
+  - extraContext.tacticalRefinements.summaryTargets esetén a záró bekezdés legyen matchup-specifikus, 2-3 konkrét győzelmi karral; kerüld az általános közhelyes lezárást.
 
 STÍLUS ELVÁRÁS:
 - Írj pontosan 6 rövid bekezdést.
@@ -110,6 +115,7 @@ STÍLUS ELVÁRÁS:
 - Mondatszintű, összefüggő elemzést adj: legyen bevezetés, közép és lezárás.
 - Használj magyar szaknyelvet: tempó, labdanyomás, visszarendeződés, festékvédekezés, faultterhelés, lepattanóharc.
 - Kerüld a gépies felsorolást, a sablonos ismétlést és a túl sűrű stat-halmazást.
+- A záró bekezdésben nevezz meg 2-3 konkrét, ezen a meccsen releváns kart, és ha van rá input, írj realista meccsállapot-célt is a negyedik negyed elejére.
 
 TILOS:
 - Általános kijelentések játékstílus nélkül ("gyors csapat" – miből derül ki?)
@@ -146,6 +152,41 @@ type PregameTextPayload = {
     perimeter: number;
     paint: number;
   } | null;
+  extraContext?: {
+    lineupContext?: {
+      recommendedLineup: Array<{ playerId: string; name: string; role: string }>;
+      primaryHandler?: string | null;
+      secondaryHandler?: string | null;
+    } | null;
+    vulnerabilityPlaybook?: {
+      title: string;
+      ownFtRatePct: number;
+      opponentFtRatePct: number;
+      targetFta: number;
+      actions: string[];
+      expectedImpact: string;
+    } | null;
+    headToHeadInsight?: {
+      ownScore: number;
+      opponentScore: number;
+      margin: number;
+      ownThreePct: number;
+      opponentThreePct: number;
+      ownStandouts: string[];
+      opponentStandouts: string[];
+      takeaway: string;
+      warning: string;
+    } | null;
+    scenarioGuidance?: {
+      title: string;
+      triggers: string[];
+      response: string[];
+      expectedOutcome: string;
+    } | null;
+    summaryTargets?: {
+      closingLevers: string[];
+    } | null;
+  } | null;
   ownTeamName?: string | null;
   opponentTeamName?: string | null;
   ownTeamId?: string | null;
@@ -180,6 +221,7 @@ const buildUserPrompt = (payload: PregameTextPayload) => {
       headToHeadSummary: payload.headToHeadSummary ?? null,
       keyMatchups: payload.keyMatchups ?? [],
       focusPriority: payload.focusPriority ?? null,
+      tacticalRefinements: payload.extraContext ?? null,
     },
   };
   return USER_PROMPT_TEMPLATE.replace(
