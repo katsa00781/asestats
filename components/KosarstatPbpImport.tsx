@@ -63,6 +63,8 @@ export function KosarstatPbpImport({ selectedSeasonId, selectedSeasonName, onImp
   const cleanupConfirmWord = 'TORLES';
   const [seasonCode, setSeasonCode] = useState('2526');
   const [roundFilter, setRoundFilter] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const [gameIdFilter, setGameIdFilter] = useState('');
   const [gameLimit, setGameLimit] = useState('0');
   const [startGameIndex, setStartGameIndex] = useState('1');
@@ -245,6 +247,8 @@ export function KosarstatPbpImport({ selectedSeasonId, selectedSeasonName, onImp
           seasonName: selectedSeasonName,
           seasonCode: seasonCode.trim() || undefined,
           rounds: roundFilter.trim() || undefined,
+          dateFrom: dateFrom.trim() || undefined,
+          dateTo: dateTo.trim() || undefined,
           gameIds: gameIdFilter.trim() || undefined,
           gameLimit: normalizedGameLimit,
           startGameIndex: normalizedStartGameIndex,
@@ -428,6 +432,24 @@ export function KosarstatPbpImport({ selectedSeasonId, selectedSeasonName, onImp
             />
           </div>
           <div className="space-y-2">
+            <label className="text-sm text-slate-300">Kezdő dátum</label>
+            <Input
+              type="date"
+              value={dateFrom}
+              onChange={event => setDateFrom(event.target.value)}
+              className="bg-slate-800 border-slate-700 text-slate-100"
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm text-slate-300">Vég dátum</label>
+            <Input
+              type="date"
+              value={dateTo}
+              onChange={event => setDateTo(event.target.value)}
+              className="bg-slate-800 border-slate-700 text-slate-100"
+            />
+          </div>
+          <div className="space-y-2">
             <label className="text-sm text-slate-300">Game ID szűrő</label>
             <Input
               value={gameIdFilter}
@@ -463,6 +485,7 @@ export function KosarstatPbpImport({ selectedSeasonId, selectedSeasonName, onImp
 
         <div className="rounded-md border border-slate-800 bg-slate-950/30 px-3 py-2 text-xs text-slate-400">
           Tipp: fordulo szerinti gyors importhoz hasznald a &quot;Forduló szűrő&quot; mezőt. Formátum: 24, 20-24, vagy 22,24.
+          Dátum alapú importhoz töltsd ki a &quot;Kezdő dátum&quot; és/vagy &quot;Vég dátum&quot; mezőt.
           Ha forduló vagy game ID szűrőt adsz meg, a rendszer automatikusan újraimportálja a kiválasztott meccseket.
         </div>
 

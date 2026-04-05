@@ -10,6 +10,8 @@ type KosarstatImportPayload = {
   seasonName?: string;
   seasonCode?: string;
   rounds?: string;
+  dateFrom?: string;
+  dateTo?: string;
   gameIds?: string;
   gameLimit?: number;
   startGameIndex?: number;
@@ -28,6 +30,8 @@ type ImportOptions = {
   seasonName?: string;
   seasonCode?: string;
   rounds?: string;
+  dateFrom?: string;
+  dateTo?: string;
   gameIds?: string;
   gameLimit?: number;
   startGameIndex?: number;
@@ -171,10 +175,12 @@ export async function POST(request: Request) {
   const seasonName = payload?.seasonName?.trim() || undefined;
   const seasonCode = sanitizeSeasonCode(payload?.seasonCode);
   const rounds = sanitizeCsvLike(payload?.rounds);
+  const dateFrom = sanitizeIsoDate(payload?.dateFrom);
+  const dateTo = sanitizeIsoDate(payload?.dateTo);
   const gameIds = sanitizeCsvLike(payload?.gameIds);
   const gameLimit = sanitizeGameLimit(payload?.gameLimit);
   const startGameIndex = sanitizeStartGameIndex(payload?.startGameIndex);
-  const forceReimport = payload?.forceReimport === true || Boolean(rounds) || Boolean(gameIds);
+  const forceReimport = payload?.forceReimport === true || Boolean(rounds) || Boolean(gameIds) || Boolean(dateFrom) || Boolean(dateTo);
   const headless = payload?.headless;
 
   isRunning = true;
@@ -203,6 +209,8 @@ export async function POST(request: Request) {
     seasonName,
     seasonCode,
     rounds,
+    dateFrom,
+    dateTo,
     gameIds,
     gameLimit,
     startGameIndex,
@@ -250,7 +258,7 @@ export async function POST(request: Request) {
   });
 }
 
-const runImporter = ({ seasonId, seasonName, seasonCode, rounds, gameIds, gameLimit, startGameIndex, forceReimport, headless = true }: ImportOptions) =>
+const runImporter = ({ seasonId, seasonName, seasonCode, rounds, dateFrom, dateTo, gameIds, gameLimit, startGameIndex, forceReimport, headless = true }: ImportOptions) =>
   new Promise<ImportResult>((resolve, reject) => {
     let settled = false;
     const safeResolve = (value: ImportResult) => {
@@ -273,6 +281,8 @@ const runImporter = ({ seasonId, seasonName, seasonCode, rounds, gameIds, gameLi
     if (seasonName) env.KOSARSTAT_SEASON_NAME = seasonName;
     if (seasonCode) env.KOSARSTAT_SEASON_CODE = seasonCode;
     if (rounds) env.KOSARSTAT_ONLY_ROUNDS = rounds;
+    if (dateFrom) env.KOSARSTAT_DATE_FROM = dateFrom;
+    if (dateTo) env.KOSARSTAT_DATE_TO = dateTo;
     if (gameIds) env.KOSARSTAT_ONLY_GAME_IDS = gameIds;
     if (typeof gameLimit === 'number') env.KOSARSTAT_GAME_LIMIT = String(gameLimit);
     if (typeof startGameIndex === 'number') env.KOSARSTAT_START_GAME_INDEX = String(startGameIndex);
@@ -365,6 +375,13 @@ const sanitizeCsvLike = (value?: string | null) => {
     .filter(Boolean)
     .join(',');
   return normalized || undefined;
+};
+
+const sanitizeIsoDate = (value?: string | null) => {
+  if (!value) return undefined;
+  const normalized = value.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized)) return undefined;
+  return normalized;
 };
 
 const tailText = (input: string, length: number) => {

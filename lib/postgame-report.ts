@@ -788,8 +788,12 @@ const getMechanismSignal = (
     case 'paint': {
       const twoDelta = toPct(game.twoRate - season.twoRate, 1);
       const ftDelta = toPct(game.ftRate - season.ftRate, 1);
+      const gameTwoPct = game.fga2 > 0 ? (game.fgm2 / game.fga2) * 100 : 0;
+      const seasonTwoPct = season.fga2 > 0 ? (season.fgm2 / season.fga2) * 100 : 0;
+      const twoPctDelta = round(gameTwoPct - seasonTwoPct, 1);
       if (twoDelta >= 5) return { realized: true, reason: `2P fókusz +${twoDelta} pp` };
       if (ftDelta >= 8) return { realized: true, reason: `FT rate +${ftDelta} pp` };
+      if (twoPctDelta >= 6) return { realized: true, reason: `2P% +${twoPctDelta} pp` };
       break;
     }
     default: {
@@ -1279,12 +1283,17 @@ const buildOpponentProfileSection = (
       case 'paint': {
         const twoDelta = game.twoRate - season.twoRate;
         const ftDelta = game.ftRate - season.ftRate;
-        const realized = twoDelta <= -0.05 || ftDelta <= -0.06;
+        const gameTwoPct = game.fga2 > 0 ? (game.fgm2 / game.fga2) * 100 : 0;
+        const seasonTwoPct = season.fga2 > 0 ? (season.fgm2 / season.fga2) * 100 : 0;
+        const twoPctDelta = gameTwoPct - seasonTwoPct;
+        const volumeSuppressed = twoDelta <= -0.05 || ftDelta <= -0.06;
+        const efficiencyResisted = twoPctDelta <= 2;
+        const realized = volumeSuppressed && efficiencyResisted;
         return {
           label,
           realized,
           expectation: `${label}: festékbe jutás és fault-kiharcolás csökkenése volt várható.`,
-          actual: `${label}: 2P arány ${toPct(season.twoRate, 1)}% → ${toPct(game.twoRate, 1)}% (${signedPct(twoDelta)}), FT-rate ${toPct(season.ftRate, 1)}% → ${toPct(game.ftRate, 1)}% (${signedPct(ftDelta)}).`,
+          actual: `${label}: 2P arány ${toPct(season.twoRate, 1)}% → ${toPct(game.twoRate, 1)}% (${signedPct(twoDelta)}), 2P% ${seasonTwoPct.toFixed(1)}% → ${gameTwoPct.toFixed(1)}% (${signed(twoPctDelta)} pp), FT-rate ${toPct(season.ftRate, 1)}% → ${toPct(game.ftRate, 1)}% (${signedPct(ftDelta)}).`,
           verdict: realized ? 'realizálódott' : 'nem realizálódott',
         };
       }

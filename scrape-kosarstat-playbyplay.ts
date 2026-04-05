@@ -29,8 +29,28 @@ const readCliArg = (name: string) => {
   return '';
 };
 
+const sanitizeIsoDateToken = (value: string) => {
+  const normalized = String(value || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized)) return '';
+  return normalized;
+};
+
+const parseDateRangeFilter = (fromInput: string, toInput: string) => {
+  const fromDate = sanitizeIsoDateToken(fromInput);
+  const toDate = sanitizeIsoDateToken(toInput);
+  if (!fromDate && !toDate) return null;
+
+  const from = fromDate || toDate;
+  const to = toDate || fromDate;
+  if (!from || !to) return null;
+
+  return from <= to ? { from, to } : { from: to, to: from };
+};
+
 const CLI_ROUNDS = readCliArg('--rounds') || readCliArg('--round');
 const CLI_GAME_IDS = readCliArg('--games') || readCliArg('--game');
+const CLI_DATE_FROM = readCliArg('--date-from') || readCliArg('--from-date') || readCliArg('--from');
+const CLI_DATE_TO = readCliArg('--date-to') || readCliArg('--to-date') || readCliArg('--to');
 
 const KOSARSTAT_BASE = 'https://kosarstat.hu';
 const KOSARSTAT_SEASON_CODE = process.env.KOSARSTAT_SEASON_CODE || '2526';
@@ -45,6 +65,9 @@ const KOSARSTAT_ONLY_GAME_IDS = String(CLI_GAME_IDS || process.env.KOSARSTAT_ONL
   .map(item => item.trim())
   .filter(Boolean);
 const KOSARSTAT_ONLY_ROUNDS_RAW = String(CLI_ROUNDS || process.env.KOSARSTAT_ONLY_ROUNDS || '').trim();
+const KOSARSTAT_DATE_FROM_RAW = String(CLI_DATE_FROM || process.env.KOSARSTAT_DATE_FROM || '').trim();
+const KOSARSTAT_DATE_TO_RAW = String(CLI_DATE_TO || process.env.KOSARSTAT_DATE_TO || '').trim();
+const KOSARSTAT_DATE_RANGE = parseDateRangeFilter(KOSARSTAT_DATE_FROM_RAW, KOSARSTAT_DATE_TO_RAW);
 const NAVIGATION_TIMEOUT_MS = parseInt(process.env.KOSARSTAT_NAVIGATION_TIMEOUT_MS || '60000', 10);
 const NAVIGATION_RETRIES = parseInt(process.env.KOSARSTAT_NAVIGATION_RETRIES || '4', 10);
 const REQUIRED_PAGE_TYPES = ['game', 'game_lineups', 'game_events', 'game_result_chart', 'game_quarters', 'game_clutch'] as const;
@@ -222,9 +245,8 @@ const navigateWithRetry = async (page: Page, url: string) => {
 };
 
 const collectGameIdsOnCurrentSeasonPage = async (page: Page) => {
-  return await page.$$eval('a, [onclick], [data-game], [data-game-id]', elements => {
+  return await page.$$eval('a, [onclick], [data-game], [data-game-id], [id], [data-id], tr, td, button', elements => {
     const ids = new Set<string>();
-    const pattern = /(?:[?&]game=|\bgame\D+)(\d{10,20})/g;
 
     for (const el of elements) {
       const candidates = [
@@ -232,14 +254,38 @@ const collectGameIdsOnCurrentSeasonPage = async (page: Page) => {
         el.getAttribute('onclick'),
         el.getAttribute('data-game'),
         el.getAttribute('data-game-id'),
+        el.getAttribute('id'),
+        el.getAttribute('data-id'),
         el.textContent,
       ];
 
+      const datasetSource = Object.values((el as HTMLElement).dataset || {}).join(' ');
+      if (datasetSource) candidates.push(datasetSource);
+
       for (const input of candidates) {
         if (!input) continue;
-        pattern.lastIndex = 0;
-        for (const match of input.matchAll(pattern)) {
-          if (match[1]) ids.add(match[1]);
+
+        const patterns = [
+          /(?:[?&](?:game|id)=)(\d{10,20})/gi,
+          /(?:\bgame\b|\bmatch\b|\bid\b)[^\d]{0,20}(\d{10,20})/gi,
+          /\b(20\d{10,18})\b/g,
+        ];
+
+        for (const pattern of patterns) {
+          for (const match of input.matchAll(pattern)) {
+            const candidate = match[1] || '';
+            if (!candidate || !/^\d{12,20}$/.test(candidate)) continue;
+
+            const y = Number.parseInt(candidate.slice(0, 4), 10);
+            const m = Number.parseInt(candidate.slice(4, 6), 10);
+            const d = Number.parseInt(candidate.slice(6, 8), 10);
+            if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) continue;
+            if (y < 2000 || y > 2100) continue;
+            if (m < 1 || m > 12) continue;
+            if (d < 1 || d > 31) continue;
+
+            ids.add(candidate);
+          }
         }
       }
     }
@@ -420,6 +466,56 @@ const moveToNextSeasonPage = async (page: Page, beforeSignature: string) => {
     }
   }
 
+  const movedByNumericPager = await page
+    .evaluate(() => {
+      const normalize = (value: string) => value.replace(/\s+/g, ' ').trim();
+      const parsePage = (value: string) => {
+        const match = normalize(value).match(/\d+/);
+        if (!match) return null;
+        const parsed = Number.parseInt(match[0], 10);
+        return Number.isFinite(parsed) ? parsed : null;
+      };
+
+      const containerCandidates = Array.from(
+        document.querySelectorAll('.dataTables_paginate, .pagination, .paginate_button, .paginate')
+      );
+      const scope: ParentNode = containerCandidates[0] || document;
+
+      const currentEl =
+        scope.querySelector('.paginate_button.current') ||
+        scope.querySelector('a[aria-current="page"]') ||
+        scope.querySelector('.active');
+
+      const currentPage = currentEl ? parsePage(currentEl.textContent || '') : null;
+      if (currentPage === null) return false;
+
+      const targetPage = currentPage + 1;
+      const clickable = Array.from(scope.querySelectorAll('a, button, span'));
+
+      for (const node of clickable) {
+        const label = normalize(node.textContent || '');
+        if (label !== String(targetPage)) continue;
+
+        const className = ((node as HTMLElement).className || '').toLowerCase();
+        const ariaDisabled = ((node as HTMLElement).getAttribute('aria-disabled') || '').toLowerCase();
+        const parentClass = ((node.parentElement?.className as string) || '').toLowerCase();
+        if (className.includes('disabled') || parentClass.includes('disabled') || ariaDisabled === 'true') continue;
+
+        (node as HTMLElement).click();
+        return true;
+      }
+
+      return false;
+    })
+    .catch(() => false);
+
+  if (movedByNumericPager) {
+    await dismissCookieBanner(page);
+    if (await waitForSeasonPageChange(page, beforeSignature, 5000)) {
+      return true;
+    }
+  }
+
   return false;
 };
 
@@ -453,6 +549,72 @@ const collectGameIdsByNextPagination = async (page: Page, seasonUrl: string, max
   return {
     gameIds: Array.from(gameIds),
     scannedPages: seenSignatures.size,
+  };
+};
+
+const collectGameIdsByMonthFilter = async (page: Page) => {
+  const gameIds = new Set<string>();
+
+  const monthOptions = await page
+    .evaluate(() => {
+      const monthRegex = /jan|feb|már|mar|ápr|apr|máj|maj|jún|jun|júl|jul|aug|szept|okt|nov|dec/i;
+
+      const selects = Array.from(document.querySelectorAll('select'));
+      const target = selects.find(select => {
+        const texts = Array.from(select.options).map(option => String(option.textContent || option.value || '').trim().toLowerCase());
+        const monthHits = texts.filter(text => monthRegex.test(text)).length;
+        return monthHits >= 6;
+      });
+
+      if (!target) return [] as string[];
+
+      return Array.from(target.options)
+        .map(option => option.value)
+        .filter(Boolean);
+    })
+    .catch(() => [] as string[]);
+
+  const uniqueMonths = Array.from(new Set(monthOptions));
+  if (uniqueMonths.length === 0) {
+    return { gameIds: Array.from(gameIds), scannedMonths: 0 };
+  }
+
+  for (const monthValue of uniqueMonths) {
+    const beforeSignature = await getSeasonPageSignature(page);
+
+    const changed = await page
+      .evaluate(value => {
+        const monthRegex = /jan|feb|már|mar|ápr|apr|máj|maj|jún|jun|júl|jul|aug|szept|okt|nov|dec/i;
+
+        const selects = Array.from(document.querySelectorAll('select'));
+        const target = selects.find(select => {
+          const texts = Array.from(select.options).map(option => String(option.textContent || option.value || '').trim().toLowerCase());
+          const monthHits = texts.filter(text => monthRegex.test(text)).length;
+          return monthHits >= 6;
+        });
+
+        if (!target) return false;
+        if (!Array.from(target.options).some(option => option.value === value)) return false;
+
+        target.value = value;
+        target.dispatchEvent(new Event('input', { bubbles: true }));
+        target.dispatchEvent(new Event('change', { bubbles: true }));
+        return true;
+      }, monthValue)
+      .catch(() => false);
+
+    if (!changed) continue;
+
+    await waitForSeasonPageChange(page, beforeSignature, 5000);
+    await page.waitForTimeout(400);
+
+    const idsOnPage = await collectGameIdsOnCurrentSeasonPage(page);
+    for (const id of idsOnPage) gameIds.add(id);
+  }
+
+  return {
+    gameIds: Array.from(gameIds),
+    scannedMonths: uniqueMonths.length,
   };
 };
 
@@ -493,6 +655,10 @@ const extractGameIdsFromSeasonPage = async (page: Page) => {
   }
 
   console.log(`Season pages scanned (url crawl): ${visitedUrls.size}`);
+
+  const byMonth = await collectGameIdsByMonthFilter(page);
+  for (const id of byMonth.gameIds) gameIds.add(id);
+  console.log(`Season month filters scanned: ${byMonth.scannedMonths}`);
 
   return Array.from(gameIds);
 };
@@ -618,6 +784,70 @@ const extractDateFromKosarstatGameId = (value: string) => {
   const match = normalized.match(/^(\d{4})(\d{2})(\d{2})/);
   if (!match) return null;
   return `${match[1]}-${match[2]}-${match[3]}`;
+};
+
+const toUtcDayTimestamp = (value: string) => {
+  const normalized = String(value || '').trim().slice(0, 10);
+  const match = normalized.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+
+  const year = Number.parseInt(match[1], 10);
+  const month = Number.parseInt(match[2], 10);
+  const day = Number.parseInt(match[3], 10);
+  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return null;
+
+  return Date.UTC(year, month - 1, day);
+};
+
+const getRoundDateWindowMatches = (
+  rounds: Set<number>,
+  fixtureRows: Array<{ round?: unknown; game_date?: string | null }>,
+  candidateGameIds: string[]
+) => {
+  if (rounds.size === 0 || fixtureRows.length === 0 || candidateGameIds.length === 0) {
+    return new Set<string>();
+  }
+
+  const roundToDates = new Map<number, number[]>();
+
+  fixtureRows.forEach(row => {
+    const roundValue = parseDbRound(row.round);
+    const timestamp = toUtcDayTimestamp(String(row.game_date || ''));
+    if (roundValue === null || timestamp === null) return;
+
+    const existing = roundToDates.get(roundValue) || [];
+    existing.push(timestamp);
+    roundToDates.set(roundValue, existing);
+  });
+
+  const orderedRounds = Array.from(roundToDates.entries())
+    .map(([roundValue, timestamps]) => ({
+      roundValue,
+      start: Math.min(...timestamps),
+    }))
+    .sort((left, right) => left.start - right.start || left.roundValue - right.roundValue);
+
+  if (orderedRounds.length === 0) return new Set<string>();
+
+  const matches = new Set<string>();
+
+  orderedRounds.forEach((entry, index) => {
+    if (!rounds.has(entry.roundValue)) return;
+
+    const nextEntry = orderedRounds.slice(index + 1).find(candidate => candidate.start > entry.start);
+    const windowEnd = nextEntry?.start ?? null;
+
+    candidateGameIds.forEach(gameId => {
+      const gameDate = extractDateFromKosarstatGameId(gameId);
+      const timestamp = gameDate ? toUtcDayTimestamp(gameDate) : null;
+      if (timestamp === null) return;
+      if (timestamp < entry.start) return;
+      if (windowEnd !== null && timestamp >= windowEnd) return;
+      matches.add(gameId);
+    });
+  });
+
+  return matches;
 };
 
 const getTeamSide = (teamName: string, metadata: RawPageMetadata): 'home' | 'away' | 'unknown' => {
@@ -1000,6 +1230,7 @@ const getRoundMappedGameIds = async (seasonId: string, rounds: Set<number>, cand
   if (rounds.size === 0) return new Set<string>();
 
   const roundList = Array.from(rounds.values()).sort((a, b) => a - b);
+  const normalizedCandidates = Array.from(new Set(candidateGameIds.map(item => String(item || '').trim()).filter(Boolean)));
 
   // Preferred path: use Hunbasket round->date mapping from league fixtures,
   // then collect Kosarstat game ids whose game date matches those fixture dates.
@@ -1021,8 +1252,6 @@ const getRoundMappedGameIds = async (seasonId: string, rounds: Set<number>, cand
     targetDates.add(dateRaw.slice(0, 10));
   });
 
-  const normalizedCandidates = Array.from(new Set(candidateGameIds.map(item => String(item || '').trim()).filter(Boolean)));
-
   if (targetDates.size > 0 && normalizedCandidates.length > 0) {
     const filteredByGameIdDate = new Set<string>();
     normalizedCandidates.forEach(gameId => {
@@ -1037,6 +1266,30 @@ const getRoundMappedGameIds = async (seasonId: string, rounds: Set<number>, cand
         `Round mapping source: league_fixtures dates + kosarstat_game_id date (${targetDates.size} dates across rounds ${roundList.join(',')}).`
       );
       return filteredByGameIdDate;
+    }
+
+    const { data: allFixtureRows, error: allFixtureError } = await supabase
+      .from('league_fixtures')
+      .select('round, game_date')
+      .eq('season_id', seasonId)
+      .not('round', 'is', null)
+      .not('game_date', 'is', null);
+
+    if (allFixtureError) {
+      throw new Error(`DB round filter lookup failed (league_fixtures windows): ${formatSupabaseError(allFixtureError)}`);
+    }
+
+    const filteredByRoundWindow = getRoundDateWindowMatches(
+      rounds,
+      ((allFixtureRows || []) as Array<{ round?: unknown; game_date?: string | null }>),
+      normalizedCandidates
+    );
+
+    if (filteredByRoundWindow.size > 0) {
+      console.log(
+        `Round mapping source: league_fixtures round date window + kosarstat_game_id date (requested rounds ${roundList.join(',')}, matched ${filteredByRoundWindow.size}).`
+      );
+      return filteredByRoundWindow;
     }
   }
 
@@ -1594,6 +1847,18 @@ const main = async () => {
     console.log(`Kosarstat game IDs total to consider: ${allGameIds.length}`);
 
     let filteredGameIds = [...allGameIds];
+
+    if (KOSARSTAT_DATE_RANGE) {
+      filteredGameIds = filteredGameIds.filter(gameId => {
+        const gameDate = extractDateFromKosarstatGameId(gameId);
+        if (!gameDate) return false;
+        return gameDate >= KOSARSTAT_DATE_RANGE.from && gameDate <= KOSARSTAT_DATE_RANGE.to;
+      });
+
+      console.log(
+        `Date filter active: from=${KOSARSTAT_DATE_RANGE.from} to=${KOSARSTAT_DATE_RANGE.to} matched=${filteredGameIds.length}.`
+      );
+    }
 
     if (KOSARSTAT_ONLY_ROUNDS.size > 0) {
       const roundMappedGameIds = await getRoundMappedGameIds(seasonId, KOSARSTAT_ONLY_ROUNDS, filteredGameIds);
