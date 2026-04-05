@@ -208,6 +208,7 @@ type SupabasePlayerGameStat = {
   id: string;
   player_id: string;
   game_id: string;
+  is_starter?: boolean | null;
   points: number;
   minutes: number;
   close_made: number;

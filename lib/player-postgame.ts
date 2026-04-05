@@ -256,9 +256,19 @@ const computeImpactScore = (player: PlayerGameStat, context: DerivedPlayerContex
   return round((normalizedVal * 0.45 + normalizedTs * 0.25 + normalizedUsage * 0.2 + normalizedStocks * 0.1) * 100, 1);
 };
 
-const classifyImpact = (score: number, minutesBucket: PlayerMinutesBucket): PlayerImpactClass => {
-  if (minutesBucket !== 'micro' && score >= 75) return 'mvp';
-  if (score >= 60) return 'engine';
+const classifyImpact = (score: number, context: DerivedPlayerContext, minutes: number): PlayerImpactClass => {
+  // Very small minute samples should not be promoted to core-role labels.
+  if (context.minutesBucket === 'micro') {
+    if (score >= 62) return 'support';
+    return 'struggling';
+  }
+
+  const eligibleForMvp = minutes >= 22 && (context.isStarter || context.minutesBucket === 'heavy');
+  if (eligibleForMvp && score >= 75) return 'mvp';
+
+  const eligibleForEngine = minutes >= 16 || (context.isStarter && minutes >= 12);
+  if (eligibleForEngine && score >= 60) return 'engine';
+
   if (score >= 45) return 'support';
   return 'struggling';
 };
@@ -286,6 +296,7 @@ export const buildPlayerPostGameReport = (
   shotMapContext?: PlayerShotMapContext
 ): PlayerPostGameReport => {
   const activePlayers = players.filter(player => player.minutes > 0).length;
+  const hasExplicitStarterInfo = players.some(player => typeof player.isStarter === 'boolean');
 
   const starterIds = new Set(
     [...players]
@@ -309,7 +320,9 @@ export const buildPlayerPostGameReport = (
   );
 
   const breakdowns: PlayerPostGameBreakdown[] = players.map(player => {
-    const isStarter = starterIds.has(player.playerId);
+    const isStarter = hasExplicitStarterInfo
+      ? player.isStarter === true
+      : starterIds.has(player.playerId);
     const minutesBucket = classifyMinutesBucket(player.minutes);
     const usage = computePlayerUsage(player);
     const usageShare = totals.usage > 0 ? usage / totals.usage : 0;
@@ -338,7 +351,7 @@ export const buildPlayerPostGameReport = (
     appendShotMapSignals(strengths, issues, focus, shotMapContext?.[player.playerId]);
     const impactTags = buildImpactTags(player, context);
     const impactScore = computeImpactScore(player, context);
-    const impactClass = classifyImpact(impactScore, minutesBucket);
+    const impactClass = classifyImpact(impactScore, context, player.minutes);
     const impactLabel = mapContextualImpactLabel(impactClass, context);
 
     return {

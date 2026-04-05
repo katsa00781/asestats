@@ -68,6 +68,7 @@ type GamePlayerStatRow = {
   id: string;
   player_id: string;
   game_id: string;
+  is_starter?: boolean | null;
   points?: number | null;
   minutes?: number | null;
   close_made?: number | null;
@@ -9108,14 +9109,30 @@ export function SeasonComparison({
       opponentGame.result = selectedGame.result === 'win' ? 'loss' : 'win';
     }
 
+    const activeLineupTeam =
+      kosarstatLineupAnalysis?.selectedTeam ||
+      kosarstatLineupAnalysis?.homeTeam ||
+      kosarstatLineupAnalysis?.awayTeam ||
+      null;
+
+    const starterProfiles = (activeLineupTeam?.starters || [])
+      .map(name => buildNormalizedNameProfile(name))
+      .filter(profile => profile.key.length > 0);
+
     const players: PlayerGameStat[] = teamPlayers.map(row => {
       const seasonPlayer = seasonPlayers.find(player => String(player.id) === String(row.player_id));
       const fallbackName = row.players?.name?.trim();
+      const resolvedName = seasonPlayer?.name || fallbackName || row.player_id;
+      const explicitStarter = typeof row.is_starter === 'boolean' ? row.is_starter : undefined;
+      const inferredStarter = starterProfiles.length > 0
+        ? matchesNormalizedNameProfile(resolvedName, starterProfiles)
+        : undefined;
 
       return {
         playerId: row.player_id,
-        name: seasonPlayer?.name || fallbackName || row.player_id,
+        name: resolvedName,
         position: mapPosition(seasonPlayer?.position || 'PG'),
+        isStarter: explicitStarter ?? inferredStarter,
         minutes: row.minutes || 0,
         points: row.points || 0,
         fga2: (row.close_attempted || 0) + (row.mid_attempted || 0),
@@ -9174,12 +9191,6 @@ export function SeasonComparison({
       alignedXFactorContext,
       postgameShotContext ?? undefined
     );
-
-    const activeLineupTeam =
-      kosarstatLineupAnalysis?.selectedTeam ||
-      kosarstatLineupAnalysis?.homeTeam ||
-      kosarstatLineupAnalysis?.awayTeam ||
-      null;
 
     const lineupInsights: PostGameReport['lineupInsights'] | undefined = (() => {
       if (!activeLineupTeam) return undefined;

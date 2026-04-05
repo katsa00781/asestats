@@ -34,6 +34,7 @@ export type PlayerGameStat = {
   playerId: string;
   name: string;
   position: Position;
+  isStarter?: boolean;
   minutes: number;
   points: number;
   fga2: number;
