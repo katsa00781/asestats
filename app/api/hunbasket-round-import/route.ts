@@ -11,15 +11,22 @@ type ImportRequestPayload = {
   seasonSlug?: string;
   seasonName?: string;
   seasonId?: string;
+  leagueCode?: string;
+  scheduleUrl?: string;
+  standingsUrl?: string;
   headless?: boolean;
 };
 
 type ImportOptions = {
-  roundFilter: string;
+  roundFilter?: string;
   teamFilter?: string;
   seasonSlug?: string;
   seasonName?: string;
   seasonId?: string;
+  leagueCode?: string;
+  scheduleUrl?: string;
+  standingsUrl?: string;
+  standingsMatchday?: number;
   headless?: boolean;
   signal?: AbortSignal;
 };
@@ -28,6 +35,11 @@ type ImportResult = {
   stdout: string;
   stderr: string;
   exitCode: number;
+};
+
+type ScriptResult = {
+  stdout: string;
+  stderr: string;
 };
 
 const NPX_COMMAND = process.platform === 'win32' ? 'npx.cmd' : 'npx';
@@ -39,15 +51,12 @@ export async function POST(request: Request) {
   }
 
   const payload = (await request.json().catch(() => null)) as ImportRequestPayload | null;
-  const rawRoundFilter = payload?.roundFilter?.trim();
-  if (!rawRoundFilter) {
-    return NextResponse.json({ ok: false, error: 'Hiányzik a roundFilter mező.' }, { status: 400 });
-  }
+  const sanitizedRoundFilter = sanitizeRoundFilter(payload?.roundFilter);
 
-  const sanitizedRoundFilter = rawRoundFilter.replace(/[^0-9,\s-]/g, '').trim();
-  if (!sanitizedRoundFilter) {
-    return NextResponse.json({ ok: false, error: 'A roundFilter csak számokat, vesszőt és kötőjelet tartalmazhat.' }, { status: 400 });
-  }
+  const scheduleUrl = sanitizeScheduleUrl(payload?.scheduleUrl);
+  const leagueCode = sanitizeLeagueCode(payload?.leagueCode);
+  const standingsUrl = sanitizeStandingsUrl(payload?.standingsUrl) || deriveStandingsUrl(scheduleUrl);
+  const standingsMatchday = parseRoundFilterMaxRound(sanitizedRoundFilter);
 
   isRunning = true;
   const startedAt = Date.now();
@@ -59,6 +68,10 @@ export async function POST(request: Request) {
       seasonSlug: payload?.seasonSlug?.trim() || undefined,
       seasonName: payload?.seasonName?.trim() || undefined,
       seasonId: payload?.seasonId?.trim() || undefined,
+      leagueCode,
+      scheduleUrl,
+      standingsUrl,
+      standingsMatchday,
       headless: payload?.headless,
       signal: request.signal,
     });
@@ -85,7 +98,19 @@ export async function POST(request: Request) {
   }
 }
 
-const runImporter = ({ roundFilter, teamFilter, seasonSlug, seasonName, seasonId, headless = true, signal }: ImportOptions) =>
+const runImporter = ({
+  roundFilter,
+  teamFilter,
+  seasonSlug,
+  seasonName,
+  seasonId,
+  leagueCode,
+  scheduleUrl,
+  standingsUrl,
+  standingsMatchday,
+  headless = true,
+  signal,
+}: ImportOptions) =>
   new Promise<ImportResult>((resolve, reject) => {
     let settled = false;
     const safeResolve = (result: ImportResult) => {
@@ -101,16 +126,83 @@ const runImporter = ({ roundFilter, teamFilter, seasonSlug, seasonName, seasonId
 
     const env: NodeJS.ProcessEnv = {
       ...process.env,
-      HUNBASKET_ROUND_FILTER: roundFilter,
       HUNBASKET_HEADLESS: headless === false ? 'false' : 'true',
     };
 
+    if (roundFilter) env.HUNBASKET_ROUND_FILTER = roundFilter;
     if (teamFilter !== undefined) env.HUNBASKET_TEAM_FILTER = teamFilter;
     if (seasonSlug) env.HUNBASKET_SEASON_SLUG = seasonSlug;
     if (seasonName) env.HUNBASKET_SEASON_NAME = seasonName;
     if (seasonId) env.HUNBASKET_SEASON_ID = seasonId;
+    if (leagueCode) env.HUNBASKET_LEAGUE_CODE = leagueCode;
+    if (scheduleUrl) env.HUNBASKET_SCHEDULE_URL = scheduleUrl;
+    if (standingsUrl) env.HUNBASKET_STANDINGS_URL = standingsUrl;
+    if (typeof standingsMatchday === 'number') env.HUNBASKET_STANDINGS_MATCHDAY = String(standingsMatchday);
 
-    const child = spawn(NPX_COMMAND, ['tsx', 'scrape-hunbasket.ts'], {
+    let stdout = '';
+    let stderr = '';
+    let aborted = false;
+
+    const run = async () => {
+      const fixtures = await runScript('scrape-hunbasket-fixtures.ts', env, signal);
+      stdout += fixtures.stdout;
+      stderr += fixtures.stderr;
+
+      const standings = await runScript('scrape-hunbasket-standings.ts', env, signal);
+      stdout += standings.stdout;
+      stderr += standings.stderr;
+
+      const stats = await runScript('scrape-hunbasket.ts', env, signal);
+      stdout += stats.stdout;
+      stderr += stats.stderr;
+
+      safeResolve({ stdout, stderr, exitCode: 0 });
+    };
+
+    const handleAbort = () => {
+      aborted = true;
+      safeReject(Object.assign(new Error('Az import folyamat megszakadt.'), { stdout, stderr, exitCode: 1 }));
+    };
+
+    if (signal) {
+      if (signal.aborted) {
+        handleAbort();
+        return;
+      }
+      signal.addEventListener('abort', handleAbort, { once: true });
+    }
+
+    run().catch(error => {
+      if (signal) {
+        signal.removeEventListener('abort', handleAbort);
+      }
+
+      if (aborted) return;
+
+      const details = error as Error & Partial<ImportResult>;
+      safeReject(
+        Object.assign(
+          new Error(details.message || 'Az importáló folyamat hibával állt le.'),
+          {
+            stdout: stdout + (details.stdout || ''),
+            stderr: stderr + (details.stderr || ''),
+            exitCode: details.exitCode ?? 1,
+          }
+        )
+      );
+      return;
+    }).finally(() => {
+      if (signal) {
+        signal.removeEventListener('abort', handleAbort);
+      }
+    });
+  });
+
+const runScript = (scriptName: string, env: NodeJS.ProcessEnv, signal?: AbortSignal) =>
+  new Promise<ScriptResult>((resolve, reject) => {
+    let settled = false;
+
+    const child = spawn(NPX_COMMAND, ['tsx', scriptName], {
       cwd: process.cwd(),
       env,
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -119,9 +211,21 @@ const runImporter = ({ roundFilter, teamFilter, seasonSlug, seasonName, seasonId
     let stdout = '';
     let stderr = '';
 
+    const safeResolve = (value: ScriptResult) => {
+      if (settled) return;
+      settled = true;
+      resolve(value);
+    };
+
+    const safeReject = (error: Error & Partial<ImportResult>) => {
+      if (settled) return;
+      settled = true;
+      reject(error);
+    };
+
     const handleAbort = () => {
       child.kill('SIGTERM');
-      safeReject(new Error('Az import folyamat megszakadt.'));
+      safeReject(Object.assign(new Error(`Az import folyamat megszakadt (${scriptName}).`), { stdout, stderr, exitCode: 1 }));
     };
 
     if (signal) {
@@ -141,7 +245,7 @@ const runImporter = ({ roundFilter, teamFilter, seasonSlug, seasonName, seasonId
     });
 
     child.on('error', error => {
-      safeReject(error);
+      safeReject(Object.assign(error, { stdout, stderr, exitCode: 1 }));
     });
 
     child.on('close', code => {
@@ -150,13 +254,78 @@ const runImporter = ({ roundFilter, teamFilter, seasonSlug, seasonName, seasonId
       }
 
       if (code === 0) {
-        safeResolve({ stdout, stderr, exitCode: 0 });
+        safeResolve({ stdout, stderr });
       } else {
-        const execError = new Error(`Az importáló folyamat ${code} kóddal állt le.`);
-        (execError as Error & ImportResult).stdout = stdout;
-        (execError as Error & ImportResult).stderr = stderr;
-        (execError as Error & ImportResult).exitCode = code ?? 1;
-        safeReject(execError as Error & ImportResult);
+        safeReject(
+          Object.assign(new Error(`Az importáló script (${scriptName}) ${code ?? 1} kóddal állt le.`), {
+            stdout,
+            stderr,
+            exitCode: code ?? 1,
+          })
+        );
       }
     });
   });
+
+const sanitizeScheduleUrl = (value?: string | null) => {
+  if (!value) return undefined;
+  try {
+    const parsed = new URL(value);
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return undefined;
+    parsed.pathname = parsed.pathname.replace('/menetrend/', '/menetrend-teljes/');
+    return parsed.toString();
+  } catch {
+    return undefined;
+  }
+};
+
+const sanitizeLeagueCode = (value?: string | null) => {
+  if (!value) return undefined;
+  const sanitized = value.trim().replace(/[^a-z0-9_]/gi, '').toLowerCase();
+  return sanitized || undefined;
+};
+
+const sanitizeStandingsUrl = (value?: string | null) => {
+  if (!value) return undefined;
+  try {
+    const parsed = new URL(value);
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return undefined;
+    return parsed.toString();
+  } catch {
+    return undefined;
+  }
+};
+
+const deriveStandingsUrl = (scheduleUrl?: string) => {
+  if (!scheduleUrl) return undefined;
+  try {
+    const parsed = new URL(scheduleUrl);
+    if (parsed.pathname.includes('/menetrend-teljes/')) {
+      parsed.pathname = parsed.pathname.replace('/menetrend-teljes/', '/tabella/');
+      return parsed.toString();
+    }
+    if (parsed.pathname.includes('/menetrend/')) {
+      parsed.pathname = parsed.pathname.replace('/menetrend/', '/tabella/');
+      return parsed.toString();
+    }
+    return undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+const parseRoundFilterMaxRound = (value?: string) => {
+  if (!value) return undefined;
+  const numbers = Array.from(value.matchAll(/\d+/g)).map(match => parseInt(match[0], 10)).filter(Number.isFinite);
+  if (numbers.length === 0) return undefined;
+  return Math.max(...numbers);
+};
+
+const sanitizeRoundFilter = (value?: string | null) => {
+  if (!value) return undefined;
+  const sanitized = value
+    .replace(/[^\p{L}0-9,\s-]/gu, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return sanitized || undefined;
+};

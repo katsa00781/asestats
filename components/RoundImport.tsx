@@ -14,6 +14,10 @@ export type RoundImportProps = {
   onImportComplete?: () => void;
 };
 
+const DEFAULT_SEASON_SLUG = 'x2526';
+const DEFAULT_LEAGUE_CODE = 'hun_ply';
+const DEFAULT_SCHEDULE_URL = `https://hunbasket.hu/menetrend-teljes/ferfi/${DEFAULT_SEASON_SLUG}/${DEFAULT_LEAGUE_CODE}`;
+
 type ImportStatus = 'idle' | 'running' | 'success' | 'error';
 
 type ApiResponse = {
@@ -26,13 +30,16 @@ type ApiResponse = {
 
 export function RoundImport({ selectedSeasonId, selectedSeasonName, onImportComplete }: RoundImportProps) {
   const [roundFilter, setRoundFilter] = useState('');
+  const [seasonSlug, setSeasonSlug] = useState(DEFAULT_SEASON_SLUG);
+  const [leagueCode, setLeagueCode] = useState(DEFAULT_LEAGUE_CODE);
+  const [scheduleUrl, setScheduleUrl] = useState(DEFAULT_SCHEDULE_URL);
   const [status, setStatus] = useState<ImportStatus>('idle');
   const [stdout, setStdout] = useState('');
   const [stderr, setStderr] = useState('');
   const [durationMs, setDurationMs] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const canRun = Boolean(selectedSeasonId && roundFilter.trim() && status !== 'running');
+  const canRun = Boolean(selectedSeasonId && status !== 'running');
 
   const handleImport = async () => {
     if (!selectedSeasonId) {
@@ -40,12 +47,6 @@ export function RoundImport({ selectedSeasonId, selectedSeasonName, onImportComp
       setStatus('error');
       return;
     }
-    if (!roundFilter.trim()) {
-      setError('Adj meg legalább egy fordulót.');
-      setStatus('error');
-      return;
-    }
-
     setStatus('running');
     setError(null);
     setStdout('');
@@ -57,9 +58,12 @@ export function RoundImport({ selectedSeasonId, selectedSeasonName, onImportComp
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          roundFilter: roundFilter.trim(),
+          roundFilter: roundFilter.trim() || undefined,
           seasonId: selectedSeasonId,
           seasonName: selectedSeasonName,
+          seasonSlug: seasonSlug.trim() || undefined,
+          leagueCode: leagueCode.trim() || undefined,
+          scheduleUrl: scheduleUrl.trim() || undefined,
         }),
       });
 
@@ -118,7 +122,7 @@ export function RoundImport({ selectedSeasonId, selectedSeasonName, onImportComp
           Forduló alapú Hunbasket import
         </CardTitle>
         <CardDescription className="text-slate-400">
-          Csak azok a meccsek kerülnek feldolgozásra, amelyek eredménye nem 0-0 és beleesnek a megadott fordulókba.
+          A művelet frissíti a menetrendet (következő meccsek), a tabellát és a fordulószűrt meccsstatisztikákat is.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -140,11 +144,11 @@ export function RoundImport({ selectedSeasonId, selectedSeasonName, onImportComp
             <Input
               value={roundFilter}
               onChange={event => setRoundFilter(event.target.value)}
-              placeholder="pl. 5 vagy 10-12,15"
+              placeholder="opcionális: pl. 5 vagy 10-12,15 vagy Negyeddöntő"
               className="bg-slate-800 border-slate-700 text-slate-100"
             />
             <p className="text-xs text-slate-500">
-              Több forduló: 5,7,9 • Tartomány: 10-12 • Kombinálható (pl. 3-4,9).
+              Opcionális. Több forduló: 5,7,9 • Tartomány: 10-12 • Playoff kör: Negyeddöntő, Elődöntő.
             </p>
           </div>
           <Button
@@ -159,6 +163,36 @@ export function RoundImport({ selectedSeasonId, selectedSeasonName, onImportComp
             )}
             Import indítása
           </Button>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-3">
+          <div className="space-y-2">
+            <label className="text-sm text-slate-300">Season slug</label>
+            <Input
+              value={seasonSlug}
+              onChange={event => setSeasonSlug(event.target.value)}
+              placeholder="pl. x2526"
+              className="bg-slate-800 border-slate-700 text-slate-100"
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm text-slate-300">League kód</label>
+            <Input
+              value={leagueCode}
+              onChange={event => setLeagueCode(event.target.value)}
+              placeholder="pl. hun_ply"
+              className="bg-slate-800 border-slate-700 text-slate-100"
+            />
+          </div>
+          <div className="space-y-2 md:col-span-3">
+            <label className="text-sm text-slate-300">Menetrend URL (tabella + eredmények forrás)</label>
+            <Input
+              value={scheduleUrl}
+              onChange={event => setScheduleUrl(event.target.value)}
+              placeholder="https://hunbasket.hu/menetrend-teljes/ferfi/x2526/hun_ply"
+              className="bg-slate-800 border-slate-700 text-slate-100"
+            />
+          </div>
         </div>
 
         {renderStatus()}

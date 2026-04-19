@@ -10,6 +10,7 @@
  * - HUNBASKET_SEASON_SLUG (alapértelmezett: x2526)
  * - HUNBASKET_SEASON_NAME (például: 2025/2026)
  * - HUNBASKET_SEASON_ID (ha megadod, nem keresünk név alapján)
+ * - HUNBASKET_SCHEDULE_URL (egyedi menetrend URL, pl. rájátszás: .../hun_ply)
  * - HUNBASKET_TEAM_FILTER (vesszővel elválasztott csapatlista részleges importhoz)
  * - HUNBASKET_ROUND_FILTER (pl. "5" vagy "3-5,12" a fordulók szűréséhez)
  * - HUNBASKET_HEADLESS=false (ha látni akarod a böngészőt futás közben)
@@ -36,6 +37,9 @@ const HUNBASKET_SEASON_SLUG = process.env.HUNBASKET_SEASON_SLUG || 'x2526';
 const HUNBASKET_SEASON_NAME = process.env.HUNBASKET_SEASON_NAME || '2025/2026';
 const HUNBASKET_SEASON_ID = process.env.HUNBASKET_SEASON_ID;
 const HUNBASKET_LEAGUE_CODE = process.env.HUNBASKET_LEAGUE_CODE || 'hun';
+const HUNBASKET_SCHEDULE_URL =
+  process.env.HUNBASKET_SCHEDULE_URL ||
+  `https://hunbasket.hu/menetrend-teljes/ferfi/${HUNBASKET_SEASON_SLUG}/${HUNBASKET_LEAGUE_CODE}`;
 const HUNBASKET_FILM_API_URL = 'https://hunbasket.hu/ajax/film.php';
 const TEAM_FILTER = (process.env.HUNBASKET_TEAM_FILTER || '')
   .split(',')
@@ -43,6 +47,14 @@ const TEAM_FILTER = (process.env.HUNBASKET_TEAM_FILTER || '')
   .filter(Boolean);
 const parseRoundFilterInput = (value: string) => {
   const rounds = new Set<number>();
+  const stages = new Set<string>();
+  const normalizeStage = (input: string) =>
+    input
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/\p{Diacritic}/gu, '')
+      .replace(/[^a-z0-9\s-]/g, '')
+      .trim();
   value
     .split(',')
     .map(part => part.trim())
@@ -64,10 +76,16 @@ const parseRoundFilterInput = (value: string) => {
       const parsed = parseInt(token, 10);
       if (!Number.isNaN(parsed)) {
         rounds.add(parsed);
+        return;
+      }
+
+      const normalizedStage = normalizeStage(token);
+      if (normalizedStage) {
+        stages.add(normalizedStage);
       }
     });
 
-  return rounds;
+  return { rounds, stages };
 };
 const ROUND_FILTER = parseRoundFilterInput(process.env.HUNBASKET_ROUND_FILTER || '');
 const HEADLESS = process.env.HUNBASKET_HEADLESS === 'false' ? false : true;
@@ -120,6 +138,7 @@ type GameLink = {
   homeTeam: string;
   awayTeam: string;
   score: string;
+  stage: string | null;
   round: number | null;
 };
 
@@ -176,6 +195,11 @@ const buildAbbreviation = (value: string) =>
     .filter(Boolean)
     .map(token => (token.length <= 2 ? token : token[0]))
     .join('');
+
+const tokenizeTeamName = (value: string) =>
+  normalizeName(value)
+    .split(/[\s-]+/)
+    .filter(token => token.length >= 2);
 
 const cleanTeamName = (value: string) =>
   value
@@ -239,9 +263,16 @@ const parseMinutes = (value: string) => {
 const TEAM_FILTER_NORMALIZED = TEAM_FILTER.map(normalizeName).filter(Boolean);
 
 const matchesRoundFilter = (round?: number | null) => {
-  if (ROUND_FILTER.size === 0) return true;
+  if (ROUND_FILTER.rounds.size === 0 && ROUND_FILTER.stages.size === 0) return true;
   if (typeof round !== 'number' || Number.isNaN(round)) return false;
-  return ROUND_FILTER.has(round);
+  return ROUND_FILTER.rounds.has(round);
+};
+
+const matchesStageFilter = (stage?: string | null) => {
+  if (ROUND_FILTER.rounds.size === 0 && ROUND_FILTER.stages.size === 0) return true;
+  const normalized = normalizeName(stage || '');
+  if (!normalized) return false;
+  return ROUND_FILTER.stages.has(normalized);
 };
 
 const matchesFilter = (teamName: string) => {
@@ -269,9 +300,22 @@ const findTeamInCache = (name: string) => {
   const normalizedTarget = normalizeName(name);
   if (!normalizedTarget) return undefined;
 
+  const targetTokens = tokenizeTeamName(name);
+
   return (
     cachedTeams.find(team => normalizeName(team.name) === normalizedTarget) ||
     cachedTeams.find(team => team.short_name && normalizeName(team.short_name) === normalizedTarget) ||
+    cachedTeams.find(team => {
+      const normalizedTeamName = normalizeName(team.name);
+      return normalizedTeamName.includes(normalizedTarget) || normalizedTarget.includes(normalizedTeamName);
+    }) ||
+    cachedTeams.find(team => {
+      if (targetTokens.length === 0) return false;
+      const teamTokens = tokenizeTeamName(team.name);
+      if (teamTokens.length === 0) return false;
+      const overlap = targetTokens.filter(token => teamTokens.includes(token)).length;
+      return overlap >= Math.min(2, targetTokens.length);
+    }) ||
     cachedTeams.find(team => {
       const teamAbbr = buildAbbreviation(normalizeName(team.name));
       const targetAbbr = buildAbbreviation(normalizedTarget);
@@ -297,6 +341,31 @@ const ensureTeam = async (name: string): Promise<TeamRecord> => {
     .single();
 
   if (error || !data) {
+    const message = error?.message || '';
+    const isShortNameConflict = message.includes('teams_short_name_key') || message.includes('duplicate key value');
+
+    if (isShortNameConflict) {
+      await refreshTeamCache();
+      const recovered = findTeamInCache(cleanedName);
+      if (recovered) return recovered;
+
+      const fallbackInsert = await supabase
+        .from('teams')
+        .insert({
+          name: cleanedName,
+          short_name: null,
+          is_primary: false,
+        })
+        .select('id, name, short_name, is_primary')
+        .single();
+
+      if (!fallbackInsert.error && fallbackInsert.data) {
+        cachedTeams.push(fallbackInsert.data);
+        console.log(`    🆕 Új csapat felvéve (short_name nélkül): ${fallbackInsert.data.name}`);
+        return fallbackInsert.data;
+      }
+    }
+
     throw new Error(`Csapat létrehozási hiba (${cleanedName}): ${error?.message}`);
   }
 
@@ -344,17 +413,18 @@ const resolveSeasonId = async (): Promise<string> => {
 
 const getGameLinks = async (page: Page): Promise<GameLink[]> => {
   console.log('📋 Meccslista letöltése...');
-  await page.goto(`https://hunbasket.hu/menetrend-teljes/ferfi/${HUNBASKET_SEASON_SLUG}/hun`, { waitUntil: 'domcontentloaded' });
+  await page.goto(HUNBASKET_SCHEDULE_URL, { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(3000);
 
   const games = await page.$$eval('table tbody tr', rows => {
-    const entries: { date: string; url: string; gameCode: string; homeTeam: string; awayTeam: string; score: string; round: number | null }[] = [];
+    const entries: { date: string; url: string; gameCode: string; homeTeam: string; awayTeam: string; score: string; stage: string | null; round: number | null }[] = [];
 
     rows.forEach(row => {
       const cells = row.querySelectorAll('td');
       if (cells.length < 5) return;
 
       const roundText = (cells[0]?.textContent || '').trim();
+      const stage = roundText || null;
       const roundMatch = roundText.match(/\d+/);
       const round = roundMatch ? parseInt(roundMatch[0] || '0', 10) || null : null;
       const homeTeam = (cells[1]?.textContent || '').trim();
@@ -365,7 +435,7 @@ const getGameLinks = async (page: Page): Promise<GameLink[]> => {
 
       if (!summaryLink) return;
       if (!scoreText.match(/\d+\s*[–-]\s*\d+/)) return;
-      const gameCodeMatch = summaryLink.href.match(/\/merkozes\/[^/]+\/[^/]+\/(hun_\d+)/i);
+      const gameCodeMatch = summaryLink.href.match(/\/merkozes\/[^/]+\/[^/]+\/([a-z0-9_]+)/i);
       if (!gameCodeMatch) return;
 
       const dateMatch = dateText.match(/(\d{4})\.\s*(\d{1,2})\.\s*(\d{1,2})/);
@@ -380,6 +450,7 @@ const getGameLinks = async (page: Page): Promise<GameLink[]> => {
         homeTeam,
         awayTeam,
         score: scoreText,
+        stage,
         round,
       });
     });
@@ -388,13 +459,16 @@ const getGameLinks = async (page: Page): Promise<GameLink[]> => {
   });
 
   const filtered = games.filter(game => {
-    if (!matchesRoundFilter(game.round)) return false;
+    if (!matchesRoundFilter(game.round) && !matchesStageFilter(game.stage)) return false;
     const { homeScore, awayScore } = parseScore(game.score);
     if (homeScore === 0 && awayScore === 0) return false;
     return matchesFilter(game.homeTeam) || matchesFilter(game.awayTeam);
   });
 
-  const roundFilterLabel = ROUND_FILTER.size > 0 ? ` (${ROUND_FILTER.size} forduló szűrve)` : '';
+  const hasRoundFilter = ROUND_FILTER.rounds.size > 0 || ROUND_FILTER.stages.size > 0;
+  const roundFilterLabel = hasRoundFilter
+    ? ` (${ROUND_FILTER.rounds.size} számozott + ${ROUND_FILTER.stages.size} szöveges kör szűrve)`
+    : '';
   console.log(`✅ ${filtered.length} feldolgozható meccs találva${roundFilterLabel}`);
   return filtered;
 };
