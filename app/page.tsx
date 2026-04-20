@@ -29,6 +29,7 @@ import { RoundImport } from '@/components/RoundImport';
 import { RosterImport } from '@/components/RosterImport';
 import { FixturesImport } from '@/components/FixturesImport';
 import { KosarstatPbpImport } from '@/components/KosarstatPbpImport';
+import { SituationalAnalysis } from '@/components/SituationalAnalysis';
 import type { PlayerTrend } from '@/lib/player-analysis';
 
 export type ShootingStats = {
@@ -889,6 +890,7 @@ export default function Home() {
                 <TabsTrigger value="standings" className={TAB_TRIGGER_CLASS}>Tabella</TabsTrigger>
                 <TabsTrigger value="games" className={TAB_TRIGGER_CLASS}>Meccsek</TabsTrigger>
                 <TabsTrigger value="gamelog" className={TAB_TRIGGER_CLASS}>Meccs Log</TabsTrigger>
+                <TabsTrigger value="situational" className={TAB_TRIGGER_CLASS}>Szituációk</TabsTrigger>
                 <TabsTrigger value="updates" className={TAB_TRIGGER_CLASS}>Frissítések</TabsTrigger>
                 <TabsTrigger value="manage" className={TAB_TRIGGER_CLASS}>Kezelés</TabsTrigger>
                 <TabsTrigger value="playersimport" className={TAB_TRIGGER_CLASS}>Játékos Import</TabsTrigger>
@@ -997,6 +999,16 @@ export default function Home() {
 
           <TabsContent value="manage">
             <PlayersManagement onPlayersChanged={loadData} />
+          </TabsContent>
+
+          <TabsContent value="situational">
+            {selectedTeamId && selectedSeasonId && (
+              <SituationalAnalysis
+                selectedTeamId={selectedTeamId}
+                selectedSeasonId={selectedSeasonId}
+                teamName={allTeams.find(t => t.id === selectedTeamId)?.name}
+              />
+            )}
           </TabsContent>
 
           <TabsContent value="playersimport">

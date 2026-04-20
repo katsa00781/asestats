@@ -65,6 +65,9 @@ export type NormalizedTeamStats = TeamSeasonStat & {
   ftRate: number;
   efg: number;
   valPerGame: number;
+  ortg: number;   // offensive rating: points per 100 own possessions
+  drtg: number;   // defensive rating: opponent points per 100 opp possessions
+  netRtg: number; // ortg - drtg
   opp2Pct: number;
   opp3Pct: number;
   oppTurnoverRate: number;
@@ -253,7 +256,7 @@ const round = (value: number, digits = 2) => {
 const clamp = (value: number, min: number, max: number) =>
   Math.min(Math.max(value, min), max);
 
-const LOWER_BETTER_STATS = new Set(['turnover_rate', 'opp2_pct', 'opp3_pct', 'fouls_per_game']);
+const LOWER_BETTER_STATS = new Set(['turnover_rate', 'opp2_pct', 'opp3_pct', 'fouls_per_game', 'drtg']);
 
 
 const ROLE_CATALOG = [
@@ -618,9 +621,17 @@ const buildDefensiveProfile = (
       ? 'Proxy alapján vállalható perimétervédekezés'
       : 'A perimétervédekezés bizonytalanabb';
 
-  const rebounding = frontcourtShare >= 38
-    ? 'A lepattanóprofil csak rotációs proxy alapján becsülhető'
-    : 'A lepattanóprofil bizonytalan, közvetlen védőlepattanó-kontextus nélkül';
+  const drebDenominator = team.dreb + team.opponent.oreb;
+  const drebRate = team.hasOpponentReb && drebDenominator > 0 ? team.dreb / drebDenominator : null;
+  const rebounding = drebRate !== null
+    ? drebRate >= 0.74
+      ? 'Erős védelmi lepattanózás'
+      : drebRate >= 0.63
+        ? 'Átlagos védelmi lepattanózás'
+        : 'Gyenge védelmi lepattanózás'
+    : frontcourtShare >= 38
+      ? 'Elfogadható lepattanózás (frontcourt proxy)'
+      : 'Lepattanóprofil nehezen becsülhető';
 
   const foulDiscipline = foulDisciplineScore >= 60
     ? 'Fegyelmezett fault-menedzsment'
@@ -663,6 +674,12 @@ const getStatValue = (team: NormalizedTeamStats, stat: string) => {
       return team.ftRate;
     case 'efg':
       return team.efg;
+    case 'ortg':
+      return team.ortg;
+    case 'drtg':
+      return team.drtg;
+    case 'net_rtg':
+      return team.netRtg;
     case 'val_per_game':
       return team.valPerGame;
     case 'opp2_pct':
@@ -713,8 +730,11 @@ export const normalizeTeamStats = (raw: TeamSeasonStat): NormalizedTeamStats => 
   const teamPossessionsPerGame = games > 0 ? teamPossessions / games : 0;
   const opponentPossessionsPerGame = games > 0 ? opponentPossessions / games : 0;
   const pace = (teamPossessionsPerGame + opponentPossessionsPerGame) / 2;
-  const assistRate = fga > 0 ? raw.ast / fga : 0;
+  const assistRate = fgm > 0 ? raw.ast / fgm : 0;
   const turnoverRate = teamPossessionsPerGame > 0 ? (raw.tov / games) / teamPossessionsPerGame : 0;
+  const ortg = teamPossessions > 0 ? (raw.pointsFor / teamPossessions) * 100 : 0;
+  const drtg = opponentPossessions > 0 ? (raw.pointsAgainst / opponentPossessions) * 100 : 0;
+  const netRtg = ortg > 0 && drtg > 0 ? ortg - drtg : 0;
   const orebDenominator = raw.oreb + raw.opponent.dreb;
   const orebRate = orebDenominator > 0 ? raw.oreb / orebDenominator : 0;
   const twoRate = fga > 0 ? raw.fga2 / fga : 0;
@@ -743,6 +763,9 @@ export const normalizeTeamStats = (raw: TeamSeasonStat): NormalizedTeamStats => 
     ftRate: round(ftRate, 3),
     efg: round(efg, 1),
     valPerGame: round(valPerGame, 1),
+    ortg: round(ortg, 1),
+    drtg: round(drtg, 1),
+    netRtg: round(netRtg, 1),
     opp2Pct: round(opp2Pct, 1),
     opp3Pct: round(opp3Pct, 1),
     oppTurnoverRate: round(oppTurnoverRate, 3),
@@ -762,6 +785,9 @@ const STAT_KEYS = [
   'three_pct',
   'ft_rate',
   'efg',
+  'ortg',
+  'drtg',
+  'net_rtg',
   'val_per_game',
   'opp2_pct',
   'opp3_pct',
@@ -921,7 +947,7 @@ const getClusterLabel = (inputs: {
   usageScore: number;
   pressureScore: number;
 }) => {
-  const { paceScore, twoRateScore, threeRateScore, assistScore, usageScore, pressureScore } = inputs;
+  const { paceScore, twoRateScore, threeRateScore, assistScore, pressureScore } = inputs;
 
   if (paceScore >= 70 && pressureScore >= 60) return 'Transition-heavy';
   if (paceScore >= 60 && twoRateScore >= 60) return 'Gyors, belső fókuszú';
@@ -929,11 +955,18 @@ const getClusterLabel = (inputs: {
   if (paceScore <= 45 && assistScore >= 60) return 'Halfcourt, playmaker-domináns';
   if (pressureScore >= 70 && paceScore <= 55) return 'Defense-first';
 
-  const maxScore = Math.max(paceScore, twoRateScore, threeRateScore, assistScore, usageScore, pressureScore);
-  if (maxScore === pressureScore) return 'Defense-first';
-  if (maxScore === paceScore) return 'Transition-heavy';
-  if (maxScore === twoRateScore) return 'Gyors, belső fókuszú';
-  if (maxScore === threeRateScore) return 'Lassú, periméter-fókuszú';
+  const fallbackScores: [string, number][] = [
+    ['pressure', pressureScore],
+    ['pace', paceScore],
+    ['two_rate', twoRateScore],
+    ['three_rate', threeRateScore],
+    ['assist', assistScore],
+  ];
+  const [topKey] = fallbackScores.reduce((a, b) => (b[1] > a[1] ? b : a));
+  if (topKey === 'pressure') return 'Defense-first';
+  if (topKey === 'pace') return 'Transition-heavy';
+  if (topKey === 'two_rate') return 'Gyors, belső fókuszú';
+  if (topKey === 'three_rate') return 'Lassú, periméter-fókuszú';
   return 'Halfcourt, playmaker-domináns';
 };
 
@@ -1252,6 +1285,8 @@ const buildRosterInsights = (
 };
 
 const strengthLabels: Record<string, string> = {
+  ortg: 'Hatékony támadás (ORTG)',
+  net_rtg: 'Pozitív net rating',
   assist_rate: 'Magas assziszt-arány',
   turnover_rate: 'Labdabiztonság',
   oreb_rate: 'Erős támadólepattanózás',
@@ -1267,6 +1302,8 @@ const strengthLabels: Record<string, string> = {
 };
 
 const limitationLabels: Record<string, string> = {
+  drtg: 'Sebezhető védekezés (DRTG)',
+  net_rtg: 'Negatív net rating',
   assist_rate: 'Alacsony assziszt-arány',
   turnover_rate: 'Magas eladott labda arány',
   oreb_rate: 'Gyenge támadólepattanózás',
@@ -1519,7 +1556,11 @@ const buildSummary = (
     ? `A csapat a liga '${cluster}' klaszterébe tartozik (${clusterCount}/${leagueMeta.teamCount} csapat).`
     : `A csapat a liga '${cluster}' klaszterébe tartozik.`;
 
-  return `A csapat ${tempo.label}, ${offense.toLowerCase()} fókuszú támadást játszik. ${tempo.note} ${shotProfile} ${playmakingProfile} ${turnoverProfile} Védekezésben ${defense.toLowerCase()} karakterű, különösen ${defensiveProfile.rimProtection.toLowerCase()} és ${defensiveProfile.perimeterDefense.toLowerCase()} olvasható ki. ${rosterSentence}${rosterInsightSentence} ${percentileNotes.join(' ')} ${clusterNote}${defenseNote}`;
+  const netRtgNote = team.ortg > 0 && team.drtg > 0
+    ? `Net rating: ${team.netRtg >= 0 ? '+' : ''}${team.netRtg} (ORTG: ${team.ortg}, DRTG: ${team.drtg}).`
+    : '';
+
+  return `A csapat ${tempo.label}, ${offense.toLowerCase()} fókuszú támadást játszik. ${tempo.note} ${shotProfile} ${playmakingProfile} ${turnoverProfile} Védekezésben ${defense.toLowerCase()} karakterű, különösen ${defensiveProfile.rimProtection.toLowerCase()} és ${defensiveProfile.perimeterDefense.toLowerCase()} olvasható ki. ${rosterSentence}${rosterInsightSentence} ${netRtgNote} ${percentileNotes.join(' ')} ${clusterNote}${defenseNote}`.trim();
 };
 
 const buildLeagueProfile = (
@@ -1534,6 +1575,9 @@ const buildLeagueProfile = (
   const threePctScore = getPercentileScore(benchmarks, team, 'three_pct');
   const ftRateScore = getPercentileScore(benchmarks, team, 'ft_rate');
   const assistScore = getPercentileScore(benchmarks, team, 'assist_rate');
+  const ortgScore = getPercentileScore(benchmarks, team, 'ortg');
+  const drtgPerfScore = getPerformanceScore(benchmarks, team, 'drtg'); // inverted: low drtg = good
+  const netRtgScore = getPercentileScore(benchmarks, team, 'net_rtg');
   const usageScore = leagueMeta
     ? percentileFromThresholds(roster.top2UsageShare, leagueMeta.usageP10, leagueMeta.usageP90)
     : 50;
@@ -1618,6 +1662,27 @@ const buildLeagueProfile = (
         percentile: round(displayPercentile(frontcourtScore), 0),
         value: frontcourtPresence,
         tier: percentileLabel(frontcourtScore),
+      },
+      {
+        key: 'ortg',
+        label: 'Offenzív rating',
+        percentile: round(displayPercentile(ortgScore), 0),
+        value: team.ortg,
+        tier: percentileLabel(ortgScore),
+      },
+      {
+        key: 'drtg',
+        label: 'Defenzív rating',
+        percentile: round(displayPercentile(drtgPerfScore), 0),
+        value: team.drtg,
+        tier: percentileLabel(drtgPerfScore),
+      },
+      {
+        key: 'net_rtg',
+        label: 'Net rating',
+        percentile: round(displayPercentile(netRtgScore), 0),
+        value: team.netRtg,
+        tier: percentileLabel(netRtgScore),
       },
     ],
     clusterLabel,

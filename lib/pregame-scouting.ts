@@ -563,8 +563,8 @@ export const normalizeTeamStats = (raw: TeamSeasonStat): NormalizedTeamStats => 
   const teamPossessionsPerGame = games > 0 ? teamPossessions / games : 0;
   const opponentPossessionsPerGame = games > 0 ? opponentPossessions / games : 0;
   const pace = Math.max((teamPossessionsPerGame + opponentPossessionsPerGame) / 2, 0);
-  const assistRate = fga > 0 ? raw.ast / fga : 0;
-  const turnoverRate = pace > 0 ? (raw.tov / games) / pace : 0;
+  const assistRate = fgm > 0 ? raw.ast / fgm : 0;
+  const turnoverRate = teamPossessionsPerGame > 0 ? (raw.tov / games) / teamPossessionsPerGame : 0;
   const orebRate = (raw.oreb + opponent.dreb) > 0 ? raw.oreb / (raw.oreb + opponent.dreb) : 0;
   const twoRate = fga > 0 ? raw.fga2 / fga : 0;
   const threeRate = fga > 0 ? raw.fga3 / fga : 0;
@@ -650,6 +650,8 @@ const getBenchmarkThreshold = (
   return benchmarks[team.league]?.[team.season]?.[stat]?.[pct] ?? 0;
 };
 
+// Returns 0–100 via linear interpolation between P10 and P90.
+// A score of 50 means halfway between the 10th and 90th percentile, not the median.
 const getPercentileScore = (
   benchmarks: LeagueTeamBenchmarks,
   team: NormalizedTeamStats,
@@ -865,18 +867,16 @@ const buildShotProfileContext = (
 const computeProxyPer = (player: PlayerSeasonStat) => {
   const minutes = Math.max(player.minutes || 0, 1);
   const pointsPer36 = (player.points / minutes) * 36;
-  const valPer36 = (player.val / minutes) * 36;
   const astPer36 = (player.ast / minutes) * 36;
   const stlPer36 = (player.stl / minutes) * 36;
   const blkPer36 = (player.blk / minutes) * 36;
   const tovPer36 = (player.tov / minutes) * 36;
   const score =
-    valPer36 * 0.52 +
-    pointsPer36 * 0.24 +
-    astPer36 * 0.2 +
-    stlPer36 * 0.38 +
-    blkPer36 * 0.26 -
-    tovPer36 * 0.22;
+    pointsPer36 * 0.35 +
+    astPer36 * 0.22 +
+    stlPer36 * 0.26 +
+    blkPer36 * 0.17 -
+    tovPer36 * 0.20;
   return round(Math.max(score, 0), 1);
 };
 
@@ -1013,26 +1013,10 @@ const buildPositionComparison = (ownPlayers: PlayerSeasonStat[], opponentPlayers
     const own = aggregate(ownPlayers, position);
     const opp = aggregate(opponentPlayers, position);
 
-    const ownValPer36 = own.minutes > 0
-      ? (own.val / own.minutes) * 36
-      : own.games > 0
-        ? own.val / own.games
-        : 0;
-    const oppValPer36 = opp.minutes > 0
-      ? (opp.val / opp.minutes) * 36
-      : opp.games > 0
-        ? opp.val / opp.games
-        : 0;
-    const ownPointsPer36 = own.minutes > 0
-      ? (own.points / own.minutes) * 36
-      : own.games > 0
-        ? own.points / own.games
-        : 0;
-    const oppPointsPer36 = opp.minutes > 0
-      ? (opp.points / opp.minutes) * 36
-      : opp.games > 0
-        ? opp.points / opp.games
-        : 0;
+    const ownValPer36 = own.minutes > 0 ? (own.val / own.minutes) * 36 : 0;
+    const oppValPer36 = opp.minutes > 0 ? (opp.val / opp.minutes) * 36 : 0;
+    const ownPointsPer36 = own.minutes > 0 ? (own.points / own.minutes) * 36 : 0;
+    const oppPointsPer36 = opp.minutes > 0 ? (opp.points / opp.minutes) * 36 : 0;
 
     const deltaValPer36 = round(ownValPer36 - oppValPer36, 1);
     let matchupFlag: PositionComparison['matchupFlag'];

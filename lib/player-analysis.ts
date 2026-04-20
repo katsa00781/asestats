@@ -43,6 +43,7 @@ export type NormalizedStats = RawPlayerSeasonStat & {
   threePct: number;
   ftPct: number;
   efg: number;
+  tsPct: number;
   astTo: number;
   valPer36: number;
   usageProxyPer36: number;
@@ -311,6 +312,7 @@ const STATS_FOR_BENCHMARKS = [
   'threeP_pct',
   'ft_pct',
   'efg',
+  'ts_pct',
   'ast_to',
   'val_per36',
   'usage_proxy',
@@ -351,6 +353,8 @@ export const normalizePlayerStats = (raw: RawPlayerSeasonStat): NormalizedStats 
   const threePct = raw.three.attempted > 0 ? (raw.three.made / raw.three.attempted) * 100 : 0;
   const ftPct = raw.ft.attempted > 0 ? (raw.ft.made / raw.ft.attempted) * 100 : 0;
   const efg = fga > 0 ? ((fgm + 0.5 * raw.three.made) / fga) * 100 : 0;
+  const tsPctDenom = 2 * (fga + 0.44 * fta);
+  const tsPct = tsPctDenom > 0 ? (raw.points / tsPctDenom) * 100 : 0;
 
   const ptsPer36 = normalizePer36(raw.points, raw.minutes);
   const rebPer36 = normalizePer36(totalRebounds, raw.minutes);
@@ -385,6 +389,7 @@ export const normalizePlayerStats = (raw: RawPlayerSeasonStat): NormalizedStats 
     threePct: round(threePct, 1),
     ftPct: round(ftPct, 1),
     efg: round(efg, 1),
+    tsPct: round(tsPct, 1),
     astTo: round(clamp(astTo, 0, 20), 2),
     valPer36: round(valPer36),
     usageProxyPer36: round(usageProxyPer36),
@@ -469,6 +474,8 @@ const getStatValue = (player: NormalizedStats, stat: string) => {
       return player.ftPct;
     case 'efg':
       return player.efg;
+    case 'ts_pct':
+      return player.tsPct;
     case 'ast_to':
       return player.astTo;
     case 'val_per36':
@@ -545,21 +552,21 @@ const computeSkillScores = (player: NormalizedStats, benchmarks: LeagueBenchmark
   const playmakingWeights = player.position === 'PG' || player.position === 'SG'
     ? [0.7, 0.3]
     : [0.5, 0.5];
-  const playmaking = scoreFromStats([
-    getPercentile(benchmarks, player, 'ast_per36') * playmakingWeights[0],
-    getPercentile(benchmarks, player, 'ast_to') * playmakingWeights[1],
-  ]);
+  const playmaking = clamp(Math.round(
+    getPercentile(benchmarks, player, 'ast_per36') * playmakingWeights[0] +
+    getPercentile(benchmarks, player, 'ast_to') * playmakingWeights[1]
+  ), 0, 100);
 
   const defense = player.position === 'PF' || player.position === 'C'
     ? scoreFromStats([
         getPercentile(benchmarks, player, 'blk_per36'),
         getPercentile(benchmarks, player, 'def_reb_per36'),
       ])
-    : scoreFromStats([
-        getPercentile(benchmarks, player, 'stl_per36') * 0.5,
-        getPercentile(benchmarks, player, 'def_reb_per36') * 0.25,
-        getPercentile(benchmarks, player, 'blk_per36') * 0.25,
-      ]);
+    : clamp(Math.round(
+        getPercentile(benchmarks, player, 'stl_per36') * 0.5 +
+        getPercentile(benchmarks, player, 'def_reb_per36') * 0.25 +
+        getPercentile(benchmarks, player, 'blk_per36') * 0.25
+      ), 0, 100);
 
   const rebounding = getPercentile(benchmarks, player, 'reb_per36');
   const efficiency = scoreFromStats([
@@ -960,21 +967,21 @@ const computeSkillPercentiles = (player: NormalizedStats, benchmarks: LeagueBenc
   const playmakingWeights = player.position === 'PG' || player.position === 'SG'
     ? [0.7, 0.3]
     : [0.5, 0.5];
-  const playmaking = scoreFromStats([
-    getPercentile(benchmarks, player, 'ast_per36') * playmakingWeights[0],
-    getPercentile(benchmarks, player, 'ast_to') * playmakingWeights[1],
-  ]);
+  const playmaking = clamp(Math.round(
+    getPercentile(benchmarks, player, 'ast_per36') * playmakingWeights[0] +
+    getPercentile(benchmarks, player, 'ast_to') * playmakingWeights[1]
+  ), 0, 100);
   const rebounding = getPercentile(benchmarks, player, 'reb_per36');
   const defense = player.position === 'PF' || player.position === 'C'
     ? scoreFromStats([
         getPercentile(benchmarks, player, 'blk_per36'),
         getPercentile(benchmarks, player, 'def_reb_per36'),
       ])
-    : scoreFromStats([
-        getPercentile(benchmarks, player, 'stl_per36') * 0.5,
-        getPercentile(benchmarks, player, 'def_reb_per36') * 0.25,
-        getPercentile(benchmarks, player, 'blk_per36') * 0.25,
-      ]);
+    : clamp(Math.round(
+        getPercentile(benchmarks, player, 'stl_per36') * 0.5 +
+        getPercentile(benchmarks, player, 'def_reb_per36') * 0.25 +
+        getPercentile(benchmarks, player, 'blk_per36') * 0.25
+      ), 0, 100);
   const efficiency = scoreFromStats([
     getPercentile(benchmarks, player, 'val_per36'),
     getPercentile(benchmarks, player, 'efg'),
@@ -1274,4 +1281,323 @@ const normalizePlayerTrend = (trend: PlayerTrend): PlayerTrend => {
 // Build a safe PlayerTrendReport from trend input.
 export const buildValidatedPlayerTrendReport = (trend: PlayerTrend): PlayerTrendReport => {
   return buildPlayerTrendReport(normalizePlayerTrend(trend));
+};
+
+// ─── Advanced Player Blocks ───────────────────────────────────────────────────
+
+export type ShootingBlock = {
+  tsPct: number;
+  efg: number;
+  rimRate: number;
+  midRate: number;
+  threeRate: number;
+  ftRate: number;
+  closeEffPct: number;
+  midEffPct: number;
+  threePct: number;
+  ftPct: number;
+  narrative: string;
+};
+
+export type PlaymakingBlock = {
+  astPer36: number;
+  astTo: number;
+  usageProxy: number;
+  narrative: string;
+};
+
+export type DefenseBlock = {
+  stlPer36: number;
+  blkPer36: number;
+  defRebPer36: number;
+  foulsPer36: number;
+  narrative: string;
+};
+
+export type ScoringBlock = {
+  ptsPer36: number;
+  tsPct: number;
+  usageProxy: number;
+  narrative: string;
+};
+
+export type EfficiencyBlock = {
+  valPer36: number;
+  tsPct: number;
+  efg: number;
+  narrative: string;
+};
+
+export type AdvancedPlayerBlocks = {
+  shooting: ShootingBlock;
+  playmaking: PlaymakingBlock;
+  defense: DefenseBlock;
+  scoring: ScoringBlock;
+  efficiency: EfficiencyBlock;
+};
+
+const pctLabel = (pct: number) =>
+  pct >= 75 ? 'kiemelkedő' : pct >= 55 ? 'átlag feletti' : pct >= 40 ? 'átlagos' : 'átlag alatti';
+
+const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+const buildShootingNarrative = (player: NormalizedStats, benchmarks: LeagueBenchmarks): string => {
+  const tsPct = getPercentile(benchmarks, player, 'ts_pct');
+  const threePctPct = getPercentile(benchmarks, player, 'threeP_pct');
+  const ftPctPct = getPercentile(benchmarks, player, 'ft_pct');
+
+  const rimRate = player.fga > 0 ? player.close.attempted / player.fga : 0;
+  const midRate = player.fga > 0 ? player.mid.attempted / player.fga : 0;
+  const threeRate = player.fga > 0 ? player.three.attempted / player.fga : 0;
+
+  const parts: string[] = [];
+
+  parts.push(
+    `${capitalize(pctLabel(tsPct))} dobáshatékonyság (TS%: ${player.tsPct}%, eFG%: ${player.efg}%).`
+  );
+
+  const zoneParts: string[] = [];
+  if (rimRate >= 0.3) zoneParts.push(`${Math.round(rimRate * 100)}% gyűrűközelből`);
+  if (threeRate >= 0.2) zoneParts.push(`${Math.round(threeRate * 100)}% hárompontosból`);
+  if (midRate >= 0.25) zoneParts.push(`${Math.round(midRate * 100)}% középtávról`);
+  if (zoneParts.length > 0) parts.push(`Shot mix: ${zoneParts.join(', ')}.`);
+
+  if (midRate >= 0.35 && player.mid.attempted > 0) {
+    const midPct = Math.round((player.mid.made / player.mid.attempted) * 100);
+    if (midPct < 42) {
+      parts.push(
+        `Magas középtávú arány (${Math.round(midRate * 100)}%) alacsony hatékonysággal (${midPct}%) — shot selection javítható.`
+      );
+    }
+  }
+
+  if (threeRate >= 0.25) {
+    if (threePctPct >= 65) {
+      parts.push(`Hárompontos megbízható (${player.threePct}%), a volumen indokolt.`);
+    } else if (threePctPct <= 30 && threeRate >= 0.35) {
+      parts.push(
+        `Magas tripla-volumen (${Math.round(threeRate * 100)}%) alacsony százalékkal (${player.threePct}%) — visszafogottabb hármashasználat javasolt.`
+      );
+    }
+  }
+
+  if (player.ft.attempted >= 2) {
+    if (ftPctPct <= 30) {
+      parts.push(`Büntető hatékonyság gyenge (${player.ftPct}%) — faultból való pontszerzés korlátozott.`);
+    } else if (ftPctPct >= 75) {
+      parts.push(`Büntetővonalnál megbízható (${player.ftPct}%).`);
+    }
+  }
+
+  return parts.join(' ');
+};
+
+const buildPlaymakingNarrative = (player: NormalizedStats, benchmarks: LeagueBenchmarks): string => {
+  const astPct = getPercentile(benchmarks, player, 'ast_per36');
+  const usagePct = getPercentile(benchmarks, player, 'usage_proxy');
+
+  const parts: string[] = [];
+
+  if (astPct >= 70) {
+    parts.push(`Aktív játéképítő a posztján belül (AST/36: ${player.astPer36}).`);
+  } else if (astPct >= 45) {
+    parts.push(`Mérsékelt passzaktivitás (AST/36: ${player.astPer36}).`);
+  } else {
+    parts.push(`Elsősorban befejező, kevésbé szervező szerepkörben (AST/36: ${player.astPer36}).`);
+  }
+
+  if (player.astTo >= 2.5) {
+    parts.push(`Labdabiztonság kiváló (AST/TO: ${player.astTo}).`);
+  } else if (player.astTo >= 1.5) {
+    parts.push(`Labdabiztonság elfogadható (AST/TO: ${player.astTo}).`);
+  } else if (player.astPer36 >= 2) {
+    parts.push(
+      `Labdaeladási arány magas a passzaktivitáshoz képest (AST/TO: ${player.astTo}) — döntéshozatal fejlesztése javasolt.`
+    );
+  }
+
+  if (usagePct >= 70) {
+    parts.push(`Magas labdabirtoklási arány — elsődleges opcióként kezelik (usage proxy/36: ${player.usageProxyPer36}).`);
+  } else if (usagePct <= 30) {
+    parts.push(`Alacsony labdaigény — kiegészítő szerepben hasznosítható leghatékonyabban.`);
+  }
+
+  return parts.join(' ');
+};
+
+const buildDefenseNarrative = (player: NormalizedStats, benchmarks: LeagueBenchmarks): string => {
+  const stlPct = getPercentile(benchmarks, player, 'stl_per36');
+  const blkPct = getPercentile(benchmarks, player, 'blk_per36');
+  const defRebPct = getPercentile(benchmarks, player, 'def_reb_per36');
+  const foulsPer36 = player.minutes > 0 ? normalizePer36(player.fouls.committed, player.minutes) : 0;
+
+  const isFrontcourt = player.position === 'PF' || player.position === 'C';
+  const parts: string[] = [];
+
+  if (isFrontcourt) {
+    if (blkPct >= 65 && defRebPct >= 55) {
+      parts.push(
+        `Erős festékvédő hatás: aktív blokkolással (BLK/36: ${player.blkPer36}) és lepattanódominanciával (DREB/36: ${player.defRebPer36}).`
+      );
+    } else if (blkPct >= 65) {
+      parts.push(
+        `Gyűrűvédelem fókusz: kiemelkedő blokkszám (BLK/36: ${player.blkPer36}), védőlepattanóban van tartalék (DREB/36: ${player.defRebPer36}).`
+      );
+    } else if (defRebPct >= 65) {
+      parts.push(
+        `Lepattanó-dominancia jellemzi (DREB/36: ${player.defRebPer36}), blokktermelése közepes (BLK/36: ${player.blkPer36}).`
+      );
+    } else {
+      parts.push(
+        `Festékhatás korlátozott: blokk (${player.blkPer36}/36) és védőlepattanó (${player.defRebPer36}/36) is az átlag körüli vagy az alatt.`
+      );
+    }
+  } else {
+    if (stlPct >= 65) {
+      parts.push(`Aktív perimétervédekezés, magas labdaszerzési szint (STL/36: ${player.stlPer36}).`);
+    } else if (stlPct >= 40) {
+      parts.push(`Mérsékelt periméter védelmi hatás (STL/36: ${player.stlPer36}).`);
+    } else {
+      parts.push(
+        `Perimétervédekezés kevésbé aktív a nyers statisztikákban (STL/36: ${player.stlPer36}) — matchup-függő értékelés szükséges.`
+      );
+    }
+    if (defRebPct >= 65) {
+      parts.push(`Posztjához képest erős védőlepattanózás (DREB/36: ${player.defRebPer36}).`);
+    }
+  }
+
+  if (foulsPer36 >= 4.5) {
+    parts.push(
+      `Fault-terhelés kritikus (${round(foulsPer36, 1)}/36 perc) — korlátozhatja a pályán töltött perceket.`
+    );
+  } else if (foulsPer36 >= 3.5) {
+    parts.push(`Fault-fegyelem javítható (${round(foulsPer36, 1)}/36).`);
+  }
+
+  return parts.join(' ');
+};
+
+const buildScoringNarrative = (player: NormalizedStats, benchmarks: LeagueBenchmarks): string => {
+  const ptsPct = getPercentile(benchmarks, player, 'pts_per36');
+  const usagePct = getPercentile(benchmarks, player, 'usage_proxy');
+  const tsPct = getPercentile(benchmarks, player, 'ts_pct');
+
+  const parts: string[] = [];
+
+  if (ptsPct >= 75) {
+    parts.push(`Kiemelkedő ponttermelő a posztján (${player.ptsPer36} pont/36).`);
+  } else if (ptsPct >= 55) {
+    parts.push(`Stabil pontszerzési jelenlét (${player.ptsPer36} pont/36).`);
+  } else if (ptsPct >= 35) {
+    parts.push(`Mérsékelt ponttermelés (${player.ptsPer36} pont/36).`);
+  } else {
+    parts.push(`Alacsony ponttermelési szerep (${player.ptsPer36} pont/36).`);
+  }
+
+  if (usagePct >= 65 && tsPct >= 60) {
+    parts.push(
+      `Magas labdabirtoklás mellett jó hatékonysággal (TS%: ${player.tsPct}%) — értékes elsődleges opció.`
+    );
+  } else if (usagePct >= 65 && tsPct <= 40) {
+    parts.push(
+      `Magas labdabirtoklás (${player.usageProxyPer36}/36) mellett alacsony hatékonyság (TS%: ${player.tsPct}%) — shot selection finomítása javasolt.`
+    );
+  } else if (usagePct <= 35 && tsPct >= 65) {
+    parts.push(
+      `Kevés labdával is hatékony (TS%: ${player.tsPct}%) — spot-up és cut-szerepkörökben kiváló opció.`
+    );
+  }
+
+  return parts.join(' ');
+};
+
+const buildEfficiencyNarrative = (player: NormalizedStats, benchmarks: LeagueBenchmarks): string => {
+  const valPct = getPercentile(benchmarks, player, 'val_per36');
+  const efgPct = getPercentile(benchmarks, player, 'efg');
+  const usagePct = getPercentile(benchmarks, player, 'usage_proxy');
+
+  const parts: string[] = [];
+
+  parts.push(
+    `${capitalize(pctLabel(valPct))} összhatékonyság: VAL/36 a ${Math.round(valPct)}. percentilisen (${player.valPer36} VAL/36).`
+  );
+
+  if (valPct >= 70 && usagePct >= 60) {
+    parts.push(`Magas labdabirtoklás mellett is erős VAL-termelés — csapatban elsőrendű értékmegőrző.`);
+  } else if (valPct >= 70 && usagePct < 40) {
+    parts.push(`Alacsony labdaigény mellett is hatékony hozzájárulás — kiegészítő szerepben maximálisan hasznosítható.`);
+  } else if (valPct < 40 && usagePct >= 60) {
+    parts.push(
+      `Magas labdabirtoklás ellenére a VAL relatíve alacsony — átfogóbb hatékonyságjavítás szükséges.`
+    );
+  }
+
+  if (efgPct >= 70) {
+    parts.push(`Mezőnydобás-hatékonyság posztján kiemelkedő (eFG%: ${player.efg}%).`);
+  } else if (efgPct <= 30 && player.fga > 0) {
+    parts.push(`Mezőnydобás-hatékonyság alacsony (eFG%: ${player.efg}%) — javítandó terület.`);
+  }
+
+  return parts.join(' ');
+};
+
+export const buildAdvancedPlayerBlocks = (
+  raw: RawPlayerSeasonStat,
+  benchmarks: LeagueBenchmarks
+): AdvancedPlayerBlocks => {
+  const player = normalizePlayerStats(raw);
+  const foulsPer36 = player.minutes > 0 ? round(normalizePer36(raw.fouls.committed, raw.minutes), 1) : 0;
+
+  const rimRate = player.fga > 0 ? round(player.close.attempted / player.fga, 3) : 0;
+  const midRate = player.fga > 0 ? round(player.mid.attempted / player.fga, 3) : 0;
+  const threeRate = player.fga > 0 ? round(player.three.attempted / player.fga, 3) : 0;
+  const ftRate = player.fga > 0 ? round(player.fta / player.fga, 3) : 0;
+  const closeEffPct = raw.close.attempted > 0
+    ? round((raw.close.made / raw.close.attempted) * 100, 1)
+    : 0;
+  const midEffPct = raw.mid.attempted > 0
+    ? round((raw.mid.made / raw.mid.attempted) * 100, 1)
+    : 0;
+
+  return {
+    shooting: {
+      tsPct: player.tsPct,
+      efg: player.efg,
+      rimRate,
+      midRate,
+      threeRate,
+      ftRate,
+      closeEffPct,
+      midEffPct,
+      threePct: player.threePct,
+      ftPct: player.ftPct,
+      narrative: buildShootingNarrative(player, benchmarks),
+    },
+    playmaking: {
+      astPer36: player.astPer36,
+      astTo: player.astTo,
+      usageProxy: player.usageProxyPer36,
+      narrative: buildPlaymakingNarrative(player, benchmarks),
+    },
+    defense: {
+      stlPer36: player.stlPer36,
+      blkPer36: player.blkPer36,
+      defRebPer36: player.defRebPer36,
+      foulsPer36,
+      narrative: buildDefenseNarrative(player, benchmarks),
+    },
+    scoring: {
+      ptsPer36: player.ptsPer36,
+      tsPct: player.tsPct,
+      usageProxy: player.usageProxyPer36,
+      narrative: buildScoringNarrative(player, benchmarks),
+    },
+    efficiency: {
+      valPer36: player.valPer36,
+      tsPct: player.tsPct,
+      efg: player.efg,
+      narrative: buildEfficiencyNarrative(player, benchmarks),
+    },
+  };
 };

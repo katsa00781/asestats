@@ -21,12 +21,14 @@ import type { PlayerStats, TeamGame } from '@/app/page';
 import {
   analyzePlayerSeason,
   buildLeagueBenchmarks,
+  buildAdvancedPlayerBlocks,
   computeSimilarity,
   isEligibleSample,
   normalizePlayerStats,
   buildCoachSummary,
   type LeagueBenchmarks,
   type PlayerAnalysis,
+  type AdvancedPlayerBlocks,
   type Position,
   type RawPlayerSeasonStat,
 } from '@/lib/player-analysis';
@@ -4802,6 +4804,12 @@ export function SeasonComparison({
     const normalized = selectedPlayerNormalized;
     if (!isEligibleSample(normalized)) return null;
     return analyzePlayerSeason(selectedPlayerRaw, benchmarks);
+  }, [benchmarks, selectedPlayerNormalized, selectedPlayerRaw]);
+
+  const advancedBlocks = useMemo<AdvancedPlayerBlocks | null>(() => {
+    if (!benchmarks || !selectedPlayerRaw || !selectedPlayerNormalized) return null;
+    if (!isEligibleSample(selectedPlayerNormalized)) return null;
+    return buildAdvancedPlayerBlocks(selectedPlayerRaw, benchmarks);
   }, [benchmarks, selectedPlayerNormalized, selectedPlayerRaw]);
 
   const rolesByPlayerId = useMemo(() => {
@@ -11850,68 +11858,71 @@ export function SeasonComparison({
                 <CardContent className="space-y-4">
                   <TooltipProvider delayDuration={120}>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-                    <div className="rounded-md border border-slate-800 bg-slate-900/50 p-3 space-y-1">
+
+                    {/* 1) Shot quality vs shot making */}
+                    <div className="rounded-md border border-slate-800 bg-slate-900/50 p-3 space-y-2">
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-1.5">
-                          <div className="text-slate-200 font-medium">1) Shot quality vs shot making</div>
+                          <div className="text-slate-200 font-medium">1) Dobásminőség vs kivitelezés</div>
                           {renderThresholdTooltip(playerAdvancedInsights.thresholdHints.shot)}
                         </div>
                         {'confidence' in playerAdvancedInsights.shotQualityVsMaking && (
                           <Badge className={getSampleConfidenceBadgeClass(normalizeSampleConfidence(playerAdvancedInsights.shotQualityVsMaking.confidence))}>{formatSampleConfidenceLabel(normalizeSampleConfidence(playerAdvancedInsights.shotQualityVsMaking.confidence))}</Badge>
                         )}
                       </div>
-                      <div className={`text-[11px] ${getInsightToneClass(playerAdvancedInsights.blockVerdicts.shot.tone)}`}>
+                      <p className={`text-[11px] leading-relaxed ${getInsightToneClass(playerAdvancedInsights.blockVerdicts.shot.tone)}`}>
                         {playerAdvancedInsights.blockVerdicts.shot.text}
+                        {'interpretation' in playerAdvancedInsights.shotQualityVsMaking && playerAdvancedInsights.shotQualityVsMaking.interpretation
+                          ? ` (${playerAdvancedInsights.shotQualityVsMaking.interpretation})` : ''}
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">Várt eFG: {formatNullableNumber(playerAdvancedInsights.shotQualityVsMaking.expectedEfg, 1, '%')}</span>
+                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">Tényleges eFG: {formatNullableNumber(playerAdvancedInsights.shotQualityVsMaking.actualEfg, 1, '%')}</span>
+                        <span className={`px-1.5 py-0.5 rounded bg-slate-800 text-[10px] ${Number(playerAdvancedInsights.shotQualityVsMaking.valueAdd ?? 0) >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
+                          Értéktöbblet: {formatNullableNumber(playerAdvancedInsights.shotQualityVsMaking.valueAdd, 1, ' pp')}
+                        </span>
                       </div>
-                      <div className="text-slate-300">Expected eFG: {formatNullableNumber(playerAdvancedInsights.shotQualityVsMaking.expectedEfg, 1, '%')}</div>
-                      <div className="text-slate-300">Actual eFG: {formatNullableNumber(playerAdvancedInsights.shotQualityVsMaking.actualEfg, 1, '%')}</div>
-                      <div className={Number(playerAdvancedInsights.shotQualityVsMaking.valueAdd ?? 0) >= 0 ? 'text-emerald-300' : 'text-rose-300'}>
-                        Shot value add: {formatNullableNumber(playerAdvancedInsights.shotQualityVsMaking.valueAdd, 1, ' pp')}
-                      </div>
-                      {'interpretation' in playerAdvancedInsights.shotQualityVsMaking && (
-                        <div className="text-slate-400">Értelmezés: {playerAdvancedInsights.shotQualityVsMaking.interpretation}</div>
-                      )}
-                      {'note' in playerAdvancedInsights.shotQualityVsMaking && playerAdvancedInsights.shotQualityVsMaking.note && (
-                        <div className="text-slate-400">Kontextus: {playerAdvancedInsights.shotQualityVsMaking.note}</div>
-                      )}
                       {playerAdvancedInsights.shotQualityVsMaking.zoneAdds.length > 0 && (
-                        <div className="text-slate-400">
+                        <div className="text-[10px] text-slate-500">
                           Zóna delta: {playerAdvancedInsights.shotQualityVsMaking.zoneAdds.slice(0, 3).map(item => `${item.label} ${item.delta >= 0 ? '+' : ''}${item.delta.toFixed(1)}`).join(' • ')}
                         </div>
                       )}
                     </div>
 
-                    <div className="rounded-md border border-slate-800 bg-slate-900/50 p-3 space-y-1">
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-1.5">
-                            <div className="text-slate-200 font-medium">2) Clutch identitás</div>
-                            {renderThresholdTooltip(playerAdvancedInsights.thresholdHints.clutch)}
-                          </div>
-                          {'confidence' in playerAdvancedInsights.clutchIdentity && (
-                            <Badge className={getSampleConfidenceBadgeClass(normalizeSampleConfidence(playerAdvancedInsights.clutchIdentity.confidence))}>{formatSampleConfidenceLabel(normalizeSampleConfidence(playerAdvancedInsights.clutchIdentity.confidence))}</Badge>
-                          )}
+                    {/* 2) Clutch identitás */}
+                    <div className="rounded-md border border-slate-800 bg-slate-900/50 p-3 space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5">
+                          <div className="text-slate-200 font-medium">2) Clutch identitás</div>
+                          {renderThresholdTooltip(playerAdvancedInsights.thresholdHints.clutch)}
                         </div>
-                        <div className={`text-[11px] ${getInsightToneClass(playerAdvancedInsights.blockVerdicts.clutch.tone)}`}> 
-                          {playerAdvancedInsights.blockVerdicts.clutch.text}
-                        </div>
-                        <div className="text-slate-300">Minta: {playerAdvancedInsights.clutchIdentity.games} Kosarstat clutch meccs</div>
-                        {playerAdvancedInsights.clutchIdentity.games === 0 && (
-                          <div className="text-rose-400 text-xs font-semibold">Nincs clutch minta – az adatok csak tájékoztató jellegűek.</div>
+                        {'confidence' in playerAdvancedInsights.clutchIdentity && (
+                          <Badge className={getSampleConfidenceBadgeClass(normalizeSampleConfidence(playerAdvancedInsights.clutchIdentity.confidence))}>{formatSampleConfidenceLabel(normalizeSampleConfidence(playerAdvancedInsights.clutchIdentity.confidence))}</Badge>
                         )}
-                        {'sampleWarning' in playerAdvancedInsights.clutchIdentity && playerAdvancedInsights.clutchIdentity.sampleWarning && (
-                          <div className="text-amber-300 text-xs font-semibold">{playerAdvancedInsights.clutchIdentity.sampleWarning}</div>
-                        )}
-                        <div className="text-slate-300">Clutch usage-share: {formatNullableNumber(playerAdvancedInsights.clutchIdentity.usagePct, 1, '%')}</div>
-                        <div className="text-slate-300">Clutch TS%: {formatNullableNumber(playerAdvancedInsights.clutchIdentity.tsPct, 1, '%')}</div>
-                        <div className="text-slate-300">Clutch TOV%: {formatNullableNumber(playerAdvancedInsights.clutchIdentity.tovPct, 1, '%')}</div>
-                        <div className="text-slate-300">Clutch AST/TO: {formatNullableNumber(playerAdvancedInsights.clutchIdentity.astTo, 2)}</div>
-                        <div className="text-slate-300">Clutch PPP: {formatNullableNumber(playerAdvancedInsights.clutchIdentity.ppp, 3)}</div>
-                        {'roleNote' in playerAdvancedInsights.clutchIdentity && playerAdvancedInsights.clutchIdentity.roleNote && (
-                          <div className="text-slate-400">Szerepkör-olvasat: {playerAdvancedInsights.clutchIdentity.roleNote}</div>
-                        )}
+                      </div>
+                      <p className={`text-[11px] leading-relaxed ${getInsightToneClass(playerAdvancedInsights.blockVerdicts.clutch.tone)}`}>
+                        {playerAdvancedInsights.blockVerdicts.clutch.text}
+                        {'roleNote' in playerAdvancedInsights.clutchIdentity && playerAdvancedInsights.clutchIdentity.roleNote
+                          ? ` ${playerAdvancedInsights.clutchIdentity.roleNote}` : ''}
+                      </p>
+                      {playerAdvancedInsights.clutchIdentity.games === 0 && (
+                        <div className="text-[10px] text-rose-400 font-semibold">Nincs clutch minta – adatok tájékoztató jellegűek.</div>
+                      )}
+                      {'sampleWarning' in playerAdvancedInsights.clutchIdentity && playerAdvancedInsights.clutchIdentity.sampleWarning && (
+                        <div className="text-[10px] text-amber-300 font-semibold">{playerAdvancedInsights.clutchIdentity.sampleWarning}</div>
+                      )}
+                      <div className="flex flex-wrap gap-1.5">
+                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">Minta: {playerAdvancedInsights.clutchIdentity.games} meccs</span>
+                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">Usage: {formatNullableNumber(playerAdvancedInsights.clutchIdentity.usagePct, 1, '%')}</span>
+                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">TS%: {formatNullableNumber(playerAdvancedInsights.clutchIdentity.tsPct, 1, '%')}</span>
+                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">TOV%: {formatNullableNumber(playerAdvancedInsights.clutchIdentity.tovPct, 1, '%')}</span>
+                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">AST/TO: {formatNullableNumber(playerAdvancedInsights.clutchIdentity.astTo, 2)}</span>
+                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">PPP: {formatNullableNumber(playerAdvancedInsights.clutchIdentity.ppp, 3)}</span>
+                      </div>
                     </div>
 
-                    <div className="rounded-md border border-slate-800 bg-slate-900/50 p-3 space-y-1">
+                    {/* 3) Kontextusos +/- (lineup) */}
+                    <div className="rounded-md border border-slate-800 bg-slate-900/50 p-3 space-y-2">
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-1.5">
                           <div className="text-slate-200 font-medium">3) Kontextusos +/- (lineup)</div>
@@ -11921,23 +11932,26 @@ export function SeasonComparison({
                           <Badge className={getSampleConfidenceBadgeClass(normalizeSampleConfidence(playerAdvancedInsights.plusMinusContext.confidence))}>{formatSampleConfidenceLabel(normalizeSampleConfidence(playerAdvancedInsights.plusMinusContext.confidence))}</Badge>
                         )}
                       </div>
-                      <div className={`text-[11px] ${getInsightToneClass(playerAdvancedInsights.blockVerdicts.impact.tone)}`}>
+                      <p className={`text-[11px] leading-relaxed ${getInsightToneClass(playerAdvancedInsights.blockVerdicts.impact.tone)}`}>
                         {playerAdvancedInsights.blockVerdicts.impact.text}
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">Pályán: {formatNullableNumber(playerAdvancedInsights.plusMinusContext.onNet40, 1)} net/40</span>
+                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">Pályán kívül: {formatNullableNumber(playerAdvancedInsights.plusMinusContext.offNet40, 1)} net/40</span>
+                        <span className={`px-1.5 py-0.5 rounded bg-slate-800 text-[10px] ${Number(playerAdvancedInsights.plusMinusContext.delta ?? 0) >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
+                          On/Off delta: {formatNullableNumber(playerAdvancedInsights.plusMinusContext.delta, 1)}
+                        </span>
+                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-400">Minta: {playerAdvancedInsights.plusMinusContext.lineupMinutes.toFixed(0)} perc</span>
                       </div>
-                      <div className="text-slate-300">On net/40: {formatNullableNumber(playerAdvancedInsights.plusMinusContext.onNet40, 1)}</div>
-                      <div className="text-slate-300">Off net/40: {formatNullableNumber(playerAdvancedInsights.plusMinusContext.offNet40, 1)}</div>
-                      <div className={Number(playerAdvancedInsights.plusMinusContext.delta ?? 0) >= 0 ? 'text-emerald-300' : 'text-rose-300'}>
-                        On/Off delta: {formatNullableNumber(playerAdvancedInsights.plusMinusContext.delta, 1)}
-                      </div>
-                      <div className="text-slate-400">Lineup minta: {playerAdvancedInsights.plusMinusContext.lineupMinutes.toFixed(1)} perc</div>
                       {playerAdvancedInsights.plusMinusContext.topPair && (
-                        <div className="text-slate-400">
+                        <div className="text-[10px] text-slate-500">
                           Legjobb páros: {playerAdvancedInsights.plusMinusContext.topPair.label} ({playerAdvancedInsights.plusMinusContext.topPair.netPer40.toFixed(1)} net/40)
                         </div>
                       )}
                     </div>
 
-                    <div className="rounded-md border border-slate-800 bg-slate-900/50 p-3 space-y-1">
+                    {/* 4) Szerepkör-hatékonyság */}
+                    <div className="rounded-md border border-slate-800 bg-slate-900/50 p-3 space-y-2">
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-1.5">
                           <div className="text-slate-200 font-medium">4) Szerepkör-hatékonyság</div>
@@ -11947,19 +11961,22 @@ export function SeasonComparison({
                           <Badge className={getSampleConfidenceBadgeClass(normalizeSampleConfidence(playerAdvancedInsights.roleEfficiency.confidence))}>{formatSampleConfidenceLabel(normalizeSampleConfidence(playerAdvancedInsights.roleEfficiency.confidence))}</Badge>
                         )}
                       </div>
-                      <div className={`text-[11px] ${getInsightToneClass(playerAdvancedInsights.blockVerdicts.role.tone)}`}>
+                      <p className={`text-[11px] leading-relaxed ${getInsightToneClass(playerAdvancedInsights.blockVerdicts.role.tone)}`}>
                         {playerAdvancedInsights.blockVerdicts.role.text}
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">Ball-handler TS/PPP: {formatNullableNumber(playerAdvancedInsights.roleEfficiency.ballHandlerTs, 1, '%')} / {formatNullableNumber(playerAdvancedInsights.roleEfficiency.ballHandlerPpp, 3)}</span>
+                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">Off-ball TS/PPP: {formatNullableNumber(playerAdvancedInsights.roleEfficiency.offBallTs, 1, '%')} / {formatNullableNumber(playerAdvancedInsights.roleEfficiency.offBallPpp, 3)}</span>
+                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">Rim nyomás TS%: {formatNullableNumber(playerAdvancedInsights.roleEfficiency.rimPressureTs, 1, '%')}</span>
+                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">Magas 3PA TS%: {formatNullableNumber(playerAdvancedInsights.roleEfficiency.highThreeTs, 1, '%')}</span>
                       </div>
-                      <div className="text-slate-300">Ball-handler TS/PPP: {formatNullableNumber(playerAdvancedInsights.roleEfficiency.ballHandlerTs, 1, '%')} / {formatNullableNumber(playerAdvancedInsights.roleEfficiency.ballHandlerPpp, 3)}</div>
-                      <div className="text-slate-300">Off-ball TS/PPP: {formatNullableNumber(playerAdvancedInsights.roleEfficiency.offBallTs, 1, '%')} / {formatNullableNumber(playerAdvancedInsights.roleEfficiency.offBallPpp, 3)}</div>
-                      <div className="text-slate-300">High-3PA TS%: {formatNullableNumber(playerAdvancedInsights.roleEfficiency.highThreeTs, 1, '%')}</div>
-                      <div className="text-slate-300">Rim-pressure TS%: {formatNullableNumber(playerAdvancedInsights.roleEfficiency.rimPressureTs, 1, '%')}</div>
                       {'ballHandlerSample' in playerAdvancedInsights.roleEfficiency && 'offBallSample' in playerAdvancedInsights.roleEfficiency && (
-                        <div className="text-slate-400">Minta: ball-handler {playerAdvancedInsights.roleEfficiency.ballHandlerSample} • off-ball {playerAdvancedInsights.roleEfficiency.offBallSample}</div>
+                        <div className="text-[10px] text-slate-500">Minta: ball-handler {playerAdvancedInsights.roleEfficiency.ballHandlerSample} • off-ball {playerAdvancedInsights.roleEfficiency.offBallSample} meccs</div>
                       )}
                     </div>
 
-                    <div className="rounded-md border border-slate-800 bg-slate-900/50 p-3 space-y-1">
+                    {/* 5) Döntésminőség index */}
+                    <div className="rounded-md border border-slate-800 bg-slate-900/50 p-3 space-y-2">
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-1.5">
                           <div className="text-slate-200 font-medium">5) Döntésminőség index</div>
@@ -11969,16 +11986,19 @@ export function SeasonComparison({
                           <Badge className={getSampleConfidenceBadgeClass(normalizeSampleConfidence(playerAdvancedInsights.decisionQuality.confidence))}>{formatSampleConfidenceLabel(normalizeSampleConfidence(playerAdvancedInsights.decisionQuality.confidence))}</Badge>
                         )}
                       </div>
-                      <div className={`text-[11px] ${getInsightToneClass(playerAdvancedInsights.blockVerdicts.decision.tone)}`}>
+                      <p className={`text-[11px] leading-relaxed ${getInsightToneClass(playerAdvancedInsights.blockVerdicts.decision.tone)}`}>
                         {playerAdvancedInsights.blockVerdicts.decision.text}
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-cyan-300 font-semibold">{playerAdvancedInsights.decisionQuality.score.toFixed(1)} / 100 — {playerAdvancedInsights.decisionQuality.tier}</span>
+                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">AST/TO: {playerAdvancedInsights.decisionQuality.astTo.toFixed(2)}</span>
+                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">TOV%: {playerAdvancedInsights.decisionQuality.tovPct.toFixed(1)}%</span>
+                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">Midrange arány: {playerAdvancedInsights.decisionQuality.midRate.toFixed(1)}%</span>
                       </div>
-                      <div className="text-slate-300">Index: <span className="font-semibold text-cyan-300">{playerAdvancedInsights.decisionQuality.score.toFixed(1)} / 100</span> ({playerAdvancedInsights.decisionQuality.tier})</div>
-                      <div className="text-slate-300">AST/TO: {playerAdvancedInsights.decisionQuality.astTo.toFixed(2)}</div>
-                      <div className="text-slate-300">TOV%: {playerAdvancedInsights.decisionQuality.tovPct.toFixed(1)}%</div>
-                      <div className="text-slate-300">Midrange rate: {playerAdvancedInsights.decisionQuality.midRate.toFixed(1)}%</div>
                     </div>
 
-                    <div className="rounded-md border border-slate-800 bg-slate-900/50 p-3 space-y-1">
+                    {/* 6) Stabilitás és hullámzás */}
+                    <div className="rounded-md border border-slate-800 bg-slate-900/50 p-3 space-y-2">
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-1.5">
                           <div className="text-slate-200 font-medium">6) Stabilitás és hullámzás</div>
@@ -11988,19 +12008,22 @@ export function SeasonComparison({
                           <Badge className={getSampleConfidenceBadgeClass(normalizeSampleConfidence(playerAdvancedInsights.stability.confidence))}>{formatSampleConfidenceLabel(normalizeSampleConfidence(playerAdvancedInsights.stability.confidence))}</Badge>
                         )}
                       </div>
-                      <div className={`text-[11px] ${getInsightToneClass(playerAdvancedInsights.blockVerdicts.stability.tone)}`}>
+                      <p className={`text-[11px] leading-relaxed ${getInsightToneClass(playerAdvancedInsights.blockVerdicts.stability.tone)}`}>
                         {playerAdvancedInsights.blockVerdicts.stability.text}
-                      </div>
-                      <div className="text-slate-300">Volatilitás: {playerAdvancedInsights.stability.volatility.toFixed(1)} / 100</div>
-                      <div className="text-slate-300">TS szórás: {playerAdvancedInsights.stability.tsStd.toFixed(1)}</div>
-                      <div className="text-slate-300">PPP szórás: {playerAdvancedInsights.stability.pppStd.toFixed(3)}</div>
-                      <div className="text-slate-300">TO szórás: {playerAdvancedInsights.stability.tovStd.toFixed(1)} pp</div>
-                      <div className={playerAdvancedInsights.stability.trend >= 0 ? 'text-emerald-300' : 'text-rose-300'}>
-                        Rövid trend (TS): {playerAdvancedInsights.stability.trend >= 0 ? '+' : ''}{playerAdvancedInsights.stability.trend.toFixed(1)} pp
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">Volatilitás: {playerAdvancedInsights.stability.volatility.toFixed(1)} / 100</span>
+                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">TS szórás: {playerAdvancedInsights.stability.tsStd.toFixed(1)}</span>
+                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">PPP szórás: {playerAdvancedInsights.stability.pppStd.toFixed(3)}</span>
+                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">TO szórás: {playerAdvancedInsights.stability.tovStd.toFixed(1)} pp</span>
+                        <span className={`px-1.5 py-0.5 rounded bg-slate-800 text-[10px] ${playerAdvancedInsights.stability.trend >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
+                          Trend (TS): {playerAdvancedInsights.stability.trend >= 0 ? '+' : ''}{playerAdvancedInsights.stability.trend.toFixed(1)} pp
+                        </span>
                       </div>
                     </div>
 
-                    <div className="rounded-md border border-slate-800 bg-slate-900/50 p-3 space-y-1">
+                    {/* 7) Matchup érzékenység */}
+                    <div className="rounded-md border border-slate-800 bg-slate-900/50 p-3 space-y-2">
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-1.5">
                           <div className="text-slate-200 font-medium">7) Matchup érzékenység</div>
@@ -12010,32 +12033,34 @@ export function SeasonComparison({
                           <Badge className={getSampleConfidenceBadgeClass(normalizeSampleConfidence(playerAdvancedInsights.matchupSensitivity.confidence))}>{formatSampleConfidenceLabel(normalizeSampleConfidence(playerAdvancedInsights.matchupSensitivity.confidence))}</Badge>
                         )}
                       </div>
-                      <div className={`text-[11px] ${getInsightToneClass(playerAdvancedInsights.blockVerdicts.matchup.tone)}`}>
+                      <p className={`text-[11px] leading-relaxed ${getInsightToneClass(playerAdvancedInsights.blockVerdicts.matchup.tone)}`}>
                         {playerAdvancedInsights.blockVerdicts.matchup.text}
-                      </div>
+                        {'interpretation' in playerAdvancedInsights.matchupSensitivity && playerAdvancedInsights.matchupSensitivity.interpretation
+                          ? ` (${playerAdvancedInsights.matchupSensitivity.interpretation})` : ''}
+                      </p>
                       {playerAdvancedInsights.matchupSensitivity.available ? (
                         <>
-                          <div className="text-slate-300">Erős védelem TS/PPP: {formatNullableNumber(playerAdvancedInsights.matchupSensitivity.strongTs, 1, '%')} / {formatNullableNumber(playerAdvancedInsights.matchupSensitivity.strongPpp, 3)}</div>
-                          <div className="text-slate-300">Gyengébb védelem TS/PPP: {formatNullableNumber(playerAdvancedInsights.matchupSensitivity.weakTs, 1, '%')} / {formatNullableNumber(playerAdvancedInsights.matchupSensitivity.weakPpp, 3)}</div>
-                          <div className={Number(playerAdvancedInsights.matchupSensitivity.tsDelta ?? 0) >= 0 ? 'text-emerald-300' : 'text-rose-300'}>
-                            TS delta (erős-gyenge): {formatNullableNumber(playerAdvancedInsights.matchupSensitivity.tsDelta, 1, ' pp')}
+                          <div className="flex flex-wrap gap-1.5">
+                            <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">Erős véd. TS/PPP: {formatNullableNumber(playerAdvancedInsights.matchupSensitivity.strongTs, 1, '%')} / {formatNullableNumber(playerAdvancedInsights.matchupSensitivity.strongPpp, 3)}</span>
+                            <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">Gyengébb véd. TS/PPP: {formatNullableNumber(playerAdvancedInsights.matchupSensitivity.weakTs, 1, '%')} / {formatNullableNumber(playerAdvancedInsights.matchupSensitivity.weakPpp, 3)}</span>
+                            <span className={`px-1.5 py-0.5 rounded bg-slate-800 text-[10px] ${Number(playerAdvancedInsights.matchupSensitivity.tsDelta ?? 0) >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
+                              TS delta: {formatNullableNumber(playerAdvancedInsights.matchupSensitivity.tsDelta, 1, ' pp')}
+                            </span>
                           </div>
-                          {'interpretation' in playerAdvancedInsights.matchupSensitivity && (
-                            <div className="text-slate-400">Értelmezés: {playerAdvancedInsights.matchupSensitivity.interpretation}</div>
-                          )}
                           {'strongOpponents' in playerAdvancedInsights.matchupSensitivity && playerAdvancedInsights.matchupSensitivity.strongOpponents?.length > 0 && (
-                            <div className="text-slate-400">Erős védelem minta: {playerAdvancedInsights.matchupSensitivity.strongOpponents.join(' • ')}</div>
+                            <div className="text-[10px] text-slate-500">Erős: {playerAdvancedInsights.matchupSensitivity.strongOpponents.join(' • ')}</div>
                           )}
                           {'weakOpponents' in playerAdvancedInsights.matchupSensitivity && playerAdvancedInsights.matchupSensitivity.weakOpponents?.length > 0 && (
-                            <div className="text-slate-400">Gyengébb védelem minta: {playerAdvancedInsights.matchupSensitivity.weakOpponents.join(' • ')}</div>
+                            <div className="text-[10px] text-slate-500">Gyengébb: {playerAdvancedInsights.matchupSensitivity.weakOpponents.join(' • ')}</div>
                           )}
                         </>
                       ) : (
-                        <div className="text-slate-400">Nincs elég minta az ellenfél-minőség szerinti splithez.</div>
+                        <div className="text-[10px] text-slate-400">Nincs elég minta az ellenfél-minőség szerinti splithez.</div>
                       )}
                     </div>
 
-                    <div className="rounded-md border border-slate-800 bg-slate-900/50 p-3 space-y-1">
+                    {/* 8) Fáradás és terhelés */}
+                    <div className="rounded-md border border-slate-800 bg-slate-900/50 p-3 space-y-2">
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-1.5">
                           <div className="text-slate-200 font-medium">8) Fáradás és terhelés</div>
@@ -12045,21 +12070,81 @@ export function SeasonComparison({
                           <Badge className={getSampleConfidenceBadgeClass(normalizeSampleConfidence(playerAdvancedInsights.fatigueLoad.confidence))}>{formatSampleConfidenceLabel(normalizeSampleConfidence(playerAdvancedInsights.fatigueLoad.confidence))}</Badge>
                         )}
                       </div>
-                      <div className={`text-[11px] ${getInsightToneClass(playerAdvancedInsights.blockVerdicts.fatigue.tone)}`}>
+                      <p className={`text-[11px] leading-relaxed ${getInsightToneClass(playerAdvancedInsights.blockVerdicts.fatigue.tone)}`}>
                         {playerAdvancedInsights.blockVerdicts.fatigue.text}
+                        {'note' in playerAdvancedInsights.fatigueLoad && playerAdvancedInsights.fatigueLoad.note
+                          ? ` ${playerAdvancedInsights.fatigueLoad.note}` : ''}
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">High-load meccsek: {playerAdvancedInsights.fatigueLoad.highLoadGames}</span>
+                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">B2B minta: {playerAdvancedInsights.fatigueLoad.b2bGames}</span>
+                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">High-load TS%: {formatNullableNumber(playerAdvancedInsights.fatigueLoad.highLoadTs, 1, '%')}</span>
+                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">Normál TS%: {formatNullableNumber(playerAdvancedInsights.fatigueLoad.normalLoadTs, 1, '%')}</span>
+                        <span className={`px-1.5 py-0.5 rounded bg-slate-800 text-[10px] ${Number(playerAdvancedInsights.fatigueLoad.tsDrop ?? 0) >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
+                          TS különbség: {formatNullableNumber(playerAdvancedInsights.fatigueLoad.tsDrop, 1, ' pp')}
+                        </span>
+                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">B2B TOV%: {formatNullableNumber(playerAdvancedInsights.fatigueLoad.b2bTovPct, 1, '%')}</span>
                       </div>
-                      <div className="text-slate-300">High-load meccsek: {playerAdvancedInsights.fatigueLoad.highLoadGames}</div>
-                      <div className="text-slate-300">Back-to-back minta: {playerAdvancedInsights.fatigueLoad.b2bGames}</div>
-                      <div className="text-slate-300">High-load TS%: {formatNullableNumber(playerAdvancedInsights.fatigueLoad.highLoadTs, 1, '%')}</div>
-                      <div className="text-slate-300">Normál TS%: {formatNullableNumber(playerAdvancedInsights.fatigueLoad.normalLoadTs, 1, '%')}</div>
-                      <div className={Number(playerAdvancedInsights.fatigueLoad.tsDrop ?? 0) >= 0 ? 'text-emerald-300' : 'text-rose-300'}>
-                        TS különbség (high-load - normál): {formatNullableNumber(playerAdvancedInsights.fatigueLoad.tsDrop, 1, ' pp')}
-                      </div>
-                      <div className="text-slate-300">B2B TOV%: {formatNullableNumber(playerAdvancedInsights.fatigueLoad.b2bTovPct, 1, '%')}</div>
-                      {'note' in playerAdvancedInsights.fatigueLoad && playerAdvancedInsights.fatigueLoad.note && (
-                        <div className="text-slate-400">Megjegyzés: {playerAdvancedInsights.fatigueLoad.note}</div>
-                      )}
                     </div>
+
+                    {/* 9–13) advancedBlocks — dobásprofil, játéképítés, védekezés, pontszerzés, hatékonyság */}
+                    {advancedBlocks && (<>
+                    <div className="rounded-md border border-slate-800 bg-slate-900/50 p-3 space-y-2">
+                      <div className="text-slate-200 font-medium">9) Dobásprofil (per-36)</div>
+                      <p className="text-[11px] leading-relaxed text-slate-300">{advancedBlocks.shooting.narrative}</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">TS%: {advancedBlocks.shooting.tsPct.toFixed(1)}%</span>
+                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">eFG%: {advancedBlocks.shooting.efg.toFixed(1)}%</span>
+                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">3P%: {advancedBlocks.shooting.threePct.toFixed(1)}%</span>
+                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">FT%: {advancedBlocks.shooting.ftPct.toFixed(1)}%</span>
+                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">Rim: {(advancedBlocks.shooting.rimRate * 100).toFixed(0)}% ({advancedBlocks.shooting.closeEffPct.toFixed(0)}%)</span>
+                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">Mid: {(advancedBlocks.shooting.midRate * 100).toFixed(0)}% ({advancedBlocks.shooting.midEffPct.toFixed(0)}%)</span>
+                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">3P-arány: {(advancedBlocks.shooting.threeRate * 100).toFixed(0)}%</span>
+                      </div>
+                    </div>
+
+                    <div className="rounded-md border border-slate-800 bg-slate-900/50 p-3 space-y-2">
+                      <div className="text-slate-200 font-medium">10) Játéképítés (per-36)</div>
+                      <p className="text-[11px] leading-relaxed text-slate-300">{advancedBlocks.playmaking.narrative}</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">AST/36: {advancedBlocks.playmaking.astPer36.toFixed(1)}</span>
+                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">AST/TO: {advancedBlocks.playmaking.astTo.toFixed(2)}</span>
+                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">Usage/36: {advancedBlocks.playmaking.usageProxy.toFixed(1)}</span>
+                      </div>
+                    </div>
+
+                    <div className="rounded-md border border-slate-800 bg-slate-900/50 p-3 space-y-2">
+                      <div className="text-slate-200 font-medium">11) Védekezés (per-36)</div>
+                      <p className="text-[11px] leading-relaxed text-slate-300">{advancedBlocks.defense.narrative}</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">STL/36: {advancedBlocks.defense.stlPer36.toFixed(1)}</span>
+                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">BLK/36: {advancedBlocks.defense.blkPer36.toFixed(1)}</span>
+                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">DREB/36: {advancedBlocks.defense.defRebPer36.toFixed(1)}</span>
+                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">Faultok/36: {advancedBlocks.defense.foulsPer36.toFixed(1)}</span>
+                      </div>
+                    </div>
+
+                    <div className="rounded-md border border-slate-800 bg-slate-900/50 p-3 space-y-2">
+                      <div className="text-slate-200 font-medium">12) Pontszerzés (per-36)</div>
+                      <p className="text-[11px] leading-relaxed text-slate-300">{advancedBlocks.scoring.narrative}</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">PTS/36: {advancedBlocks.scoring.ptsPer36.toFixed(1)}</span>
+                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">TS%: {advancedBlocks.scoring.tsPct.toFixed(1)}%</span>
+                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">Usage/36: {advancedBlocks.scoring.usageProxy.toFixed(1)}</span>
+                      </div>
+                    </div>
+
+                    <div className="rounded-md border border-slate-800 bg-slate-900/50 p-3 space-y-2">
+                      <div className="text-slate-200 font-medium">13) Összhatékonyság (per-36)</div>
+                      <p className="text-[11px] leading-relaxed text-slate-300">{advancedBlocks.efficiency.narrative}</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">VAL/36: {advancedBlocks.efficiency.valPer36.toFixed(1)}</span>
+                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">TS%: {advancedBlocks.efficiency.tsPct.toFixed(1)}%</span>
+                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">eFG%: {advancedBlocks.efficiency.efg.toFixed(1)}%</span>
+                      </div>
+                    </div>
+                    </>)}
+
                     </div>
                   </TooltipProvider>
 
@@ -12122,6 +12207,7 @@ export function SeasonComparison({
                 </div>
               </CardContent>
             </Card>
+
           </div>
 
           <div className="space-y-6">

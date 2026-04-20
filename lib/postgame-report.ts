@@ -352,13 +352,18 @@ const buildTeamShotMapSummary = (events: ShotMapEventInput[]): TeamShotMapSummar
   const midRate = attempts > 0 ? zones.mid.attempts / attempts : 0;
   const threeRate = attempts > 0 ? threeAttempts / attempts : 0;
   const corner3Rate = attempts > 0 ? zones.corner3.attempts / attempts : 0;
+  const aboveBreak3Rate = attempts > 0 ? zones.aboveBreak3.attempts / attempts : 0;
+  const paintRate = attempts > 0 ? zones.paint.attempts / attempts : 0;
 
   const rimPct = zones.rim.attempts > 0 ? (zones.rim.made / zones.rim.attempts) * 100 : 0;
   const midPct = zones.mid.attempts > 0 ? (zones.mid.made / zones.mid.attempts) * 100 : 0;
   const threePct = threeAttempts > 0 ? (threeMade / threeAttempts) * 100 : 0;
   const corner3Pct = zones.corner3.attempts > 0 ? (zones.corner3.made / zones.corner3.attempts) * 100 : 0;
 
-  const shotQualityIndex = round(((rimRate * 1.25) + (corner3Rate * 1.2) + (threeRate * 0.7) - (midRate * 0.9)) * 100, 1);
+  const shotQualityIndex = round(
+    ((rimRate * 1.25) + (paintRate * 0.8) + (corner3Rate * 1.2) + (aboveBreak3Rate * 0.65) - (midRate * 0.9)) * 100,
+    1
+  );
 
   return {
     attempts,
@@ -471,9 +476,10 @@ const normalizeTeamSeason = (raw: TeamSeasonStat): NormalizedTeamStats => {
   const games = raw.games || 1;
   const fga = raw.fga2 + raw.fga3;
   const fgm = raw.fgm2 + raw.fgm3;
-  const pace = (fga + 0.44 * raw.fta + raw.tov) / games;
-  const assistRate = fga > 0 ? raw.ast / fga : 0;
-  const turnoverRate = pace > 0 ? (raw.tov / games) / pace : 0;
+  const tovDenominator = fga + 0.44 * raw.fta + raw.tov;
+  const pace = Math.max(tovDenominator - raw.oreb, 0) / games;
+  const assistRate = fgm > 0 ? raw.ast / fgm : 0;
+  const turnoverRate = tovDenominator > 0 ? raw.tov / tovDenominator : 0;
   const orebRate = (raw.oreb + raw.dreb) > 0 ? raw.oreb / (raw.oreb + raw.dreb) : 0;
   const twoRate = fga > 0 ? raw.fga2 / fga : 0;
   const threeRate = fga > 0 ? raw.fga3 / fga : 0;
@@ -502,9 +508,10 @@ const normalizeTeamSeason = (raw: TeamSeasonStat): NormalizedTeamStats => {
 const normalizeTeamGame = (raw: TeamGameStat, opponent: TeamGameStat): NormalizedGameStats => {
   const fga = raw.fga2 + raw.fga3;
   const fgm = raw.fgm2 + raw.fgm3;
-  const pace = fga + 0.44 * raw.fta + raw.tov;
-  const assistRate = fga > 0 ? raw.ast / fga : 0;
-  const turnoverRate = pace > 0 ? raw.tov / pace : 0;
+  const tovDenominator = fga + 0.44 * raw.fta + raw.tov;
+  const pace = Math.max(tovDenominator - raw.oreb, 0);
+  const assistRate = fgm > 0 ? raw.ast / fgm : 0;
+  const turnoverRate = tovDenominator > 0 ? raw.tov / tovDenominator : 0;
   const orebRate = (raw.oreb + opponent.dreb) > 0 ? raw.oreb / (raw.oreb + opponent.dreb) : 0;
   const twoRate = fga > 0 ? raw.fga2 / fga : 0;
   const threeRate = fga > 0 ? raw.fga3 / fga : 0;
@@ -702,7 +709,7 @@ const buildDecisiveFactors = (
         defense.push(`Tripla-volumen kockázat kontroll alatt (${round(opponentThreePct, 1)}% ellenfél 3P)`);
       }
     }
-    if (opponent.orebRate - season.orebRate >= 0.08) defense.push('Lepattanózás gyenge');
+    if (opponent.orebRate >= 0.33) defense.push('Lepattanózás gyenge');
   }
 
   return { offense, defense };
