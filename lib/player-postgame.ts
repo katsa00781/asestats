@@ -249,27 +249,39 @@ const buildImpactTags = (player: PlayerGameStat, context: DerivedPlayerContext) 
 };
 
 const computeImpactScore = (player: PlayerGameStat, context: DerivedPlayerContext) => {
-  const normalizedVal = clamp(context.valPer36 / 22, 0, 1);
-  const normalizedTs = clamp((context.tsPct - 45) / 25, 0, 1);
-  const normalizedUsage = clamp(context.usageShare / 0.34, 0, 1);
+  // Wider normalization ranges so elite games (53 VAL/36, 107% TS) score
+  // clearly higher than solid ones (39 VAL/36, 89% TS) instead of both
+  // being clamped to 1.0.
+  const normalizedVal = clamp(context.valPer36 / 45, 0, 1);
+  const normalizedTs = clamp((context.tsPct - 45) / 75, 0, 1);
+  const normalizedUsage = clamp(context.usageShare / 0.30, 0, 1);
   const normalizedStocks = clamp((player.stl + player.blk) / 4, 0, 1);
   return round((normalizedVal * 0.45 + normalizedTs * 0.25 + normalizedUsage * 0.2 + normalizedStocks * 0.1) * 100, 1);
 };
 
-const classifyImpact = (score: number, context: DerivedPlayerContext, minutes: number): PlayerImpactClass => {
-  // Very small minute samples should not be promoted to core-role labels.
+const classifyImpact = (
+  score: number,
+  context: DerivedPlayerContext,
+  minutes: number,
+  maxScoreInGame: number
+): PlayerImpactClass => {
   if (context.minutesBucket === 'micro') {
-    if (score >= 62) return 'support';
+    if (score >= 55) return 'support';
     return 'struggling';
   }
 
+  // Top performer in this game with sufficient minutes → MVP regardless of
+  // starter status, so a dominant bench scorer isn't capped at 'engine'.
+  const isTopPerformer = maxScoreInGame > 0 && score >= maxScoreInGame * 0.95 && minutes >= 18 && score >= 60;
+  if (isTopPerformer) return 'mvp';
+
   const eligibleForMvp = minutes >= 22 && (context.isStarter || context.minutesBucket === 'heavy');
-  if (eligibleForMvp && score >= 75) return 'mvp';
+  if (eligibleForMvp && score >= 68) return 'mvp';
 
   const eligibleForEngine = minutes >= 16 || (context.isStarter && minutes >= 12);
-  if (eligibleForEngine && score >= 60) return 'engine';
+  if (eligibleForEngine && score >= 52) return 'engine';
 
-  if (score >= 45) return 'support';
+  if (score >= 38) return 'support';
   return 'struggling';
 };
 
@@ -319,7 +331,19 @@ export const buildPlayerPostGameReport = (
     { usage: 0, val: 0, rebounds: 0, assists: 0, turnovers: 0 }
   );
 
-  const breakdowns: PlayerPostGameBreakdown[] = players.map(player => {
+  // Pass 1: derive contexts and compute raw impact scores so we can find the
+  // game-best score before classifying anyone (needed for relative MVP logic).
+  type PlayerDraft = {
+    player: PlayerGameStat;
+    isStarter: boolean;
+    minutesBucket: PlayerMinutesBucket;
+    usage: number;
+    usageShare: number;
+    context: DerivedPlayerContext;
+    impactScore: number;
+  };
+
+  const drafts: PlayerDraft[] = players.map(player => {
     const isStarter = hasExplicitStarterInfo
       ? player.isStarter === true
       : starterIds.has(player.playerId);
@@ -345,13 +369,19 @@ export const buildPlayerPostGameReport = (
       turnoverShare,
     };
 
+    return { player, isStarter, minutesBucket, usage, usageShare, context, impactScore: computeImpactScore(player, context) };
+  });
+
+  const maxScoreInGame = drafts.reduce((max, d) => Math.max(max, d.impactScore), 0);
+
+  // Pass 2: classify and build full breakdowns now that maxScoreInGame is known.
+  const breakdowns: PlayerPostGameBreakdown[] = drafts.map(({ player, isStarter, minutesBucket, usageShare, context, impactScore }) => {
     const strengths = buildStrengths(player, context);
     const issues = buildIssues(player, context);
     const focus = buildFocus(issues);
     appendShotMapSignals(strengths, issues, focus, shotMapContext?.[player.playerId]);
     const impactTags = buildImpactTags(player, context);
-    const impactScore = computeImpactScore(player, context);
-    const impactClass = classifyImpact(impactScore, context, player.minutes);
+    const impactClass = classifyImpact(impactScore, context, player.minutes, maxScoreInGame);
     const impactLabel = mapContextualImpactLabel(impactClass, context);
 
     return {
@@ -363,17 +393,17 @@ export const buildPlayerPostGameReport = (
       minutesBucket,
       roles: player.roles,
       usageShare,
-      usageTier,
-      usageLabel: mapUsageLabel(usageTier),
+      usageTier: context.usageTier,
+      usageLabel: mapUsageLabel(context.usageTier),
       val: player.val,
-      valPer36: round(valPer36, 1),
+      valPer36: round(context.valPer36, 1),
       points: player.points,
       rebounds: player.oreb + player.dreb,
       assists: player.ast,
       turnovers: player.tov,
       stocks: player.stl + player.blk,
       fouls: getFouls(player),
-      tsPct: round(tsPct, 1),
+      tsPct: round(context.tsPct, 1),
       impactScore,
       impactClass,
       impactLabel,
@@ -385,11 +415,11 @@ export const buildPlayerPostGameReport = (
       llmContext: {
         isStarter,
         minutesBucket,
-        usageTier,
+        usageTier: context.usageTier,
         usageSharePct: round(usageShare * 100, 1),
-        tsPct: round(tsPct, 1),
+        tsPct: round(context.tsPct, 1),
         val: player.val,
-        valPer36: round(valPer36, 1),
+        valPer36: round(context.valPer36, 1),
         points: player.points,
         rebounds: player.oreb + player.dreb,
         assists: player.ast,
