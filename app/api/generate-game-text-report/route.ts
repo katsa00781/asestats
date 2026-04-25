@@ -84,7 +84,29 @@ const extractPostgameContext = (report: PostGameReport) => ({
   reflection: report.reflection,
   playerImpact: report.playerImpact,
   lineupInsights: report.lineupInsights ?? null,
+  playerReport: extractPlayerContext(report),
 });
+
+const extractPlayerContext = (report: PostGameReport) => {
+  const pr = report.playerReport;
+  if (!pr) return null;
+
+  const slim = (p: { name: string; position: string; llmContext: Record<string, unknown> }) => ({
+    name: p.name,
+    position: p.position,
+    ...p.llmContext,
+  });
+
+  return {
+    mvp: pr.highlights.mvp ? slim(pr.highlights.mvp) : null,
+    engines: pr.highlights.engines.map(slim),
+    sparkPlugs: pr.highlights.sparkPlugs.map(slim),
+    struggling: pr.highlights.struggling.map(slim),
+    rotationAndHeavy: pr.players
+      .filter(p => p.minutesBucket !== 'micro')
+      .map(p => slim(p)),
+  };
+};
 
 const BASE_INSTRUCTIONS = `Feladatod egy szurkolóbarát, jól olvasható szöveges mérkőzés-elemzés készítése a pre-game és post-game riportok alapján.
 
@@ -112,16 +134,23 @@ Kötelező szerkezet (alcímeket is írd ki):
 3️⃣ Pre-game várakozás vs. realizáció – kezdj egy félkövér alcímmel (**3️⃣ Pre-game várakozás vs. realizáció**), majd minden kulcspontot két sorban írj le: az első sor legyen pl. "✓ **Teljesült**: fókusz", a második sor "  → rövid magyarázat". Használd a ✓ / ↺ / ✗ jelöléseket.
 4️⃣ Mi döntötte el valójában a mérkőzést? – Nevezd meg, hogy hatékonyság-, volumen- vagy kontroll-alapú faktor volt, és térj ki arra is, hogy a kulcsra kijelölt X-faktor miért nem (vagy hogyan) lett tényleges döntő tényező. Zárd le a bekezdést egy stratégiai javaslattal a következő találkozóra.
 4️⃣/b RiskFlags – ha a pre-game riport tartalmazott risk flag-eket, itt kezeld önálló bekezdésben, rendezetten felsorolva a bekövetkezett vs. elmaradt kockázatokat.
-5️⃣ Tanulság és alkalmazhatóság – 2–3 mondatban fogalmazd meg, hogyan hasznosítható mindez a következő meccseken/edzéseken (tempó, rotáció, védekező elvek, speciális játékhelyzetek).
+5️⃣ Játékos-kiemelések – a rotation és heavy percesek kötelezők (legalább 2–3 játékos részletes értékelése):
+   - Az MVP-t és az engine játékosokat pozitívan emeld ki, mindig adj konkrét statisztikát (VAL, TS%, pont).
+   - A sparkplug játékosoknál mutasd meg az arányos hatást: "rövid perc, de érzékelhető lendület".
+   - A küzdő (struggling) játékosoknál fogalmazz építő kritikát, mindig zárj megoldási iránnyal.
+   - Ne gépies felsorolás legyen, hanem olvaszd a játékosokat a narratívába.
+   - A TS% és a VAL/36 a legfontosabb mutatók; ha messze eltér a szezonátlagtól, feltétlenül tüntesd fel.
+6️⃣ Tanulság és alkalmazhatóság – 2–3 mondatban fogalmazd meg, hogyan hasznosítható mindez a következő meccseken/edzéseken (tempó, rotáció, védekező elvek, speciális játékhelyzetek).
 
 Plusz elvárások:
 - Adj rövid indoklást arra, hogy melyik előzetes fókuszpont miért NEM vált döntővé (ha releváns).
 - Emeld ki, ha valamely kockázati jelző nem materializálódott, és miért.
 - Lineup adatoknál írd le: melyik ötös/páros hozott vagy veszített előnyt, és ez milyen konkrét rotációs döntést indokol.
 - Lineup adatoknál ne abszolút ítéletet írj, hanem valószínűsíthető mintázatot és alkalmazható következő lépést.
+- Játékos-adatoknál (playerReport): az mvp és az engines játékosokat feltétlenül emeld ki névvel és konkrét statisztikával. A struggling játékosokat konstruktívan kezeld. Ha nincs mvp/engine adat, a rotationAndHeavy lista alapján írj minden rotation/heavy percest.
 - A záró tanulság mindig mutasson előre (edzésfókusz, rotáció, taktikai döntés), pozitív és érthető stílusban.
 - Használj kötőszavakat, amelyek segítik a logikus átmenetet ("emiatt", "ezért", "mivel").
-- Célzott számtartalom: a teljes szövegben 4-8 konkrét szám szerepeljen; ne legyen se száraz, se túl általános.
+- Célzott számtartalom: a teljes szövegben 6–12 konkrét szám szerepeljen; ne legyen se száraz, se túl általános.
 
 Stíluselvárás:
 - A szöveg legyen olyan, amit egy szurkoló is szívesen végigolvas.
@@ -132,7 +161,7 @@ Stíluselvárás:
 - Blokkonként 1-2 kulcsszámot emelj ki, és mindig tedd mellé a szakmai következményt.
 - Amikor kritikát fogalmazol, megoldási iránnyal zárd a gondolatot.
 
-Terjedelem: 14–20 mondat. Alkoss összefüggő, UI-ba illeszthető szöveget.`;
+Terjedelem: 20–30 mondat. Alkoss összefüggő, UI-ba illeszthető szöveget. A játékos-kiemelések szekció legalább 4–6 mondatot igényel.`;
 
 const getStyleInstructions = (style: 'fan' | 'balanced' | 'coach') => {
   if (style === 'fan') {

@@ -272,7 +272,12 @@ const matchesStageFilter = (stage?: string | null) => {
   if (ROUND_FILTER.rounds.size === 0 && ROUND_FILTER.stages.size === 0) return true;
   const normalized = normalizeName(stage || '');
   if (!normalized) return false;
-  return ROUND_FILTER.stages.has(normalized);
+  // Use substring matching so "negyeddonto 1" matches filter "negyeddonto",
+  // and exact match still works when there is no suffix.
+  for (const filterStage of ROUND_FILTER.stages) {
+    if (normalized.includes(filterStage) || filterStage.includes(normalized)) return true;
+  }
+  return false;
 };
 
 const matchesFilter = (teamName: string) => {
@@ -469,7 +474,15 @@ const getGameLinks = async (page: Page): Promise<GameLink[]> => {
   const roundFilterLabel = hasRoundFilter
     ? ` (${ROUND_FILTER.rounds.size} számozott + ${ROUND_FILTER.stages.size} szöveges kör szűrve)`
     : '';
-  console.log(`✅ ${filtered.length} feldolgozható meccs találva${roundFilterLabel}`);
+
+  if (hasRoundFilter) {
+    const uniqueStages = [...new Set(games.map(g => g.stage).filter(Boolean))].slice(0, 10);
+    if (uniqueStages.length > 0) {
+      console.log(`  ℹ️ Oldalon talált kör-szövegek: ${uniqueStages.map(s => `"${s}"`).join(', ')}`);
+    }
+  }
+
+  console.log(`✅ ${filtered.length} feldolgozható meccs találva${roundFilterLabel} (összes sor: ${games.length})`);
   return filtered;
 };
 
@@ -1025,7 +1038,9 @@ const main = async () => {
     console.log(`📊 ${games.length} meccs feldolgozása...`);
 
     for (const [index, game] of games.entries()) {
-      const roundLabel = typeof game.round === 'number' ? `${game.round}. forduló | ` : '';
+      const roundLabel = typeof game.round === 'number'
+        ? `${game.round}. forduló${game.stage && !game.stage.match(/^\d+$/) ? ` (${game.stage})` : ''} | `
+        : game.stage ? `${game.stage} | ` : '';
       console.log(`\n[${index + 1}/${games.length}] ${roundLabel}${cleanTeamName(game.homeTeam)} vs ${cleanTeamName(game.awayTeam)} (${game.score})`);
       const scraped = await scrapeGameDetails(page, game);
       if (!scraped) continue;
