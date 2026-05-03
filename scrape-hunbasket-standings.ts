@@ -193,7 +193,8 @@ const main = async () => {
   try {
     const standings = await scrapeStandings(page);
     if (standings.length === 0) {
-      throw new Error('A tabella nem tartalmaz feldolgozható sorokat.');
+      console.warn(`⚠️ A tabella nem tartalmaz feldolgozható sorokat: ${HUNBASKET_STANDINGS_URL} – kihagyva.`);
+      return;
     }
 
     const matchday = await upsertStandings(seasonId, standings);
