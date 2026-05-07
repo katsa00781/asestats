@@ -78,6 +78,9 @@ const extractPostgameContext = (report: PostGameReport) => ({
   context: report.context,
   decisiveFactors: report.decisiveFactors,
   decisiveFactorMeta: report.decisiveFactorMeta,
+  // Pre-computed deltas extracted directly from decisiveFactors strings.
+  // Use ONLY these values when quoting pp-differences — do NOT recalculate.
+  computedDeltas: extractDeltasFromDecisiveFactors(report.decisiveFactors),
   strengths: report.strengths,
   problems: report.problems,
   nextFocus: report.nextFocus,
@@ -86,6 +89,26 @@ const extractPostgameContext = (report: PostGameReport) => ({
   lineupInsights: report.lineupInsights ?? null,
   playerReport: extractPlayerContext(report),
 });
+
+const DELTA_PATTERN = /\(([+-]?\d+(?:\.\d+)?)\s*pp\)/;
+
+const extractDeltasFromDecisiveFactors = (
+  factors: { offense?: string[]; defense?: string[] } | null | undefined
+): Record<string, string> => {
+  const result: Record<string, string> = {};
+  const all = [...(factors?.offense ?? []), ...(factors?.defense ?? [])];
+  for (const factor of all) {
+    const match = DELTA_PATTERN.exec(factor);
+    if (!match) continue;
+    const delta = `${match[1]} pp`;
+    if (/3P|tripla|periméter/i.test(factor)) result['threePctDelta'] = delta;
+    else if (/assist|labdajárat/i.test(factor)) result['assistRateDelta'] = delta;
+    else if (/TO|labdavesztés|turnover/i.test(factor)) result['turnoverRateDelta'] = delta;
+    else if (/eFG|hatékonyság/i.test(factor)) result['efgDelta'] = delta;
+    else if (/OREB|lepattanó/i.test(factor)) result['orebDelta'] = delta;
+  }
+  return result;
+};
 
 const extractPlayerContext = (report: PostGameReport) => {
   const pr = report.playerReport;
@@ -122,7 +145,7 @@ Kritikus szabályok:
 - A hangvétel legyen szurkolóbarát: közérthető, de ne leegyszerűsítő; kritikát is építő módon fogalmazz meg.
 - Minden fő blokkban szerepeljen legalább egy konkrét szám vagy százalékpont-eltérés a kapott adatokból.
 - Adj konkrét edzői javaslatot arra, hogyan használható fel a tapasztalat a következő meccsen / visszavágón.
-- FONTOS – pontos számok: csak a JSON-ban szereplő pontos értékeket idézd, ne kerekítsd vagy becsüld felül/alul a statisztikákat.
+- FONTOS – pontos számok: csak a JSON-ban szereplő pontos értékeket idézd, ne kerekítsd vagy becsüld felül/alul a statisztikákat. A "computedDeltas" mezőben találod az előre kiszámított pp-különbségeket (pl. threePctDelta, assistRateDelta) – ezeket szó szerint használd, ne számolj belőlük újat.
 - FONTOS – lineup adatok: csak a lineupInsights-ban ténylegesen szereplő párosokat/ötösöket és azok statjait idézd; ne találj ki olyan összeköttetéseket, amelyek nem szerepelnek az adatban.
 - FONTOS – hatékonysági mutatók: a csapatszintű hatékonysági mutatóra az adatban "efgPct" / "eFG%" szerepel (effective field goal %), ez NEM ugyanaz mint a TS% (true shooting). Ne cseréld fel, és ne nevezd TS%-nak az eFG%-ot.
 

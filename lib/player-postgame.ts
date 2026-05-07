@@ -24,6 +24,7 @@ export type PlayerPostGameBreakdown = {
   stocks: number;
   fouls: number;
   tsPct: number;
+  hasShotAttempts: boolean;
   impactScore: number;
   impactClass: PlayerImpactClass;
   impactLabel: string;
@@ -300,7 +301,9 @@ const buildSummaryLine = (player: PlayerGameStat, context: DerivedPlayerContext,
     `${rebounds} lep`,
     `${player.ast} ast`,
   ];
-  return `${parts.join(' • ')} | TS ${round(context.tsPct, 1)}% • Usage ${(usageShare * 100).toFixed(1)}%`;
+  const hasShotAttempts = player.fga2 + player.fga3 + player.fta > 0;
+  const tsDisplay = hasShotAttempts ? `${round(context.tsPct, 1)}%` : '–';
+  return `${parts.join(' • ')} | TS ${tsDisplay} • Usage ${(usageShare * 100).toFixed(1)}%`;
 };
 
 export const buildPlayerPostGameReport = (
@@ -404,6 +407,7 @@ export const buildPlayerPostGameReport = (
       stocks: player.stl + player.blk,
       fouls: getFouls(player),
       tsPct: round(context.tsPct, 1),
+      hasShotAttempts: player.fga2 + player.fga3 + player.fta > 0,
       impactScore,
       impactClass,
       impactLabel,

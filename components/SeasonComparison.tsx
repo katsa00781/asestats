@@ -1568,6 +1568,17 @@ const matchesNormalizedNameProfile = (candidate: string, profiles: NormalizedNam
     if (profile.key === normalizedCandidate.key) return true;
     if (normalizedCandidate.tokens.length < 2) return false;
 
+    // Long-token shortcut: if both sides share a token of ≥6 chars it's the same person.
+    // Handles foreign names where Kosarstat uses a nickname/abbreviated form
+    // (e.g. "Zena EDOSOMWAN" vs "EDOSOMWAN Kinsley Nehizena").
+    const hasLongSharedToken = profile.tokens.some(profileToken =>
+      profileToken.length >= 6
+      && normalizedCandidate.tokens.some(t =>
+        t === profileToken || profileToken.includes(t) || t.includes(profileToken)
+      )
+    );
+    if (hasLongSharedToken) return true;
+
     let exactMatches = 0;
     const allTokensMatch = normalizedCandidate.tokens.every(token => {
       const matchedToken = profile.tokens.find(profileToken => (
@@ -16692,7 +16703,7 @@ export function SeasonComparison({
                             <div className="flex flex-wrap items-center gap-2 text-xs">
                               <span className="px-2 py-1 rounded-full bg-slate-800 text-slate-200">{player.impactLabel}</span>
                               <span className="px-2 py-1 rounded-full bg-slate-800 text-slate-200">{player.usageLabel}</span>
-                              <span className="text-slate-500">TS {player.tsPct.toFixed(1)}%</span>
+                              <span className="text-slate-500">TS {player.hasShotAttempts ? `${player.tsPct.toFixed(1)}%` : '–'}</span>
                               <span className="text-slate-500">VAL {player.val}</span>
                               <span className="text-slate-500">VAL/36 {player.valPer36.toFixed(1)}</span>
                             </div>

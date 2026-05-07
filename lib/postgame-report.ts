@@ -942,8 +942,10 @@ const analyzePlayerImpact = (players: PlayerGameStat[]) => {
       positive.push(formatPositiveContributorLabel(player));
     }
 
+    // Also include high-efficiency starters who played fewer minutes (e.g. foul trouble,
+    // tactical substitution) but dominated their time (valPer36 ≥ 35, ts ≥ 0.65).
     const qualifiesOverperformer =
-      player.minutes >= 18
+      (player.minutes >= 18 || (player.minutes >= 12 && valPer36 >= 35 && ts >= 0.65))
       && (player.val >= 18 || valPer36 >= 20)
       && (ts >= 0.55 || usageShare >= 0.12);
 
