@@ -368,6 +368,11 @@ const selectPlayersForPosition = (players: PlayerSeasonStat[], position: Positio
 const CRITICAL_MATCHUP_DELTA = -12;
 const CLEAR_ADVANTAGE_DELTA = 12;
 const SIGNIFICANT_MATCHUP_DELTA = 10;
+const POSITION_MATCHUP_WEIGHTS: Record<string, number> = {
+  PG: 0.25, SG: 0.15, SF: 0.15, PF: 0.20, C: 0.25,
+};
+const MATCHUP_PROB_SCALE = 10;
+const MATCHUP_PROB_CAP = 15;
 
 type TempoBand = 'high' | 'medium' | 'low';
 
@@ -1975,6 +1980,40 @@ const computeWinProbability = (
   };
 };
 
+const applyMatchupAdjustment = (
+  baseProb: ReturnType<typeof computeWinProbability>,
+  positionComparison: ReturnType<typeof buildPositionComparison>
+): ReturnType<typeof computeWinProbability> => {
+  const weightedDelta = positionComparison.reduce((acc, pos) => {
+    const w = POSITION_MATCHUP_WEIGHTS[pos.position] ?? 0.20;
+    return acc + pos.deltaValPer36 * w;
+  }, 0);
+
+  const rawAdjust = weightedDelta * MATCHUP_PROB_SCALE;
+  const adjustment = clamp(rawAdjust, -MATCHUP_PROB_CAP, MATCHUP_PROB_CAP);
+  if (Math.abs(adjustment) < 2) return baseProb;
+
+  const newOwnPct = round(clamp(baseProb.ownPct + adjustment, 8, 92), 1);
+  const absDiff = Math.abs(newOwnPct - 50);
+  const predictedWinner: 'own' | 'opponent' | 'even' =
+    absDiff < 2 ? 'even' : newOwnPct > 50 ? 'own' : 'opponent';
+
+  const confidence =
+    baseProb.confidence === 'High' && Math.abs(adjustment) >= 8 ? 'Medium' : baseProb.confidence;
+
+  return {
+    ...baseProb,
+    ownPct: newOwnPct,
+    opponentPct: round(100 - newOwnPct, 1),
+    predictedWinner,
+    confidence,
+    confidenceReasons: [
+      ...baseProb.confidenceReasons,
+      ...(Math.abs(adjustment) >= 5 ? ['matchup-mérleg korrekció'] : []),
+    ],
+  };
+};
+
 export const analyzePreGameScouting = (
   opponentTeam: TeamSeasonStat,
   opponentPlayers: PlayerSeasonStat[],
@@ -2040,7 +2079,10 @@ export const analyzePreGameScouting = (
   const threats = buildThreats(normalizedOpponent, leagueBenchmarks, usageShare);
   const vulnerabilities = buildVulnerabilities(normalizedOpponent, leagueBenchmarks);
   const positionComparison = buildPositionComparison(ownPlayers, opponentPlayers);
-  const winProbability = computeWinProbability(normalizedOwn, normalizedOpponent, leagueBenchmarks);
+  const winProbability = applyMatchupAdjustment(
+    computeWinProbability(normalizedOwn, normalizedOpponent, leagueBenchmarks),
+    positionComparison
+  );
   const xFactors = buildXFactors(normalizedOpponent, normalizedOwn, leagueBenchmarks, threats, vulnerabilities);
   const xFactorImpact = buildXFactorImpact(xFactors, normalizedOpponent, normalizedOwn, leagueBenchmarks);
   const riskNotes = buildRiskNotes(normalizedOpponent, normalizedOwn, leagueBenchmarks);
