@@ -3,6 +3,7 @@ import type { PlayerPostGameBreakdown } from '@/lib/player-postgame';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+export const maxDuration = 60;
 
 const openAiApiKey = process.env.OPENAI_API_KEY;
 const OPENAI_URL = process.env.OPENAI_API_URL ?? 'https://api.openai.com/v1/chat/completions';

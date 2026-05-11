@@ -854,4 +854,4 @@ function PlayerDetails( { player, onBack }: PlayerDetailProps) {
   )
 }
 
-export default PlayerDetails
+export { PlayerDetails }

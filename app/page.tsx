@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Trophy, LogOut } from 'lucide-react';
-import PlayerDetails from '@/components/PlayerDetails';
+import { PlayerDetails } from '@/components/PlayerDetails';
 import { PlayersList } from '@/components/PlayersList';
 import { TeamStatistics } from '@/components/TeamStatistics';
 import { JsonImport } from '@/components/JsonImport';
@@ -189,6 +189,7 @@ type SupabasePlayerStat = {
   total_blocks: number;
   total_turnovers: number;
   total_fouls_committed: number;
+  total_fouls_drawn: number;
   total_valuation: number;
   avg_valuation: number;
 };
@@ -399,7 +400,7 @@ export default function Home() {
               steals: ps.total_steals || 0,
               turnovers: ps.total_turnovers || 0,
               foulsCommitted: ps.total_fouls_committed || 0,
-              foulsDrawn: 0,
+              foulsDrawn: ps.total_fouls_drawn ?? 0,
               blocks: ps.total_blocks || 0,
               valuation: ps.avg_valuation || 0,
               offensiveRating: Math.round(avgOffRtg * 10) / 10,
@@ -707,7 +708,7 @@ export default function Home() {
             steals: ps.total_steals || 0,
             turnovers: ps.total_turnovers || 0,
             foulsCommitted: ps.total_fouls_committed || 0,
-            foulsDrawn: 0, // Nincs a view-ban
+            foulsDrawn: ps.total_fouls_drawn ?? 0,
             blocks: ps.total_blocks || 0,
             valuation: ps.avg_valuation || 0, // VAL egy mutató, átlagot használunk
             offensiveRating: Math.round(scoringEfficiency * 100) / 100,
