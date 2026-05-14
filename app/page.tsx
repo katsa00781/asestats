@@ -289,8 +289,11 @@ export default function Home() {
 
   const playersBySeason = useMemo(() => {
     if (!selectedSeasonId) return players;
-    return players.filter(player => String(player.seasonId ?? '') === String(selectedSeasonId));
-  }, [players, selectedSeasonId]);
+    return players.filter(player =>
+      String(player.seasonId ?? '') === String(selectedSeasonId) &&
+      (!selectedTeamId || String(player.teamId ?? '') === String(selectedTeamId))
+    );
+  }, [players, selectedSeasonId, selectedTeamId]);
 
   const selectedPlayer = selectedPlayerId 
     ? playersBySeason.find((player: PlayerStats) => player.id === selectedPlayerId) || null 

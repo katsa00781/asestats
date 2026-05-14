@@ -1,6 +1,6 @@
 -- fouls_drawn hozzáadása a view-okhoz
 -- A player_season_stats_by_season és player_season_stats view-ból korábban kimaradt.
--- Futtatandó: Supabase SQL Editor-ban.
+-- FONTOS: megtartja a jelenlegi view struktúrát (teams JOIN, team_name, our_team_id feltétel).
 
 DROP VIEW IF EXISTS player_season_stats_by_season CASCADE;
 
@@ -17,6 +17,8 @@ SELECT
   p.weight,
   p.team_id,
   p.is_active,
+  t.name as team_name,
+  t.short_name as team_short_name,
   s.id as season_id,
   s.name as season_name,
   s.is_current,
@@ -48,16 +50,17 @@ SELECT
   SUM(pgs.fouls_drawn) as total_fouls_drawn,
   SUM(pgs.plus_minus) as total_plus_minus,
   SUM(pgs.valuation) as total_valuation,
-  AVG(pgs.valuation) as avg_valuation
+  COALESCE(ROUND(AVG(pgs.valuation)::numeric, 1), 0) as avg_valuation
 FROM
   players p
+  INNER JOIN teams t ON p.team_id = t.id
   INNER JOIN seasons s ON p.season_id = s.id
   INNER JOIN player_game_stats pgs ON p.id = pgs.player_id
-  INNER JOIN games g ON pgs.game_id = g.id AND g.season_id = s.id
+  INNER JOIN games g ON pgs.game_id = g.id AND g.season_id = s.id AND g.our_team_id = t.id
 WHERE p.is_active = true
 GROUP BY
   p.id, p.name, p.number, p.position, p.birth_year, p.height, p.weight,
-  p.team_id, p.is_active, s.id, s.name, s.is_current;
+  p.team_id, p.is_active, t.name, t.short_name, s.id, s.name, s.is_current;
 
 GRANT SELECT ON player_season_stats_by_season TO anon, authenticated;
 
@@ -77,6 +80,8 @@ SELECT
   season_id,
   team_id,
   is_active,
+  team_name,
+  team_short_name,
   games_played,
   total_points,
   total_minutes,
