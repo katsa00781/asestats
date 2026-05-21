@@ -88,6 +88,8 @@ const parseRoundFilterInput = (value: string) => {
   return { rounds, stages };
 };
 const ROUND_FILTER = parseRoundFilterInput(process.env.HUNBASKET_ROUND_FILTER || '');
+const HUNBASKET_DATE_FROM = process.env.HUNBASKET_DATE_FROM || '';
+const HUNBASKET_DATE_TO = process.env.HUNBASKET_DATE_TO || '';
 const HEADLESS = process.env.HUNBASKET_HEADLESS === 'false' ? false : true;
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
@@ -110,8 +112,11 @@ type PlayerStats = {
   steals: number;
   turnovers: number;
   blocks: number;
+  blocksSuffered: number;
   fouls: number;
+  foulsDrawn: number;
   valuation: number;
+  isStarter: boolean;
   advanced: {
     offensiveRating: number;
     defensiveRating: number;
@@ -261,6 +266,13 @@ const parseMinutes = (value: string) => {
 };
 
 const TEAM_FILTER_NORMALIZED = TEAM_FILTER.map(normalizeName).filter(Boolean);
+
+const matchesDateFilter = (date: string) => {
+  if (!HUNBASKET_DATE_FROM && !HUNBASKET_DATE_TO) return true;
+  if (HUNBASKET_DATE_FROM && date < HUNBASKET_DATE_FROM) return false;
+  if (HUNBASKET_DATE_TO && date > HUNBASKET_DATE_TO) return false;
+  return true;
+};
 
 const matchesRoundFilter = (round?: number | null) => {
   if (ROUND_FILTER.rounds.size === 0 && ROUND_FILTER.stages.size === 0) return true;
@@ -464,6 +476,7 @@ const getGameLinks = async (page: Page): Promise<GameLink[]> => {
   });
 
   const filtered = games.filter(game => {
+    if (!matchesDateFilter(game.date)) return false;
     if (!matchesRoundFilter(game.round) && !matchesStageFilter(game.stage)) return false;
     const { homeScore, awayScore } = parseScore(game.score);
     if (homeScore === 0 && awayScore === 0) return false;
@@ -522,6 +535,7 @@ const collectStatTables = async (page: Page): Promise<Locator[]> => {
 const scrapePlayerTable = async (table: Locator): Promise<PlayerStats[]> => {
   const rows = await table.locator('tbody tr').all();
   const players: PlayerStats[] = [];
+  let starterCount = 0;
 
   for (const row of rows) {
     const cells = await row.locator('td').all();
@@ -548,6 +562,8 @@ const scrapePlayerTable = async (table: Locator): Promise<PlayerStats[]> => {
     const defensiveRebounds = toInt(17);
     const offensiveRebounds = toInt(18);
     const totalRebounds = toInt(19) || defensiveRebounds + offensiveRebounds;
+    const isStarter = starterCount < 5;
+    starterCount++;
 
     players.push({
       number,
@@ -567,8 +583,11 @@ const scrapePlayerTable = async (table: Locator): Promise<PlayerStats[]> => {
       steals: toInt(20),
       turnovers: toInt(21),
       blocks: toInt(25),
+      blocksSuffered: toInt(26),
       fouls: toInt(22),
+      foulsDrawn: toInt(23),
       valuation: toInt(27),
+      isStarter,
       advanced: {
         offensiveRating: toFloat(28),
         defensiveRating: toFloat(29),
@@ -926,7 +945,11 @@ const syncPlayerStats = async (
         turnovers: stats.turnovers,
         blocks: stats.blocks,
         fouls_committed: stats.fouls,
+        fouls_drawn: stats.foulsDrawn,
+        blocks_suffered: stats.blocksSuffered,
+        plus_minus: 0,
         valuation: stats.valuation,
+        is_starter: stats.isStarter,
         offensive_rating: stats.advanced.offensiveRating,
         defensive_rating: stats.advanced.defensiveRating,
         true_shooting_percentage: stats.advanced.trueShootingPct,

@@ -30,6 +30,8 @@ type ApiResponse = {
 
 export function RoundImport({ selectedSeasonId, selectedSeasonName, onImportComplete }: RoundImportProps) {
   const [roundFilter, setRoundFilter] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const [seasonSlug, setSeasonSlug] = useState(DEFAULT_SEASON_SLUG);
   const [leagueCode, setLeagueCode] = useState(DEFAULT_LEAGUE_CODE);
   const [scheduleUrl, setScheduleUrl] = useState(DEFAULT_SCHEDULE_URL);
@@ -59,6 +61,8 @@ export function RoundImport({ selectedSeasonId, selectedSeasonName, onImportComp
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           roundFilter: roundFilter.trim() || undefined,
+          dateFrom: dateFrom.trim() || undefined,
+          dateTo: dateTo.trim() || undefined,
           seasonId: selectedSeasonId,
           seasonName: selectedSeasonName,
           seasonSlug: seasonSlug.trim() || undefined,
@@ -164,6 +168,30 @@ export function RoundImport({ selectedSeasonId, selectedSeasonName, onImportComp
             Import indítása
           </Button>
         </div>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <label className="text-sm text-slate-300">Dátumtól</label>
+            <Input
+              type="date"
+              value={dateFrom}
+              onChange={event => setDateFrom(event.target.value)}
+              className="bg-slate-800 border-slate-700 text-slate-100"
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm text-slate-300">Dátumig</label>
+            <Input
+              type="date"
+              value={dateTo}
+              onChange={event => setDateTo(event.target.value)}
+              className="bg-slate-800 border-slate-700 text-slate-100"
+            />
+          </div>
+        </div>
+        <p className="text-xs text-slate-500 -mt-2">
+          Opcionális dátum szűrő — csak a megadott intervallumba eső meccseket importálja. Hasznos rájátszásnál, hogy ne importálja újra az összes korábbi meccset.
+        </p>
 
         <div className="grid gap-4 md:grid-cols-3">
           <div className="space-y-2">

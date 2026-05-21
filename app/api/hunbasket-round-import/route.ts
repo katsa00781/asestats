@@ -14,6 +14,8 @@ type ImportRequestPayload = {
   leagueCode?: string;
   scheduleUrl?: string;
   standingsUrl?: string;
+  dateFrom?: string;
+  dateTo?: string;
   headless?: boolean;
 };
 
@@ -27,6 +29,8 @@ type ImportOptions = {
   scheduleUrl?: string;
   standingsUrl?: string;
   standingsMatchday?: number;
+  dateFrom?: string;
+  dateTo?: string;
   headless?: boolean;
   signal?: AbortSignal;
 };
@@ -72,6 +76,8 @@ export async function POST(request: Request) {
       scheduleUrl,
       standingsUrl,
       standingsMatchday,
+      dateFrom: sanitizeDateString(payload?.dateFrom),
+      dateTo: sanitizeDateString(payload?.dateTo),
       headless: payload?.headless,
       signal: request.signal,
     });
@@ -108,6 +114,8 @@ const runImporter = ({
   scheduleUrl,
   standingsUrl,
   standingsMatchday,
+  dateFrom,
+  dateTo,
   headless = true,
   signal,
 }: ImportOptions) =>
@@ -138,6 +146,8 @@ const runImporter = ({
     if (scheduleUrl) env.HUNBASKET_SCHEDULE_URL = scheduleUrl;
     if (standingsUrl) env.HUNBASKET_STANDINGS_URL = standingsUrl;
     if (typeof standingsMatchday === 'number') env.HUNBASKET_STANDINGS_MATCHDAY = String(standingsMatchday);
+    if (dateFrom) env.HUNBASKET_DATE_FROM = dateFrom;
+    if (dateTo) env.HUNBASKET_DATE_TO = dateTo;
 
     let stdout = '';
     let stderr = '';
@@ -319,6 +329,12 @@ const parseRoundFilterMaxRound = (value?: string) => {
   const numbers = Array.from(value.matchAll(/\d+/g)).map(match => parseInt(match[0], 10)).filter(Number.isFinite);
   if (numbers.length === 0) return undefined;
   return Math.max(...numbers);
+};
+
+const sanitizeDateString = (value?: string | null) => {
+  if (!value) return undefined;
+  const trimmed = value.trim();
+  return /^\d{4}-\d{2}-\d{2}$/.test(trimmed) ? trimmed : undefined;
 };
 
 const sanitizeRoundFilter = (value?: string | null) => {
