@@ -28,6 +28,7 @@ import { PlayersImport } from '@/components/PlayersImport';
 import { RoundImport } from '@/components/RoundImport';
 import { RosterImport } from '@/components/RosterImport';
 import { FixturesImport } from '@/components/FixturesImport';
+import { ALL_SEASON_STATS_TABLES, getSeasonStatsTable } from '@/lib/season-tables';
 import { KosarstatPbpImport } from '@/components/KosarstatPbpImport';
 import { SituationalAnalysis } from '@/components/SituationalAnalysis';
 import type { PlayerTrend } from '@/lib/player-analysis';
@@ -317,20 +318,32 @@ export default function Home() {
   useEffect(() => {
     const loadFilters = async () => {
       try {
-        const [seasonsResult, teamsResult, allPlayersResult, allGameStatsResult, playerStatusResult] = await Promise.all([
-          supabase.from('seasons').select('id, name').order('start_date', { ascending: false }),
-          supabase.from('teams').select('id, name').order('is_primary', { ascending: false }).order('name'),
-          supabase.from('player_season_stats_by_season').select('*'),
-          supabase.from('player_game_stats').select('player_id, offensive_rating, defensive_rating, true_shooting_percentage, effective_field_goal_percentage, games!inner(season_id)'),
-          supabase.from('players').select('id, name, number, position, season_id, team_id, is_active, birth_year, height, weight')
-        ]);
+        const [[seasonsResult, teamsResult, allPlayersResult, playerStatusResult], allGameStatsResults] =
+          await Promise.all([
+            Promise.all([
+              supabase.from('seasons').select('id, name').order('start_date', { ascending: false }),
+              supabase.from('teams').select('id, name').order('is_primary', { ascending: false }).order('name'),
+              supabase.from('player_season_stats_by_season').select('*'),
+              supabase.from('players').select('id, name, number, position, season_id, team_id, is_active, birth_year, height, weight'),
+            ]),
+            // Szezonspecifikus táblákból lekérdezés – elkerüli az 1000 soros PostgREST limitet
+            Promise.all(
+              ALL_SEASON_STATS_TABLES.map(table =>
+                supabase
+                  .from(table as never)
+                  .select('player_id, offensive_rating, defensive_rating, true_shooting_percentage, effective_field_goal_percentage, games!inner(season_id)')
+              )
+            ),
+          ]);
 
         if (seasonsResult.data) setAllSeasons(seasonsResult.data);
         if (teamsResult.data) setAllTeams(teamsResult.data);
-        
+
         // Minden játékos minden szezonból és csapatból
-        if (allPlayersResult.data && allGameStatsResult.data) {
-          const playerGameStats = allGameStatsResult.data as SupabasePlayerSeasonGameStat[];
+        const allGameStatsData = (allGameStatsResults as Array<{ data: SupabasePlayerSeasonGameStat[] | null; error: unknown }>)
+          .flatMap(r => r.data ?? []);
+        if (allPlayersResult.data && allGameStatsData.length >= 0) {
+          const playerGameStats = allGameStatsData as SupabasePlayerSeasonGameStat[];
           const playerActiveMap = new Map(
             (playerStatusResult.data ?? []).map(row => [row.id, row.is_active])
           );
@@ -579,21 +592,27 @@ export default function Home() {
         const opponentGameIds = opponentGamesData.map(g => g.id);
         const allGameIds = Array.from(new Set([...gameIds, ...opponentGameIds]));
 
+        // Szezonspecifikus tábla használata az 1000 soros limit elkerüléséhez
+        const selectedSeasonName = allSeasons.find(s => s.id === selectedSeasonId)?.name;
+        const statsTable = selectedSeasonName
+          ? getSeasonStatsTable(selectedSeasonName)
+          : 'player_game_stats';
+
         const { data: playerGameStatsData, error: gameStatsError } = await supabase
-          .from('player_game_stats')
+          .from(statsTable as never)
           .select(`
             *,
             games:game_id (date, opponent, season_id),
             players:player_id (team_id, name)
           `)
-          .in('game_id', allGameIds.length > 0 ? allGameIds : ['00000000-0000-0000-0000-000000000000']); // Ha nincs meccs, üres eredmény
+          .in('game_id', allGameIds.length > 0 ? allGameIds : ['00000000-0000-0000-0000-000000000000']);
 
         if (gameStatsError) throw gameStatsError;
         setPlayerGameStats((playerGameStatsData as SupabasePlayerGameStat[]) || []);
 
         // 3b. Meccsenkénti csapat összesítés (TeamStatistics-hoz) - csak a kiválasztott szezon meccseiből
         const { data: gameAggregates, error: aggregateError } = await supabase
-          .from('player_game_stats')
+          .from(statsTable as never)
           .select('game_id, points, total_rebounds, assists, steals, blocks, turnovers, valuation')
           .in('game_id', gameIds.length > 0 ? gameIds : ['00000000-0000-0000-0000-000000000000']);
 

@@ -35,7 +35,7 @@
 - **Supabase PostgreSQL** (elsődleges adattár):
   - `games` — mérkőzések (dátum, ellenfél, eredmény, szezon, csapat)
   - `players` — játékos alapadatok (név, szám, pozíció, szezon, csapat, aktív státusz)
-  - `player_game_stats` — meccsenkénti játékos statisztikák (minden statisztikai mező)
+  - `player_game_stats_YYYY_YYYY` — meccsenkénti játékos statisztikák szezononként külön táblában (`player_game_stats_2023_2024`, `player_game_stats_2024_2025`, `player_game_stats_2025_2026`); a `player_game_stats` UNION view INSTEAD OF triggerekkel biztosítja a visszafelé kompatibilitást; JS-kód `lib/season-tables.ts` segítségével érje el a helyes táblát
   - `seasons` — szezonok (id, név, start/end dátum)
   - `teams` — csapatok (id, név, rövid név, is_primary flag)
   - `league_fixtures` — bajnokság mérkőzésnaptár (hazai, vendég, dátum, kör, státusz)

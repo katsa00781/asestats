@@ -42,6 +42,16 @@ Update this file after every meaningful implementation change.
 
 - (Nincs aktív fejlesztési egység)
 
+## Completed (legutóbbi)
+
+- **player_game_stats szezonos szétválasztás** (2026-05-21):
+  - Létrehozva: `player_game_stats_2023_2024`, `player_game_stats_2024_2025`, `player_game_stats_2025_2026` táblák
+  - Migráció SQL: `migrations/split-player-game-stats-by-season.sql` (Supabase SQL Editorban futtatandó)
+  - Visszafelé kompatibilis UNION view `player_game_stats` névvel + INSTEAD OF trigger routing
+  - Új helper: `lib/season-tables.ts` (táblanév mapping, `getSeasonStatsTable`, `ALL_SEASON_STATS_TABLES`)
+  - `app/page.tsx`: szűretlen cross-season lekérdezés → szezonspecifikus táblákra bontva (1000 soros limit elkerülése)
+  - `player_season_stats_by_season` view újraírva, közvetlenül a szezon-specifikus táblákból aggregál
+
 ## Next Up
 
 - Meghatározandó a következő fejlesztési egység a felhasználóval való egyeztetés alapján
