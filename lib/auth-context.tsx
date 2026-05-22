@@ -7,6 +7,7 @@ import { supabase } from './supabase';
 type AuthContextType = {
   user: User | null;
   loading: boolean;
+  isAdmin: boolean;
   signIn: (email: string, password: string) => Promise<{ error: AuthError | null }>;
   signOut: () => Promise<void>;
 };
@@ -47,8 +48,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await supabase.auth.signOut();
   };
 
+  const isAdmin = user?.user_metadata?.role === 'admin';
+
   return (
-    <AuthContext.Provider value={{ user, loading, signIn, signOut }}>
+    <AuthContext.Provider value={{ user, loading, isAdmin, signIn, signOut }}>
       {children}
     </AuthContext.Provider>
   );

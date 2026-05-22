@@ -1,4 +1,4 @@
-import { PlayerStats, TeamGame, GameAggregate } from '@/app/page';
+import type { PlayerStats, TeamGame, GameAggregate } from '@/lib/dashboard-types';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
 import { Trophy, Target, TrendingUp, Users, Award, Activity } from 'lucide-react';

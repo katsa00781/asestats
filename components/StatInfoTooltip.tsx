@@ -80,16 +80,14 @@ const statDescriptions: Record<string, StatInfo> = {
     interpretation: '55%+ kiváló, 50-55% jó, 45-50% átlagos. Jobb mutató mint a sima FG%, mert figyelembe veszi a triplák nagyobb pontértékét.',
   },
   ortg: {
-    name: 'Offensive Rating (ORtg)',
-    description: 'A játékos 100 támadásra vetített ponttermelését mutatja. Megmutatja, mennyire hatékony a támadójáték.',
-    formula: 'ORtg = (Szerzett pontok / Támadások száma) × 100',
-    interpretation: '115+ kiváló, 110-115 nagyon jó, 105-110 jó, 100-105 átlagos, 100 alatt gyenge. Az NBA átlag körülbelül 110.',
+    name: 'Egyéni Támadóhatékonyság (ORtg)',
+    description: 'A Hunbasket hivatalos statisztikai rendszere által számított egyéni támadóhatékonysági mutató. Nem az NBA-féle csapatszintű per-100-possessions Offensive Rating.',
+    interpretation: 'Magasabb érték jobb. Összehasonlításra más játékosok értékeivel érdemes használni.',
   },
   drtg: {
-    name: 'Defensive Rating (DRtg)',
-    description: 'A játékos 100 támadásra engedett pontjait mutatja. Megmutatja, mennyire hatékony a védekezés.',
-    formula: 'DRtg = (Kapott pontok / Védekezések száma) × 100',
-    interpretation: '105 alatt kiváló, 105-108 nagyon jó, 108-112 jó, 112-115 átlagos, 115+ gyenge. Alacsonyabb érték jobb.',
+    name: 'Egyéni Védekezési Index (DRtg)',
+    description: 'A Hunbasket hivatalos statisztikai rendszere által számított egyéni védekezési mutató. Nem az NBA-féle csapatszintű per-100-possessions Defensive Rating.',
+    interpretation: 'Alacsonyabb érték jobb védekezést jelent. Összehasonlításra más játékosok értékeivel érdemes használni.',
   },
 };
 

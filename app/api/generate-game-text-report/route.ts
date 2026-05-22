@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import type { ScoutingReport } from '@/lib/pregame-scouting';
 import type { PostGameReport } from '@/lib/postgame-report';
+import { callAi, AI_GENERATED_BY } from '@/lib/ai-client';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -9,7 +10,6 @@ export const maxDuration = 60;
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const openAiApiKey = process.env.OPENAI_API_KEY;
 
 if (!supabaseUrl) {
   throw new Error('NEXT_PUBLIC_SUPABASE_URL hiányzik a környezeti változók közül.');
@@ -17,15 +17,8 @@ if (!supabaseUrl) {
 if (!serviceRoleKey) {
   throw new Error('SUPABASE_SERVICE_ROLE_KEY hiányzik a környezeti változók közül.');
 }
-if (!openAiApiKey) {
-  throw new Error('OPENAI_API_KEY hiányzik a környezeti változók közül.');
-}
 
 const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
-
-const MAX_RESPONSE_MS = 50_000;
-const OPENAI_URL = process.env.OPENAI_API_URL ?? 'https://api.openai.com/v1/chat/completions';
-const OPENAI_MODEL = process.env.OPENAI_MODEL ?? 'gpt-4.1-mini';
 
 const SYSTEM_PROMPT = `Te egy magyar kosárlabda-szakértő elemző vagy.
 Feladatod: szurkolóbarát, olvasmányos, mégis szakmailag pontos mérkőzésértékelést írni a kapott pre-game és post-game riport alapján.
@@ -236,42 +229,8 @@ const buildUserPrompt = (payload: GeneratePayload) => {
   return `${BASE_INSTRUCTIONS}${getStyleInstructions(style)}\n\n### KONKRÉT ADATOK JSON FORMÁBAN\n${JSON.stringify(contextBlock, null, 2)}`;
 };
 
-const callOpenAi = async (prompt: string, style: 'fan' | 'balanced' | 'coach') => {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), MAX_RESPONSE_MS);
-  try {
-    const response = await fetch(OPENAI_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${openAiApiKey}`,
-      },
-      body: JSON.stringify({
-        model: OPENAI_MODEL,
-        temperature: resolveTemperature(style),
-        messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
-          { role: 'user', content: prompt },
-        ],
-      }),
-      signal: controller.signal,
-    });
-
-    if (!response.ok) {
-      const errorPayload = await response.json().catch(() => ({}));
-      throw new Error(errorPayload.error?.message ?? 'Az OpenAI hívás sikertelen.');
-    }
-
-    const json = await response.json();
-    const narrative: string | undefined = json.choices?.[0]?.message?.content?.trim();
-    if (!narrative) {
-      throw new Error('Az OpenAI válasza nem tartalmazott szöveget.');
-    }
-    return narrative;
-  } finally {
-    clearTimeout(timeout);
-  }
-};
+const callAiForReport = (prompt: string, style: 'fan' | 'balanced' | 'coach') =>
+  callAi(SYSTEM_PROMPT, prompt, resolveTemperature(style));
 
 export async function POST(request: Request) {
   const payload = (await request.json().catch(() => null)) as GeneratePayload | null;
@@ -289,7 +248,7 @@ export async function POST(request: Request) {
   try {
     const style = payload.stylePreset ?? 'balanced';
     const prompt = buildUserPrompt(payload);
-    const narrative = await callOpenAi(prompt, style);
+    const narrative = await callAiForReport(prompt, style);
     const reportType = payload.reportType ?? 'combined';
     const ownTeamId = resolveOwnTeamId(payload);
     const ownTeamName = resolveOwnTeamName(payload);
@@ -306,7 +265,7 @@ export async function POST(request: Request) {
           narrative,
           pregame_snapshot: payload.pregameReport,
           postgame_snapshot: payload.postgameReport,
-          generated_by: payload.generatedBy ?? 'gpt-automata',
+          generated_by: payload.generatedBy ?? AI_GENERATED_BY,
           generated_at: generatedAt,
           own_team_id: ownTeamId,
           own_team_name: ownTeamName,

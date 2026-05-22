@@ -124,6 +124,26 @@ export type Database = {
         }
         Update: Partial<Database['public']['Tables']['game_text_reports']['Insert']>
       }
+      player_game_text_reports: {
+        Row: {
+          id: string
+          game_id: string
+          player_id: string
+          narrative: string
+          breakdown: Json | null
+          generated_at: string
+          updated_at: string
+        }
+        Insert: {
+          game_id: string
+          player_id: string
+          narrative: string
+          breakdown?: Json | null
+          generated_at?: string
+          updated_at?: string
+        }
+        Update: Partial<Database['public']['Tables']['player_game_text_reports']['Insert']>
+      }
       team_text_reports: {
         Row: {
           id: string

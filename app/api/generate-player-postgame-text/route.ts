@@ -1,18 +1,16 @@
 import { NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
 import type { PlayerPostGameBreakdown } from '@/lib/player-postgame';
+import { callAi } from '@/lib/ai-client';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
-const openAiApiKey = process.env.OPENAI_API_KEY;
-const OPENAI_URL = process.env.OPENAI_API_URL ?? 'https://api.openai.com/v1/chat/completions';
-const OPENAI_MODEL = process.env.OPENAI_MODEL ?? 'gpt-4.1-mini';
-const MAX_RESPONSE_MS = 45_000;
-
-if (!openAiApiKey) {
-  throw new Error('OPENAI_API_KEY hiányzik a környezeti változók közül.');
-}
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const supabaseAdmin =
+  supabaseUrl && serviceRoleKey ? createClient(supabaseUrl, serviceRoleKey) : null;
 
 type PlayerPostGameTextPayload = {
   gameId?: string | null;
@@ -58,42 +56,8 @@ const buildUserPrompt = (payload: PlayerPostGameTextPayload) => {
   return `${formatInstructions}\n\n### ADATOK JSON FORMÁBAN\n${JSON.stringify(context, null, 2)}`;
 };
 
-const callOpenAi = async (prompt: string) => {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), MAX_RESPONSE_MS);
-  try {
-    const response = await fetch(OPENAI_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${openAiApiKey}`,
-      },
-      body: JSON.stringify({
-        model: OPENAI_MODEL,
-        temperature: 0.25,
-        messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
-          { role: 'user', content: prompt },
-        ],
-      }),
-      signal: controller.signal,
-    });
-
-    if (!response.ok) {
-      const errorPayload = await response.json().catch(() => ({}));
-      throw new Error(errorPayload.error?.message ?? 'Az OpenAI hívás sikertelen.');
-    }
-
-    const json = await response.json();
-    const narrative: string | undefined = json.choices?.[0]?.message?.content?.trim();
-    if (!narrative) {
-      throw new Error('Az OpenAI válasza nem tartalmazott szöveget.');
-    }
-    return narrative;
-  } finally {
-    clearTimeout(timeout);
-  }
-};
+const callAiForPlayer = (prompt: string) =>
+  callAi(SYSTEM_PROMPT, prompt, 0.25);
 
 export async function POST(request: Request) {
   const payload = (await request.json().catch(() => null)) as PlayerPostGameTextPayload | null;
@@ -110,8 +74,24 @@ export async function POST(request: Request) {
 
   try {
     const prompt = buildUserPrompt(payload);
-    const narrative = await callOpenAi(prompt);
+    const narrative = await callAiForPlayer(prompt);
     const generatedAt = new Date().toISOString();
+
+    if (supabaseAdmin && payload.gameId) {
+      await supabaseAdmin
+        .from('player_game_text_reports')
+        .upsert(
+          {
+            game_id: payload.gameId,
+            player_id: payload.playerId,
+            narrative,
+            breakdown: payload.report as unknown as Record<string, unknown>,
+            generated_at: generatedAt,
+          },
+          { onConflict: 'game_id,player_id' }
+        );
+    }
+
     return NextResponse.json({ ok: true, narrative, generatedAt });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Ismeretlen hiba történt.';

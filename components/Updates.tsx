@@ -1,8 +1,9 @@
 'use client';
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Sparkles, TrendingUp, Users, Calendar, BarChart3, Trophy } from 'lucide-react';
+import { Sparkles, TrendingUp, Users, Calendar, BarChart3, Trophy, RefreshCw, Clock } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
 
 type UpdateItem = {
   date: string;
@@ -332,13 +333,105 @@ const categoryLabels = {
   fix: 'Javítás',
 };
 
+type ImportTimestamps = {
+  lastGameImport: string | null;
+  lastStatsImport: string | null;
+  lastFixtureImport: string | null;
+};
+
+function formatTimestamp(ts: string | null): string {
+  if (!ts) return 'Nincs adat';
+  const d = new Date(ts);
+  return d.toLocaleString('hu-HU', {
+    year: 'numeric', month: 'short', day: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+  });
+}
+
 export function Updates() {
+  const [timestamps, setTimestamps] = useState<ImportTimestamps>({
+    lastGameImport: null,
+    lastStatsImport: null,
+    lastFixtureImport: null,
+  });
+  const [loadingTs, setLoadingTs] = useState(true);
+
+  useEffect(() => {
+    async function fetchTimestamps() {
+      const [gamesRes, statsRes, fixturesRes] = await Promise.all([
+        supabase
+          .from('games')
+          .select('created_at')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single(),
+        supabase
+          .from('player_game_stats_2025_2026')
+          .select('created_at')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single(),
+        supabase
+          .from('league_fixtures')
+          .select('created_at')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single(),
+      ]);
+
+      type WithCreatedAt = { created_at?: string };
+      const g = gamesRes.data as WithCreatedAt | null;
+      const s = statsRes.data as WithCreatedAt | null;
+      const f = fixturesRes.data as WithCreatedAt | null;
+
+      setTimestamps({
+        lastGameImport: g?.created_at ?? null,
+        lastStatsImport: s?.created_at ?? null,
+        lastFixtureImport: f?.created_at ?? null,
+      });
+      setLoadingTs(false);
+    }
+    fetchTimestamps();
+  }, []);
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">
         <Sparkles className="text-emerald-400" size={28} />
         <h2 className="text-2xl font-bold text-slate-50">Frissítések és újdonságok</h2>
       </div>
+
+      <Card className="bg-slate-900 border-slate-700">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-slate-50 flex items-center gap-2 text-base">
+            <Clock className="text-blue-400" size={18} />
+            Legutóbbi adatfrissítések
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {loadingTs ? (
+            <div className="flex items-center gap-2 text-slate-400 text-sm">
+              <RefreshCw className="h-4 w-4 animate-spin" />
+              Betöltés...
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="space-y-1">
+                <div className="text-xs text-slate-500 uppercase tracking-wide">Meccsadatok</div>
+                <div className="text-sm text-slate-200 font-medium">{formatTimestamp(timestamps.lastGameImport)}</div>
+              </div>
+              <div className="space-y-1">
+                <div className="text-xs text-slate-500 uppercase tracking-wide">Játékosstatisztikák</div>
+                <div className="text-sm text-slate-200 font-medium">{formatTimestamp(timestamps.lastStatsImport)}</div>
+              </div>
+              <div className="space-y-1">
+                <div className="text-xs text-slate-500 uppercase tracking-wide">Menetrend</div>
+                <div className="text-sm text-slate-200 font-medium">{formatTimestamp(timestamps.lastFixtureImport)}</div>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <Card className="bg-slate-900 border-slate-800">
         <CardHeader>

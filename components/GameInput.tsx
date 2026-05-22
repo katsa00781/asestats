@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { PlayerStats } from '@/app/page';
+import type { PlayerStats } from '@/lib/dashboard-types';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Input } from './ui/input';

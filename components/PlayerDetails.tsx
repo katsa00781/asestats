@@ -1,5 +1,5 @@
 import { useState, useMemo, type ReactNode } from 'react';
-import { PlayerStats } from "@/app/page";
+import type { PlayerStats } from '@/lib/dashboard-types';
 
 import {
   Card,

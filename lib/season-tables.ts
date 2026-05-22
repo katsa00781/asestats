@@ -5,6 +5,7 @@ export const SEASON_STATS_TABLES: Record<string, string> = {
   '2023/2024': 'player_game_stats_2023_2024',
   '2024/2025': 'player_game_stats_2024_2025',
   '2025/2026': 'player_game_stats_2025_2026',
+  '2026/2027': 'player_game_stats_2026_2027',
 } as const;
 
 // Összes szezon tábla tömbje (pl. cross-season lekérdezésekhez)

@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ArrowLeft, Users, X } from 'lucide-react';
-import { PlayerStats } from '@/app/page';
+import type { PlayerStats } from '@/lib/dashboard-types';
 import {
   RadarChart,
   PolarGrid,

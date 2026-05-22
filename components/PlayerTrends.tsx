@@ -14,7 +14,7 @@ import {
   Tooltip,
   Legend,
 } from 'recharts';
-import { GamePerformance } from '@/app/page';
+import type { GamePerformance } from '@/lib/dashboard-types';
 
 type PlayerTrendsProps = {
   gameHistory: GamePerformance[];

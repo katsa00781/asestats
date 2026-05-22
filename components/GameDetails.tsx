@@ -4,9 +4,13 @@ import { useCallback, useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
-import { ArrowLeft, TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { ArrowLeft, TrendingUp, TrendingDown, Minus, FileText, Sparkles, Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
+import { GamePbpCharts } from './GamePbpCharts';
+import { buildPlayerPostGameReport } from '@/lib/player-postgame';
+import type { PlayerPostGameBreakdown } from '@/lib/player-postgame';
+import type { PlayerGameStat as LibPlayerGameStat, Position } from '@/lib/postgame-report';
 
 type GameComparison = {
   game_id: string;
@@ -83,6 +87,7 @@ type PlayerGameStat = {
   player_id: string;
   player_name: string;
   player_number: number;
+  player_position: string | null;
   minutes: number;
   points: number;
   close_made: number;
@@ -132,13 +137,47 @@ type PlayerGameStatsRow = {
   fouls_committed: number | null;
   plus_minus: number | null;
   valuation: number | null;
-  players: { name: string; number: number } | { name: string; number: number }[];
+  players: { name: string; number: number; position: string | null } | { name: string; number: number; position: string | null }[];
+};
+
+type TextReport = {
+  id: string;
+  report_type: 'pregame' | 'postgame' | 'combined';
+  narrative: string;
+  generated_at: string;
+};
+
+type QuarterStatRow = {
+  team_side: 'home' | 'away' | 'unknown';
+  quarter: number;
+  points: number | null;
+};
+
+const mapPosition = (pos: string | null): Position => {
+  if (pos === 'C') return 'C';
+  if (pos === 'F') return 'SF';
+  return 'PG';
+};
+
+const impactBadgeClass = (impactClass: PlayerPostGameBreakdown['impactClass']) => {
+  switch (impactClass) {
+    case 'mvp': return 'bg-amber-600 hover:bg-amber-700 text-white';
+    case 'engine': return 'bg-emerald-700 hover:bg-emerald-800 text-white';
+    case 'support': return 'bg-blue-700 hover:bg-blue-800 text-white';
+    default: return 'bg-slate-600 hover:bg-slate-700 text-white';
+  }
 };
 
 export function GameDetails({ gameId, onBack }: GameDetailsProps) {
   const [gameComparison, setGameComparison] = useState<GameComparison | null>(null);
   const [playerStats, setPlayerStats] = useState<PlayerGameStat[]>([]);
+  const [textReports, setTextReports] = useState<TextReport[]>([]);
+  const [quarterStats, setQuarterStats] = useState<QuarterStatRow[]>([]);
+  const [ourSide, setOurSide] = useState<'home' | 'away'>('home');
   const [loading, setLoading] = useState(true);
+  const [playerBreakdowns, setPlayerBreakdowns] = useState<PlayerPostGameBreakdown[]>([]);
+  const [playerTexts, setPlayerTexts] = useState<Record<string, string>>({});
+  const [generatingPlayerTexts, setGeneratingPlayerTexts] = useState(false);
 
   const loadGameDetails = useCallback(async () => {
     setLoading(true);
@@ -180,7 +219,8 @@ export function GameDetails({ gameId, onBack }: GameDetailsProps) {
           valuation,
           players!inner(
             name,
-            number
+            number,
+            position
           )
         `)
         .eq('game_id', gameId)
@@ -196,6 +236,7 @@ export function GameDetails({ gameId, onBack }: GameDetailsProps) {
             player_id: stat.player_id,
             player_name: playerInfo?.name ?? 'Ismeretlen játékos',
             player_number: playerInfo?.number ?? 0,
+            player_position: playerInfo?.position ?? null,
             minutes: stat.minutes ?? 0,
             points: stat.points ?? 0,
             close_made: stat.close_made ?? 0,
@@ -221,6 +262,56 @@ export function GameDetails({ gameId, onBack }: GameDetailsProps) {
       );
 
       setPlayerStats(formattedPlayerStats);
+
+      // AI riportok betöltése
+      const { data: reportsData } = await supabase
+        .from('game_text_reports')
+        .select('id, report_type, narrative, generated_at')
+        .eq('game_id', gameId)
+        .order('generated_at', { ascending: false });
+
+      setTextReports((reportsData ?? []) as TextReport[]);
+
+      // Per-játékos AI értékelések betöltése
+      const { data: playerReportsData } = await supabase
+        .from('player_game_text_reports')
+        .select('player_id, narrative, breakdown, generated_at')
+        .eq('game_id', gameId);
+
+      if (playerReportsData && playerReportsData.length > 0) {
+        const texts: Record<string, string> = {};
+        const breakdownsFromDb: PlayerPostGameBreakdown[] = [];
+        for (const row of playerReportsData) {
+          texts[row.player_id as string] = row.narrative as string;
+          if (row.breakdown) {
+            breakdownsFromDb.push(row.breakdown as unknown as PlayerPostGameBreakdown);
+          }
+        }
+        setPlayerTexts(texts);
+        if (breakdownsFromDb.length > 0) {
+          const sorted = [...breakdownsFromDb].sort((a, b) => b.impactScore - a.impactScore);
+          setPlayerBreakdowns(sorted);
+        }
+      }
+
+      // Kosarstat negyedenkénti adatok
+      const { data: gameRow } = await supabase
+        .from('games')
+        .select('kosarstat_game_id, home_away, season_id')
+        .eq('id', gameId)
+        .single();
+
+      if (gameRow?.kosarstat_game_id && gameRow?.season_id) {
+        const { data: qData } = await supabase
+          .from('kosarstat_game_quarter_stats' as never)
+          .select('team_side, quarter, points')
+          .eq('kosarstat_game_id', gameRow.kosarstat_game_id)
+          .eq('season_id', gameRow.season_id)
+          .order('quarter');
+
+        setQuarterStats((qData ?? []) as QuarterStatRow[]);
+        setOurSide(gameRow.home_away as 'home' | 'away');
+      }
     } catch (error) {
       console.error('Hiba a meccs részletek betöltésekor:', error);
       toast.error('Nem sikerült betölteni a meccs részleteit');
@@ -232,6 +323,73 @@ export function GameDetails({ gameId, onBack }: GameDetailsProps) {
   useEffect(() => {
     loadGameDetails();
   }, [loadGameDetails]);
+
+  const generatePlayerTexts = useCallback(async () => {
+    if (!gameComparison || playerStats.length === 0) return;
+    setGeneratingPlayerTexts(true);
+    setPlayerTexts({});
+
+    const libPlayers: (LibPlayerGameStat & { fouls: number })[] = playerStats
+      .filter(p => p.minutes > 0)
+      .map(p => ({
+        playerId: p.player_id,
+        name: p.player_name,
+        position: mapPosition(p.player_position),
+        minutes: p.minutes,
+        points: p.points,
+        fga2: p.close_attempted + p.mid_attempted,
+        fgm2: p.close_made + p.mid_made,
+        fga3: p.three_attempted,
+        fgm3: p.three_made,
+        fta: p.free_throw_attempted,
+        ftm: p.free_throw_made,
+        oreb: p.offensive_rebounds,
+        dreb: p.defensive_rebounds,
+        ast: p.assists,
+        tov: p.turnovers,
+        stl: p.steals,
+        blk: p.blocks,
+        val: p.valuation,
+        fouls: p.fouls_committed,
+        roles: [],
+      }));
+
+    const report = buildPlayerPostGameReport(libPlayers as LibPlayerGameStat[]);
+    setPlayerBreakdowns(report.players);
+
+    try {
+      await Promise.all(
+        report.players.map(async (breakdown) => {
+          try {
+            const resp = await fetch('/api/generate-player-postgame-text', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                gameId: gameComparison.game_id,
+                playerId: breakdown.playerId,
+                playerName: breakdown.name,
+                teamName: gameComparison.team_name,
+                opponentName: gameComparison.opponent,
+                result: gameComparison.result as 'win' | 'loss',
+                report: breakdown,
+              }),
+            });
+            const json = (await resp.json()) as { ok: boolean; narrative?: string };
+            if (json.ok && json.narrative) {
+              setPlayerTexts(prev => ({ ...prev, [breakdown.playerId]: json.narrative! }));
+            }
+          } catch {
+            // egyedi játékos hiba csendes kezelése
+          }
+        })
+      );
+    } catch (error) {
+      console.error('Hiba a játékos értékelések generálásakor:', error);
+      toast.error('Nem sikerült generálni a játékos értékeléseket');
+    } finally {
+      setGeneratingPlayerTexts(false);
+    }
+  }, [gameComparison, playerStats]);
 
   const renderDiffIndicator = (diff: number) => {
     if (diff > 0) {
@@ -481,11 +639,101 @@ export function GameDetails({ gameId, onBack }: GameDetailsProps) {
             </table>
           </div>
           <div className="mt-2 text-xs text-slate-500">
-            LP = Lepattanó, GP = Gólpassz, LS = Labdaszerzés, BD = Blokkolt dobás, 
+            LP = Lepattanó, GP = Gólpassz, LS = Labdaszerzés, BD = Blokkolt dobás,
             LV = Labdavesztés, SZ = Szabálytalanság, ± = Plusz-mínusz, ÉRT = Értékelés
           </div>
         </CardContent>
       </Card>
+
+      {/* Játékos AI értékelések */}
+      <Card className="bg-slate-900 border-slate-800">
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-slate-50">Játékos Értékelések</CardTitle>
+            <Button
+              onClick={generatePlayerTexts}
+              disabled={generatingPlayerTexts || playerStats.length === 0}
+              size="sm"
+              className="bg-violet-600 hover:bg-violet-700 text-white"
+            >
+              {generatingPlayerTexts ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Sparkles className="w-4 h-4 mr-2" />
+              )}
+              {generatingPlayerTexts
+                ? 'Generálás...'
+                : Object.keys(playerTexts).length > 0
+                  ? 'Újragenerálás'
+                  : 'AI Értékelések'}
+            </Button>
+          </div>
+        </CardHeader>
+        {playerBreakdowns.length > 0 && (
+          <CardContent className="space-y-4">
+            {playerBreakdowns.map(breakdown => (
+              <div key={breakdown.playerId} className="border border-slate-700 rounded-lg p-4 space-y-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-semibold text-slate-100">{breakdown.name}</span>
+                  <Badge className={impactBadgeClass(breakdown.impactClass)}>
+                    {breakdown.impactLabel}
+                  </Badge>
+                  <span className="text-xs text-slate-500 ml-auto hidden sm:block">{breakdown.summaryLine}</span>
+                </div>
+                <div className="text-xs text-slate-500 sm:hidden">{breakdown.summaryLine}</div>
+                {playerTexts[breakdown.playerId] ? (
+                  <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap">
+                    {playerTexts[breakdown.playerId]}
+                  </p>
+                ) : generatingPlayerTexts ? (
+                  <div className="flex items-center gap-2 text-xs text-slate-500">
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                    Értékelés generálása...
+                  </div>
+                ) : null}
+              </div>
+            ))}
+          </CardContent>
+        )}
+      </Card>
+
+      <GamePbpCharts
+        quarterStats={quarterStats}
+        playerStats={playerStats}
+        ourSide={ourSide}
+        teamShortName={gameComparison.team_short_name}
+        opponent={gameComparison.opponent}
+      />
+
+      {textReports.length > 0 && (
+        <div className="space-y-4">
+          {textReports.map((report) => {
+            const typeLabel =
+              report.report_type === 'pregame' ? 'Pregame scouting' :
+              report.report_type === 'postgame' ? 'Postgame elemzés' :
+              'Összesített riport';
+            const generatedAt = new Date(report.generated_at).toLocaleDateString('hu-HU', {
+              year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit',
+            });
+            return (
+              <Card key={report.id} className="bg-slate-900 border-slate-700">
+                <CardHeader className="pb-3">
+                  <CardTitle className="flex items-center gap-2 text-base text-slate-200">
+                    <FileText className="h-4 w-4 text-violet-400" />
+                    {typeLabel}
+                    <span className="ml-auto text-xs text-slate-500 font-normal">{generatedAt}</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-sm text-slate-300 whitespace-pre-wrap leading-relaxed">
+                    {report.narrative}
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

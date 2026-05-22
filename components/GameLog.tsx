@@ -2,9 +2,10 @@
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Calendar, User } from 'lucide-react';
-import { PlayerStats, GamePerformance } from '@/app/page';
+import { Calendar, User, Search, X } from 'lucide-react';
+import type { PlayerStats, GamePerformance } from '@/lib/dashboard-types';
 
 type GameLogProps = {
   players: PlayerStats[];
@@ -18,7 +19,7 @@ type PlayerGameData = GamePerformance & {
 
 export function GameLog({ players }: GameLogProps) {
   const [selectedPlayer, setSelectedPlayer] = useState<string>('all');
-  const [selectedGame, setSelectedGame] = useState<string>('all');
+  const [opponentSearch, setOpponentSearch] = useState<string>('');
 
   // Összes meccs összegyűjtése dátum szerint csoportosítva
   const allGames = new Map<string, { date: string; opponent: string; players: PlayerGameData[] }>();
@@ -44,9 +45,10 @@ export function GameLog({ players }: GameLogProps) {
   );
 
   // Szűrés
-  const filteredGames = selectedGame === 'all' 
-    ? gamesList 
-    : gamesList.filter(g => `${g.date}-${g.opponent}` === selectedGame);
+  const filteredGames = gamesList.filter(g => {
+    if (opponentSearch.trim() && !g.opponent.toLowerCase().includes(opponentSearch.toLowerCase())) return false;
+    return true;
+  });
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -68,24 +70,24 @@ export function GameLog({ players }: GameLogProps) {
           </Select>
         </div>
         <div className="flex-1">
-          <label className="text-slate-400 text-sm mb-2 block">Meccs szűrő</label>
-          <Select value={selectedGame} onValueChange={setSelectedGame}>
-            <SelectTrigger className="bg-slate-800 border-slate-700 text-slate-300">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent className="bg-slate-800 border-slate-700">
-              <SelectItem value="all" className="text-slate-300">Minden meccs</SelectItem>
-              {gamesList.map((game, idx) => (
-                <SelectItem 
-                  key={idx} 
-                  value={`${game.date}-${game.opponent}`}
-                  className="text-slate-300"
-                >
-                  {new Date(game.date).toLocaleDateString('hu-HU')} - {game.opponent}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <label className="text-slate-400 text-sm mb-2 block">Ellenfél keresés</label>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500 pointer-events-none" />
+            <Input
+              value={opponentSearch}
+              onChange={e => setOpponentSearch(e.target.value)}
+              placeholder="Ellenfél neve..."
+              className="bg-slate-800 border-slate-700 text-slate-300 pl-9 pr-9 placeholder:text-slate-500"
+            />
+            {opponentSearch && (
+              <button
+                onClick={() => setOpponentSearch('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
         </div>
       </div>
 

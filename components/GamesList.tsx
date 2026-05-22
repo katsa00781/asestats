@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { Calendar, Users, Trophy, TrendingDown, Trash2, Loader2, Edit, Save, X, Eye } from 'lucide-react';
-import { TeamGame, UpcomingFixture } from '@/app/page';
+import type { TeamGame, UpcomingFixture } from '@/lib/dashboard-types';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { Input } from './ui/input';

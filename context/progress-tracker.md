@@ -44,6 +44,13 @@ Update this file after every meaningful implementation change.
 
 ## Completed (legutóbbi)
 
+- **Per-játékos AI értékelések a GameDetails-ban + DB perzisztencia** (2026-05-22):
+  - Migráció: `migrations/add-player-game-text-reports.sql` – kézzel futtatandó Supabase SQL Editorban
+  - `lib/supabase.ts`: `player_game_text_reports` tábla típus hozzáadva
+  - `app/api/generate-player-postgame-text/route.ts`: upsert `player_game_text_reports`-ba (service role)
+  - `components/GameDetails.tsx`: mountkor betölti a meglévő értékeléseket; "Újragenerálás" felirat ha már van adat
+  - Breakdown JSON is tárolódik – megnyitáskor azonnal megjelennek a badge-ek és szövegek
+
 - **player_game_stats szezonos szétválasztás** (2026-05-21):
   - Létrehozva: `player_game_stats_2023_2024`, `player_game_stats_2024_2025`, `player_game_stats_2025_2026` táblák
   - Migráció SQL: `migrations/split-player-game-stats-by-season.sql` (Supabase SQL Editorban futtatandó)

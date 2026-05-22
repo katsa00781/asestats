@@ -17,7 +17,7 @@ import { PostgameShotScatterChart } from '@/components/PostgameShotScatterChart'
 import { PostgameZoneHeatmapChart } from '@/components/PostgameZoneHeatmapChart';
 import { supabase, type Database } from '@/lib/supabase';
 import { buildPositionMetadata } from '@/lib/positions';
-import type { PlayerStats, TeamGame } from '@/app/page';
+import type { PlayerStats, TeamGame } from '@/lib/dashboard-types';
 import {
   analyzePlayerSeason,
   buildLeagueBenchmarks,
@@ -2712,6 +2712,7 @@ export function SeasonComparison({
   const [textReportStyle, setTextReportStyle] = useState<'fan' | 'balanced' | 'coach'>('balanced');
   const [expandedPlayerImpactId, setExpandedPlayerImpactId] = useState<string | null>(null);
   const [playerNarratives, setPlayerNarratives] = useState<Record<string, PlayerNarrativeStatus>>({});
+  const [isGeneratingAllPlayerNarratives, setIsGeneratingAllPlayerNarratives] = useState(false);
   const [teamNarrative, setTeamNarrative] = useState<TeamNarrativeStatus>({ status: 'idle' });
   const [teamNarrativeStyle, setTeamNarrativeStyle] = useState<'fan' | 'coach' | 'scouting'>('fan');
   const [isGeneratingTeamNarrative, setIsGeneratingTeamNarrative] = useState(false);
@@ -10722,6 +10723,13 @@ export function SeasonComparison({
     }
   };
 
+  const handleGenerateAllPlayerNarratives = async () => {
+    if (!postgameReport?.playerReport?.players?.length) return;
+    setIsGeneratingAllPlayerNarratives(true);
+    await Promise.all(postgameReport.playerReport.players.map(p => handleGeneratePlayerNarrative(p.playerId)));
+    setIsGeneratingAllPlayerNarratives(false);
+  };
+
   const similarityList = useMemo(() => {
     if (!analysis || !benchmarks || !resolvedSeasonId || !selectedPlayer) return [];
 
@@ -16683,6 +16691,20 @@ export function SeasonComparison({
                         <div className="text-sm text-slate-500">Nincs elég meccsadat trendgörbéhez.</div>
                       )}
                     </div>
+                  </div>
+
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="text-xs text-slate-500">Kattints egy sorra a részletekért</div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={handleGenerateAllPlayerNarratives}
+                      disabled={isGeneratingAllPlayerNarratives || !postgameReport.playerReport.players.length}
+                      className="bg-violet-900/40 text-violet-200 border-violet-700 hover:bg-violet-800/60"
+                    >
+                      {isGeneratingAllPlayerNarratives ? 'LLM értékelések készülnek…' : 'Összes játékos LLM értékelése'}
+                    </Button>
                   </div>
 
                   <div className="space-y-2">
