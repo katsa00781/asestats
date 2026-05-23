@@ -6,6 +6,10 @@ function fmtPct(made: number, attempted: number): string {
   return attempted > 0 ? `${((made / attempted) * 100).toFixed(1)}%` : '-';
 }
 
+function sign(v: number): string {
+  return v >= 0 ? `+${v.toFixed(1)}` : `${v.toFixed(1)}`;
+}
+
 export type GameComparisonExport = {
   date: string;
   opponent: string;
@@ -28,6 +32,38 @@ export type GameComparisonExport = {
   avg_three_attempted: number; avg_three_percentage: number; avg_three_points: number;
   avg_free_throw_attempted: number; avg_free_throw_percentage: number; avg_free_throw_points: number;
   avg_total_points: number;
+  close_points_diff?: number; mid_points_diff?: number; three_points_diff?: number;
+  free_throw_points_diff?: number; total_points_diff?: number;
+};
+
+export type QuarterScoreExport = {
+  quarter: string;
+  ourScore: number;
+  oppScore: number;
+};
+
+export type PlayerBreakdownExport = {
+  playerId: string;
+  name: string;
+  position: string;
+  impactLabel: string;
+  summaryLine: string;
+  val: number;
+  valPer36: number;
+  tsPct: number;
+  usageShare: number;
+  minutes: number;
+  strengths: string[];
+  issues: string[];
+  focus: string[];
+  roles: string[];
+};
+
+export type GameExtraData = {
+  quarterStats?: QuarterScoreExport[];
+  teamShortName?: string;
+  playerBreakdowns?: PlayerBreakdownExport[];
+  playerTexts?: Record<string, string>;
 };
 
 export type PlayerGameStatExport = {
@@ -44,11 +80,53 @@ export type PlayerGameStatExport = {
   fouls_committed: number; plus_minus: number; valuation: number;
 };
 
-export function gameStatsToMd(game: GameComparisonExport, players: PlayerGameStatExport[]): string {
+export function gameStatsToMd(
+  game: GameComparisonExport,
+  players: PlayerGameStatExport[],
+  extra?: GameExtraData
+): string {
   const homeAway = game.home_away === 'home' ? 'Hazai' : 'Vendég';
   const result = game.result === 'win' ? 'Győzelem' : 'Vereség';
   const date = new Date(game.date).toLocaleDateString('hu-HU');
   const n = (v: number | undefined) => (v ?? 0).toFixed(1);
+
+  // Fejlett csapatmutatók számítása a meccs adataiból
+  const fga2 = game.close_attempted + game.mid_attempted;
+  const fgm2 = game.close_made + game.mid_made;
+  const fga3 = game.three_attempted;
+  const fgm3 = game.three_made;
+  const fga = fga2 + fga3;
+  const fgm = fgm2 + fgm3;
+  const fta = game.free_throw_attempted;
+
+  const efg = fga > 0 ? ((fgm + 0.5 * fgm3) / fga) * 100 : 0;
+  const ts = fga > 0 || fta > 0
+    ? (game.total_points / (2 * (fga + 0.44 * fta))) * 100
+    : 0;
+  const tovDenom = fga + 0.44 * fta + game.turnovers;
+  const toRate = tovDenom > 0 ? (game.turnovers / tovDenom) * 100 : 0;
+  const assistRate = fgm > 0 ? (game.assists / fgm) * 100 : 0;
+  const orebRate = game.total_rebounds > 0
+    ? (game.offensive_rebounds / game.total_rebounds) * 100
+    : 0;
+  const ftRate = fga > 0 ? (fta / fga) * 100 : 0;
+
+  // Szezonátlag számítása az avg_ mezőkből
+  const avgFga2 = game.avg_close_attempted + game.avg_mid_attempted;
+  const avgFgm2 = (game.avg_close_attempted * game.avg_close_percentage / 100)
+    + (game.avg_mid_attempted * game.avg_mid_percentage / 100);
+  const avgFga3 = game.avg_three_attempted;
+  const avgFgm3 = game.avg_three_attempted * game.avg_three_percentage / 100;
+  const avgFga = avgFga2 + avgFga3;
+  const avgFgm = avgFgm2 + avgFgm3;
+  const avgFta = game.avg_free_throw_attempted;
+  const avgEfg = avgFga > 0 ? ((avgFgm + 0.5 * avgFgm3) / avgFga) * 100 : 0;
+  const avgTs = avgFga > 0 || avgFta > 0
+    ? (game.avg_total_points / (2 * (avgFga + 0.44 * avgFta))) * 100
+    : 0;
+  const avgTovDenom = avgFga + 0.44 * avgFta;
+  const avgAssistRate = avgFgm > 0 ? (game.assists / avgFgm) * 100 : 0;
+  const avgFtRate = avgFga > 0 ? (avgFta / avgFga) * 100 : 0;
 
   const lines: string[] = [
     `# Meccs elemzés: ${game.team_name} vs ${game.opponent}`,
@@ -56,16 +134,57 @@ export function gameStatsToMd(game: GameComparisonExport, players: PlayerGameSta
     `**Dátum:** ${date} | **Szezon:** ${game.season_name} | **Helyszín:** ${homeAway}`,
     `**Eredmény:** ${result} ${game.our_score}–${game.opp_score}`,
     ``,
+  ];
+
+  // --- Negyedenkénti bontás ---
+  if (extra?.quarterStats && extra.quarterStats.length > 0) {
+    const qs = extra.quarterStats;
+    const totalOur = qs.reduce((s, q) => s + q.ourScore, 0);
+    const totalOpp = qs.reduce((s, q) => s + q.oppScore, 0);
+    const teamLabel = extra.teamShortName ?? game.team_name;
+    lines.push(`## Negyedenkénti bontás`, ``);
+    lines.push(`| Negyed | ${teamLabel} | ${game.opponent} | Különbség |`);
+    lines.push(`|--------|${'-'.repeat(teamLabel.length + 2)}|${'-'.repeat(game.opponent.length + 2)}|-----------|`);
+    for (const q of qs) {
+      const diff = q.ourScore - q.oppScore;
+      const diffStr = diff > 0 ? `+${diff}` : `${diff}`;
+      lines.push(`| ${q.quarter} | ${q.ourScore} | ${q.oppScore} | ${diffStr} |`);
+    }
+    lines.push(`| **Összesen** | **${totalOur}** | **${totalOpp}** | **${totalOur - totalOpp > 0 ? '+' : ''}${totalOur - totalOpp}** |`);
+    lines.push(``);
+  }
+
+  // --- Fejlett csapatmutatók ---
+  lines.push(
+    `## Fejlett csapatmutatók`,
+    ``,
+    `| Mutató | Meccs | Szezon átl. | Delta |`,
+    `|--------|-------|-------------|-------|`,
+    `| eFG% | ${efg.toFixed(1)}% | ${avgEfg.toFixed(1)}% | ${sign(efg - avgEfg)}pp |`,
+    `| TS% | ${ts.toFixed(1)}% | ${avgTs.toFixed(1)}% | ${sign(ts - avgTs)}pp |`,
+    `| Assist% (ast/fgm) | ${assistRate.toFixed(1)}% | – | – |`,
+    `| TO rate | ${toRate.toFixed(1)}% | ${avgTovDenom > 0 ? `${(game.turnovers / (avgTovDenom + game.turnovers) * 100).toFixed(1)}%` : '–'} | – |`,
+    `| OREB% | ${orebRate.toFixed(1)}% | – | – |`,
+    `| FT rate (fta/fga) | ${ftRate.toFixed(1)}% | ${avgFtRate.toFixed(1)}% | ${sign(ftRate - avgFtRate)}pp |`,
+    ``
+  );
+
+  // --- Dobásstatisztikák ---
+  lines.push(
     `## Csapatszintű dobásstatisztikák`,
     ``,
-    `| Zóna | Kísérlet | Szerzett | % | Szezon átl. kísérlet | Szezon átl. % | Pontok | Átl. pontok |`,
-    `|------|----------|----------|---|----------------------|---------------|--------|-------------|`,
-    `| Közeli | ${game.close_attempted} | ${game.close_made} | ${fmtPct(game.close_made, game.close_attempted)} | ${n(game.avg_close_attempted)} | ${n(game.avg_close_percentage)}% | ${game.close_points} | ${n(game.avg_close_points)} |`,
-    `| Középtáv | ${game.mid_attempted} | ${game.mid_made} | ${fmtPct(game.mid_made, game.mid_attempted)} | ${n(game.avg_mid_attempted)} | ${n(game.avg_mid_percentage)}% | ${game.mid_points} | ${n(game.avg_mid_points)} |`,
-    `| Hárompontos | ${game.three_attempted} | ${game.three_made} | ${fmtPct(game.three_made, game.three_attempted)} | ${n(game.avg_three_attempted)} | ${n(game.avg_three_percentage)}% | ${game.three_points} | ${n(game.avg_three_points)} |`,
-    `| Büntető | ${game.free_throw_attempted} | ${game.free_throw_made} | ${fmtPct(game.free_throw_made, game.free_throw_attempted)} | ${n(game.avg_free_throw_attempted)} | ${n(game.avg_free_throw_percentage)}% | ${game.free_throw_points} | ${n(game.avg_free_throw_points)} |`,
-    `| **Összesen** | | | | | | **${game.total_points}** | **${n(game.avg_total_points)}** |`,
-    ``,
+    `| Zóna | Kísérlet | Szerzett | % | Átl. kísérlet | Átl. % | Pontok | Átl. pontok | Δ pont |`,
+    `|------|----------|----------|---|---------------|--------|--------|-------------|--------|`,
+    `| Közeli | ${game.close_attempted} | ${game.close_made} | ${fmtPct(game.close_made, game.close_attempted)} | ${n(game.avg_close_attempted)} | ${n(game.avg_close_percentage)}% | ${game.close_points} | ${n(game.avg_close_points)} | ${game.close_points_diff !== undefined ? sign(game.close_points_diff) : '–'} |`,
+    `| Középtáv | ${game.mid_attempted} | ${game.mid_made} | ${fmtPct(game.mid_made, game.mid_attempted)} | ${n(game.avg_mid_attempted)} | ${n(game.avg_mid_percentage)}% | ${game.mid_points} | ${n(game.avg_mid_points)} | ${game.mid_points_diff !== undefined ? sign(game.mid_points_diff) : '–'} |`,
+    `| Hárompontos | ${game.three_attempted} | ${game.three_made} | ${fmtPct(game.three_made, game.three_attempted)} | ${n(game.avg_three_attempted)} | ${n(game.avg_three_percentage)}% | ${game.three_points} | ${n(game.avg_three_points)} | ${game.three_points_diff !== undefined ? sign(game.three_points_diff) : '–'} |`,
+    `| Büntető | ${game.free_throw_attempted} | ${game.free_throw_made} | ${fmtPct(game.free_throw_made, game.free_throw_attempted)} | ${n(game.avg_free_throw_attempted)} | ${n(game.avg_free_throw_percentage)}% | ${game.free_throw_points} | ${n(game.avg_free_throw_points)} | ${game.free_throw_points_diff !== undefined ? sign(game.free_throw_points_diff) : '–'} |`,
+    `| **Összesen** | **${fga + fta}** | **${fgm + game.free_throw_made}** | | | | **${game.total_points}** | **${n(game.avg_total_points)}** | ${game.total_points_diff !== undefined ? sign(game.total_points_diff) : '–'} |`,
+    ``
+  );
+
+  // --- Egyéb csapatstatisztikák ---
+  lines.push(
     `## Csapatszintű egyéb statisztikák`,
     ``,
     `| Statisztika | Meccs |`,
@@ -77,18 +196,69 @@ export function gameStatsToMd(game: GameComparisonExport, players: PlayerGameSta
     `| Labdavesztés | ${game.turnovers} |`,
     `| Szabálytalanság | ${game.fouls_committed} |`,
     `| Valuation | ${game.valuation} |`,
-    ``,
-    `## Játékos statisztikák`,
+    ``
+  );
+
+  // --- Játékos alapstatisztikák ---
+  lines.push(
+    `## Játékos statisztikák (alapadatok)`,
     ``,
     `| # | Játékos | Poz | Perc | Pont | Közeli | Középtáv | 3P | Büntető | T-Lep | V-Lep | Lep | Gp | St | Bl | LV | Fault | +/- | VAL |`,
-    `|---|---------|-----|------|------|--------|----------|----|---------|-------|-------|-----|----|----|----|----|-------|-----|-----|`,
-  ];
+    `|---|---------|-----|------|------|--------|----------|----|---------|-------|-------|-----|----|----|----|----|-------|-----|-----|`
+  );
 
   for (const p of players) {
     const pm = p.plus_minus >= 0 ? `+${p.plus_minus}` : `${p.plus_minus}`;
     lines.push(
       `| ${p.player_number} | ${p.player_name} | ${p.player_position ?? '-'} | ${p.minutes} | ${p.points} | ${p.close_made}/${p.close_attempted} | ${p.mid_made}/${p.mid_attempted} | ${p.three_made}/${p.three_attempted} | ${p.free_throw_made}/${p.free_throw_attempted} | ${p.offensive_rebounds} | ${p.defensive_rebounds} | ${p.total_rebounds} | ${p.assists} | ${p.steals} | ${p.blocks} | ${p.turnovers} | ${p.fouls_committed} | ${pm} | ${p.valuation} |`
     );
+  }
+  lines.push(``);
+
+  // --- Játékos impact breakdown ---
+  if (extra?.playerBreakdowns && extra.playerBreakdowns.length > 0) {
+    lines.push(`## Játékos impact elemzés`, ``);
+    lines.push(`| Játékos | Poz | Perc | Pont | Lep | Gp | St+Bl | LV | TS% | VAL | VAL/36 | Usage% | Hatás |`);
+    lines.push(`|---------|-----|------|------|-----|----|-------|----|-----|-----|--------|--------|-------|`);
+    for (const b of extra.playerBreakdowns) {
+      const tsStr = b.tsPct > 0 ? `${(b.tsPct * 100).toFixed(1)}%` : '–';
+      lines.push(
+        `| ${b.name} | ${b.position} | ${b.minutes} | – | – | – | – | – | ${tsStr} | ${b.val.toFixed(1)} | ${b.valPer36.toFixed(1)} | ${(b.usageShare * 100).toFixed(1)}% | ${b.impactLabel} |`
+      );
+    }
+    lines.push(``);
+
+    for (const b of extra.playerBreakdowns) {
+      if (b.strengths.length === 0 && b.issues.length === 0 && b.focus.length === 0) continue;
+      lines.push(`### ${b.name} – ${b.impactLabel}`);
+      lines.push(`*${b.summaryLine}*`);
+      if (b.roles.length > 0) lines.push(`**Szerepek:** ${b.roles.join(', ')}`);
+      if (b.strengths.length > 0) {
+        lines.push(`**Erősségek:**`);
+        for (const s of b.strengths) lines.push(`- ${s}`);
+      }
+      if (b.issues.length > 0) {
+        lines.push(`**Problémák:**`);
+        for (const i of b.issues) lines.push(`- ${i}`);
+      }
+      if (b.focus.length > 0) {
+        lines.push(`**Fejlesztési fókusz:**`);
+        for (const f of b.focus) lines.push(`- ${f}`);
+      }
+      lines.push(``);
+    }
+  }
+
+  // --- Játékos AI értékelések ---
+  if (extra?.playerTexts && Object.keys(extra.playerTexts).length > 0 && extra?.playerBreakdowns) {
+    lines.push(`## Játékos AI értékelések`, ``);
+    for (const b of extra.playerBreakdowns) {
+      const text = extra.playerTexts[b.playerId];
+      if (!text) continue;
+      lines.push(`### ${b.name}`);
+      lines.push(text);
+      lines.push(``);
+    }
   }
 
   return lines.join('\n');

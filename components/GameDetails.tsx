@@ -9,6 +9,7 @@ import { ArrowLeft, TrendingUp, TrendingDown, Minus, FileText, Sparkles, Loader2
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { gameStatsToMd } from '@/lib/export-to-md';
+import type { PlayerBreakdownExport, QuarterScoreExport } from '@/lib/export-to-md';
 import { GamePbpCharts } from './GamePbpCharts';
 import { buildPlayerPostGameReport } from '@/lib/player-postgame';
 import type { PlayerPostGameBreakdown } from '@/lib/player-postgame';
@@ -397,7 +398,47 @@ export function GameDetails({ gameId, onBack }: GameDetailsProps) {
 
   const exportGameMd = useCallback(() => {
     if (!gameComparison) return;
-    const md = gameStatsToMd(gameComparison, playerStats);
+
+    // Negyedenkénti bontás
+    const ourSideLocal = ourSide;
+    const oppSide = ourSideLocal === 'home' ? 'away' : 'home';
+    const allQuarters = [...new Set(quarterStats.map(r => r.quarter))].sort((a, b) => a - b);
+    const quarterLabels: Record<number, string> = { 1: 'N1', 2: 'N2', 3: 'N3', 4: 'N4' };
+    const quarterExport: QuarterScoreExport[] = allQuarters.map(q => {
+      const ourRow = quarterStats.find(r => r.quarter === q && r.team_side === ourSideLocal);
+      const oppRow = quarterStats.find(r => r.quarter === q && r.team_side === oppSide);
+      return {
+        quarter: quarterLabels[q] ?? `N${q}`,
+        ourScore: ourRow?.points ?? 0,
+        oppScore: oppRow?.points ?? 0,
+      };
+    });
+
+    // Játékos impact breakdown
+    const breakdownExport: PlayerBreakdownExport[] = playerBreakdowns.map(b => ({
+      playerId: b.playerId,
+      name: b.name,
+      position: b.position,
+      impactLabel: b.impactLabel,
+      summaryLine: b.summaryLine,
+      val: b.val,
+      valPer36: b.valPer36,
+      tsPct: b.tsPct,
+      usageShare: b.usageShare,
+      minutes: b.minutes,
+      strengths: b.strengths,
+      issues: b.issues,
+      focus: b.focus,
+      roles: b.roles,
+    }));
+
+    const md = gameStatsToMd(gameComparison, playerStats, {
+      quarterStats: quarterExport.length > 0 ? quarterExport : undefined,
+      teamShortName: gameComparison.team_short_name,
+      playerBreakdowns: breakdownExport.length > 0 ? breakdownExport : undefined,
+      playerTexts: Object.keys(playerTexts).length > 0 ? playerTexts : undefined,
+    });
+
     const filename = `meccs-${gameComparison.date}-${gameComparison.opponent.replace(/\s+/g, '-')}.md`;
     const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
     const url = URL.createObjectURL(blob);
@@ -408,7 +449,7 @@ export function GameDetails({ gameId, onBack }: GameDetailsProps) {
     URL.revokeObjectURL(url);
     navigator.clipboard.writeText(md).catch(() => null);
     toast.success('MD exportálva – vágólapra másolva és letöltve');
-  }, [gameComparison, playerStats]);
+  }, [gameComparison, playerStats, quarterStats, ourSide, playerBreakdowns, playerTexts]);
 
   const saveManualReport = useCallback(async () => {
     if (!gameComparison || !manualText.trim()) return;
