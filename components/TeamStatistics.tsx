@@ -3,7 +3,7 @@
 import { useState, useCallback } from 'react';
 import type { PlayerStats, TeamGame, GameAggregate } from '@/lib/dashboard-types';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
-import { Badge } from './ui/badge';
+import { StatCard } from './ui/stat-card';
 import { Button } from './ui/button';
 import { Textarea } from './ui/textarea';
 import { Trophy, Target, TrendingUp, Users, Award, Activity, Download, Save, ClipboardList, Loader2 } from 'lucide-react';
@@ -68,12 +68,11 @@ export function TeamStatistics({ players, games, gameStats, teamName, seasonId, 
     }
   }, [manualText, seasonId, teamId]);
 
-  // Ha nincsenek játékosok, jelenítünk meg egy üzenetet
   if (players.length === 0) {
     return (
       <div className="text-center py-12">
-        <p className="text-slate-400">Még nincsenek betöltött statisztikák.</p>
-        <p className="text-slate-500 text-sm mt-2">Töltsd be a meccsadatokat a kezdéshez.</p>
+        <p className="text-secondary">Még nincsenek betöltött statisztikák.</p>
+        <p className="text-muted text-sm mt-2">Töltsd be a meccsadatokat a kezdéshez.</p>
       </div>
     );
   }
@@ -83,18 +82,15 @@ export function TeamStatistics({ players, games, gameStats, teamName, seasonId, 
   const losses = totalGames - wins;
   const winPercentage = totalGames > 0 ? ((wins / totalGames) * 100).toFixed(1) : '0.0';
 
-  // Csapat átlagok: A meccsenkénti összesített adatokból
   const avgTeamPoints = gameStats.avgPoints.toFixed(1);
   const avgTeamRebounds = gameStats.avgRebounds.toFixed(1);
   const avgTeamAssists = gameStats.avgAssists.toFixed(1);
 
-  // Top játékosok
   const topScorer = [...players].sort((a, b) => b.points / b.gamesPlayed - a.points / a.gamesPlayed)[0];
   const topRebounder = [...players].sort((a, b) => b.rebounds.total / b.gamesPlayed - a.rebounds.total / a.gamesPlayed)[0];
   const topAssister = [...players].sort((a, b) => b.assists / b.gamesPlayed - a.assists / a.gamesPlayed)[0];
   const topValuation = [...players].sort((a, b) => b.valuation - a.valuation)[0];
 
-  // Játékosok összehasonlítása
   const playerComparison = players
     .sort((a, b) => b.points - a.points)
     .slice(0, 6)
@@ -106,12 +102,11 @@ export function TeamStatistics({ players, games, gameStats, teamName, seasonId, 
       VAL: player.valuation,
     }));
 
-  // Pozíció szerinti pontok eloszlása
   type PositionData = {
     position: string;
     points: number;
   };
-  
+
   const positionData = players.reduce((acc: PositionData[], player) => {
     const existing = acc.find((item) => item.position === player.position);
     if (existing) {
@@ -124,7 +119,6 @@ export function TeamStatistics({ players, games, gameStats, teamName, seasonId, 
 
   const COLORS = ['#10b981', '#06b6d4', '#8b5cf6', '#f59e0b', '#ec4899'];
 
-  // Dobási statisztikák összesítve
   const totalShooting = players.reduce(
     (acc, player) => {
       acc.close.made += player.shooting.close.made;
@@ -171,114 +165,109 @@ export function TeamStatistics({ players, games, gameStats, teamName, seasonId, 
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h2 className="text-slate-50 mb-2 text-xl sm:text-2xl">Csapat Statisztikák</h2>
-          <p className="text-slate-400 text-sm sm:text-base">{teamName || 'Csapat'} teljesítménye</p>
+          <h2 className="font-display uppercase tracking-wide text-primary mb-2 text-xl sm:text-2xl">
+            Csapat Statisztikák
+          </h2>
+          <p className="text-secondary text-sm sm:text-base">{teamName || 'Csapat'} teljesítménye</p>
         </div>
-        <Button onClick={exportTeamMd} variant="outline" size="sm" className="border-cyan-800 hover:bg-slate-800 text-cyan-400 shrink-0">
-          <Download className="w-4 h-4 mr-2" />
+        <Button onClick={exportTeamMd} variant="outline" size="sm" className="shrink-0">
+          <Download className="w-4 h-4 mr-2" strokeWidth={1.6} />
           Export MD
         </Button>
       </div>
 
-      {/* Összesítő kártyák */}
+      {/* KPI StatCard sor */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <Card className="bg-linear-to-br from-emerald-900/30 to-emerald-800/20 border-emerald-700/50">
-          <CardHeader className="flex flex-row items-center justify-between pb-2 p-3 sm:p-6">
-            <CardTitle className="text-xs sm:text-sm text-slate-400">Győzelmi arány</CardTitle>
-            <Trophy className="text-emerald-400" size={16} />
-          </CardHeader>
-          <CardContent className="p-3 sm:p-6 pt-0">
-            <div className="text-slate-50 text-xl sm:text-2xl mb-1">{winPercentage}%</div>
-            <p className="text-slate-500 text-xs sm:text-sm">
-              {wins} győzelem - {losses} vereség
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-linear-to-br from-cyan-900/30 to-cyan-800/20 border-cyan-700/50">
-          <CardHeader className="flex flex-row items-center justify-between pb-2 p-3 sm:p-6">
-            <CardTitle className="text-xs sm:text-sm text-slate-400">Átlag pontok</CardTitle>
-            <Target className="text-cyan-400" size={16} />
-          </CardHeader>
-          <CardContent className="p-3 sm:p-6 pt-0">
-            <div className="text-slate-50 text-xl sm:text-2xl mb-1">{avgTeamPoints}</div>
-            <p className="text-slate-500 text-xs sm:text-sm">Pontok/Meccs</p>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-linear-to-br from-violet-900/30 to-violet-800/20 border-violet-700/50">
-          <CardHeader className="flex flex-row items-center justify-between pb-2 p-3 sm:p-6">
-            <CardTitle className="text-xs sm:text-sm text-slate-400">Átlag lepattanók</CardTitle>
-            <TrendingUp className="text-violet-400" size={16} />
-          </CardHeader>
-          <CardContent className="p-3 sm:p-6 pt-0">
-            <div className="text-slate-50 text-xl sm:text-2xl mb-1">{avgTeamRebounds}</div>
-            <p className="text-slate-500 text-xs sm:text-sm">Lepattanók/Meccs</p>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-linear-to-br from-orange-900/30 to-orange-800/20 border-orange-700/50">
-          <CardHeader className="flex flex-row items-center justify-between pb-2 p-3 sm:p-6">
-            <CardTitle className="text-xs sm:text-sm text-slate-400">Átlag gólpasszok</CardTitle>
-            <Users className="text-orange-400" size={16} />
-          </CardHeader>
-          <CardContent className="p-3 sm:p-6 pt-0">
-            <div className="text-slate-50 text-xl sm:text-2xl mb-1">{avgTeamAssists}</div>
-            <p className="text-slate-500 text-xs sm:text-sm">Gólpasszok/Meccs</p>
-          </CardContent>
-        </Card>
+        <StatCard
+          label="Győzelmi arány"
+          value={`${winPercentage}%`}
+          trend="neutral"
+          trendValue={`${wins}Gy · ${losses}V`}
+          icon={<Trophy className="h-5 w-5" strokeWidth={1.6} />}
+          accentColor="green"
+          animationDelay={0}
+        />
+        <StatCard
+          label="Átlag pontok"
+          value={avgTeamPoints}
+          trendValue="pont/meccs"
+          trend="neutral"
+          icon={<Target className="h-5 w-5" strokeWidth={1.6} />}
+          accentColor="cyan"
+          animationDelay={60}
+        />
+        <StatCard
+          label="Átlag lepattanók"
+          value={avgTeamRebounds}
+          trendValue="lep./meccs"
+          trend="neutral"
+          icon={<TrendingUp className="h-5 w-5" strokeWidth={1.6} />}
+          accentColor="purple"
+          animationDelay={120}
+        />
+        <StatCard
+          label="Átlag gólpasszok"
+          value={avgTeamAssists}
+          trendValue="góp./meccs"
+          trend="neutral"
+          icon={<Users className="h-5 w-5" strokeWidth={1.6} />}
+          accentColor="orange"
+          animationDelay={180}
+        />
       </div>
 
-      {/* Top játékosok */}
-      <Card className="bg-slate-900 border-slate-800">
+      {/* Csapat vezetők */}
+      <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-slate-50 text-base sm:text-lg">
-            <Award className="text-emerald-400" size={20} />
+          <CardTitle className="flex items-center gap-2 text-base sm:text-lg font-display uppercase tracking-wide">
+            <Award className="text-positive h-5 w-5" strokeWidth={1.6} />
             Csapat vezetők
           </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-            <div className="p-3 sm:p-4 bg-linear-to-br from-emerald-500/10 to-emerald-500/5 rounded-lg border border-emerald-500/30">
+            <div className="p-3 sm:p-4 bg-surface-2 rounded-lg border border-border-subtle">
               <div className="flex items-center gap-2 mb-2">
-                <Trophy className="text-emerald-400" size={16} />
-                <span className="text-slate-400 text-xs sm:text-sm">Legjobb pontszerző</span>
+                <Trophy className="text-positive h-4 w-4" strokeWidth={1.6} />
+                <span className="text-secondary text-xs font-display uppercase tracking-wide">Legjobb pontszerző</span>
               </div>
-              <div className="text-slate-50 mb-1 text-sm sm:text-base">{topScorer.name}</div>
-              <div className="text-emerald-400 text-sm sm:text-base">
+              <div className="text-primary mb-1 text-sm">{topScorer.name}</div>
+              <div className="text-positive font-mono tabular-nums text-sm">
                 {(topScorer.points / topScorer.gamesPlayed).toFixed(1)} PPG
               </div>
             </div>
 
-            <div className="p-3 sm:p-4 bg-linear-to-br from-cyan-500/10 to-cyan-500/5 rounded-lg border border-cyan-500/30">
+            <div className="p-3 sm:p-4 bg-surface-2 rounded-lg border border-border-subtle">
               <div className="flex items-center gap-2 mb-2">
-                <Trophy className="text-cyan-400" size={16} />
-                <span className="text-slate-400 text-xs sm:text-sm">Legtöbb lepattanó</span>
+                <Trophy className="text-cyan h-4 w-4" strokeWidth={1.6} />
+                <span className="text-secondary text-xs font-display uppercase tracking-wide">Legtöbb lepattanó</span>
               </div>
-              <div className="text-slate-50 mb-1 text-sm sm:text-base">{topRebounder.name}</div>
-              <div className="text-cyan-400 text-sm sm:text-base">
+              <div className="text-primary mb-1 text-sm">{topRebounder.name}</div>
+              <div className="text-cyan font-mono tabular-nums text-sm">
                 {(topRebounder.rebounds.total / topRebounder.gamesPlayed).toFixed(1)} RPG
               </div>
             </div>
 
-            <div className="p-3 sm:p-4 bg-linear-to-br from-violet-500/10 to-violet-500/5 rounded-lg border border-violet-500/30">
+            <div className="p-3 sm:p-4 bg-surface-2 rounded-lg border border-border-subtle">
               <div className="flex items-center gap-2 mb-2">
-                <Trophy className="text-violet-400" size={16} />
-                <span className="text-slate-400 text-xs sm:text-sm">Legtöbb gólpassz</span>
+                <Trophy className="text-ai h-4 w-4" strokeWidth={1.6} />
+                <span className="text-secondary text-xs font-display uppercase tracking-wide">Legtöbb gólpassz</span>
               </div>
-              <div className="text-slate-50 mb-1 text-sm sm:text-base">{topAssister.name}</div>
-              <div className="text-violet-400 text-sm sm:text-base">
+              <div className="text-primary mb-1 text-sm">{topAssister.name}</div>
+              <div className="text-ai font-mono tabular-nums text-sm">
                 {(topAssister.assists / topAssister.gamesPlayed).toFixed(1)} APG
               </div>
             </div>
 
-            <div className="p-3 sm:p-4 bg-linear-to-br from-pink-500/10 to-pink-500/5 rounded-lg border border-pink-500/30">
+            <div className="p-3 sm:p-4 bg-surface-2 rounded-lg border border-border-subtle">
               <div className="flex items-center gap-2 mb-2">
-                <Activity className="text-pink-400" size={16} />
-                <span className="text-slate-400 text-xs sm:text-sm">Legjobb VAL</span>
+                <Activity className="text-orange h-4 w-4" strokeWidth={1.6} />
+                <span className="text-secondary text-xs font-display uppercase tracking-wide">Legjobb VAL</span>
               </div>
-              <div className="text-slate-50 mb-1 text-sm sm:text-base">{topValuation.name}</div>
-              <div className="text-pink-400 text-sm sm:text-base">{topValuation.valuation.toFixed(1)}</div>
+              <div className="text-primary mb-1 text-sm">{topValuation.name}</div>
+              <div className="text-orange font-mono tabular-nums text-sm">
+                {topValuation.valuation.toFixed(1)} VAL
+              </div>
             </div>
           </div>
         </CardContent>
@@ -286,9 +275,11 @@ export function TeamStatistics({ players, games, gameStats, teamName, seasonId, 
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6">
         {/* Csapat dobási statisztikák */}
-        <Card className="bg-slate-900 border-slate-800">
+        <Card>
           <CardHeader>
-            <CardTitle className="text-slate-50 text-base sm:text-lg">Csapat Dobási Statisztikák</CardTitle>
+            <CardTitle className="text-base sm:text-lg font-display uppercase tracking-wide">
+              Csapat Dobási Statisztikák
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={250} className="text-xs sm:text-sm">
@@ -306,9 +297,9 @@ export function TeamStatistics({ players, games, gameStats, teamName, seasonId, 
             </ResponsiveContainer>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-4">
               {shootingStats.map((stat, index) => (
-                <div key={index} className="text-center text-xs sm:text-sm p-2 bg-slate-800/50 rounded">
-                  <div className="text-slate-500 text-xs">{stat.category}</div>
-                  <div className="text-slate-300">
+                <div key={index} className="text-center text-xs sm:text-sm p-2 bg-surface-2 rounded">
+                  <div className="text-muted text-xs font-display uppercase tracking-wide">{stat.category}</div>
+                  <div className="text-primary font-mono tabular-nums">
                     {stat.made}/{stat.attempted}
                   </div>
                 </div>
@@ -318,9 +309,11 @@ export function TeamStatistics({ players, games, gameStats, teamName, seasonId, 
         </Card>
 
         {/* Pontok eloszlása pozíciónként */}
-        <Card className="bg-slate-900 border-slate-800">
+        <Card>
           <CardHeader>
-            <CardTitle className="text-slate-50 text-base sm:text-lg">Pontok eloszlása pozíciónként</CardTitle>
+            <CardTitle className="text-base sm:text-lg font-display uppercase tracking-wide">
+              Pontok eloszlása pozíciónként
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={300}>
@@ -350,9 +343,11 @@ export function TeamStatistics({ players, games, gameStats, teamName, seasonId, 
       </div>
 
       {/* Játékosok összehasonlítása */}
-      <Card className="bg-slate-900 border-slate-800">
+      <Card>
         <CardHeader>
-          <CardTitle className="text-slate-50 text-base sm:text-lg">Legjobb játékosok összehasonlítása</CardTitle>
+          <CardTitle className="text-base sm:text-lg font-display uppercase tracking-wide">
+            Legjobb játékosok összehasonlítása
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <ResponsiveContainer width="100%" height={300} className="text-xs sm:text-sm">
@@ -374,81 +369,68 @@ export function TeamStatistics({ players, games, gameStats, teamName, seasonId, 
       </Card>
 
       {/* Manuális elemzés beillesztése */}
-      <Card className="bg-slate-900 border-slate-800">
+      <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2 text-slate-50 text-base">
-            <ClipboardList className="h-4 w-4 text-cyan-400" />
+          <CardTitle className="flex items-center gap-2 text-base">
+            <ClipboardList className="h-4 w-4 text-cyan" strokeWidth={1.6} />
             Manuális csapatelemzés beillesztése
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          <p className="text-xs text-slate-400">
+          <p className="text-xs text-secondary">
             Exportáld a statokat MD-be, add át Claude-nak, majd illeszd be az elemzés szövegét és mentsd el.
           </p>
           <Textarea
             placeholder="Illeszd be a Claude-csapatelemzés szövegét..."
             value={manualText}
             onChange={(e) => setManualText(e.target.value)}
-            className="min-h-25 bg-slate-800 border-slate-700 text-slate-200 placeholder:text-slate-500"
+            className="min-h-25"
           />
           <Button
             onClick={saveManualReport}
             disabled={!manualText.trim() || savingManual}
             size="sm"
-            className="bg-cyan-700 hover:bg-cyan-600 text-white"
           >
             {savingManual ? (
               <Loader2 className="w-4 h-4 mr-2 animate-spin" />
             ) : (
-              <Save className="w-4 h-4 mr-2" />
+              <Save className="w-4 h-4 mr-2" strokeWidth={1.6} />
             )}
             {savingManual ? 'Mentés...' : 'Mentés'}
           </Button>
         </CardContent>
       </Card>
 
-      {/* Meccsek listája */}
-      <Card className="bg-slate-900 border-slate-800">
+      {/* Legutóbbi meccsek */}
+      <Card>
         <CardHeader>
-          <CardTitle className="text-slate-50 text-base sm:text-lg">Legutóbbi meccsek</CardTitle>
+          <CardTitle className="text-base sm:text-lg font-display uppercase tracking-wide">
+            Legutóbbi meccsek
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="space-y-2 sm:space-y-3">
             {games.map((game) => (
               <div
                 key={game.id}
-                className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 sm:p-4 bg-slate-800/50 rounded-lg hover:bg-slate-800 transition-colors gap-2"
+                className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 sm:p-4 bg-surface-2 rounded-lg hover:bg-surface-3 transition-colors gap-2"
               >
                 <div className="flex-1 w-full sm:w-auto">
                   <div className="flex items-center gap-2 mb-1">
-                    <span className="text-slate-50 text-sm sm:text-base">{game.opponent}</span>
-                    <Badge
-                      variant={game.homeAway === 'home' ? 'default' : 'secondary'}
-                      className={`text-xs ${
-                        game.homeAway === 'home'
-                          ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/50'
-                          : 'bg-slate-700 text-slate-400'
-                      }`}
-                    >
+                    <span className="text-primary text-sm sm:text-base">{game.opponent}</span>
+                    <span className={game.homeAway === 'home' ? 'badge-positive' : 'badge-neutral'}>
                       {game.homeAway === 'home' ? 'Hazai' : 'Vendég'}
-                    </Badge>
+                    </span>
                   </div>
-                  <div className="text-slate-500 text-xs sm:text-sm">{new Date(game.date).toLocaleDateString('hu-HU')}</div>
+                  <div className="text-muted text-xs sm:text-sm">{new Date(game.date).toLocaleDateString('hu-HU')}</div>
                 </div>
                 <div className="flex items-center gap-3 sm:gap-4">
-                  <div className="text-slate-50 text-lg sm:text-xl font-semibold">
+                  <div className="text-primary text-lg sm:text-xl font-mono tabular-nums font-semibold">
                     {game.ourScore} - {game.oppScore}
                   </div>
-                  <Badge
-                    variant={game.result === 'win' ? 'default' : 'destructive'}
-                    className={`text-xs ${
-                      game.result === 'win'
-                        ? 'bg-emerald-500 text-white'
-                        : 'bg-red-500/20 text-red-400 border-red-500/50'
-                    }`}
-                  >
+                  <span className={game.result === 'win' ? 'badge-positive' : 'badge-negative'}>
                     {game.result === 'win' ? 'Győzelem' : 'Vereség'}
-                  </Badge>
+                  </span>
                 </div>
               </div>
             ))}

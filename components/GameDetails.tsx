@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
-import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { Textarea } from './ui/textarea';
+import { StatCard } from './ui/stat-card';
+import { DataTable, type ColumnDef } from './ui/data-table';
 import { ArrowLeft, TrendingUp, TrendingDown, Minus, FileText, Sparkles, Loader2, Download, Save, ClipboardList } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
@@ -26,28 +27,27 @@ type GameComparison = {
   season_name: string;
   team_name: string;
   team_short_name: string;
-  
-  // Meccs statisztikák
+
   close_made: number;
   close_attempted: number;
   close_percentage: number;
   close_points: number;
-  
+
   mid_made: number;
   mid_attempted: number;
   mid_percentage: number;
   mid_points: number;
-  
+
   three_made: number;
   three_attempted: number;
   three_percentage: number;
   three_points: number;
-  
+
   free_throw_made: number;
   free_throw_attempted: number;
   free_throw_percentage: number;
   free_throw_points: number;
-  
+
   total_points: number;
   offensive_rebounds: number;
   defensive_rebounds: number;
@@ -58,8 +58,7 @@ type GameComparison = {
   turnovers: number;
   fouls_committed: number;
   valuation: number;
-  
-  // Szezon átlagok
+
   avg_close_attempted: number;
   avg_close_percentage: number;
   avg_close_points: number;
@@ -73,8 +72,7 @@ type GameComparison = {
   avg_free_throw_percentage: number;
   avg_free_throw_points: number;
   avg_total_points: number;
-  
-  // Különbségek
+
   close_points_diff: number;
   mid_points_diff: number;
   three_points_diff: number;
@@ -156,6 +154,112 @@ type QuarterStatRow = {
   points: number | null;
 };
 
+const PLAYER_STATS_COLUMNS: ColumnDef<PlayerGameStat>[] = [
+  {
+    key: 'player',
+    label: 'Játékos',
+    sortable: false,
+    render: (r) => (
+      <div className="flex items-center gap-2">
+        <span className="font-mono tabular-nums text-muted text-xs">#{r.player_number}</span>
+        <span className="text-primary text-sm">{r.player_name}</span>
+      </div>
+    ),
+  },
+  {
+    key: 'minutes',
+    label: 'Perc',
+    numeric: true,
+    render: (r) => <span data-stat>{r.minutes}</span>,
+  },
+  {
+    key: 'points',
+    label: 'Pont',
+    numeric: true,
+    render: (r) => <span className="text-orange font-semibold" data-stat>{r.points}</span>,
+  },
+  {
+    key: 'close',
+    label: 'Közeli',
+    center: true,
+    sortable: false,
+    render: (r) => <span className="dt-num dt-num--muted">{r.close_made}/{r.close_attempted}</span>,
+  },
+  {
+    key: 'mid',
+    label: 'Közép',
+    center: true,
+    sortable: false,
+    render: (r) => <span className="dt-num dt-num--muted">{r.mid_made}/{r.mid_attempted}</span>,
+  },
+  {
+    key: 'three',
+    label: '3pt',
+    center: true,
+    sortable: false,
+    render: (r) => <span className="dt-num dt-num--muted">{r.three_made}/{r.three_attempted}</span>,
+  },
+  {
+    key: 'ft',
+    label: 'FT',
+    center: true,
+    sortable: false,
+    render: (r) => <span className="dt-num dt-num--muted">{r.free_throw_made}/{r.free_throw_attempted}</span>,
+  },
+  {
+    key: 'total_rebounds',
+    label: 'LP',
+    numeric: true,
+    render: (r) => <span data-stat>{r.total_rebounds}</span>,
+  },
+  {
+    key: 'assists',
+    label: 'GP',
+    numeric: true,
+    render: (r) => <span data-stat>{r.assists}</span>,
+  },
+  {
+    key: 'steals',
+    label: 'LS',
+    numeric: true,
+    render: (r) => <span data-stat>{r.steals}</span>,
+  },
+  {
+    key: 'blocks',
+    label: 'BD',
+    numeric: true,
+    render: (r) => <span data-stat>{r.blocks}</span>,
+  },
+  {
+    key: 'turnovers',
+    label: 'LV',
+    numeric: true,
+    render: (r) => <span className="text-negative" data-stat>{r.turnovers}</span>,
+  },
+  {
+    key: 'fouls_committed',
+    label: 'SZ',
+    numeric: true,
+    render: (r) => <span data-stat>{r.fouls_committed}</span>,
+  },
+  {
+    key: 'plus_minus',
+    label: '±',
+    numeric: true,
+    render: (r) => (
+      <span className={r.plus_minus >= 0 ? 'text-positive' : 'text-negative'} data-stat>
+        {r.plus_minus > 0 ? '+' : ''}{r.plus_minus}
+      </span>
+    ),
+  },
+  {
+    key: 'valuation',
+    label: 'ÉRT',
+    numeric: true,
+    render: (r) => <span className="text-cyan font-semibold" data-stat>{r.valuation}</span>,
+  },
+];
+
 const mapPosition = (pos: string | null): Position => {
   if (pos === 'C') return 'C';
   if (pos === 'F') return 'SF';
@@ -164,10 +268,10 @@ const mapPosition = (pos: string | null): Position => {
 
 const impactBadgeClass = (impactClass: PlayerPostGameBreakdown['impactClass']) => {
   switch (impactClass) {
-    case 'mvp': return 'bg-amber-600 hover:bg-amber-700 text-white';
-    case 'engine': return 'bg-emerald-700 hover:bg-emerald-800 text-white';
-    case 'support': return 'bg-blue-700 hover:bg-blue-800 text-white';
-    default: return 'bg-slate-600 hover:bg-slate-700 text-white';
+    case 'mvp': return 'badge-orange';
+    case 'engine': return 'badge-positive';
+    case 'support': return 'badge-cyan';
+    default: return 'badge-neutral';
   }
 };
 
@@ -187,7 +291,6 @@ export function GameDetails({ gameId, onBack }: GameDetailsProps) {
   const loadGameDetails = useCallback(async () => {
     setLoading(true);
     try {
-      // Meccs összehasonlító adatok
       const { data: comparisonData, error: comparisonError } = await supabase
         .from('game_vs_season_comparison')
         .select('*')
@@ -197,7 +300,6 @@ export function GameDetails({ gameId, onBack }: GameDetailsProps) {
       if (comparisonError) throw comparisonError;
       setGameComparison(comparisonData);
 
-      // Játékos statisztikák
       const { data: playersData, error: playersError } = await supabase
         .from('player_game_stats')
         .select(`
@@ -268,7 +370,6 @@ export function GameDetails({ gameId, onBack }: GameDetailsProps) {
 
       setPlayerStats(formattedPlayerStats);
 
-      // AI riportok betöltése
       const { data: reportsData } = await supabase
         .from('game_text_reports')
         .select('id, report_type, narrative, generated_at')
@@ -277,7 +378,6 @@ export function GameDetails({ gameId, onBack }: GameDetailsProps) {
 
       setTextReports((reportsData ?? []) as TextReport[]);
 
-      // Per-játékos AI értékelések betöltése
       const { data: playerReportsData } = await supabase
         .from('player_game_text_reports')
         .select('player_id, narrative, breakdown, generated_at')
@@ -299,7 +399,6 @@ export function GameDetails({ gameId, onBack }: GameDetailsProps) {
         }
       }
 
-      // Kosarstat negyedenkénti adatok
       const { data: gameRow } = await supabase
         .from('games')
         .select('kosarstat_game_id, home_away, season_id')
@@ -399,7 +498,6 @@ export function GameDetails({ gameId, onBack }: GameDetailsProps) {
   const exportGameMd = useCallback(() => {
     if (!gameComparison) return;
 
-    // Negyedenkénti bontás
     const ourSideLocal = ourSide;
     const oppSide = ourSideLocal === 'home' ? 'away' : 'home';
     const allQuarters = [...new Set(quarterStats.map(r => r.quarter))].sort((a, b) => a - b);
@@ -414,7 +512,6 @@ export function GameDetails({ gameId, onBack }: GameDetailsProps) {
       };
     });
 
-    // Játékos impact breakdown
     const breakdownExport: PlayerBreakdownExport[] = playerBreakdowns.map(b => ({
       playerId: b.playerId,
       name: b.name,
@@ -488,22 +585,22 @@ export function GameDetails({ gameId, onBack }: GameDetailsProps) {
   const renderDiffIndicator = (diff: number) => {
     if (diff > 0) {
       return (
-        <span className="text-emerald-400 flex items-center gap-1">
-          <TrendingUp className="w-4 h-4" />
+        <span className="text-positive flex items-center gap-1">
+          <TrendingUp className="w-4 h-4" strokeWidth={1.6} />
           +{diff.toFixed(1)}
         </span>
       );
     } else if (diff < 0) {
       return (
-        <span className="text-red-400 flex items-center gap-1">
-          <TrendingDown className="w-4 h-4" />
+        <span className="text-negative flex items-center gap-1">
+          <TrendingDown className="w-4 h-4" strokeWidth={1.6} />
           {diff.toFixed(1)}
         </span>
       );
     } else {
       return (
-        <span className="text-slate-500 flex items-center gap-1">
-          <Minus className="w-4 h-4" />
+        <span className="text-muted flex items-center gap-1">
+          <Minus className="w-4 h-4" strokeWidth={1.6} />
           0
         </span>
       );
@@ -514,8 +611,8 @@ export function GameDetails({ gameId, onBack }: GameDetailsProps) {
     return (
       <div className="flex items-center justify-center p-8">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-500 mx-auto"></div>
-          <p className="mt-4 text-slate-400">Betöltés...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyan mx-auto" />
+          <p className="mt-4 text-secondary">Betöltés...</p>
         </div>
       </div>
     );
@@ -524,9 +621,9 @@ export function GameDetails({ gameId, onBack }: GameDetailsProps) {
   if (!gameComparison) {
     return (
       <div className="text-center p-8">
-        <p className="text-slate-400">Nem található meccs adat</p>
-        <Button onClick={onBack} className="mt-4 bg-emerald-600 hover:bg-emerald-700">
-          <ArrowLeft className="w-4 h-4 mr-2" />
+        <p className="text-secondary">Nem található meccs adat</p>
+        <Button onClick={onBack} className="mt-4">
+          <ArrowLeft className="w-4 h-4 mr-2" strokeWidth={1.6} />
           Vissza
         </Button>
       </div>
@@ -535,95 +632,96 @@ export function GameDetails({ gameId, onBack }: GameDetailsProps) {
 
   return (
     <div className="space-y-6">
+      {/* Fejléc */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-        <Button onClick={onBack} variant="outline" size="sm" className="border-slate-700 hover:bg-slate-800">
-          <ArrowLeft className="w-4 h-4 mr-2" />
+        <Button onClick={onBack} variant="outline" size="sm">
+          <ArrowLeft className="w-4 h-4 mr-2" strokeWidth={1.6} />
           Vissza
         </Button>
         <div className="flex-1">
-          <h2 className="text-2xl font-bold text-slate-50">
+          <h2 className="text-2xl font-display uppercase tracking-wide text-primary">
             {gameComparison.team_short_name} vs {gameComparison.opponent}
           </h2>
-          <p className="text-slate-400">
-            {new Date(gameComparison.date).toLocaleDateString('hu-HU')} • {gameComparison.season_name}
+          <p className="text-secondary text-sm">
+            {new Date(gameComparison.date).toLocaleDateString('hu-HU')} · {gameComparison.season_name}
           </p>
         </div>
-        <Button onClick={exportGameMd} variant="outline" size="sm" className="border-cyan-800 hover:bg-slate-800 text-cyan-400">
-          <Download className="w-4 h-4 mr-2" />
+        <Button onClick={exportGameMd} variant="outline" size="sm" className="text-cyan">
+          <Download className="w-4 h-4 mr-2" strokeWidth={1.6} />
           Export MD
         </Button>
-        <Badge
-          className={`ml-auto sm:ml-0 ${gameComparison.result === 'win' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-red-600 hover:bg-red-700'} text-white`}
-        >
-          {gameComparison.our_score} - {gameComparison.opp_score}
-        </Badge>
+        <span className={`ml-auto sm:ml-0 font-mono tabular-nums ${gameComparison.result === 'win' ? 'badge-positive' : 'badge-negative'}`}>
+          {gameComparison.our_score} – {gameComparison.opp_score}
+        </span>
       </div>
 
-      {/* Csapat dobás statisztikák vs átlag */}
-      <Card className="bg-slate-900 border-slate-800">
+      {/* Dobás Statisztikák */}
+      <Card className="shadow-panel">
         <CardHeader>
-          <CardTitle className="text-slate-50">Dobás Statisztikák (Meccs vs Szezon Átlag)</CardTitle>
+          <CardTitle className="text-base sm:text-lg font-display uppercase tracking-wide">
+            Dobás Statisztikák (Meccs vs Szezon Átlag)
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr className="border-b border-slate-700">
-                  <th className="text-left p-2 text-slate-300">Típus</th>
-                  <th className="text-center p-2 text-slate-300">Kísérletek</th>
-                  <th className="text-center p-2 text-slate-300">Hatékonyság %</th>
-                  <th className="text-center p-2 text-slate-300">Átlag %</th>
-                  <th className="text-center p-2 text-slate-300">Pontérték</th>
-                  <th className="text-center p-2 text-slate-300">Pontok</th>
-                  <th className="text-center p-2 text-slate-300">Átlag Pontok</th>
-                  <th className="text-center p-2 text-slate-300">Különbség</th>
+                <tr className="border-b border-border-subtle">
+                  <th className="text-left p-2 text-secondary text-xs font-display uppercase tracking-wide">Típus</th>
+                  <th className="text-center p-2 text-secondary text-xs font-display uppercase tracking-wide">Kísérletek</th>
+                  <th className="text-center p-2 text-secondary text-xs font-display uppercase tracking-wide">Hatékonyság %</th>
+                  <th className="text-center p-2 text-secondary text-xs font-display uppercase tracking-wide">Átlag %</th>
+                  <th className="text-center p-2 text-secondary text-xs font-display uppercase tracking-wide">Pontérték</th>
+                  <th className="text-center p-2 text-secondary text-xs font-display uppercase tracking-wide">Pontok</th>
+                  <th className="text-center p-2 text-secondary text-xs font-display uppercase tracking-wide">Átlag Pontok</th>
+                  <th className="text-center p-2 text-secondary text-xs font-display uppercase tracking-wide">Különbség</th>
                 </tr>
               </thead>
               <tbody>
-                <tr className="border-b border-slate-700 hover:bg-slate-800/50">
-                  <td className="p-2 font-medium text-slate-200">Közeli</td>
-                  <td className="text-center p-2 text-slate-300">{gameComparison.close_attempted}</td>
-                  <td className="text-center p-2 text-slate-300">{gameComparison.close_percentage}%</td>
-                  <td className="text-center p-2 text-slate-500">{gameComparison.avg_close_percentage}%</td>
-                  <td className="text-center p-2 text-slate-300">2</td>
-                  <td className="text-center p-2 font-semibold text-slate-50">{gameComparison.close_points}</td>
-                  <td className="text-center p-2 text-slate-500">{gameComparison.avg_close_points}</td>
+                <tr className="border-b border-border-subtle hover:bg-surface-2/50">
+                  <td className="p-2 font-medium text-primary">Közeli</td>
+                  <td className="text-center p-2 font-mono tabular-nums text-primary">{gameComparison.close_attempted}</td>
+                  <td className="text-center p-2 font-mono tabular-nums text-primary">{gameComparison.close_percentage}%</td>
+                  <td className="text-center p-2 font-mono tabular-nums text-muted">{gameComparison.avg_close_percentage}%</td>
+                  <td className="text-center p-2 text-secondary">2</td>
+                  <td className="text-center p-2 font-semibold font-mono tabular-nums text-primary">{gameComparison.close_points}</td>
+                  <td className="text-center p-2 font-mono tabular-nums text-muted">{gameComparison.avg_close_points}</td>
                   <td className="text-center p-2">{renderDiffIndicator(gameComparison.close_points_diff)}</td>
                 </tr>
-                <tr className="border-b border-slate-700 hover:bg-slate-800/50">
-                  <td className="p-2 font-medium text-slate-200">Középtávoli</td>
-                  <td className="text-center p-2 text-slate-300">{gameComparison.mid_attempted}</td>
-                  <td className="text-center p-2 text-slate-300">{gameComparison.mid_percentage}%</td>
-                  <td className="text-center p-2 text-slate-500">{gameComparison.avg_mid_percentage}%</td>
-                  <td className="text-center p-2 text-slate-300">2</td>
-                  <td className="text-center p-2 font-semibold text-slate-50">{gameComparison.mid_points}</td>
-                  <td className="text-center p-2 text-slate-500">{gameComparison.avg_mid_points}</td>
+                <tr className="border-b border-border-subtle hover:bg-surface-2/50">
+                  <td className="p-2 font-medium text-primary">Középtávoli</td>
+                  <td className="text-center p-2 font-mono tabular-nums text-primary">{gameComparison.mid_attempted}</td>
+                  <td className="text-center p-2 font-mono tabular-nums text-primary">{gameComparison.mid_percentage}%</td>
+                  <td className="text-center p-2 font-mono tabular-nums text-muted">{gameComparison.avg_mid_percentage}%</td>
+                  <td className="text-center p-2 text-secondary">2</td>
+                  <td className="text-center p-2 font-semibold font-mono tabular-nums text-primary">{gameComparison.mid_points}</td>
+                  <td className="text-center p-2 font-mono tabular-nums text-muted">{gameComparison.avg_mid_points}</td>
                   <td className="text-center p-2">{renderDiffIndicator(gameComparison.mid_points_diff)}</td>
                 </tr>
-                <tr className="border-b border-slate-700 hover:bg-slate-800/50">
-                  <td className="p-2 font-medium text-slate-200">3 pontos</td>
-                  <td className="text-center p-2 text-slate-300">{gameComparison.three_attempted}</td>
-                  <td className="text-center p-2 text-slate-300">{gameComparison.three_percentage}%</td>
-                  <td className="text-center p-2 text-slate-500">{gameComparison.avg_three_percentage}%</td>
-                  <td className="text-center p-2 text-slate-300">3</td>
-                  <td className="text-center p-2 font-semibold text-slate-50">{gameComparison.three_points}</td>
-                  <td className="text-center p-2 text-slate-500">{gameComparison.avg_three_points}</td>
+                <tr className="border-b border-border-subtle hover:bg-surface-2/50">
+                  <td className="p-2 font-medium text-primary">3 pontos</td>
+                  <td className="text-center p-2 font-mono tabular-nums text-primary">{gameComparison.three_attempted}</td>
+                  <td className="text-center p-2 font-mono tabular-nums text-primary">{gameComparison.three_percentage}%</td>
+                  <td className="text-center p-2 font-mono tabular-nums text-muted">{gameComparison.avg_three_percentage}%</td>
+                  <td className="text-center p-2 text-secondary">3</td>
+                  <td className="text-center p-2 font-semibold font-mono tabular-nums text-primary">{gameComparison.three_points}</td>
+                  <td className="text-center p-2 font-mono tabular-nums text-muted">{gameComparison.avg_three_points}</td>
                   <td className="text-center p-2">{renderDiffIndicator(gameComparison.three_points_diff)}</td>
                 </tr>
-                <tr className="border-b border-slate-700 hover:bg-slate-800/50">
-                  <td className="p-2 font-medium text-slate-200">Büntető</td>
-                  <td className="text-center p-2 text-slate-300">{gameComparison.free_throw_attempted}</td>
-                  <td className="text-center p-2 text-slate-300">{gameComparison.free_throw_percentage}%</td>
-                  <td className="text-center p-2 text-slate-500">{gameComparison.avg_free_throw_percentage}%</td>
-                  <td className="text-center p-2 text-slate-300">1</td>
-                  <td className="text-center p-2 font-semibold text-slate-50">{gameComparison.free_throw_points}</td>
-                  <td className="text-center p-2 text-slate-500">{gameComparison.avg_free_throw_points}</td>
+                <tr className="border-b border-border-subtle hover:bg-surface-2/50">
+                  <td className="p-2 font-medium text-primary">Büntető</td>
+                  <td className="text-center p-2 font-mono tabular-nums text-primary">{gameComparison.free_throw_attempted}</td>
+                  <td className="text-center p-2 font-mono tabular-nums text-primary">{gameComparison.free_throw_percentage}%</td>
+                  <td className="text-center p-2 font-mono tabular-nums text-muted">{gameComparison.avg_free_throw_percentage}%</td>
+                  <td className="text-center p-2 text-secondary">1</td>
+                  <td className="text-center p-2 font-semibold font-mono tabular-nums text-primary">{gameComparison.free_throw_points}</td>
+                  <td className="text-center p-2 font-mono tabular-nums text-muted">{gameComparison.avg_free_throw_points}</td>
                   <td className="text-center p-2">{renderDiffIndicator(gameComparison.free_throw_points_diff)}</td>
                 </tr>
-                <tr className="bg-slate-800/80 font-bold">
-                  <td className="p-2 text-slate-100" colSpan={5}>Összes pont</td>
-                  <td className="text-center p-2 text-slate-50">{gameComparison.total_points}</td>
-                  <td className="text-center p-2 text-slate-400">{gameComparison.avg_total_points}</td>
+                <tr className="bg-surface-2 font-bold">
+                  <td className="p-2 text-primary" colSpan={5}>Összes pont</td>
+                  <td className="text-center p-2 font-mono tabular-nums text-primary">{gameComparison.total_points}</td>
+                  <td className="text-center p-2 font-mono tabular-nums text-muted">{gameComparison.avg_total_points}</td>
                   <td className="text-center p-2">{renderDiffIndicator(gameComparison.total_points_diff)}</td>
                 </tr>
               </tbody>
@@ -632,132 +730,62 @@ export function GameDetails({ gameId, onBack }: GameDetailsProps) {
         </CardContent>
       </Card>
 
-      {/* Egyéb csapat statisztikák */}
-      <Card className="bg-slate-900 border-slate-800">
-        <CardHeader>
-          <CardTitle className="text-slate-50">Egyéb Csapat Statisztikák</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="text-center p-4 bg-slate-800/50 rounded border border-slate-700">
-              <div className="text-2xl font-bold text-slate-50">{gameComparison.total_rebounds}</div>
-              <div className="text-sm text-slate-400">Lepattanó</div>
-              <div className="text-xs text-slate-500">
-                ({gameComparison.offensive_rebounds} TLP / {gameComparison.defensive_rebounds} VLP)
-              </div>
-            </div>
-            <div className="text-center p-4 bg-slate-800/50 rounded border border-slate-700">
-              <div className="text-2xl font-bold text-slate-50">{gameComparison.assists}</div>
-              <div className="text-sm text-slate-400">Gólpassz</div>
-            </div>
-            <div className="text-center p-4 bg-slate-800/50 rounded border border-slate-700">
-              <div className="text-2xl font-bold text-slate-50">{gameComparison.steals}</div>
-              <div className="text-sm text-slate-400">Labdaszerzés</div>
-            </div>
-            <div className="text-center p-4 bg-slate-800/50 rounded border border-slate-700">
-              <div className="text-2xl font-bold text-slate-50">{gameComparison.blocks}</div>
-              <div className="text-sm text-slate-400">Blokkolt dobás</div>
-            </div>
-            <div className="text-center p-4 bg-slate-800/50 rounded border border-slate-700">
-              <div className="text-2xl font-bold text-slate-50">{gameComparison.turnovers}</div>
-              <div className="text-sm text-slate-400">Labdavesztés</div>
-            </div>
-            <div className="text-center p-4 bg-slate-800/50 rounded border border-slate-700">
-              <div className="text-2xl font-bold text-slate-50">{gameComparison.fouls_committed}</div>
-              <div className="text-sm text-slate-400">Szabálytalanság</div>
-            </div>
-            <div className="text-center p-4 bg-slate-800/50 rounded border border-slate-700">
-              <div className="text-2xl font-bold text-slate-50">{gameComparison.valuation}</div>
-              <div className="text-sm text-slate-400">Értékelés</div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Fő csapat statisztikák – StatCard sor */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <StatCard label="Lepattanó" value={gameComparison.total_rebounds}
+          trendValue={`${gameComparison.offensive_rebounds}T · ${gameComparison.defensive_rebounds}V`}
+          trend="neutral" accentColor="cyan" animationDelay={0} />
+        <StatCard label="Gólpassz" value={gameComparison.assists}
+          accentColor="orange" animationDelay={60} />
+        <StatCard label="Labdaszerzés" value={gameComparison.steals}
+          accentColor="green" animationDelay={120} />
+        <StatCard label="Blokkolt dobás" value={gameComparison.blocks}
+          accentColor="purple" animationDelay={180} />
+        <StatCard label="Labdavesztés" value={gameComparison.turnovers}
+          accentColor="orange" animationDelay={240} />
+        <StatCard label="Szabálytalanság" value={gameComparison.fouls_committed}
+          accentColor="orange" animationDelay={300} />
+        <StatCard label="Értékelés (VAL)" value={gameComparison.valuation}
+          accentColor="cyan" animationDelay={360} />
+      </div>
 
-      {/* Játékos statisztikák */}
-      <Card className="bg-slate-900 border-slate-800">
+      {/* Játékos statisztikák – DataTable */}
+      <Card className="shadow-panel">
         <CardHeader>
-          <CardTitle className="text-slate-50">Játékos Teljesítmények</CardTitle>
+          <CardTitle className="text-base sm:text-lg font-display uppercase tracking-wide">
+            Játékos Teljesítmények
+          </CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-slate-700">
-                  <th className="text-left p-2 text-slate-300">Játékos</th>
-                  <th className="text-center p-2 text-slate-300">Perc</th>
-                  <th className="text-center p-2 text-slate-300">Pont</th>
-                  <th className="text-center p-2 text-slate-300">Közeli</th>
-                  <th className="text-center p-2 text-slate-300">Közép</th>
-                  <th className="text-center p-2 text-slate-300">3pt</th>
-                  <th className="text-center p-2 text-slate-300">Büntető</th>
-                  <th className="text-center p-2 text-slate-300">LP</th>
-                  <th className="text-center p-2 text-slate-300">GP</th>
-                  <th className="text-center p-2 text-slate-300">LS</th>
-                  <th className="text-center p-2 text-slate-300">BD</th>
-                  <th className="text-center p-2 text-slate-300">LV</th>
-                  <th className="text-center p-2 text-slate-300">SZ</th>
-                  <th className="text-center p-2 text-slate-300">±</th>
-                  <th className="text-center p-2 text-slate-300">ÉRT</th>
-                </tr>
-              </thead>
-              <tbody>
-                {playerStats.map((player) => (
-                  <tr key={player.player_id} className="border-b border-slate-700 hover:bg-slate-800/50">
-                    <td className="p-2 font-medium text-slate-200">
-                      #{player.player_number} {player.player_name}
-                    </td>
-                    <td className="text-center p-2 text-slate-300">{player.minutes}</td>
-                    <td className="text-center p-2 font-semibold text-emerald-400">{player.points}</td>
-                    <td className="text-center p-2 text-xs text-slate-400">
-                      {player.close_made}/{player.close_attempted}
-                    </td>
-                    <td className="text-center p-2 text-xs text-slate-400">
-                      {player.mid_made}/{player.mid_attempted}
-                    </td>
-                    <td className="text-center p-2 text-xs text-slate-400">
-                      {player.three_made}/{player.three_attempted}
-                    </td>
-                    <td className="text-center p-2 text-xs text-slate-400">
-                      {player.free_throw_made}/{player.free_throw_attempted}
-                    </td>
-                    <td className="text-center p-2 text-slate-300">{player.total_rebounds}</td>
-                    <td className="text-center p-2 text-slate-300">{player.assists}</td>
-                    <td className="text-center p-2 text-slate-300">{player.steals}</td>
-                    <td className="text-center p-2 text-slate-300">{player.blocks}</td>
-                    <td className="text-center p-2 text-slate-300">{player.turnovers}</td>
-                    <td className="text-center p-2 text-slate-300">{player.fouls_committed}</td>
-                    <td className={`text-center p-2 font-medium ${player.plus_minus >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                      {player.plus_minus > 0 ? '+' : ''}{player.plus_minus}
-                    </td>
-                    <td className="text-center p-2 font-semibold text-slate-50">{player.valuation}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <div className="mt-2 text-xs text-slate-500">
-            LP = Lepattanó, GP = Gólpassz, LS = Labdaszerzés, BD = Blokkolt dobás,
-            LV = Labdavesztés, SZ = Szabálytalanság, ± = Plusz-mínusz, ÉRT = Értékelés
-          </div>
+        <CardContent className="p-0 pb-1">
+          <DataTable<PlayerGameStat>
+            columns={PLAYER_STATS_COLUMNS}
+            rows={playerStats}
+            initialSort={{ key: 'points', dir: 'desc' }}
+            getRowId={(r) => r.player_id}
+          />
+          <p className="text-xs text-muted px-4 py-2">
+            LP = Lepattanó · GP = Gólpassz · LS = Labdaszerzés · BD = Blokkolt dobás · LV = Labdavesztés · SZ = Szabálytalanság · ± = Plusz-mínusz · ÉRT = Értékelés
+          </p>
         </CardContent>
       </Card>
 
       {/* Játékos AI értékelések */}
-      <Card className="bg-slate-900 border-slate-800">
+      <Card className="shadow-panel">
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
-            <CardTitle className="text-slate-50">Játékos Értékelések</CardTitle>
+            <CardTitle className="text-base font-display uppercase tracking-wide">
+              Játékos Értékelések
+            </CardTitle>
             <Button
               onClick={generatePlayerTexts}
               disabled={generatingPlayerTexts || playerStats.length === 0}
               size="sm"
-              className="bg-violet-600 hover:bg-violet-700 text-white"
+              className="bg-ai text-white hover:opacity-90"
             >
               {generatingPlayerTexts ? (
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
               ) : (
-                <Sparkles className="w-4 h-4 mr-2" />
+                <Sparkles className="w-4 h-4 mr-2" strokeWidth={1.6} />
               )}
               {generatingPlayerTexts
                 ? 'Generálás...'
@@ -770,21 +798,21 @@ export function GameDetails({ gameId, onBack }: GameDetailsProps) {
         {playerBreakdowns.length > 0 && (
           <CardContent className="space-y-4">
             {playerBreakdowns.map(breakdown => (
-              <div key={breakdown.playerId} className="border border-slate-700 rounded-lg p-4 space-y-2">
+              <div key={breakdown.playerId} className="ai-marker border border-border-subtle rounded-lg p-4 space-y-2">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-semibold text-slate-100">{breakdown.name}</span>
-                  <Badge className={impactBadgeClass(breakdown.impactClass)}>
+                  <span className="font-semibold text-primary">{breakdown.name}</span>
+                  <span className={impactBadgeClass(breakdown.impactClass)}>
                     {breakdown.impactLabel}
-                  </Badge>
-                  <span className="text-xs text-slate-500 ml-auto hidden sm:block">{breakdown.summaryLine}</span>
+                  </span>
+                  <span className="text-xs text-muted ml-auto hidden sm:block">{breakdown.summaryLine}</span>
                 </div>
-                <div className="text-xs text-slate-500 sm:hidden">{breakdown.summaryLine}</div>
+                <div className="text-xs text-muted sm:hidden">{breakdown.summaryLine}</div>
                 {playerTexts[breakdown.playerId] ? (
-                  <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap">
+                  <p className="text-sm text-secondary leading-relaxed whitespace-pre-wrap">
                     {playerTexts[breakdown.playerId]}
                   </p>
                 ) : generatingPlayerTexts ? (
-                  <div className="flex items-center gap-2 text-xs text-slate-500">
+                  <div className="flex items-center gap-2 text-xs text-muted">
                     <Loader2 className="w-3 h-3 animate-spin" />
                     Értékelés generálása...
                   </div>
@@ -804,39 +832,39 @@ export function GameDetails({ gameId, onBack }: GameDetailsProps) {
       />
 
       {/* Manuális elemzés beillesztése */}
-      <Card className="bg-slate-900 border-slate-800">
+      <Card className="shadow-panel">
         <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2 text-slate-50 text-base">
-            <ClipboardList className="h-4 w-4 text-cyan-400" />
+          <CardTitle className="flex items-center gap-2 text-base">
+            <ClipboardList className="h-4 w-4 text-cyan" strokeWidth={1.6} />
             Manuális elemzés beillesztése
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          <p className="text-xs text-slate-400">
+          <p className="text-xs text-secondary">
             Exportáld a statokat MD-be, add át Claude-nak, majd illeszd be az elemzés szövegét és mentsd el.
           </p>
           <Textarea
             placeholder="Illeszd be a Claude-elemzés szövegét..."
             value={manualText}
             onChange={(e) => setManualText(e.target.value)}
-            className="min-h-25 bg-slate-800 border-slate-700 text-slate-200 placeholder:text-slate-500"
+            className="min-h-25"
           />
           <Button
             onClick={saveManualReport}
             disabled={!manualText.trim() || savingManual}
             size="sm"
-            className="bg-cyan-700 hover:bg-cyan-600 text-white"
           >
             {savingManual ? (
               <Loader2 className="w-4 h-4 mr-2 animate-spin" />
             ) : (
-              <Save className="w-4 h-4 mr-2" />
+              <Save className="w-4 h-4 mr-2" strokeWidth={1.6} />
             )}
             {savingManual ? 'Mentés...' : 'Mentés'}
           </Button>
         </CardContent>
       </Card>
 
+      {/* AI szöveges riportok */}
       {textReports.length > 0 && (
         <div className="space-y-4">
           {textReports.map((report) => {
@@ -849,16 +877,16 @@ export function GameDetails({ gameId, onBack }: GameDetailsProps) {
               year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit',
             });
             return (
-              <Card key={report.id} className="bg-slate-900 border-slate-700">
+              <Card key={report.id} className="shadow-panel ai-marker">
                 <CardHeader className="pb-3">
-                  <CardTitle className="flex items-center gap-2 text-base text-slate-200">
-                    <FileText className="h-4 w-4 text-violet-400" />
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <FileText className="h-4 w-4 text-ai" strokeWidth={1.6} />
                     {typeLabel}
-                    <span className="ml-auto text-xs text-slate-500 font-normal">{generatedAt}</span>
+                    <span className="ml-auto text-xs text-muted font-normal">{generatedAt}</span>
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-sm text-slate-300 whitespace-pre-wrap leading-relaxed">
+                  <div className="text-sm text-secondary whitespace-pre-wrap leading-relaxed">
                     {report.narrative}
                   </div>
                 </CardContent>

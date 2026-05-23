@@ -1,0 +1,894 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ASEStats — StatCard Redesign</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@500;600;700&family=Barlow+Condensed:wght@500;600;700&family=DM+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<style>
+/* ============================================================
+   Tokenek — globals.css-ből inline-olva
+   ============================================================ */
+:root {
+  --bg-base: #050B14;
+  --bg-surface-1: #0A1628;
+  --bg-surface-2: #0F1F3D;
+  --bg-surface-3: #162440;
+
+  --accent-cyan: #00D4FF;
+  --accent-cyan-dim: #0096B8;
+  --accent-orange: #FF6B35;
+  --accent-orange-dim: #B84A22;
+  --accent-ai: #7C3AED;
+
+  --text-primary: #E8F4FF;
+  --text-secondary: #5A7A99;
+  --text-muted: #2D4A6B;
+
+  --positive: #10D98A;
+  --negative: #FF4757;
+  --warning: #FFB627;
+
+  --border-subtle: #0F2040;
+  --border-active: #1E3A5F;
+  --border-strong: #2A4A75;
+
+  --glow-cyan: rgba(0, 212, 255, 0.18);
+  --glow-orange: rgba(255, 107, 53, 0.18);
+  --glow-positive: rgba(16, 217, 138, 0.18);
+  --glow-ai: rgba(124, 58, 237, 0.20);
+
+  --font-display: "Barlow Condensed", system-ui, sans-serif;
+  --font-sans: "Barlow", "DM Sans", system-ui, sans-serif;
+  --font-body: "DM Sans", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+
+  --ease-snap: cubic-bezier(.2, .8, .2, 1);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+}
+body {
+  background-image:
+    radial-gradient(circle at 1px 1px, rgba(0,212,255,0.045) 1px, transparent 0),
+    radial-gradient(1200px 600px at 20% -10%, rgba(0,212,255,.05), transparent 60%),
+    radial-gradient(900px 500px at 95% 110%, rgba(255,107,53,.04), transparent 60%);
+  background-size: 24px 24px, 100% 100%, 100% 100%;
+  background-attachment: fixed;
+  padding: 56px 48px 96px;
+}
+
+/* ============================================================
+   STATCARD — komponens stílusok
+   ============================================================ */
+.statcard {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 20px;
+  min-height: 140px;
+  padding: 18px 20px 18px 24px;
+  background: var(--bg-surface-1);
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  overflow: hidden;
+  transition:
+    transform 220ms var(--ease-snap),
+    border-color 220ms var(--ease-snap),
+    box-shadow 220ms var(--ease-snap),
+    background 220ms var(--ease-snap);
+  will-change: transform;
+}
+
+/* Bal oldali 3px accent sáv — az accentColor prop az --accent-color
+   CSS változót állítja be a kártyán */
+.statcard::before {
+  content: "";
+  position: absolute;
+  top: 0; bottom: 0; left: 0;
+  width: 3px;
+  background: var(--accent-color, var(--accent-cyan));
+  box-shadow: 0 0 12px var(--accent-glow, var(--glow-cyan));
+}
+
+/* Hover */
+.statcard:hover {
+  transform: translateY(-2px);
+  border-color: var(--border-active);
+  background: linear-gradient(180deg, var(--bg-surface-1) 0%, var(--bg-surface-2) 100%);
+  box-shadow: 0 8px 24px var(--accent-glow, var(--glow-cyan));
+}
+
+.statcard__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.statcard__label {
+  font-family: var(--font-sans);
+  font-weight: 600; /* Barlow SemiBold */
+  font-size: 0.7rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  line-height: 1.2;
+  /* finom színkapcsolat az accenttel a label kezdetén */
+}
+
+.statcard__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px; height: 24px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+  transition: color 220ms var(--ease-snap);
+}
+.statcard:hover .statcard__icon {
+  color: var(--accent-color, var(--accent-cyan));
+}
+
+.statcard__body {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.statcard__value {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum", "zero";
+  font-weight: 500;
+  font-size: 2.5rem;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  color: var(--text-primary);
+}
+
+/* Trend pirula */
+.statcard__trend {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  font-size: 0.78rem;
+  padding: 4px 8px 4px 6px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  opacity: 0;
+  animation: trend-fade-in 480ms var(--ease-snap) 280ms both;
+}
+.statcard__trend--up {
+  color: var(--positive);
+  background: color-mix(in oklab, var(--positive) 12%, transparent);
+  border-color: color-mix(in oklab, var(--positive) 28%, transparent);
+}
+.statcard__trend--down {
+  color: var(--negative);
+  background: color-mix(in oklab, var(--negative) 12%, transparent);
+  border-color: color-mix(in oklab, var(--negative) 28%, transparent);
+}
+.statcard__trend--neutral {
+  color: var(--text-secondary);
+  background: var(--bg-surface-2);
+  border-color: var(--border-active);
+}
+.statcard__trend svg { width: 12px; height: 12px; }
+
+/* Belépő animáció — staggered delay-t a komponens inline style-ban ad */
+@keyframes statcard-fade-slide-up {
+  0%   { opacity: 0; transform: translateY(12px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+@keyframes trend-fade-in {
+  0%   { opacity: 0; transform: translateX(-4px); }
+  100% { opacity: 1; transform: translateX(0); }
+}
+.animate-fade-slide-up {
+  animation: statcard-fade-slide-up 460ms var(--ease-snap) both;
+}
+
+/* ============================================================
+   SHOWCASE OLDAL CHROME (nem része a komponensnek)
+   ============================================================ */
+.page {
+  max-width: 1240px;
+  margin: 0 auto;
+}
+.page__eyebrow {
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 0.7rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--accent-cyan);
+  margin-bottom: 12px;
+}
+.page__title {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 2.4rem;
+  letter-spacing: -0.01em;
+  line-height: 1;
+  margin-bottom: 10px;
+}
+.page__sub {
+  color: var(--text-secondary);
+  max-width: 640px;
+  line-height: 1.55;
+}
+
+.section {
+  margin-top: 56px;
+}
+.section__head {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  margin-bottom: 20px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.section__num {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+.section__title {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 1.2rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.section__hint {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+}
+
+.grid-4 {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+}
+.grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+@media (max-width: 1024px) {
+  .grid-4 { grid-template-columns: repeat(2, 1fr); }
+  .grid-3 { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* Annotációk a card-ok mellett */
+.anno-card {
+  background: var(--bg-surface-1);
+  border: 1px dashed var(--border-active);
+  border-radius: 10px;
+  padding: 18px 20px;
+}
+.anno-card h4 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 0.95rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent-cyan);
+  margin-bottom: 10px;
+}
+.anno-card ul {
+  list-style: none;
+  display: grid;
+  gap: 6px;
+}
+.anno-card li {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  line-height: 1.55;
+}
+.anno-card li b {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+/* Kódbox */
+.code-wrap {
+  border: 1px solid var(--border-subtle);
+  background: linear-gradient(180deg, #060D1A 0%, var(--bg-surface-1) 100%);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.code-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-surface-1);
+}
+.code-head .dot { width: 8px; height: 8px; border-radius: 999px; background: var(--border-active); }
+.code-head .dot--c { background: var(--accent-cyan); box-shadow: 0 0 8px var(--glow-cyan); }
+.code-head .name {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+}
+.code-head .tag {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent-cyan);
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: color-mix(in oklab, var(--accent-cyan) 12%, transparent);
+  border: 1px solid color-mix(in oklab, var(--accent-cyan) 28%, transparent);
+}
+.code-body {
+  padding: 20px 22px;
+  overflow-x: auto;
+}
+.code-body pre {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  line-height: 1.7;
+  color: #C9DCEF;
+  white-space: pre;
+}
+.tk-com { color: #3E5C7E; font-style: italic; }
+.tk-kw  { color: #7C9CC9; }
+.tk-typ { color: #FFB627; }
+.tk-str { color: #10D98A; }
+.tk-fn  { color: #00D4FF; }
+.tk-num { color: #FF6B35; }
+.tk-prp { color: #C4B5FD; }
+.tk-tag { color: #5A7A99; }
+
+/* Replay gomb */
+.replay {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-surface-2);
+  border: 1px solid var(--border-active);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 0.72rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  padding: 8px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 160ms var(--ease-snap);
+}
+.replay:hover {
+  border-color: var(--accent-cyan-dim);
+  color: var(--accent-cyan);
+  box-shadow: 0 0 18px var(--glow-cyan);
+}
+
+/* Token swatch sor a komponens dokumentációhoz */
+.tokens {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0,1fr));
+  gap: 12px;
+}
+.token {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px;
+  background: var(--bg-surface-1);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+}
+.token .sw {
+  width: 18px; height: 18px; border-radius: 4px;
+  border: 1px solid rgba(255,255,255,.06);
+}
+.token .nm { font-family: var(--font-mono); font-size: 0.72rem; color: var(--text-primary); }
+.token .vl { font-family: var(--font-mono); font-size: 0.7rem; color: var(--text-muted); margin-left: auto; }
+@media (max-width: 1024px) { .tokens { grid-template-columns: repeat(2, 1fr); } }
+</style>
+</head>
+<body>
+<div class="page" id="page">
+  <div class="page__eyebrow">ASEStats / Components / Atoms</div>
+  <h1 class="page__title">StatCard · KPI komponens</h1>
+  <p class="page__sub">
+    A platform leggyakrabban használt eleme. Bal oldali accent sáv, JetBrains Mono nagy
+    szám, Barlow SemiBold ALL-CAPS label, opcionális ikon &amp; trend jelző. Belépés
+    staggered fade-slide-up, hover-en finom emelés + glow.
+  </p>
+
+  <!-- ===================== 01 — ACCENT VARIÁNSOK ===================== -->
+  <section class="section">
+    <div class="section__head">
+      <span class="section__num">01</span>
+      <h2 class="section__title">Accent variánsok</h2>
+      <span class="section__hint">accentColor: cyan · orange · green · purple</span>
+      <button class="replay" id="replay">↻ Replay animáció</button>
+    </div>
+    <div id="mount-variants" class="grid-4"></div>
+  </section>
+
+  <!-- ===================== 02 — TREND ÁLLAPOTOK ===================== -->
+  <section class="section">
+    <div class="section__head">
+      <span class="section__num">02</span>
+      <h2 class="section__title">Trend állapotok</h2>
+      <span class="section__hint">trend: up · down · neutral · — (nincs)</span>
+    </div>
+    <div id="mount-trends" class="grid-4"></div>
+  </section>
+
+  <!-- ===================== 03 — ÉLŐ PÉLDA (kosáros KPI sor) ===================== -->
+  <section class="section">
+    <div class="section__head">
+      <span class="section__num">03</span>
+      <h2 class="section__title">Élő példa — meccs KPI sor</h2>
+      <span class="section__hint">Stagger: animationDelay = i × 80ms</span>
+    </div>
+    <div id="mount-live" class="grid-4"></div>
+  </section>
+
+  <!-- ===================== 04 — ANATÓMIA + TOKENEK ===================== -->
+  <section class="section">
+    <div class="section__head">
+      <span class="section__num">04</span>
+      <h2 class="section__title">Anatómia &amp; tokenek</h2>
+    </div>
+    <div class="grid-3" style="grid-template-columns: 1.1fr 1fr 1fr;">
+      <div id="mount-anatomy"></div>
+      <div class="anno-card">
+        <h4>Slotok</h4>
+        <ul>
+          <li><b>::before</b> — 3px accent sáv (bal él)</li>
+          <li><b>.label</b> — Barlow SemiBold · 0.7rem · 0.14em tracking</li>
+          <li><b>.icon</b> — 24×24 · text-muted · accent on hover</li>
+          <li><b>.value</b> — JetBrains Mono · 2.5rem · tabular-nums</li>
+          <li><b>.trend</b> — pirula · fade-in 280ms delay</li>
+        </ul>
+      </div>
+      <div class="anno-card">
+        <h4>Viselkedés</h4>
+        <ul>
+          <li><b>hover</b> — translateY(-2px) + glow(accent)</li>
+          <li><b>enter</b> — fade-slide-up 460ms</li>
+          <li><b>stagger</b> — animationDelay × N</li>
+          <li><b>icon</b> — szín → accent színe hover-en</li>
+          <li><b>surface</b> — bg-surface-1 → ‑2 hover gradient</li>
+        </ul>
+      </div>
+    </div>
+
+    <div style="margin-top: 18px;" class="tokens">
+      <div class="token"><span class="sw" style="background:var(--accent-cyan)"></span><span class="nm">--accent-cyan</span><span class="vl">#00D4FF</span></div>
+      <div class="token"><span class="sw" style="background:var(--accent-orange)"></span><span class="nm">--accent-orange</span><span class="vl">#FF6B35</span></div>
+      <div class="token"><span class="sw" style="background:var(--positive)"></span><span class="nm">--positive</span><span class="vl">#10D98A</span></div>
+      <div class="token"><span class="sw" style="background:var(--accent-ai)"></span><span class="nm">--accent-ai</span><span class="vl">#7C3AED</span></div>
+      <div class="token"><span class="sw" style="background:var(--bg-surface-1); border-color: var(--border-subtle)"></span><span class="nm">--bg-surface-1</span><span class="vl">#0A1628</span></div>
+      <div class="token"><span class="sw" style="background:var(--border-subtle)"></span><span class="nm">--border-subtle</span><span class="vl">#0F2040</span></div>
+      <div class="token"><span class="sw" style="background:var(--text-primary)"></span><span class="nm">--text-primary</span><span class="vl">#E8F4FF</span></div>
+      <div class="token"><span class="sw" style="background:var(--text-secondary)"></span><span class="nm">--text-secondary</span><span class="vl">#5A7A99</span></div>
+    </div>
+  </section>
+
+  <!-- ===================== 05 — KOMPONENS KÓD ===================== -->
+  <section class="section">
+    <div class="section__head">
+      <span class="section__num">05</span>
+      <h2 class="section__title">Komponens — TSX</h2>
+      <span class="section__hint">components/ui/stat-card.tsx</span>
+    </div>
+
+    <div class="code-wrap">
+      <div class="code-head">
+        <span class="dot dot--c"></span><span class="dot"></span><span class="dot"></span>
+        <span class="name">components/ui/stat-card.tsx</span>
+        <span class="tag">React 19 · Tailwind 4</span>
+      </div>
+      <div class="code-body"><pre id="code-tsx"></pre></div>
+    </div>
+
+    <div style="margin-top: 18px;" class="code-wrap">
+      <div class="code-head">
+        <span class="dot dot--c"></span><span class="dot"></span><span class="dot"></span>
+        <span class="name">app/globals.css — kiegészítés (animáció + accent map)</span>
+        <span class="tag">CSS</span>
+      </div>
+      <div class="code-body"><pre id="code-css"></pre></div>
+    </div>
+  </section>
+</div>
+
+<!-- ============================================================
+     ICON SVG-K (egyszerű körvonalas — vékony stroke)
+     ============================================================ -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="ic-target" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5"/>
+    </symbol>
+    <symbol id="ic-trophy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M7 4h10v3a5 5 0 0 1-10 0V4z"/><path d="M4 5h3v2a3 3 0 0 1-3-3"/><path d="M20 5h-3v2a3 3 0 0 0 3-3"/>
+      <path d="M10 13h4l-.5 4h-3z"/><path d="M8 21h8"/><path d="M12 17v4"/>
+    </symbol>
+    <symbol id="ic-bolt" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M13 3 5 13h6l-1 8 8-10h-6z"/>
+    </symbol>
+    <symbol id="ic-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>
+    </symbol>
+    <symbol id="ic-basket" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3v18"/><path d="M5.6 5.6c4 4 8.8 4 12.8 0"/><path d="M5.6 18.4c4-4 8.8-4 12.8 0"/>
+    </symbol>
+    <symbol id="ic-users" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0"/><circle cx="17" cy="9" r="2.5"/><path d="M15 20a5 5 0 0 1 6-4"/>
+    </symbol>
+    <symbol id="ic-spark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 3v4"/><path d="M12 17v4"/><path d="M3 12h4"/><path d="M17 12h4"/><path d="M6 6l2.5 2.5"/><path d="M15.5 15.5 18 18"/><path d="M6 18l2.5-2.5"/><path d="M15.5 8.5 18 6"/>
+    </symbol>
+    <symbol id="ic-flame" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 3s4 4 4 8a4 4 0 1 1-8 0c0-1.5.5-2 1-3 .8 1.5 2 2 2 2s-1-3 1-7z"/>
+    </symbol>
+  </defs>
+</svg>
+
+<!-- ============================================================
+     KOMPONENS (JSX)
+     ============================================================ -->
+<script type="text/babel" data-presets="react">
+const { useState } = React;
+
+// === Icon helper (SVG <use>) ===
+function Icon({ name }) {
+  return (
+    <svg width="24" height="24" aria-hidden="true">
+      <use href={`#ic-${name}`} />
+    </svg>
+  );
+}
+
+// =============================================================
+// StatCard — a tényleges komponens, ahogy a TSX fájlba kerül
+// =============================================================
+const ACCENT_MAP = {
+  cyan:   { color: 'var(--accent-cyan)',   glow: 'var(--glow-cyan)'    },
+  orange: { color: 'var(--accent-orange)', glow: 'var(--glow-orange)'  },
+  green:  { color: 'var(--positive)',      glow: 'var(--glow-positive)'},
+  purple: { color: 'var(--accent-ai)',     glow: 'var(--glow-ai)'      },
+};
+
+function TrendArrow({ dir }) {
+  if (dir === 'up') {
+    return (
+      <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M6 9.5V2.5"/><path d="M3 5.5 6 2.5l3 3"/>
+      </svg>
+    );
+  }
+  if (dir === 'down') {
+    return (
+      <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M6 2.5v7"/><path d="M3 6.5 6 9.5l3-3"/>
+      </svg>
+    );
+  }
+  return (
+    <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M2.5 6h7"/>
+    </svg>
+  );
+}
+
+function StatCard({
+  label,
+  value,
+  trend,
+  trendValue,
+  icon,
+  accentColor = 'cyan',
+  animationDelay = 0,
+}) {
+  const accent = ACCENT_MAP[accentColor] ?? ACCENT_MAP.cyan;
+  return (
+    <div
+      className="statcard animate-fade-slide-up"
+      style={{
+        '--accent-color': accent.color,
+        '--accent-glow':  accent.glow,
+        animationDelay: `${animationDelay}ms`,
+      }}
+    >
+      <div className="statcard__head">
+        <span className="statcard__label">{label}</span>
+        {icon && <span className="statcard__icon">{icon}</span>}
+      </div>
+      <div className="statcard__body">
+        <span className="statcard__value">{value}</span>
+        {trend && (
+          <span className={`statcard__trend statcard__trend--${trend}`}>
+            <TrendArrow dir={trend} />
+            {trendValue}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// =============================================================
+// MOUNTS — showcase szekciók
+// =============================================================
+function Variants({ replayKey }) {
+  return (
+    <React.Fragment key={replayKey}>
+      <StatCard label="Átlagpontok" value="84.2" accentColor="cyan"
+        icon={<Icon name="basket"/>} animationDelay={0} />
+      <StatCard label="Dobási % (FG)" value="47.8%" accentColor="orange"
+        icon={<Icon name="target"/>} animationDelay={80} />
+      <StatCard label="Győzelmek" value="12" accentColor="green"
+        icon={<Icon name="trophy"/>} animationDelay={160} />
+      <StatCard label="AI predikció" value="71%" accentColor="purple"
+        icon={<Icon name="spark"/>} animationDelay={240} />
+    </React.Fragment>
+  );
+}
+
+function Trends({ replayKey }) {
+  return (
+    <React.Fragment key={replayKey}>
+      <StatCard label="Pontok / meccs" value="84.2" trend="up" trendValue="+5.2%"
+        accentColor="cyan" icon={<Icon name="basket"/>} animationDelay={0} />
+      <StatCard label="Eladott labda" value="13.4" trend="down" trendValue="-2.1%"
+        accentColor="orange" icon={<Icon name="bolt"/>} animationDelay={80} />
+      <StatCard label="Lepattanók" value="42" trend="neutral" trendValue="0.0%"
+        accentColor="green" icon={<Icon name="users"/>} animationDelay={160} />
+      <StatCard label="Win streak" value="5" accentColor="purple"
+        icon={<Icon name="flame"/>} animationDelay={240} />
+    </React.Fragment>
+  );
+}
+
+function Live({ replayKey }) {
+  return (
+    <React.Fragment key={replayKey}>
+      <StatCard label="Pontok" value="84" trend="up" trendValue="+6"
+        accentColor="cyan" icon={<Icon name="basket"/>} animationDelay={0} />
+      <StatCard label="Asszisztok" value="21" trend="up" trendValue="+3"
+        accentColor="cyan" icon={<Icon name="users"/>} animationDelay={80} />
+      <StatCard label="Eladott labda" value="9" trend="down" trendValue="-2"
+        accentColor="orange" icon={<Icon name="bolt"/>} animationDelay={160} />
+      <StatCard label="Negyed" value="Q3" trend="neutral" trendValue="07:42"
+        accentColor="green" icon={<Icon name="clock"/>} animationDelay={240} />
+    </React.Fragment>
+  );
+}
+
+function Anatomy() {
+  return (
+    <div style={{display:'grid', gap: 16}}>
+      <StatCard
+        label="Átlagpontok"
+        value="84.2"
+        trend="up"
+        trendValue="+5.2%"
+        accentColor="cyan"
+        icon={<Icon name="basket"/>}
+      />
+      <StatCard
+        label="3-pontos %"
+        value="38.7%"
+        trend="down"
+        trendValue="-1.4%"
+        accentColor="orange"
+        icon={<Icon name="target"/>}
+      />
+    </div>
+  );
+}
+
+// === Render ===
+const Root = () => {
+  const [k, setK] = useState(0);
+  window.__replay = () => setK(x => x + 1);
+  return null;
+};
+ReactDOM.createRoot(document.createElement('div')).render(<Root/>);
+
+function mount(id, El) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const root = ReactDOM.createRoot(el);
+  return root;
+}
+const rVariants = ReactDOM.createRoot(document.getElementById('mount-variants'));
+const rTrends   = ReactDOM.createRoot(document.getElementById('mount-trends'));
+const rLive     = ReactDOM.createRoot(document.getElementById('mount-live'));
+const rAnatomy  = ReactDOM.createRoot(document.getElementById('mount-anatomy'));
+
+let replayKey = 0;
+function renderAll() {
+  rVariants.render(<Variants replayKey={replayKey}/>);
+  rTrends.render(<Trends replayKey={replayKey}/>);
+  rLive.render(<Live replayKey={replayKey}/>);
+  rAnatomy.render(<Anatomy/>);
+}
+renderAll();
+
+document.getElementById('replay').addEventListener('click', () => {
+  replayKey++;
+  renderAll();
+});
+</script>
+
+<!-- ============================================================
+     KÓDBLOKK render (egyszerű inline syntax highlight)
+     ============================================================ -->
+<script>
+const TSX = String.raw`§com§// components/ui/stat-card.tsx§/com§
+§kw§import§/kw§ §kw§type§/kw§ { ReactNode } §kw§from§/kw§ §str§"react"§/str§
+§kw§import§/kw§ { cn } §kw§from§/kw§ §str§"@/lib/utils"§/str§
+
+§kw§export§/kw§ §kw§interface§/kw§ §typ§StatCardProps§/typ§ {
+  §prp§label§/prp§: §typ§string§/typ§
+  §prp§value§/prp§: §typ§string§/typ§ | §typ§number§/typ§
+  §prp§trend§/prp§?: §str§'up'§/str§ | §str§'down'§/str§ | §str§'neutral'§/str§
+  §prp§trendValue§/prp§?: §typ§string§/typ§
+  §prp§icon§/prp§?: §typ§ReactNode§/typ§
+  §prp§accentColor§/prp§?: §str§'cyan'§/str§ | §str§'orange'§/str§ | §str§'green'§/str§ | §str§'purple'§/str§
+  §prp§animationDelay§/prp§?: §typ§number§/typ§
+}
+
+§com§/* accentColor → CSS custom property map */§/com§
+§kw§const§/kw§ ACCENT_MAP = {
+  §prp§cyan§/prp§:   { §prp§color§/prp§: §str§'var(--accent-cyan)'§/str§,   §prp§glow§/prp§: §str§'var(--glow-cyan)'§/str§     },
+  §prp§orange§/prp§: { §prp§color§/prp§: §str§'var(--accent-orange)'§/str§, §prp§glow§/prp§: §str§'var(--glow-orange)'§/str§   },
+  §prp§green§/prp§:  { §prp§color§/prp§: §str§'var(--positive)'§/str§,      §prp§glow§/prp§: §str§'var(--glow-positive)'§/str§ },
+  §prp§purple§/prp§: { §prp§color§/prp§: §str§'var(--accent-ai)'§/str§,     §prp§glow§/prp§: §str§'var(--glow-ai)'§/str§       },
+} §kw§as const§/kw§
+
+§kw§export function§/kw§ §fn§StatCard§/fn§({
+  label,
+  value,
+  trend,
+  trendValue,
+  icon,
+  accentColor = §str§'cyan'§/str§,
+  animationDelay = §num§0§/num§,
+}: §typ§StatCardProps§/typ§) {
+  §kw§const§/kw§ accent = ACCENT_MAP[accentColor]
+
+  §kw§return§/kw§ (
+    §tag§<§/tag§§fn§div§/fn§
+      §prp§className§/prp§={§fn§cn§/fn§(
+        §com§// alap kártya — bg-surface-1, border, radius, relative+overflow (accent sávhoz)§/com§
+        §str§"group relative overflow-hidden rounded-[10px]"§/str§,
+        §str§"bg-[var(--bg-surface-1)] border border-[var(--border-subtle)]"§/str§,
+        §str§"min-h-[140px] pl-6 pr-5 py-[18px]"§/str§,
+        §str§"flex flex-col justify-between gap-5"§/str§,
+        §com§// belépő animáció (globals.css)§/com§
+        §str§"animate-fade-slide-up"§/str§,
+        §com§// hover — emelés + accent glow§/com§
+        §str§"transition-[transform,border-color,box-shadow,background] duration-200 ease-[var(--ease-snap)]"§/str§,
+        §str§"hover:-translate-y-0.5 hover:border-[var(--border-active)]"§/str§,
+        §str§"hover:bg-gradient-to-b hover:from-[var(--bg-surface-1)] hover:to-[var(--bg-surface-2)]"§/str§,
+        §str§"hover:shadow-[0_8px_24px_var(--accent-glow)]"§/str§,
+        §com§// 3px accent sáv a bal élre§/com§
+        §str§"before:absolute before:inset-y-0 before:left-0 before:w-[3px]"§/str§,
+        §str§"before:bg-[var(--accent-color)] before:shadow-[0_0_12px_var(--accent-glow)]"§/str§,
+      )}
+      §prp§style§/prp§={{
+        §prp§'--accent-color'§/prp§: accent.color,
+        §prp§'--accent-glow'§/prp§: accent.glow,
+        §prp§animationDelay§/prp§: §str§\`${'$'}{animationDelay}ms\`§/str§,
+      } §kw§as§/kw§ §typ§React.CSSProperties§/typ§}
+    §tag§>§/tag§
+      §com§{/* fejléc — label + ikon */}§/com§
+      §tag§<§/tag§§fn§div§/fn§ §prp§className§/prp§=§str§"flex items-start justify-between gap-3"§/str§§tag§>§/tag§
+        §tag§<§/tag§§fn§span§/fn§ §prp§className§/prp§={§fn§cn§/fn§(
+          §str§"font-[var(--font-sans)] font-semibold uppercase"§/str§,
+          §str§"text-[0.7rem] tracking-[0.14em] leading-tight"§/str§,
+          §str§"text-[var(--text-secondary)]"§/str§,
+        )}§tag§>§/tag§{label}§tag§</§/tag§§fn§span§/fn§§tag§>§/tag§
+
+        {icon && (
+          §tag§<§/tag§§fn§span§/fn§ §prp§className§/prp§={§fn§cn§/fn§(
+            §str§"inline-flex items-center justify-center w-6 h-6 shrink-0"§/str§,
+            §str§"text-[var(--text-muted)] transition-colors duration-200"§/str§,
+            §str§"group-hover:text-[var(--accent-color)]"§/str§,
+          )}§tag§>§/tag§{icon}§tag§</§/tag§§fn§span§/fn§§tag§>§/tag§
+        )}
+      §tag§</§/tag§§fn§div§/fn§§tag§>§/tag§
+
+      §com§{/* érték + trend */}§/com§
+      §tag§<§/tag§§fn§div§/fn§ §prp§className§/prp§=§str§"flex items-end justify-between gap-3"§/str§§tag§>§/tag§
+        §tag§<§/tag§§fn§span§/fn§ §prp§className§/prp§={§fn§cn§/fn§(
+          §str§"font-[var(--font-mono)] tabular-nums"§/str§,
+          §str§"text-[2.5rem] leading-none tracking-[-0.03em] font-medium"§/str§,
+          §str§"text-[var(--text-primary)]"§/str§,
+        )}§tag§>§/tag§{value}§tag§</§/tag§§fn§span§/fn§§tag§>§/tag§
+
+        {trend && §tag§<§/tag§§fn§TrendPill§/fn§ §prp§dir§/prp§={trend} §prp§value§/prp§={trendValue} §tag§/>§/tag§}
+      §tag§</§/tag§§fn§div§/fn§§tag§>§/tag§
+    §tag§</§/tag§§fn§div§/fn§§tag§>§/tag§
+  )
+}
+
+§com§/* belső trend pirula — animált fade-in (CSS keyframe) */§/com§
+§kw§function§/kw§ §fn§TrendPill§/fn§({ dir, value }: { dir: §str§'up'§/str§|§str§'down'§/str§|§str§'neutral'§/str§; value?: §typ§string§/typ§ }) {
+  §kw§const§/kw§ tone =
+    dir === §str§'up'§/str§     ? §str§"text-[var(--positive)] bg-[color-mix(in_oklab,var(--positive)_12%,transparent)] border-[color-mix(in_oklab,var(--positive)_28%,transparent)]"§/str§ :
+    dir === §str§'down'§/str§   ? §str§"text-[var(--negative)] bg-[color-mix(in_oklab,var(--negative)_12%,transparent)] border-[color-mix(in_oklab,var(--negative)_28%,transparent)]"§/str§ :
+                          §str§"text-[var(--text-secondary)] bg-[var(--bg-surface-2)] border-[var(--border-active)]"§/str§
+  §kw§return§/kw§ (
+    §tag§<§/tag§§fn§span§/fn§ §prp§className§/prp§={§fn§cn§/fn§(
+      §str§"inline-flex items-center gap-1 rounded-full border px-2 py-1"§/str§,
+      §str§"font-[var(--font-mono)] tabular-nums text-[0.78rem] font-medium"§/str§,
+      §str§"animate-trend-in"§/str§, §com§// 280ms delay-jel — globals.css§/com§
+      tone,
+    )}§tag§>§/tag§
+      §tag§<§/tag§§fn§TrendArrow§/fn§ §prp§dir§/prp§={dir} §tag§/>§/tag§
+      {value}
+    §tag§</§/tag§§fn§span§/fn§§tag§>§/tag§
+  )
+}
+`;
+
+const CSS = String.raw`§com§/* app/globals.css — kiegészítés a StatCard-hoz */§/com§
+
+§com§/* Belépő — fade-slide-up (már létezik a Te globals.css-edben) */§/com§
+§kw§@keyframes§/kw§ §fn§fade-slide-up§/fn§ {
+  §num§0%§/num§   { §prp§opacity§/prp§: §num§0§/num§; §prp§transform§/prp§: §fn§translateY§/fn§(§num§12px§/num§); }
+  §num§100%§/num§ { §prp§opacity§/prp§: §num§1§/num§; §prp§transform§/prp§: §fn§translateY§/fn§(§num§0§/num§); }
+}
+
+§com§/* Trend pirula — késleltetett bejövetel */§/com§
+§kw§@keyframes§/kw§ §fn§trend-in§/fn§ {
+  §num§0%§/num§   { §prp§opacity§/prp§: §num§0§/num§; §prp§transform§/prp§: §fn§translateX§/fn§(§num§-4px§/num§); }
+  §num§100%§/num§ { §prp§opacity§/prp§: §num§1§/num§; §prp§transform§/prp§: §fn§translateX§/fn§(§num§0§/num§); }
+}
+§prp§.animate-trend-in§/prp§  { §prp§animation§/prp§: trend-in §num§480ms§/num§ §kw§var§/kw§(--ease-snap) §num§280ms§/num§ both; }
+`;
+
+function highlight(src){
+  return src
+    .replace(/§com§/g,'<span class="tk-com">').replace(/§\/com§/g,'</span>')
+    .replace(/§kw§/g,'<span class="tk-kw">').replace(/§\/kw§/g,'</span>')
+    .replace(/§typ§/g,'<span class="tk-typ">').replace(/§\/typ§/g,'</span>')
+    .replace(/§str§/g,'<span class="tk-str">').replace(/§\/str§/g,'</span>')
+    .replace(/§fn§/g,'<span class="tk-fn">').replace(/§\/fn§/g,'</span>')
+    .replace(/§num§/g,'<span class="tk-num">').replace(/§\/num§/g,'</span>')
+    .replace(/§prp§/g,'<span class="tk-prp">').replace(/§\/prp§/g,'</span>')
+    .replace(/§tag§/g,'<span class="tk-tag">').replace(/§\/tag§/g,'</span>');
+}
+document.getElementById('code-tsx').innerHTML = highlight(TSX);
+document.getElementById('code-css').innerHTML = highlight(CSS);
+</script>
+</body>
+</html>

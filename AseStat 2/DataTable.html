@@ -1,0 +1,1201 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ASEStats — DataTable Redesign</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@500;600;700&family=Barlow+Condensed:wght@500;600;700&family=DM+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<style>
+/* ============================================================
+   Tokenek — globals.css-ből inline-olva
+   ============================================================ */
+:root {
+  --bg-base: #050B14;
+  --bg-surface-1: #0A1628;
+  --bg-surface-2: #0F1F3D;
+  --bg-surface-3: #162440;
+
+  --accent-cyan: #00D4FF;
+  --accent-cyan-dim: #0096B8;
+  --accent-orange: #FF6B35;
+  --accent-ai: #7C3AED;
+
+  --text-primary: #E8F4FF;
+  --text-secondary: #5A7A99;
+  --text-muted: #2D4A6B;
+
+  --positive: #10D98A;
+  --negative: #FF4757;
+  --warning: #FFB627;
+
+  --border-subtle: #0F2040;
+  --border-active: #1E3A5F;
+  --border-strong: #2A4A75;
+
+  --glow-cyan: rgba(0, 212, 255, 0.18);
+  --glow-cyan-hot: rgba(0, 212, 255, 0.45);
+  --glow-positive: rgba(16, 217, 138, 0.18);
+  --glow-negative: rgba(255, 71, 87, 0.18);
+
+  --font-display: "Barlow Condensed", system-ui, sans-serif;
+  --font-sans: "Barlow", "DM Sans", system-ui, sans-serif;
+  --font-body: "DM Sans", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+
+  --ease-snap: cubic-bezier(.2, .8, .2, 1);
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+}
+body {
+  background-image:
+    radial-gradient(circle at 1px 1px, rgba(0,212,255,0.045) 1px, transparent 0),
+    radial-gradient(1200px 600px at 20% -10%, rgba(0,212,255,.05), transparent 60%),
+    radial-gradient(900px 500px at 95% 110%, rgba(255,107,53,.04), transparent 60%);
+  background-size: 24px 24px, 100% 100%, 100% 100%;
+  background-attachment: fixed;
+  padding: 48px 40px 96px;
+}
+
+/* ============================================================
+   PAGE HEADER + LAYOUT
+   ============================================================ */
+.page {
+  max-width: 1400px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 56px;
+}
+
+.page-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid var(--border-active);
+}
+.page-eyebrow {
+  font-family: var(--font-display);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  font-size: 0.72rem;
+  color: var(--accent-cyan);
+  margin-bottom: 8px;
+}
+.page-title {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 2.4rem;
+  letter-spacing: -0.01em;
+  line-height: 1;
+}
+.page-sub {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  margin-top: 12px;
+  max-width: 56ch;
+  line-height: 1.55;
+}
+.page-meta {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  text-align: right;
+  line-height: 1.5;
+}
+.page-meta b { color: var(--text-secondary); font-weight: 500; }
+
+/* Section frame for each table demo */
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.section-title-row {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+}
+.section-num {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  letter-spacing: 0.1em;
+}
+.section-title {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 1.35rem;
+  letter-spacing: -0.005em;
+}
+.section-desc {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+}
+.section-tools {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+/* Filter chips above tables */
+.chip {
+  font-family: var(--font-display);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-size: 0.7rem;
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface-1);
+  border: 1px solid var(--border-active);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 160ms var(--ease-snap);
+}
+.chip:hover { color: var(--text-primary); border-color: var(--accent-cyan-dim); }
+.chip[data-active="true"] {
+  background: color-mix(in oklab, var(--accent-cyan) 12%, transparent);
+  color: var(--accent-cyan);
+  border-color: color-mix(in oklab, var(--accent-cyan) 40%, transparent);
+}
+
+.input-cmd {
+  background: var(--bg-surface-1);
+  border: 1px solid var(--border-active);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  border-radius: var(--radius-sm);
+  padding: 6px 10px 6px 28px;
+  width: 220px;
+  position: relative;
+}
+.input-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+.input-wrap svg {
+  position: absolute;
+  left: 9px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  pointer-events: none;
+}
+.input-cmd:focus {
+  outline: none;
+  border-color: var(--accent-cyan);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent-cyan) 18%, transparent);
+}
+
+/* ============================================================
+   DATATABLE — wrapper rendszer
+   ============================================================ */
+
+/* Külső wrapper: kerek sarok + clip + halvány glow lehetősége */
+.dt-shell {
+  background: var(--bg-surface-1);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  position: relative;
+}
+
+/* Görgethető konténer — vízszintes scroll mobil/tablet alatt */
+.dt-scroll {
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-active) transparent;
+}
+.dt-scroll::-webkit-scrollbar { height: 8px; width: 8px; }
+.dt-scroll::-webkit-scrollbar-track { background: var(--bg-surface-1); }
+.dt-scroll::-webkit-scrollbar-thumb { background: var(--border-active); border-radius: 2px; }
+
+/* A tábla maga */
+.dt-table {
+  width: 100%;
+  border-collapse: collapse;
+  border-spacing: 0;
+  font-family: var(--font-body);
+}
+
+/* -------- FEJLÉC ---------------------------------------------- */
+.dt-table thead tr {
+  background: var(--bg-surface-2);
+  border-bottom: 1px solid var(--border-active);
+}
+.dt-th {
+  font-family: var(--font-display);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  padding: 14px 14px;
+  text-align: left;
+  white-space: nowrap;
+  user-select: none;
+  position: relative;
+}
+.dt-th[data-num="true"] { text-align: right; font-family: var(--font-mono); letter-spacing: 0.04em; }
+.dt-th[data-center="true"] { text-align: center; }
+.dt-th[data-sortable="true"] { cursor: pointer; transition: color 140ms var(--ease-snap); }
+.dt-th[data-sortable="true"]:hover { color: var(--text-secondary); }
+.dt-th[data-sorted] { color: var(--accent-cyan); }
+
+/* Sort ikon konténer — kattintásra forog */
+.dt-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.dt-th[data-num="true"] .dt-sort { flex-direction: row-reverse; }
+.dt-sort-icon {
+  width: 12px;
+  height: 12px;
+  transition: transform 220ms var(--ease-snap), opacity 140ms var(--ease-snap);
+  opacity: 0.35;
+  flex-shrink: 0;
+}
+.dt-th[data-sorted] .dt-sort-icon { opacity: 1; color: var(--accent-cyan); }
+.dt-th[data-sorted="desc"] .dt-sort-icon { transform: rotate(180deg); }
+
+/* -------- BODY ROWS ------------------------------------------- */
+.dt-table tbody tr {
+  border-bottom: 1px solid var(--border-subtle);
+  transition: background 150ms var(--ease-snap),
+              box-shadow 150ms var(--ease-snap);
+  position: relative;
+}
+.dt-table tbody tr:last-child { border-bottom: none; }
+
+/* Hover: surface-2 + bal oldali 2px cián border (inset shadow trükkel) */
+.dt-table tbody tr:hover {
+  background: var(--bg-surface-2);
+  box-shadow: inset 2px 0 0 0 var(--accent-cyan);
+}
+/* Aktív / kijelölt sor — állandó cián marker */
+.dt-table tbody tr[data-active="true"] {
+  background: var(--bg-surface-2);
+  box-shadow: inset 2px 0 0 0 var(--accent-cyan),
+              0 0 24px -4px var(--glow-cyan);
+}
+
+.dt-td {
+  padding: 14px 14px;
+  font-size: 0.86rem;
+  color: var(--text-primary);
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+/* -------- CELL TÍPUSOK ---------------------------------------- */
+
+/* Numerikus cella — JetBrains Mono, jobbra zárva */
+.dt-num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum", "zero";
+  text-align: right;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+}
+.dt-num--muted { color: var(--text-secondary); }
+.dt-num--strong { color: var(--accent-cyan); font-weight: 600; }
+.dt-num--pos { color: var(--positive); }
+.dt-num--neg { color: var(--negative); }
+
+/* Index / rank cella */
+.dt-rank {
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  width: 44px;
+  text-align: right;
+  padding-right: 4px;
+}
+
+/* Játékos név cella */
+.dt-player {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+.dt-player-avatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  background: var(--bg-surface-3);
+  border: 1px solid var(--border-active);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+  letter-spacing: 0.05em;
+  flex-shrink: 0;
+}
+.dt-player-name {
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 0.92rem;
+  color: var(--accent-cyan);
+  cursor: pointer;
+  transition: color 140ms var(--ease-snap);
+}
+.dt-player-name:hover { text-decoration: underline; text-underline-offset: 3px; }
+.dt-player-meta {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+  letter-spacing: 0.04em;
+}
+
+/* Team cella — kis logó + rövid kód */
+.dt-team {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.dt-team-logo {
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-active);
+  background: var(--bg-surface-3);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.66rem;
+  letter-spacing: 0.04em;
+  color: var(--text-primary);
+}
+.dt-team-name {
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 0.88rem;
+  color: var(--text-primary);
+}
+
+/* Badge pill */
+.dt-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-size: 0.66rem;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  min-width: 28px;
+}
+.dt-badge--win {
+  background: color-mix(in oklab, var(--positive) 14%, transparent);
+  color: var(--positive);
+  border-color: color-mix(in oklab, var(--positive) 36%, transparent);
+}
+.dt-badge--loss {
+  background: color-mix(in oklab, var(--negative) 14%, transparent);
+  color: var(--negative);
+  border-color: color-mix(in oklab, var(--negative) 36%, transparent);
+}
+.dt-badge--pg { background: color-mix(in oklab, var(--accent-cyan) 14%, transparent); color: var(--accent-cyan); border-color: color-mix(in oklab, var(--accent-cyan) 36%, transparent); }
+.dt-badge--sg { background: color-mix(in oklab, #38BDF8 16%, transparent); color: #7DD3FC; border-color: color-mix(in oklab, #38BDF8 36%, transparent); }
+.dt-badge--sf { background: color-mix(in oklab, var(--warning) 14%, transparent); color: var(--warning); border-color: color-mix(in oklab, var(--warning) 36%, transparent); }
+.dt-badge--pf { background: color-mix(in oklab, var(--accent-orange) 14%, transparent); color: var(--accent-orange); border-color: color-mix(in oklab, var(--accent-orange) 36%, transparent); }
+.dt-badge--c  { background: color-mix(in oklab, var(--accent-ai) 18%, transparent); color: #C4B5FD; border-color: color-mix(in oklab, var(--accent-ai) 42%, transparent); }
+.dt-badge--neutral {
+  background: var(--bg-surface-2);
+  color: var(--text-secondary);
+  border-color: var(--border-active);
+}
+
+/* Trend chip — pozitív/negatív delta */
+.dt-trend {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.dt-trend--up { color: var(--positive); }
+.dt-trend--down { color: var(--negative); }
+.dt-trend--flat { color: var(--text-muted); }
+
+/* Mini bar a táblában (pl. shooting %) */
+.dt-bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  max-width: 160px;
+}
+.dt-bar-track {
+  flex: 1;
+  height: 4px;
+  background: var(--bg-surface-3);
+  border-radius: 999px;
+  overflow: hidden;
+  min-width: 60px;
+}
+.dt-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent-cyan-dim), var(--accent-cyan));
+  border-radius: 999px;
+}
+.dt-bar-fill--orange { background: linear-gradient(90deg, #B84A22, var(--accent-orange)); }
+.dt-bar-val {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.76rem;
+  color: var(--text-secondary);
+  min-width: 38px;
+  text-align: right;
+}
+
+/* Streak vizualizáció — kis pöttyök sorozata */
+.dt-streak {
+  display: inline-flex;
+  gap: 3px;
+}
+.dt-streak-dot {
+  width: 6px;
+  height: 14px;
+  border-radius: 1px;
+  background: var(--bg-surface-3);
+}
+.dt-streak-dot--w { background: var(--positive); box-shadow: 0 0 6px var(--glow-positive); }
+.dt-streak-dot--l { background: var(--negative); box-shadow: 0 0 6px var(--glow-negative); }
+
+/* Footer pagination strip */
+.dt-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 18px;
+  border-top: 1px solid var(--border-subtle);
+  background: var(--bg-surface-1);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+  letter-spacing: 0.04em;
+}
+.dt-foot-pager { display: inline-flex; align-items: center; gap: 4px; }
+.dt-foot-btn {
+  background: transparent;
+  border: 1px solid var(--border-active);
+  color: var(--text-secondary);
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  cursor: pointer;
+  transition: all 140ms var(--ease-snap);
+}
+.dt-foot-btn:hover { color: var(--accent-cyan); border-color: var(--accent-cyan-dim); }
+.dt-foot-btn[data-active="true"] {
+  background: color-mix(in oklab, var(--accent-cyan) 14%, transparent);
+  color: var(--accent-cyan);
+  border-color: color-mix(in oklab, var(--accent-cyan) 40%, transparent);
+}
+
+/* ============================================================
+   CODE PANEL — komponens példa szerelv
+   ============================================================ */
+.code-panel {
+  background: var(--bg-surface-1);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+.code-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: var(--bg-surface-2);
+  border-bottom: 1px solid var(--border-active);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+.code-panel-head b { color: var(--accent-cyan); font-weight: 600; }
+.code-panel pre {
+  margin: 0;
+  padding: 18px 20px;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  line-height: 1.65;
+  color: var(--text-primary);
+  overflow-x: auto;
+  white-space: pre;
+  tab-size: 2;
+}
+.tk { color: #C4B5FD; }       /* keyword */
+.ts { color: #FBBF24; }       /* string */
+.tt { color: var(--accent-cyan); } /* type / tag */
+.tc { color: var(--text-muted); }  /* comment */
+.tp { color: var(--positive); }    /* prop */
+.tn { color: #F472B6; }       /* function name */
+
+/* Misc */
+.hr-cap {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 6px;
+}
+.hr-cap span {
+  font-family: var(--font-display);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  font-size: 0.68rem;
+  color: var(--text-muted);
+}
+.hr-cap::before, .hr-cap::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border-subtle);
+}
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" data-presets="react">
+const { useState, useMemo } = React;
+
+/* ============================================================
+   IKONOK
+   ============================================================ */
+function ChevronUp({ className = "dt-sort-icon" }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none"
+         stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="18 15 12 9 6 15"></polyline>
+    </svg>
+  );
+}
+function SearchIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+         stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="11" cy="11" r="7"></circle>
+      <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+    </svg>
+  );
+}
+function TrendUp() {
+  return (
+    <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
+         stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="6 15 12 9 18 15"></polyline>
+    </svg>
+  );
+}
+function TrendDown() {
+  return (
+    <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
+         stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="6 9 12 15 18 9"></polyline>
+    </svg>
+  );
+}
+
+/* ============================================================
+   GENERIKUS DATATABLE KOMPONENS
+   ============================================================ */
+function DataTable({ columns, rows, initialSort, activeRowId, getRowId, footer }) {
+  const [sort, setSort] = useState(initialSort || { key: null, dir: "asc" });
+
+  const sortedRows = useMemo(() => {
+    if (!sort.key) return rows;
+    const col = columns.find(c => c.key === sort.key);
+    const accessor = col?.sortAccessor || (r => r[sort.key]);
+    const dir = sort.dir === "asc" ? 1 : -1;
+    return [...rows].sort((a, b) => {
+      const av = accessor(a), bv = accessor(b);
+      if (av == null) return 1;
+      if (bv == null) return -1;
+      if (typeof av === "number" && typeof bv === "number") return (av - bv) * dir;
+      return String(av).localeCompare(String(bv), "hu") * dir;
+    });
+  }, [rows, sort, columns]);
+
+  function toggleSort(key) {
+    setSort(s => {
+      if (s.key !== key) return { key, dir: "desc" };
+      if (s.dir === "desc") return { key, dir: "asc" };
+      return { key: null, dir: "asc" };
+    });
+  }
+
+  return (
+    <div className="dt-shell">
+      <div className="dt-scroll">
+        <table className="dt-table">
+          <thead>
+            <tr>
+              {columns.map(col => {
+                const sorted = sort.key === col.key ? sort.dir : undefined;
+                return (
+                  <th
+                    key={col.key}
+                    className="dt-th"
+                    data-num={col.numeric ? "true" : undefined}
+                    data-center={col.center ? "true" : undefined}
+                    data-sortable={col.sortable !== false ? "true" : undefined}
+                    data-sorted={sorted}
+                    style={col.width ? { width: col.width } : undefined}
+                    onClick={() => col.sortable !== false && toggleSort(col.key)}
+                  >
+                    <span className="dt-sort">
+                      <span>{col.label}</span>
+                      {col.sortable !== false && <ChevronUp />}
+                    </span>
+                  </th>
+                );
+              })}
+            </tr>
+          </thead>
+          <tbody>
+            {sortedRows.map((row, idx) => {
+              const id = getRowId ? getRowId(row) : idx;
+              const isActive = activeRowId != null && id === activeRowId;
+              return (
+                <tr key={id} data-active={isActive ? "true" : undefined}>
+                  {columns.map(col => (
+                    <td
+                      key={col.key}
+                      className={`dt-td ${col.cellClassName || ""}`}
+                      style={col.numeric ? { textAlign: "right" } : col.center ? { textAlign: "center" } : undefined}
+                    >
+                      {col.render ? col.render(row, idx) : row[col.key]}
+                    </td>
+                  ))}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      {footer && <div className="dt-foot">{footer}</div>}
+    </div>
+  );
+}
+
+/* ============================================================
+   ADATOK — DEMO
+   ============================================================ */
+const PLAYERS = [
+  { id: 1, no: 7,  first: "Bence",   last: "Kovács",  team: "ASE", pos: "PG", gp: 24, min: 32.4, pts: 18.6, reb: 4.2, ast: 6.8, fg: 47.2, three: 38.4, plusMinus: +8.4 },
+  { id: 2, no: 11, first: "Márk",    last: "Horváth", team: "ASE", pos: "SG", gp: 24, min: 30.1, pts: 21.3, reb: 3.6, ast: 3.4, fg: 44.6, three: 41.2, plusMinus: +6.1 },
+  { id: 3, no: 23, first: "Dávid",   last: "Szabó",   team: "ASE", pos: "SF", gp: 22, min: 28.5, pts: 14.1, reb: 5.8, ast: 2.6, fg: 49.8, three: 35.0, plusMinus: +3.5 },
+  { id: 4, no: 33, first: "Ádám",    last: "Tóth",    team: "ASE", pos: "PF", gp: 24, min: 26.7, pts: 11.4, reb: 7.6, ast: 1.8, fg: 53.2, three: 28.6, plusMinus: +2.2 },
+  { id: 5, no: 55, first: "Levente", last: "Nagy",    team: "ASE", pos: "C",  gp: 21, min: 24.2, pts:  9.8, reb: 8.9, ast: 1.2, fg: 58.4, three: 12.5, plusMinus: -1.4 },
+  { id: 6, no: 4,  first: "Gergő",   last: "Varga",   team: "ASE", pos: "PG", gp: 20, min: 18.4, pts:  7.2, reb: 2.1, ast: 4.6, fg: 42.1, three: 36.7, plusMinus: +1.0 },
+  { id: 7, no: 14, first: "Patrik",  last: "Farkas",  team: "ASE", pos: "SF", gp: 18, min: 16.8, pts:  6.4, reb: 3.4, ast: 1.6, fg: 41.0, three: 30.2, plusMinus: -0.6 },
+];
+
+const STANDINGS = [
+  { id: "ASE",  name: "Atomerőmű SE",        rank: 1, w: 18, l: 6,  pf: 2104, pa: 1968, streak: ["W","W","W","L","W"] },
+  { id: "SZL",  name: "Szolnoki Olajbányász", rank: 2, w: 17, l: 7,  pf: 2056, pa: 1932, streak: ["W","L","W","W","W"] },
+  { id: "FAL",  name: "Falco-Vulcano Szombathely", rank: 3, w: 16, l: 8, pf: 2018, pa: 1944, streak: ["L","W","W","W","L"] },
+  { id: "ZTE",  name: "Zalakerámia ZTE KK",   rank: 4, w: 14, l: 10, pf: 1972, pa: 1936, streak: ["W","W","L","W","W"] },
+  { id: "ALB",  name: "Alba Fehérvár",         rank: 5, w: 13, l: 11, pf: 1928, pa: 1944, streak: ["L","W","L","W","W"] },
+  { id: "KOR",  name: "Körmend",               rank: 6, w: 12, l: 12, pf: 1904, pa: 1928, streak: ["L","L","W","L","W"] },
+  { id: "DEAC", name: "DEAC Debrecen",         rank: 7, w: 10, l: 14, pf: 1856, pa: 1956, streak: ["W","L","L","L","W"] },
+  { id: "PVS",  name: "PVSK-Veolia Pécs",      rank: 8, w:  8, l: 16, pf: 1812, pa: 1992, streak: ["L","L","W","L","L"] },
+];
+
+const GAMELOG = [
+  { id: "G24", date: "2026-05-21", opp: "SZL", home: true,  res: "W", score: "88-79", min: 33, pts: 22, reb: 5, ast: 7, fg: "8/15", three: "3/7", plusMinus: +14 },
+  { id: "G23", date: "2026-05-18", opp: "FAL", home: false, res: "L", score: "74-82", min: 31, pts: 14, reb: 3, ast: 4, fg: "5/14", three: "1/6", plusMinus:  -6 },
+  { id: "G22", date: "2026-05-14", opp: "ZTE", home: true,  res: "W", score: "94-71", min: 28, pts: 19, reb: 4, ast: 9, fg: "7/12", three: "4/8", plusMinus: +22 },
+  { id: "G21", date: "2026-05-10", opp: "ALB", home: true,  res: "W", score: "85-77", min: 34, pts: 24, reb: 6, ast: 5, fg: "9/16", three: "2/5", plusMinus: +11 },
+  { id: "G20", date: "2026-05-06", opp: "KOR", home: false, res: "W", score: "79-72", min: 30, pts: 16, reb: 2, ast: 8, fg: "6/13", three: "2/7", plusMinus:  +4 },
+  { id: "G19", date: "2026-05-02", opp: "DEAC",home: false, res: "L", score: "68-71", min: 35, pts: 18, reb: 4, ast: 3, fg: "6/17", three: "2/9", plusMinus:  -2 },
+  { id: "G18", date: "2026-04-28", opp: "PVS", home: true,  res: "W", score:"102-69", min: 22, pts: 12, reb: 3, ast: 6, fg: "4/8",  three: "2/4", plusMinus: +18 },
+];
+
+/* ============================================================
+   POS BADGE + W/L BADGE HELPERS
+   ============================================================ */
+function PosBadge({ pos }) {
+  const cls = {
+    PG: "dt-badge--pg",
+    SG: "dt-badge--sg",
+    SF: "dt-badge--sf",
+    PF: "dt-badge--pf",
+    C:  "dt-badge--c",
+  }[pos] || "dt-badge--neutral";
+  return <span className={`dt-badge ${cls}`}>{pos}</span>;
+}
+function WLBadge({ res }) {
+  if (res === "W") return <span className="dt-badge dt-badge--win">GY</span>;
+  return <span className="dt-badge dt-badge--loss">V</span>;
+}
+function PlayerCell({ row }) {
+  const initials = (row.first[0] + row.last[0]).toUpperCase();
+  return (
+    <div className="dt-player">
+      <span className="dt-player-avatar">{initials}</span>
+      <span>
+        <span className="dt-player-name">{row.last} {row.first}</span>
+        <span className="dt-player-meta">#{row.no} · {row.team}</span>
+      </span>
+    </div>
+  );
+}
+function TeamCell({ code, name }) {
+  return (
+    <div className="dt-team">
+      <span className="dt-team-logo">{code}</span>
+      <span className="dt-team-name">{name}</span>
+    </div>
+  );
+}
+function Streak({ list }) {
+  return (
+    <span className="dt-streak">
+      {list.map((s, i) => (
+        <span key={i} className={`dt-streak-dot ${s === "W" ? "dt-streak-dot--w" : "dt-streak-dot--l"}`}></span>
+      ))}
+    </span>
+  );
+}
+function ShootingBar({ pct, variant }) {
+  return (
+    <div className="dt-bar">
+      <span className="dt-bar-track">
+        <span className={`dt-bar-fill ${variant === "orange" ? "dt-bar-fill--orange" : ""}`} style={{ width: `${pct}%` }}></span>
+      </span>
+      <span className="dt-bar-val">{pct.toFixed(1)}%</span>
+    </div>
+  );
+}
+function PlusMinus({ v }) {
+  const cls = v > 0 ? "dt-num--pos" : v < 0 ? "dt-num--neg" : "dt-num--muted";
+  return <span className={`dt-num ${cls}`}>{v > 0 ? "+" : ""}{v.toFixed(1)}</span>;
+}
+
+/* ============================================================
+   PAGE
+   ============================================================ */
+function Page() {
+  /* PlayersList columns */
+  const playerCols = [
+    { key: "no", label: "#", numeric: true, width: 56, render: r => <span className="dt-num dt-num--muted">{r.no}</span> },
+    { key: "name", label: "Játékos", sortAccessor: r => r.last + r.first, render: r => <PlayerCell row={r} /> },
+    { key: "pos", label: "Poz", center: true, render: r => <PosBadge pos={r.pos} /> },
+    { key: "gp", label: "M", numeric: true, render: r => <span className="dt-num dt-num--muted">{r.gp}</span> },
+    { key: "min", label: "Perc", numeric: true, render: r => <span className="dt-num">{r.min.toFixed(1)}</span> },
+    { key: "pts", label: "Pont", numeric: true, sortAccessor: r => r.pts, render: r => <span className="dt-num dt-num--strong">{r.pts.toFixed(1)}</span> },
+    { key: "reb", label: "Lep", numeric: true, render: r => <span className="dt-num">{r.reb.toFixed(1)}</span> },
+    { key: "ast", label: "Gól.p", numeric: true, render: r => <span className="dt-num">{r.ast.toFixed(1)}</span> },
+    { key: "fg", label: "FG%", numeric: true, render: r => <ShootingBar pct={r.fg} /> },
+    { key: "three", label: "3P%", numeric: true, render: r => <ShootingBar pct={r.three} variant="orange" /> },
+    { key: "plusMinus", label: "+/−", numeric: true, render: r => <PlusMinus v={r.plusMinus} /> },
+  ];
+
+  /* Standings columns */
+  const standingsCols = [
+    { key: "rank", label: "#", numeric: true, width: 48, render: r => <span className="dt-num dt-num--muted">{String(r.rank).padStart(2, "0")}</span> },
+    { key: "name", label: "Csapat", render: r => <TeamCell code={r.id} name={r.name} /> },
+    { key: "w", label: "GY", numeric: true, render: r => <span className="dt-num dt-num--strong">{r.w}</span> },
+    { key: "l", label: "V", numeric: true, render: r => <span className="dt-num">{r.l}</span> },
+    { key: "pct", label: "GY%", numeric: true, sortAccessor: r => r.w / (r.w + r.l), render: r => <span className="dt-num">{((r.w / (r.w + r.l)) * 100).toFixed(1)}%</span> },
+    { key: "pf", label: "Szerzett", numeric: true, render: r => <span className="dt-num">{r.pf}</span> },
+    { key: "pa", label: "Kapott", numeric: true, render: r => <span className="dt-num dt-num--muted">{r.pa}</span> },
+    { key: "diff", label: "Diff", numeric: true, sortAccessor: r => r.pf - r.pa, render: r => {
+        const d = r.pf - r.pa;
+        return <span className={`dt-num ${d > 0 ? "dt-num--pos" : d < 0 ? "dt-num--neg" : ""}`}>{d > 0 ? "+" : ""}{d}</span>;
+    } },
+    { key: "streak", label: "Forma", sortable: false, center: true, render: r => <Streak list={r.streak} /> },
+  ];
+
+  /* Game log columns */
+  const gameCols = [
+    { key: "id", label: "Forduló", width: 90, render: r => <span className="dt-num dt-num--muted">{r.id}</span> },
+    { key: "date", label: "Dátum", render: r => <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.78rem", color: "var(--text-secondary)" }}>{r.date}</span> },
+    { key: "opp", label: "Ellenfél", render: r => (
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+          <span style={{ color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: "0.74rem", width: 14 }}>{r.home ? "vs" : "@"}</span>
+          <span className="dt-team-logo" style={{ width: 24, height: 24, fontSize: "0.6rem" }}>{r.opp}</span>
+        </span>
+    ) },
+    { key: "res", label: "Eredm", center: true, render: r => <WLBadge res={r.res} /> },
+    { key: "score", label: "Pontszám", numeric: true, render: r => <span className="dt-num dt-num--strong">{r.score}</span> },
+    { key: "min", label: "Perc", numeric: true, render: r => <span className="dt-num">{r.min}</span> },
+    { key: "pts", label: "Pont", numeric: true, render: r => <span className="dt-num">{r.pts}</span> },
+    { key: "reb", label: "Lep", numeric: true, render: r => <span className="dt-num">{r.reb}</span> },
+    { key: "ast", label: "Gól.p", numeric: true, render: r => <span className="dt-num">{r.ast}</span> },
+    { key: "fg", label: "FG", numeric: true, sortable: false, render: r => <span className="dt-num dt-num--muted">{r.fg}</span> },
+    { key: "three", label: "3P", numeric: true, sortable: false, render: r => <span className="dt-num dt-num--muted">{r.three}</span> },
+    { key: "plusMinus", label: "+/−", numeric: true, render: r => <PlusMinus v={r.plusMinus} /> },
+  ];
+
+  const [posFilter, setPosFilter] = useState("ALL");
+  const filteredPlayers = posFilter === "ALL" ? PLAYERS : PLAYERS.filter(p => p.pos === posFilter);
+
+  return (
+    <div className="page">
+      {/* HEADER */}
+      <header className="page-head">
+        <div>
+          <div className="page-eyebrow">DESIGN_DOC // 03 // DATATABLE</div>
+          <h1 className="page-title">Adattáblák — redesign</h1>
+          <p className="page-sub">
+            Wrapper CSS osztály-réteg a meglévő table struktúra felé. A rendezés-, szűrés-,
+            és pagination logika érintetlen marad; csak a className-ek és layout cserélődik.
+          </p>
+        </div>
+        <div className="page-meta">
+          <b>scope</b> &nbsp;PlayersList · Standings · GameLog<br/>
+          <b>theme</b> &nbsp;dark only<br/>
+          <b>tokens</b>&nbsp;globals.css → :root<br/>
+          <b>rev</b> &nbsp;r03 · 2026-05-23
+        </div>
+      </header>
+
+      {/* ============================================================ */}
+      {/* SECTION 1 — PLAYERS LIST                                     */}
+      {/* ============================================================ */}
+      <section className="section">
+        <div className="section-head">
+          <div className="section-title-row">
+            <span className="section-num">/ 01</span>
+            <h2 className="section-title">PlayersList</h2>
+            <span className="section-desc">— csapat keret · átlag statisztikák</span>
+          </div>
+          <div className="section-tools">
+            {["ALL","PG","SG","SF","PF","C"].map(p => (
+              <button
+                key={p}
+                className="chip"
+                data-active={posFilter === p ? "true" : undefined}
+                onClick={() => setPosFilter(p)}
+              >{p === "ALL" ? "Mind" : p}</button>
+            ))}
+            <span className="input-wrap" style={{ marginLeft: 8 }}>
+              <SearchIcon />
+              <input className="input-cmd" placeholder="keresés név alapján…" />
+            </span>
+          </div>
+        </div>
+
+        <DataTable
+          columns={playerCols}
+          rows={filteredPlayers}
+          initialSort={{ key: "pts", dir: "desc" }}
+          activeRowId={2}
+          getRowId={r => r.id}
+          footer={
+            <>
+              <span>Megjelenítve <b style={{color:"var(--text-primary)"}}>{filteredPlayers.length}</b> / {PLAYERS.length} játékos</span>
+              <span className="dt-foot-pager">
+                <button className="dt-foot-btn">‹</button>
+                <button className="dt-foot-btn" data-active="true">01</button>
+                <button className="dt-foot-btn">02</button>
+                <button className="dt-foot-btn">›</button>
+              </span>
+            </>
+          }
+        />
+      </section>
+
+      {/* ============================================================ */}
+      {/* SECTION 2 — STANDINGS                                        */}
+      {/* ============================================================ */}
+      <section className="section">
+        <div className="section-head">
+          <div className="section-title-row">
+            <span className="section-num">/ 02</span>
+            <h2 className="section-title">Standings</h2>
+            <span className="section-desc">— NB I/A · 2025/26 szezon · alapszakasz</span>
+          </div>
+          <div className="section-tools">
+            <button className="chip" data-active="true">Alapszakasz</button>
+            <button className="chip">Hazai</button>
+            <button className="chip">Idegenben</button>
+          </div>
+        </div>
+
+        <DataTable
+          columns={standingsCols}
+          rows={STANDINGS}
+          initialSort={{ key: "rank", dir: "asc" }}
+          activeRowId="ASE"
+          getRowId={r => r.id}
+        />
+      </section>
+
+      {/* ============================================================ */}
+      {/* SECTION 3 — GAME LOG                                         */}
+      {/* ============================================================ */}
+      <section className="section">
+        <div className="section-head">
+          <div className="section-title-row">
+            <span className="section-num">/ 03</span>
+            <h2 className="section-title">Game Log</h2>
+            <span className="section-desc">— Kovács Bence · utolsó 7 mérkőzés</span>
+          </div>
+          <div className="section-tools">
+            <button className="chip" data-active="true">Utolsó 7</button>
+            <button className="chip">Szezon</button>
+            <button className="chip">Hazai</button>
+            <button className="chip">Idegen</button>
+          </div>
+        </div>
+
+        <DataTable
+          columns={gameCols}
+          rows={GAMELOG}
+          initialSort={{ key: "id", dir: "desc" }}
+          getRowId={r => r.id}
+        />
+      </section>
+
+      {/* ============================================================ */}
+      {/* SECTION 4 — KOMPONENS PÉLDA                                  */}
+      {/* ============================================================ */}
+      <section className="section">
+        <div className="section-head">
+          <div className="section-title-row">
+            <span className="section-num">/ 04</span>
+            <h2 className="section-title">Wrapper API + komponens példa</h2>
+            <span className="section-desc">— shadcn/ui-kompatibilis · csak className-csere a meglévő táblán</span>
+          </div>
+        </div>
+
+        <div className="hr-cap"><span>CSS WRAPPER OSZTÁLYOK</span></div>
+        <div className="code-panel">
+          <div className="code-panel-head"><span><b>app/styles/datatable.css</b> — osztály-réteg</span><span>~ 240 LOC</span></div>
+          <pre>{`<span class="tc">/* Konténer */</span>
+.<span class="tt">dt-shell</span>          <span class="tc">/* külső doboz: surface-1, border, radius-lg, clip */</span>
+.<span class="tt">dt-scroll</span>         <span class="tc">/* vízszintes overflow + slim scrollbar */</span>
+.<span class="tt">dt-table</span>          <span class="tc">/* width:100%, border-collapse */</span>
+
+<span class="tc">/* Fejléc */</span>
+.<span class="tt">dt-th</span>             <span class="tc">/* Barlow SemiBold, ALL CAPS, 0.7rem, text-muted, ls 0.1em */</span>
+.<span class="tt">dt-th</span>[data-num=<span class="ts">"true"</span>]
+.<span class="tt">dt-th</span>[data-sortable=<span class="ts">"true"</span>]
+.<span class="tt">dt-th</span>[data-sorted=<span class="ts">"asc"</span> | <span class="ts">"desc"</span>]   <span class="tc">/* cián szín, ikon rotation */</span>
+.<span class="tt">dt-sort</span>           <span class="tc">/* inline-flex label + ikon konténer */</span>
+.<span class="tt">dt-sort-icon</span>      <span class="tc">/* ChevronUp, transform 180deg @ desc, 220ms snap */</span>
+
+<span class="tc">/* Sorok */</span>
+.<span class="tt">dt-table tbody tr</span>             <span class="tc">/* border-subtle, 150ms transition */</span>
+.<span class="tt">dt-table tbody tr</span>:hover       <span class="tc">/* surface-2 + inset 2px cián */</span>
+.<span class="tt">dt-table tbody tr</span>[data-active=<span class="ts">"true"</span>]
+
+<span class="tc">/* Cellák */</span>
+.<span class="tt">dt-td</span>             <span class="tc">/* padding 14px, font-size 0.86rem */</span>
+.<span class="tt">dt-num</span>            <span class="tc">/* JetBrains Mono, tabular-nums, text-right */</span>
+.<span class="tt">dt-num--strong</span>    <span class="tc">/* cián, weight 600 — kiemelt KPI */</span>
+.<span class="tt">dt-num--pos</span> / .<span class="tt">dt-num--neg</span> / .<span class="tt">dt-num--muted</span>
+
+<span class="tc">/* Speciális cellák */</span>
+.<span class="tt">dt-rank</span>           <span class="tc">/* index oszlop, muted, fixed width */</span>
+.<span class="tt">dt-player</span>         <span class="tc">/* avatar + név + #szám/csapat */</span>
+.<span class="tt">dt-player-name</span>    <span class="tc">/* Barlow SemiBold, cián, hover underline */</span>
+.<span class="tt">dt-team</span>           <span class="tc">/* logó + név inline-flex */</span>
+.<span class="tt">dt-badge</span>          <span class="tc">/* pill, Barlow SemiBold ALL CAPS, 0.66rem */</span>
+.<span class="tt">dt-badge--win</span>     <span class="tc">/* "GY" — pozitív zöld */</span>
+.<span class="tt">dt-badge--loss</span>    <span class="tc">/* "V"  — negatív piros */</span>
+.<span class="tt">dt-badge--pg|sg|sf|pf|c</span>      <span class="tc">/* pozíció-specifikus szín */</span>
+.<span class="tt">dt-bar</span>            <span class="tc">/* inline mini bar — pl. shooting % */</span>
+.<span class="tt">dt-streak</span>         <span class="tc">/* W/L pöttysor (5 utolsó meccs) */</span>
+
+<span class="tc">/* Lábléc / pager */</span>
+.<span class="tt">dt-foot</span>           <span class="tc">/* border-top, mono caption, pager gombok */</span>`}</pre>
+        </div>
+
+        <div className="hr-cap"><span>REACT KOMPONENS — DataTable.tsx</span></div>
+        <div className="code-panel">
+          <div className="code-panel-head"><span><b>components/data-table.tsx</b> — generikus, típusos</span><span>shadcn/ui + Lucide</span></div>
+          <pre>{`<span class="tk">"use client"</span>;
+<span class="tk">import</span> { useMemo, useState } <span class="tk">from</span> <span class="ts">"react"</span>;
+<span class="tk">import</span> { ChevronUp } <span class="tk">from</span> <span class="ts">"lucide-react"</span>;
+<span class="tk">import</span> { cn } <span class="tk">from</span> <span class="ts">"@/lib/utils"</span>;
+
+<span class="tk">export type</span> <span class="tt">SortDir</span> = <span class="ts">"asc"</span> | <span class="ts">"desc"</span>;
+
+<span class="tk">export type</span> <span class="tt">ColumnDef</span>&lt;<span class="tt">T</span>&gt; = {
+  <span class="tp">key</span>: <span class="tk">string</span>;
+  <span class="tp">label</span>: <span class="tk">string</span>;
+  <span class="tp">numeric</span>?: <span class="tk">boolean</span>;
+  <span class="tp">center</span>?: <span class="tk">boolean</span>;
+  <span class="tp">sortable</span>?: <span class="tk">boolean</span>;                  <span class="tc">// default true</span>
+  <span class="tp">sortAccessor</span>?: (<span class="tp">row</span>: <span class="tt">T</span>) =&gt; <span class="tk">string</span> | <span class="tk">number</span>;
+  <span class="tp">width</span>?: <span class="tk">number</span>;
+  <span class="tp">render</span>?: (<span class="tp">row</span>: <span class="tt">T</span>, <span class="tp">idx</span>: <span class="tk">number</span>) =&gt; <span class="tt">React.ReactNode</span>;
+};
+
+<span class="tk">export function</span> <span class="tn">DataTable</span>&lt;<span class="tt">T</span>&gt;({
+  columns, rows, initialSort, activeRowId, getRowId, footer,
+}: {
+  <span class="tp">columns</span>: <span class="tt">ColumnDef</span>&lt;<span class="tt">T</span>&gt;[];
+  <span class="tp">rows</span>: <span class="tt">T</span>[];
+  <span class="tp">initialSort</span>?: { <span class="tp">key</span>: <span class="tk">string</span>; <span class="tp">dir</span>: <span class="tt">SortDir</span> };
+  <span class="tp">activeRowId</span>?: <span class="tk">string</span> | <span class="tk">number</span>;
+  <span class="tp">getRowId</span>?: (<span class="tp">row</span>: <span class="tt">T</span>) =&gt; <span class="tk">string</span> | <span class="tk">number</span>;
+  <span class="tp">footer</span>?: <span class="tt">React.ReactNode</span>;
+}) {
+  <span class="tk">const</span> [sort, setSort] = <span class="tn">useState</span>(initialSort ?? { key: <span class="tk">null</span>, dir: <span class="ts">"asc"</span> });
+
+  <span class="tk">const</span> sortedRows = <span class="tn">useMemo</span>(() =&gt; { <span class="tc">/* …same as JS demo… */</span> }, [rows, sort]);
+
+  <span class="tk">function</span> <span class="tn">toggleSort</span>(key: <span class="tk">string</span>) {
+    setSort(s =&gt; s.key !== key
+      ? { key, dir: <span class="ts">"desc"</span> }
+      : s.dir === <span class="ts">"desc"</span> ? { key, dir: <span class="ts">"asc"</span> } : { key: <span class="tk">null</span>, dir: <span class="ts">"asc"</span> });
+  }
+
+  <span class="tk">return</span> (
+    &lt;<span class="tt">div</span> <span class="tp">className</span>=<span class="ts">"dt-shell"</span>&gt;
+      &lt;<span class="tt">div</span> <span class="tp">className</span>=<span class="ts">"dt-scroll"</span>&gt;
+        &lt;<span class="tt">table</span> <span class="tp">className</span>=<span class="ts">"dt-table"</span>&gt;
+          &lt;<span class="tt">thead</span>&gt;&lt;<span class="tt">tr</span>&gt;
+            {columns.map(col =&gt; {
+              <span class="tk">const</span> sorted = sort.key === col.key ? sort.dir : <span class="tk">undefined</span>;
+              <span class="tk">return</span> (
+                &lt;<span class="tt">th</span>
+                  <span class="tp">key</span>={col.key}
+                  <span class="tp">className</span>=<span class="ts">"dt-th"</span>
+                  <span class="tp">data-num</span>={col.numeric || <span class="tk">undefined</span>}
+                  <span class="tp">data-center</span>={col.center || <span class="tk">undefined</span>}
+                  <span class="tp">data-sortable</span>={col.sortable !== <span class="tk">false</span> || <span class="tk">undefined</span>}
+                  <span class="tp">data-sorted</span>={sorted}
+                  <span class="tp">onClick</span>={() =&gt; col.sortable !== <span class="tk">false</span> && <span class="tn">toggleSort</span>(col.key)}
+                &gt;
+                  &lt;<span class="tt">span</span> <span class="tp">className</span>=<span class="ts">"dt-sort"</span>&gt;
+                    &lt;<span class="tt">span</span>&gt;{col.label}&lt;/<span class="tt">span</span>&gt;
+                    {col.sortable !== <span class="tk">false</span> && &lt;<span class="tt">ChevronUp</span> <span class="tp">className</span>=<span class="ts">"dt-sort-icon"</span> /&gt;}
+                  &lt;/<span class="tt">span</span>&gt;
+                &lt;/<span class="tt">th</span>&gt;
+              );
+            })}
+          &lt;/<span class="tt">tr</span>&gt;&lt;/<span class="tt">thead</span>&gt;
+          &lt;<span class="tt">tbody</span>&gt;
+            {sortedRows.map((row, idx) =&gt; {
+              <span class="tk">const</span> id = getRowId?.(row) ?? idx;
+              <span class="tk">const</span> isActive = activeRowId === id;
+              <span class="tk">return</span> (
+                &lt;<span class="tt">tr</span> <span class="tp">key</span>={id} <span class="tp">data-active</span>={isActive || <span class="tk">undefined</span>}&gt;
+                  {columns.map(col =&gt; (
+                    &lt;<span class="tt">td</span> <span class="tp">key</span>={col.key} <span class="tp">className</span>=<span class="ts">"dt-td"</span>&gt;
+                      {col.render ? col.render(row, idx) : (row <span class="tk">as any</span>)[col.key]}
+                    &lt;/<span class="tt">td</span>&gt;
+                  ))}
+                &lt;/<span class="tt">tr</span>&gt;
+              );
+            })}
+          &lt;/<span class="tt">tbody</span>&gt;
+        &lt;/<span class="tt">table</span>&gt;
+      &lt;/<span class="tt">div</span>&gt;
+      {footer && &lt;<span class="tt">div</span> <span class="tp">className</span>=<span class="ts">"dt-foot"</span>&gt;{footer}&lt;/<span class="tt">div</span>&gt;}
+    &lt;/<span class="tt">div</span>&gt;
+  );
+}`}</pre>
+        </div>
+
+        <div className="hr-cap"><span>HASZNÁLAT — PlayersList.tsx</span></div>
+        <div className="code-panel">
+          <div className="code-panel-head"><span><b>app/players/players-list.tsx</b> — meglévő logika érintetlen</span><span>diff: className only</span></div>
+          <pre>{`<span class="tk">const</span> playerCols: <span class="tt">ColumnDef</span>&lt;<span class="tt">Player</span>&gt;[] = [
+  { key: <span class="ts">"no"</span>,   label: <span class="ts">"#"</span>,        numeric: <span class="tk">true</span>, width: <span class="ts">56</span>,
+    render: r =&gt; &lt;<span class="tt">span</span> <span class="tp">className</span>=<span class="ts">"dt-num dt-num--muted"</span>&gt;{r.no}&lt;/<span class="tt">span</span>&gt; },
+
+  { key: <span class="ts">"name"</span>, label: <span class="ts">"Játékos"</span>,
+    sortAccessor: r =&gt; r.last + r.first,
+    render: r =&gt; (
+      &lt;<span class="tt">div</span> <span class="tp">className</span>=<span class="ts">"dt-player"</span>&gt;
+        &lt;<span class="tt">span</span> <span class="tp">className</span>=<span class="ts">"dt-player-avatar"</span>&gt;{initials(r)}&lt;/<span class="tt">span</span>&gt;
+        &lt;<span class="tt">span</span>&gt;
+          &lt;<span class="tt">Link</span> <span class="tp">href</span>={<span class="ts">\`/players/\${r.id}\`</span>} <span class="tp">className</span>=<span class="ts">"dt-player-name"</span>&gt;
+            {r.last} {r.first}
+          &lt;/<span class="tt">Link</span>&gt;
+          &lt;<span class="tt">span</span> <span class="tp">className</span>=<span class="ts">"dt-player-meta"</span>&gt;#{r.no} · {r.team}&lt;/<span class="tt">span</span>&gt;
+        &lt;/<span class="tt">span</span>&gt;
+      &lt;/<span class="tt">div</span>&gt;
+    )},
+
+  { key: <span class="ts">"pos"</span>,  label: <span class="ts">"Poz"</span>, center: <span class="tk">true</span>,
+    render: r =&gt; &lt;<span class="tt">PosBadge</span> <span class="tp">pos</span>={r.pos} /&gt; },
+
+  { key: <span class="ts">"pts"</span>,  label: <span class="ts">"Pont"</span>, numeric: <span class="tk">true</span>,
+    render: r =&gt; &lt;<span class="tt">span</span> <span class="tp">className</span>=<span class="ts">"dt-num dt-num--strong"</span>&gt;{r.pts.toFixed(<span class="ts">1</span>)}&lt;/<span class="tt">span</span>&gt; },
+
+  { key: <span class="ts">"fg"</span>,   label: <span class="ts">"FG%"</span>, numeric: <span class="tk">true</span>,
+    render: r =&gt; &lt;<span class="tt">ShootingBar</span> <span class="tp">pct</span>={r.fg} /&gt; },
+
+  { key: <span class="ts">"plusMinus"</span>, label: <span class="ts">"+/−"</span>, numeric: <span class="tk">true</span>,
+    render: r =&gt; &lt;<span class="tt">PlusMinus</span> <span class="tp">v</span>={r.plusMinus} /&gt; },
+];
+
+<span class="tk">export function</span> <span class="tn">PlayersList</span>({ players, activeId }: <span class="tt">Props</span>) {
+  <span class="tk">return</span> (
+    &lt;<span class="tt">DataTable</span>
+      <span class="tp">columns</span>={playerCols}
+      <span class="tp">rows</span>={players}
+      <span class="tp">initialSort</span>={{ key: <span class="ts">"pts"</span>, dir: <span class="ts">"desc"</span> }}
+      <span class="tp">activeRowId</span>={activeId}
+      <span class="tp">getRowId</span>={r =&gt; r.id}
+    /&gt;
+  );
+}`}</pre>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<Page />);
+</script>
+</body>
+</html>

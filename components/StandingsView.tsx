@@ -1,8 +1,8 @@
 'use client';
 import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
-import { Badge } from './ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { DataTable, type ColumnDef } from './ui/data-table';
 import { supabase } from '@/lib/supabase';
 import { Trophy, TrendingUp, TrendingDown } from 'lucide-react';
 
@@ -36,6 +36,105 @@ type StandingsViewProps = {
   selectedSeasonName?: string;
 };
 
+function positionBadgeClass(pos: number): string {
+  if (pos <= 8)  return 'dt-badge dt-badge--win';
+  if (pos <= 10) return 'dt-badge dt-badge--sf';
+  return 'dt-badge dt-badge--neutral';
+}
+
+function StreakCell({ streak }: { streak: string }) {
+  const isWin = streak.startsWith('GY');
+  const isLoss = streak.startsWith('V');
+  return (
+    <span className={`dt-trend ${isWin ? 'dt-trend--up' : isLoss ? 'dt-trend--down' : 'dt-trend--flat'}`}>
+      {isWin && <TrendingUp className="h-3.5 w-3.5" strokeWidth={2} />}
+      {isLoss && <TrendingDown className="h-3.5 w-3.5" strokeWidth={2} />}
+      {streak}
+    </span>
+  );
+}
+
+function DiffCell({ scored, conceded }: { scored: number; conceded: number }) {
+  const diff = scored - conceded;
+  const cls = diff > 0 ? 'dt-num--pos' : diff < 0 ? 'dt-num--neg' : 'dt-num--muted';
+  return (
+    <span className={`dt-num ${cls}`}>
+      {diff > 0 ? '+' : ''}{diff}
+    </span>
+  );
+}
+
+const STANDINGS_COLUMNS: ColumnDef<StandingRow>[] = [
+  {
+    key: 'position',
+    label: 'H.',
+    sortable: true,
+    width: 56,
+    center: true,
+    render: (r) => <span className={positionBadgeClass(r.position)}>{r.position}</span>,
+  },
+  {
+    key: 'team',
+    label: 'Csapat',
+    sortable: true,
+    render: (r) => <span className="font-medium text-primary">{r.team}</span>,
+  },
+  { key: 'matches', label: 'M',   numeric: true, sortable: true, width: 52 },
+  {
+    key: 'winPct',
+    label: '%',
+    numeric: true,
+    sortable: true,
+    width: 64,
+    render: (r) => <span data-stat>{(r.winPct * 100).toFixed(0)}%</span>,
+  },
+  {
+    key: 'points',
+    label: 'PT',
+    numeric: true,
+    sortable: true,
+    width: 56,
+    render: (r) => <span data-stat className="dt-num--strong">{r.points}</span>,
+  },
+  {
+    key: 'wins',
+    label: 'GY',
+    numeric: true,
+    sortable: true,
+    width: 56,
+    render: (r) => <span data-stat className="dt-num--pos">{r.wins}</span>,
+  },
+  {
+    key: 'losses',
+    label: 'V',
+    numeric: true,
+    sortable: true,
+    width: 56,
+    render: (r) => <span data-stat className="dt-num--neg">{r.losses}</span>,
+  },
+  { key: 'scored',   label: 'DOB', numeric: true, sortable: true, width: 64 },
+  { key: 'conceded', label: 'KAP', numeric: true, sortable: true, width: 64 },
+  {
+    key: 'diff',
+    label: '+/-',
+    numeric: true,
+    sortable: true,
+    sortAccessor: (r) => r.scored - r.conceded,
+    width: 64,
+    render: (r) => <DiffCell scored={r.scored} conceded={r.conceded} />,
+  },
+  {
+    key: 'streak',
+    label: 'SOR',
+    sortable: false,
+    width: 80,
+    render: (r) => <StreakCell streak={r.streak} />,
+  },
+  { key: 'home',  label: 'HA',   sortable: false, width: 72, render: (r) => <span className="text-secondary text-xs">{r.home}</span> },
+  { key: 'away',  label: 'VE',   sortable: false, width: 72, render: (r) => <span className="text-secondary text-xs">{r.away}</span> },
+  { key: 'last5', label: 'UT.5', sortable: false, width: 72, render: (r) => <span className="text-secondary text-xs">{r.last5}</span> },
+];
+
 export function StandingsView({ onRefresh, selectedSeasonId, selectedSeasonName }: StandingsViewProps) {
   const [standings, setStandings] = useState<StandingData[]>([]);
   const [selectedMatchday, setSelectedMatchday] = useState<string>('');
@@ -45,12 +144,8 @@ export function StandingsView({ onRefresh, selectedSeasonId, selectedSeasonName 
 
   const normalizeRows = (rows: StandingData[] | null | undefined): StandingData[] => {
     if (!Array.isArray(rows)) return [];
-
     return rows
-      .map(row => ({
-        ...row,
-        data: Array.isArray(row.data) ? row.data : [],
-      }))
+      .map(row => ({ ...row, data: Array.isArray(row.data) ? row.data : [] }))
       .filter(row => row.data.length > 0);
   };
 
@@ -68,7 +163,6 @@ export function StandingsView({ onRefresh, selectedSeasonId, selectedSeasonName 
           .select('*')
           .eq('season_id', selectedSeasonId)
           .order('matchday', { ascending: false });
-
         data = seasonQuery.data as StandingData[] | null;
         error = seasonQuery.error as Error | null;
       } else {
@@ -77,7 +171,6 @@ export function StandingsView({ onRefresh, selectedSeasonId, selectedSeasonName 
           .select('*')
           .order('date', { ascending: false })
           .order('matchday', { ascending: false });
-
         data = latestQuery.data as StandingData[] | null;
         error = latestQuery.error as Error | null;
       }
@@ -94,7 +187,6 @@ export function StandingsView({ onRefresh, selectedSeasonId, selectedSeasonName 
           .is('season_id', null)
           .order('date', { ascending: false })
           .order('matchday', { ascending: false });
-
         if (legacyError) throw legacyError;
         normalized = normalizeRows(legacyData as StandingData[] | null);
         fallbackUsed = normalized.length > 0;
@@ -102,7 +194,6 @@ export function StandingsView({ onRefresh, selectedSeasonId, selectedSeasonName 
 
       if (normalized.length > 0) {
         setStandings(normalized);
-        // Legfrissebb forduló kiválasztása
         const latest = normalized[0];
         setSelectedMatchday(latest.matchday.toString());
         setCurrentStanding(latest.data);
@@ -124,39 +215,20 @@ export function StandingsView({ onRefresh, selectedSeasonId, selectedSeasonName 
     }
   }, [selectedSeasonId]);
 
-  useEffect(() => {
-    loadStandings();
-  }, [loadStandings, onRefresh]);
+  useEffect(() => { loadStandings(); }, [loadStandings, onRefresh]);
 
   useEffect(() => {
     if (selectedMatchday) {
       const standing = standings.find(s => s.matchday.toString() === selectedMatchday);
-      if (standing) {
-        setCurrentStanding(standing.data);
-      }
+      if (standing) setCurrentStanding(standing.data);
     }
   }, [selectedMatchday, standings]);
-
-  const getStreakIcon = (streak: string) => {
-    if (streak.startsWith('GY')) {
-      return <TrendingUp className="h-4 w-4 text-green-600" />;
-    } else if (streak.startsWith('V')) {
-      return <TrendingDown className="h-4 w-4 text-red-600" />;
-    }
-    return null;
-  };
-
-  const getPositionColor = (position: number) => {
-    if (position <= 8) return 'bg-green-100 text-green-800 border-green-300';
-    if (position <= 10) return 'bg-yellow-100 text-yellow-800 border-yellow-300';
-    return 'bg-slate-100 text-slate-800 border-slate-300';
-  };
 
   if (isLoading) {
     return (
       <Card>
         <CardContent className="py-12">
-          <p className="text-center text-slate-500">Betöltés...</p>
+          <p className="text-center text-secondary">Betöltés...</p>
         </CardContent>
       </Card>
     );
@@ -166,8 +238,8 @@ export function StandingsView({ onRefresh, selectedSeasonId, selectedSeasonName 
     return (
       <Card>
         <CardContent className="py-12">
-          <p className="text-center text-slate-400">Nincs elérhető tabella adat.</p>
-          <p className="text-center text-slate-500 text-sm mt-2">
+          <p className="text-center text-secondary">Nincs elérhető tabella adat.</p>
+          <p className="text-center text-muted text-sm mt-2">
             {selectedSeasonId
               ? 'Importálj egy tabellát a kezdéshez.'
               : 'Válassz szezont, vagy importálj tabellát a Tabella fülön.'}
@@ -182,120 +254,44 @@ export function StandingsView({ onRefresh, selectedSeasonId, selectedSeasonName 
       <Card>
         <CardHeader>
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <CardTitle className="flex items-center gap-2">
-              <Trophy className="h-5 w-5" />
-              Bajnokság Tabella{selectedSeasonName ? ` - ${selectedSeasonName}` : ''}
+            <CardTitle className="flex items-center gap-2 font-display uppercase tracking-wide">
+              <Trophy className="h-5 w-5 text-cyan" strokeWidth={1.6} />
+              Bajnokság Tabella{selectedSeasonName ? ` – ${selectedSeasonName}` : ''}
             </CardTitle>
-            <div className="flex items-center gap-2">
-              <Select value={selectedMatchday} onValueChange={setSelectedMatchday}>
-                <SelectTrigger className="w-full sm:w-45 bg-slate-800 border-slate-700 text-slate-300">
-                  <SelectValue placeholder="Válassz fordulót" />
-                </SelectTrigger>
-                <SelectContent className="bg-slate-800 border-slate-700">
-                  {standings.map((s) => (
-                    <SelectItem key={s.id} value={s.matchday.toString()}>
-                      {s.matchday}. forduló ({new Date(s.date).toLocaleDateString('hu-HU')})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            <Select value={selectedMatchday} onValueChange={setSelectedMatchday}>
+              <SelectTrigger className="w-full sm:w-52">
+                <SelectValue placeholder="Válassz fordulót" />
+              </SelectTrigger>
+              <SelectContent>
+                {standings.map((s) => (
+                  <SelectItem key={s.id} value={s.matchday.toString()}>
+                    {s.matchday}. forduló ({new Date(s.date).toLocaleDateString('hu-HU')})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto -mx-4 sm:mx-0">
-            <div className="inline-block min-w-full align-middle">
-              <table className="w-full text-xs sm:text-sm">
-                <thead>
-                  <tr className="border-b-2 border-slate-300">
-                    <th className="text-left p-2 sm:p-3 font-semibold sticky left-0 bg-slate-900 z-10">H.</th>
-                    <th className="text-left p-2 sm:p-3 font-semibold sticky left-8 sm:left-12 bg-slate-900 z-10 min-w-37.5 sm:min-w-50">Csapat</th>
-                    <th className="text-center p-2 sm:p-3 font-semibold">M</th>
-                    <th className="text-center p-2 sm:p-3 font-semibold hidden sm:table-cell">%</th>
-                    <th className="text-center p-2 sm:p-3 font-semibold">PT</th>
-                    <th className="text-center p-2 sm:p-3 font-semibold">GY</th>
-                    <th className="text-center p-2 sm:p-3 font-semibold">V</th>
-                    <th className="text-center p-2 sm:p-3 font-semibold hidden md:table-cell">DOB</th>
-                    <th className="text-center p-2 sm:p-3 font-semibold hidden md:table-cell">KAP</th>
-                    <th className="text-center p-2 sm:p-3 font-semibold">+/-</th>
-                    <th className="text-center p-2 sm:p-3 font-semibold hidden lg:table-cell">SOR</th>
-                    <th className="text-center p-2 sm:p-3 font-semibold hidden lg:table-cell">HA</th>
-                    <th className="text-center p-2 sm:p-3 font-semibold hidden lg:table-cell">VE</th>
-                    <th className="text-center p-2 sm:p-3 font-semibold hidden xl:table-cell">UT.5</th>
-                  </tr>
-                </thead>
-              <tbody>
-                {currentStanding.map((row, idx) => {
-                  const diff = row.scored - row.conceded;
-                  return (
-                    <tr 
-                      key={idx} 
-                      className={`border-b hover:bg-slate-200 ${
-                        idx === 7 ? 'border-b-2 border-blue-300' : ''
-                      }`}
-                    >
-                      <td className="p-2 sm:p-3 sticky left-0 bg-slate-900 hover:bg-slate-200 z-10">
-                        <Badge 
-                          variant="outline" 
-                          className={`${getPositionColor(row.position)} font-bold text-[10px] sm:text-xs`}
-                        >
-                          {row.position}
-                        </Badge>
-                      </td>
-                      <td className="p-2 sm:p-3 font-medium hover:text-slate-900 sticky left-8 sm:left-12 bg-slate-900 hover:bg-slate-200 z-10 text-xs sm:text-sm">{row.team}</td>
-                      <td className="text-center p-2 sm:p-3 text-slate-600 hover:text-slate-900">{row.matches}</td>
-                      <td className="text-center p-2 sm:p-3 text-slate-600 hover:text-slate-900 hidden sm:table-cell">
-                        {(row.winPct * 100).toFixed(0)}%
-                      </td>
-                      <td className="text-center p-2 sm:p-3">
-                        <span className="font-bold text-base sm:text-lg hover:text-slate-900">{row.points}</span>
-                      </td>
-                      <td className="text-center p-2 sm:p-3">
-                        <span className="text-green-600 font-semibold">{row.wins}</span>
-                      </td>
-                      <td className="text-center p-2 sm:p-3">
-                        <span className="text-red-600 font-semibold">{row.losses}</span>
-                      </td>
-                      <td className="text-center p-2 sm:p-3 text-slate-600 hidden md:table-cell">{row.scored}</td>
-                      <td className="text-center p-2 sm:p-3 text-slate-600 hidden md:table-cell">{row.conceded}</td>
-                      <td className="text-center p-2 sm:p-3">
-                        <span 
-                          className={`font-semibold text-xs sm:text-sm ${
-                            diff > 0 ? 'text-green-600' : diff < 0 ? 'text-red-600' : 'text-slate-600'
-                          }`}
-                        >
-                          {diff > 0 ? '+' : ''}{diff}
-                        </span>
-                      </td>
-                      <td className="text-center p-2 sm:p-3 hidden lg:table-cell">
-                        <div className="flex items-center justify-center gap-1">
-                          {getStreakIcon(row.streak)}
-                          <span className="text-xs sm:text-sm font-medium">{row.streak}</span>
-                        </div>
-                      </td>
-                      <td className="text-center p-2 sm:p-3 text-xs sm:text-sm text-slate-600 hidden lg:table-cell">{row.home}</td>
-                      <td className="text-center p-2 sm:p-3 text-xs sm:text-sm text-slate-600 hidden lg:table-cell">{row.away}</td>
-                      <td className="text-center p-2 sm:p-3 text-xs sm:text-sm text-slate-600 hidden xl:table-cell">{row.last5}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-            </div>
-          </div>
+        <CardContent className="space-y-4">
+          <DataTable<StandingRow>
+            columns={STANDINGS_COLUMNS}
+            rows={currentStanding}
+            initialSort={{ key: 'position', dir: 'asc' }}
+            getRowId={(r) => r.position}
+          />
 
-          <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-4 text-xs sm:text-sm px-4 sm:px-0">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs px-1">
             <div className="flex items-center gap-2">
-              <div className="w-3 h-3 sm:w-4 sm:h-4 bg-green-100 border border-green-300 rounded shrink-0"></div>
-              <span className="text-slate-600">1-8. helyezettek (playoff)</span>
+              <span className="dt-badge dt-badge--win">8</span>
+              <span className="text-secondary">1–8. helyezett (playoff)</span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="w-3 h-3 sm:w-4 sm:h-4 bg-yellow-100 border border-yellow-300 rounded shrink-0"></div>
-              <span className="text-slate-600">9-10. helyezettek</span>
+              <span className="dt-badge dt-badge--sf">10</span>
+              <span className="text-secondary">9–10. helyezett</span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="w-3 h-3 sm:w-4 sm:h-4 bg-slate-100 border border-slate-300 rounded shrink-0"></div>
-              <span className="text-slate-600">11-14. helyezettek</span>
+              <span className="dt-badge dt-badge--neutral">14</span>
+              <span className="text-secondary">11–14. helyezett</span>
             </div>
           </div>
         </CardContent>
@@ -303,7 +299,7 @@ export function StandingsView({ onRefresh, selectedSeasonId, selectedSeasonName 
 
       {usedFallback && (
         <Card>
-          <CardContent className="py-3 text-sm text-amber-300">
+          <CardContent className="py-3 text-sm text-warning">
             A kiválasztott szezonhoz nem volt közvetlen tabella, ezért legacy (szezon nélküli) snapshot került betöltésre.
           </CardContent>
         </Card>

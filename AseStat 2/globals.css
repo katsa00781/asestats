@@ -1,0 +1,492 @@
+/* =============================================================
+   ASEStats — "Dark Command Center"
+   app/globals.css
+   Tailwind CSS 4 + shadcn/ui (New York) override layer
+   ============================================================= */
+
+@import "tailwindcss";
+@import "tw-animate-css";
+
+/* shadcn / Tailwind 4 — engedjük a class-alapú dark-ot ha kell,
+   de a platform kizárólag dark módban fut. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* -------------------------------------------------------------
+   1) NYERS DESIGN TOKENEK  (a Single Source of Truth)
+   ------------------------------------------------------------- */
+:root {
+  /* Surface skála — mélyfekete-kék alaptól a hover/nested elemekig */
+  --bg-base:        #050B14;
+  --bg-surface-1:   #0A1628;
+  --bg-surface-2:   #0F1F3D;
+  --bg-surface-3:   #162440;
+
+  /* Accentek */
+  --accent-cyan:    #00D4FF;
+  --accent-cyan-dim:#0096B8;
+  --accent-orange:  #FF6B35;
+  --accent-orange-dim:#B84A22;
+  --accent-ai:      #7C3AED;
+  --accent-ai-dim:  #5B21B6;
+
+  /* Tipográfia szín-skála */
+  --text-primary:   #E8F4FF;
+  --text-secondary: #5A7A99;
+  --text-muted:     #2D4A6B;
+
+  /* Szemantikus jelzések */
+  --positive:       #10D98A;
+  --negative:       #FF4757;
+  --warning:        #FFB627;
+
+  /* Vonalak / rács */
+  --border-subtle:  #0F2040;
+  --border-active:  #1E3A5F;
+  --border-strong:  #2A4A75;
+
+  /* Glow-k (rgba a box-shadow / drop-shadow használathoz) */
+  --glow-cyan:      rgba(0, 212, 255, 0.15);
+  --glow-cyan-hot:  rgba(0, 212, 255, 0.45);
+  --glow-orange:    rgba(255, 107, 53, 0.15);
+  --glow-orange-hot:rgba(255, 107, 53, 0.45);
+  --glow-ai:        rgba(124, 58, 237, 0.18);
+  --glow-positive:  rgba(16, 217, 138, 0.18);
+  --glow-negative:  rgba(255, 71, 87, 0.18);
+
+  /* Tipográfia változók — layout.tsx-ben Google Fonts-tal töltjük */
+  --font-display:   "Barlow Condensed", ui-sans-serif, system-ui, sans-serif;
+  --font-body:      "DM Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono:      "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+  /* Sűrűség */
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+  --radius-xl: 14px;
+
+  /* Easings — telemetria érzet */
+  --ease-snap:  cubic-bezier(.2, .8, .2, 1);
+  --ease-glide: cubic-bezier(.4, 0, .2, 1);
+}
+
+/* -------------------------------------------------------------
+   2) @theme — Tailwind 4 utility-k generálása a tokenekből
+      Innentől használható: bg-base, text-cyan, border-subtle, stb.
+   ------------------------------------------------------------- */
+@theme inline {
+  /* Színek — Tailwind class-ekké válnak: bg-base, text-cyan, border-subtle */
+  --color-base:         var(--bg-base);
+  --color-surface-1:    var(--bg-surface-1);
+  --color-surface-2:    var(--bg-surface-2);
+  --color-surface-3:    var(--bg-surface-3);
+
+  --color-cyan:         var(--accent-cyan);
+  --color-cyan-dim:     var(--accent-cyan-dim);
+  --color-orange:       var(--accent-orange);
+  --color-orange-dim:   var(--accent-orange-dim);
+  --color-ai:           var(--accent-ai);
+  --color-ai-dim:       var(--accent-ai-dim);
+
+  --color-primary:      var(--text-primary);
+  --color-secondary:    var(--text-secondary);
+  --color-muted:        var(--text-muted);
+
+  --color-positive:     var(--positive);
+  --color-negative:     var(--negative);
+  --color-warning:      var(--warning);
+
+  --color-border-subtle: var(--border-subtle);
+  --color-border-active: var(--border-active);
+  --color-border-strong: var(--border-strong);
+
+  /* Fontok */
+  --font-display: var(--font-display);
+  --font-sans:    var(--font-body);
+  --font-mono:    var(--font-mono);
+
+  /* Egyedi shadow / glow utility-k */
+  --shadow-glow-cyan:    0 0 20px var(--glow-cyan);
+  --shadow-glow-cyan-hot:0 0 32px var(--glow-cyan-hot);
+  --shadow-glow-orange:  0 0 20px var(--glow-orange);
+  --shadow-glow-orange-hot:0 0 32px var(--glow-orange-hot);
+  --shadow-glow-ai:      0 0 24px var(--glow-ai);
+  --shadow-glow-positive:0 0 20px var(--glow-positive);
+  --shadow-glow-negative:0 0 20px var(--glow-negative);
+  --shadow-panel:        0 1px 0 0 rgba(255,255,255,.03) inset,
+                          0 24px 60px -28px rgba(0,0,0,.8);
+
+  /* Animation keyframes — Tailwind 4 ezekből generál animate-* utility-t */
+  --animate-count-up:     count-up 1.2s var(--ease-snap) both;
+  --animate-fade-slide-up:fade-slide-up 400ms var(--ease-snap) both;
+  --animate-pulse-glow:   pulse-glow 1.8s ease-in-out infinite;
+  --animate-shimmer:      shimmer 1.6s linear infinite;
+  --animate-scan:         scan 3s linear infinite;
+  --animate-blink:        blink 1.1s steps(2, end) infinite;
+}
+
+/* -------------------------------------------------------------
+   3) BASE — globális reset + rács háttér
+   ------------------------------------------------------------- */
+@layer base {
+  * {
+    border-color: var(--border-subtle);
+  }
+  html, body {
+    background: var(--bg-base);
+    color: var(--text-primary);
+    font-family: var(--font-body);
+    font-feature-settings: "ss01", "cv11";
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  body {
+    /* Pont-rács háttér — alig látható telemetria érzet */
+    background-image:
+      radial-gradient(circle at 1px 1px, rgba(0, 212, 255, 0.045) 1px, transparent 0),
+      radial-gradient(1200px 600px at 20% -10%, rgba(0,212,255,.05), transparent 60%),
+      radial-gradient(900px 500px at 95% 110%, rgba(255,107,53,.04), transparent 60%);
+    background-size: 24px 24px, 100% 100%, 100% 100%;
+    background-attachment: fixed;
+  }
+
+  /* Fejléc hierarchia — Barlow Condensed, sportos */
+  h1, h2, h3, h4 {
+    font-family: var(--font-display);
+    letter-spacing: -0.01em;
+    color: var(--text-primary);
+  }
+  h1 { font-weight: 600; font-size: clamp(2rem, 4vw, 3rem); line-height: 1; }
+  h2 { font-weight: 600; font-size: 1.75rem; line-height: 1.05; }
+  h3 { font-weight: 600; font-size: 1.25rem; line-height: 1.1; }
+
+  /* Stat / metrika számok — JetBrains Mono, tabular-nums kötelező */
+  .stat, [data-stat] {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum", "zero";
+    letter-spacing: -0.02em;
+  }
+
+  /* Label / badge — Barlow SemiBold, ALL CAPS, wide tracking */
+  .label, [data-label], .uppercase-label {
+    font-family: var(--font-display);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+  }
+
+  /* Selection */
+  ::selection {
+    background: var(--accent-cyan);
+    color: var(--bg-base);
+  }
+
+  /* Scrollbar — vékony, "rack" jellegű */
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: var(--bg-surface-1); }
+  ::-webkit-scrollbar-thumb {
+    background: var(--border-active);
+    border-radius: 2px;
+  }
+  ::-webkit-scrollbar-thumb:hover { background: var(--accent-cyan-dim); }
+}
+
+/* -------------------------------------------------------------
+   4) SHADCN/UI OVERRIDE-OK
+   Az alapértelmezett shadcn változókat átírjuk a sajátunkra,
+   így a Button / Card / Badge / Input / Select / Tabs azonnal
+   a Dark Command Center palettát kapja.
+   ------------------------------------------------------------- */
+:root {
+  --background:        var(--bg-base);
+  --foreground:        var(--text-primary);
+
+  --card:              var(--bg-surface-1);
+  --card-foreground:   var(--text-primary);
+
+  --popover:           var(--bg-surface-2);
+  --popover-foreground:var(--text-primary);
+
+  --primary:           var(--accent-cyan);
+  --primary-foreground:var(--bg-base);
+
+  --secondary:         var(--bg-surface-2);
+  --secondary-foreground: var(--text-primary);
+
+  --muted:             var(--bg-surface-2);
+  --muted-foreground:  var(--text-secondary);
+
+  --accent:            var(--bg-surface-3);
+  --accent-foreground: var(--text-primary);
+
+  --destructive:       var(--negative);
+  --destructive-foreground: var(--text-primary);
+
+  --border:            var(--border-subtle);
+  --input:             var(--bg-surface-2);
+  --ring:              var(--accent-cyan);
+
+  --chart-1: var(--accent-cyan);
+  --chart-2: var(--accent-orange);
+  --chart-3: var(--positive);
+  --chart-4: var(--accent-ai);
+  --chart-5: var(--warning);
+
+  --radius: var(--radius-md);
+}
+
+/* shadcn Card — kifejezett override a kérés alapján */
+[data-slot="card"],
+.shadcn-card {
+  background: var(--bg-surface-1);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  transition: background 200ms var(--ease-snap),
+              border-color 200ms var(--ease-snap),
+              box-shadow 200ms var(--ease-snap);
+}
+[data-slot="card"]:hover,
+.shadcn-card:hover {
+  background: var(--bg-surface-2);
+  border-color: var(--border-active);
+}
+
+/* shadcn Button — primary / secondary / ghost állapotok */
+[data-slot="button"][data-variant="default"],
+.btn-primary {
+  background: var(--accent-cyan);
+  color: var(--bg-base);
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  transition: all 160ms var(--ease-snap);
+}
+[data-slot="button"][data-variant="default"]:hover,
+.btn-primary:hover {
+  box-shadow: 0 0 24px var(--glow-cyan-hot);
+  filter: brightness(1.08);
+}
+
+[data-slot="button"][data-variant="secondary"],
+.btn-secondary {
+  background: var(--bg-surface-2);
+  color: var(--text-primary);
+  border: 1px solid var(--border-active);
+}
+[data-slot="button"][data-variant="secondary"]:hover,
+.btn-secondary:hover {
+  background: var(--bg-surface-3);
+  border-color: var(--accent-cyan-dim);
+}
+
+[data-slot="button"][data-variant="ghost"],
+.btn-ghost {
+  background: transparent;
+  color: var(--text-secondary);
+}
+[data-slot="button"][data-variant="ghost"]:hover,
+.btn-ghost:hover {
+  background: var(--bg-surface-2);
+  color: var(--text-primary);
+}
+
+/* shadcn Badge — szemantikus változatok */
+[data-slot="badge"],
+.badge {
+  font-family: var(--font-display);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 0.7rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: var(--radius-xs);
+  display: inline-flex; align-items: center; gap: 0.35rem;
+  border: 1px solid transparent;
+}
+.badge-cyan    { background: color-mix(in oklab, var(--accent-cyan) 14%, transparent); color: var(--accent-cyan); border-color: color-mix(in oklab, var(--accent-cyan) 30%, transparent); }
+.badge-orange  { background: color-mix(in oklab, var(--accent-orange) 14%, transparent); color: var(--accent-orange); border-color: color-mix(in oklab, var(--accent-orange) 30%, transparent); }
+.badge-ai      { background: color-mix(in oklab, var(--accent-ai) 16%, transparent); color: #C4B5FD; border-color: color-mix(in oklab, var(--accent-ai) 40%, transparent); }
+.badge-positive{ background: color-mix(in oklab, var(--positive) 14%, transparent); color: var(--positive); border-color: color-mix(in oklab, var(--positive) 30%, transparent); }
+.badge-negative{ background: color-mix(in oklab, var(--negative) 14%, transparent); color: var(--negative); border-color: color-mix(in oklab, var(--negative) 30%, transparent); }
+.badge-warning { background: color-mix(in oklab, var(--warning) 14%, transparent); color: var(--warning); border-color: color-mix(in oklab, var(--warning) 30%, transparent); }
+.badge-neutral { background: var(--bg-surface-2); color: var(--text-secondary); border-color: var(--border-active); }
+
+/* shadcn Input + Select — terminal-jellegű mezők */
+[data-slot="input"], [data-slot="select-trigger"],
+.cmd-input {
+  background: var(--bg-surface-1);
+  border: 1px solid var(--border-active);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  border-radius: var(--radius-sm);
+  padding: 0.55rem 0.75rem;
+  transition: border-color 160ms var(--ease-snap),
+              box-shadow 160ms var(--ease-snap),
+              background 160ms var(--ease-snap);
+}
+[data-slot="input"]:focus, [data-slot="select-trigger"]:focus,
+.cmd-input:focus {
+  outline: none;
+  border-color: var(--accent-cyan);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent-cyan) 18%, transparent);
+}
+[data-slot="input"]::placeholder, .cmd-input::placeholder {
+  color: var(--text-muted);
+}
+
+/* shadcn Tabs — szegmentált, alá-világító indikátorral */
+[data-slot="tabs-list"], .cmd-tabs {
+  display: inline-flex;
+  background: var(--bg-surface-1);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 4px;
+  gap: 2px;
+}
+[data-slot="tabs-trigger"], .cmd-tab {
+  font-family: var(--font-display);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  padding: 0.45rem 0.9rem;
+  border-radius: var(--radius-sm);
+  transition: all 160ms var(--ease-snap);
+}
+[data-slot="tabs-trigger"][data-state="active"],
+.cmd-tab[data-active="true"] {
+  background: var(--bg-surface-3);
+  color: var(--accent-cyan);
+  box-shadow: inset 0 -2px 0 0 var(--accent-cyan), 0 0 16px var(--glow-cyan);
+}
+
+/* -------------------------------------------------------------
+   5) ANIMÁCIÓK
+   ------------------------------------------------------------- */
+@keyframes count-up {
+  0%   { opacity: 0; transform: translateY(8px); filter: blur(4px); }
+  60%  { opacity: 1; filter: blur(0); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+@keyframes fade-slide-up {
+  0%   { opacity: 0; transform: translateY(12px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 0 0 var(--glow-cyan), 0 0 16px 0 var(--glow-cyan); }
+  50%      { box-shadow: 0 0 0 6px transparent,    0 0 32px 4px var(--glow-cyan-hot); }
+}
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
+}
+@keyframes scan {
+  0%   { transform: translateY(-100%); opacity: 0; }
+  10%  { opacity: 1; }
+  90%  { opacity: 1; }
+  100% { transform: translateY(100%); opacity: 0; }
+}
+@keyframes blink {
+  0%, 49%   { opacity: 1; }
+  50%, 100% { opacity: 0.25; }
+}
+
+/* Utility osztályok */
+.animate-count-up      { animation: count-up 1.2s var(--ease-snap) both; }
+.animate-fade-slide-up { animation: fade-slide-up 400ms var(--ease-snap) both; }
+.animate-pulse-glow    { animation: pulse-glow 1.8s ease-in-out infinite; }
+.animate-blink         { animation: blink 1.1s steps(2, end) infinite; }
+.animate-scan          { animation: scan 3s linear infinite; }
+
+/* Stagger segéd — gyermekek 60ms-enként */
+.stagger > *           { animation-delay: calc(var(--i, 0) * 60ms); }
+
+/* Skeleton shimmer — bg-surface-1 → bg-surface-2 közötti csíkkal */
+.skeleton-shimmer {
+  position: relative;
+  overflow: hidden;
+  background: var(--bg-surface-1);
+  border-radius: var(--radius-sm);
+}
+.skeleton-shimmer::after {
+  content: "";
+  position: absolute; inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--bg-surface-2) 50%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.6s linear infinite;
+}
+
+/* -------------------------------------------------------------
+   6) CUSTOM UTILITY OSZTÁLYOK
+   ------------------------------------------------------------- */
+
+/* Telemetria rács overlay — bárhova rátehető */
+.grid-overlay {
+  background-image:
+    linear-gradient(to right, var(--border-subtle) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--border-subtle) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+.dot-overlay {
+  background-image: radial-gradient(circle at 1px 1px, var(--border-active) 1px, transparent 0);
+  background-size: 16px 16px;
+}
+
+/* Glow utility-k */
+.shadow-glow-cyan      { box-shadow: 0 0 20px var(--glow-cyan); }
+.shadow-glow-cyan-hot  { box-shadow: 0 0 32px var(--glow-cyan-hot); }
+.shadow-glow-orange    { box-shadow: 0 0 20px var(--glow-orange); }
+.shadow-glow-orange-hot{ box-shadow: 0 0 32px var(--glow-orange-hot); }
+.shadow-glow-ai        { box-shadow: 0 0 24px var(--glow-ai); }
+.shadow-panel          { box-shadow: 0 1px 0 0 rgba(255,255,255,.03) inset, 0 24px 60px -28px rgba(0,0,0,.8); }
+
+/* AI-jelölés — bal oldali halvány lila gradient sáv */
+.ai-marker {
+  position: relative;
+}
+.ai-marker::before {
+  content: "";
+  position: absolute; left: 0; top: 10%; bottom: 10%;
+  width: 2px;
+  background: linear-gradient(to bottom, transparent, var(--accent-ai), transparent);
+  box-shadow: 0 0 12px var(--glow-ai);
+}
+
+/* "LIVE" pont */
+.live-dot {
+  width: 8px; height: 8px; border-radius: 999px;
+  background: var(--negative);
+  box-shadow: 0 0 0 0 var(--negative);
+  animation: pulse-glow 1.6s ease-in-out infinite;
+}
+
+/* Mini bar / sparkline rácsok */
+.bar-track {
+  position: relative;
+  height: 6px;
+  background: var(--bg-surface-3);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.bar-fill {
+  position: absolute; inset: 0 auto 0 0;
+  background: linear-gradient(90deg, var(--accent-cyan-dim), var(--accent-cyan));
+  box-shadow: 0 0 12px var(--glow-cyan);
+  border-radius: 999px;
+}
+
+/* Divider — finom horizontális */
+.hairline {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--border-active), transparent);
+}

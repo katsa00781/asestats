@@ -1,8 +1,10 @@
+// app/layout.tsx
+// Google Fonts betöltés — Barlow Condensed / DM Sans / JetBrains Mono
+// Mindhárom font CSS változón keresztül kapcsolódik a globals.css-be.
+
 import type { Metadata } from "next";
 import { Barlow_Condensed, DM_Sans, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
-import { AuthProvider } from "@/lib/auth-context";
-import { Toaster } from "sonner";
 
 const display = Barlow_Condensed({
   subsets: ["latin", "latin-ext"],
@@ -27,7 +29,8 @@ const mono = JetBrains_Mono({
 
 export const metadata: Metadata = {
   title: "ASEStats — Command Center",
-  description: "Az ASE kosárlabdacsapat belső statisztikai és elemzési platformja",
+  description: "Magyar kosárlabda analitikai platform",
+  themeColor: "#050B14",
 };
 
 export default function RootLayout({
@@ -38,10 +41,7 @@ export default function RootLayout({
       <body
         className={`${display.variable} ${body.variable} ${mono.variable} font-sans bg-base text-primary antialiased`}
       >
-        <AuthProvider>
-          {children}
-          <Toaster />
-        </AuthProvider>
+        {children}
       </body>
     </html>
   );

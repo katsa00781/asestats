@@ -33,7 +33,7 @@ import { useFilterData } from '@/hooks/useFilterData';
 import { useGameData } from '@/hooks/useGameData';
 export type { ShootingStats, PlayerStats, GamePerformance, GamePlayer, TeamGame, GameAggregate, UpcomingFixture } from '@/lib/dashboard-types';
 
-const TAB_TRIGGER_CLASS = 'text-xs sm:text-sm flex-shrink-0 md:flex-1 min-w-[7rem] px-3 py-2 whitespace-nowrap';
+const TAB_TRIGGER_CLASS = 'flex-shrink-0 md:flex-1 min-w-[7rem] whitespace-nowrap';
 
 type MobileGroup = 'stats' | 'games' | 'admin';
 
@@ -108,8 +108,8 @@ export default function Home() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-950 dark flex items-center justify-center">
-        <div className="text-white text-xl">Betöltés...</div>
+      <div className="min-h-screen bg-base dark flex items-center justify-center">
+        <div className="text-primary text-xl font-display tracking-wider uppercase">Betöltés...</div>
       </div>
     );
   }
@@ -119,12 +119,12 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 dark">
-      <header className="bg-slate-900 text-white py-4 sm:py-6 shadow-lg">
+    <div className="min-h-screen bg-base dark">
+      <header className="bg-surface-1 border-b border-border-subtle py-4 sm:py-6 shadow-panel">
         <div className="container mx-auto px-4">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <h1 className="text-center md:text-left text-2xl sm:text-3xl md:text-4xl font-bold flex items-center gap-2 sm:gap-3">
-              <Trophy className="h-6 w-6 sm:h-8 sm:w-8 md:h-10 md:w-10" />
+            <h1 className="text-center md:text-left text-2xl sm:text-3xl md:text-4xl font-display font-semibold tracking-tight flex items-center gap-2 sm:gap-3">
+              <Trophy className="h-6 w-6 sm:h-8 sm:w-8 md:h-10 md:w-10 text-cyan" strokeWidth={1.5} />
               ASE Statisztika Kezelő
             </h1>
             <Button
@@ -144,14 +144,14 @@ export default function Home() {
         <div className="mb-6 space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="w-full">
-              <label className="text-sm text-slate-400 mb-2 block">Szezon</label>
+              <label className="uppercase-label mb-2 block">Szezon</label>
               <SeasonSelector
                 selectedSeasonId={selectedSeasonId}
                 onSeasonChange={setSelectedSeasonId}
               />
             </div>
             <div className="w-full">
-              <label className="text-sm text-slate-400 mb-2 block">Csapat</label>
+              <label className="uppercase-label mb-2 block">Csapat</label>
               <TeamSelector
                 selectedTeamId={selectedTeamId}
                 onTeamChange={setSelectedTeamId}
@@ -161,27 +161,27 @@ export default function Home() {
         </div>
 
         {filterError && (
-          <div className="mb-4 flex items-center gap-3 rounded-lg border border-red-500/40 bg-red-900/20 px-4 py-3 text-sm text-red-300">
-            <AlertCircle className="h-4 w-4 shrink-0" />
-            <span>{filterError}</span>
-            <button onClick={() => window.location.reload()} className="ml-auto flex items-center gap-1 text-xs text-red-400 hover:text-red-200">
+          <div className="mb-4 flex items-center gap-3 rounded-lg border border-border-subtle bg-surface-1 px-4 py-3 text-sm">
+            <AlertCircle className="h-4 w-4 shrink-0 text-negative" />
+            <span className="text-negative">{filterError}</span>
+            <button onClick={() => window.location.reload()} className="ml-auto flex items-center gap-1 text-xs text-secondary hover:text-primary">
               <RefreshCw className="h-3 w-3" />
               Újratöltés
             </button>
           </div>
         )}
         {dataError && (
-          <div className="mb-4 flex items-center gap-3 rounded-lg border border-red-500/40 bg-red-900/20 px-4 py-3 text-sm text-red-300">
-            <AlertCircle className="h-4 w-4 shrink-0" />
-            <span>{dataError}</span>
-            <button onClick={loadData} className="ml-auto flex items-center gap-1 text-xs text-red-400 hover:text-red-200">
+          <div className="mb-4 flex items-center gap-3 rounded-lg border border-border-subtle bg-surface-1 px-4 py-3 text-sm">
+            <AlertCircle className="h-4 w-4 shrink-0 text-negative" />
+            <span className="text-negative">{dataError}</span>
+            <button onClick={loadData} className="ml-auto flex items-center gap-1 text-xs text-secondary hover:text-primary">
               <RefreshCw className="h-3 w-3" />
               Újrapróbálás
             </button>
           </div>
         )}
         {(filterLoading || dataLoading) && (
-          <div className="mb-4 flex items-center gap-2 text-sm text-slate-400">
+          <div className="mb-4 flex items-center gap-2 text-sm text-secondary">
             <Loader2 className="h-4 w-4 animate-spin" />
             Adatok betöltése...
           </div>
@@ -196,10 +196,10 @@ export default function Home() {
                   key={group.key}
                   onClick={() => setMobileGroup(group.key)}
                   className={cn(
-                    'flex-1 px-3 py-1.5 rounded text-xs font-semibold transition-colors border',
+                    'flex-1 px-3 py-1.5 rounded-sm font-display font-semibold text-[0.7rem] uppercase tracking-widest transition-all border',
                     mobileGroup === group.key
-                      ? 'bg-slate-700 border-slate-600 text-slate-50'
-                      : 'bg-transparent border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700'
+                      ? 'bg-surface-3 border-border-active text-cyan shadow-glow-cyan'
+                      : 'bg-transparent border-border-subtle text-secondary hover:text-primary hover:border-border-active'
                   )}
                 >
                   {group.label}
@@ -218,7 +218,7 @@ export default function Home() {
                 <TabsTrigger value="updates" className={cn(TAB_TRIGGER_CLASS, !isMobileVisible('updates') && 'hidden md:flex')}>Frissítések</TabsTrigger>
                 {isAdmin && <TabsTrigger value="manage" className={cn(TAB_TRIGGER_CLASS, !isMobileVisible('manage') && 'hidden md:flex')}>Kezelés</TabsTrigger>}
                 {isAdmin && <TabsTrigger value="playersimport" className={cn(TAB_TRIGGER_CLASS, !isMobileVisible('playersimport') && 'hidden md:flex')}>Játékos Import</TabsTrigger>}
-                {isAdmin && <TabsTrigger value="delete" className={cn(TAB_TRIGGER_CLASS, 'text-red-400', !isMobileVisible('delete') && 'hidden md:flex')}>Törlés</TabsTrigger>}
+                {isAdmin && <TabsTrigger value="delete" className={cn(TAB_TRIGGER_CLASS, 'text-negative', !isMobileVisible('delete') && 'hidden md:flex')}>Törlés</TabsTrigger>}
                 {isAdmin && <TabsTrigger value="import" className={cn(TAB_TRIGGER_CLASS, !isMobileVisible('import') && 'hidden md:flex')}>Import</TabsTrigger>}
               </TabsList>
             </div>
@@ -238,8 +238,9 @@ export default function Home() {
                 <div className="flex justify-end">
                   <Button
                     onClick={() => setShowTeamComparison(true)}
+                    variant="secondary"
                     size="sm"
-                    className="gap-2 bg-slate-700 hover:bg-slate-600 text-slate-100 border border-slate-600"
+                    className="gap-2"
                   >
                     Csapatok összehasonlítása
                   </Button>

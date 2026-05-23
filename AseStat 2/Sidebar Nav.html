@@ -1,0 +1,888 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ASEStats — Sidebar Navigation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg-base: #050B14;
+  --bg-surface-1: #0A1628;
+  --bg-surface-2: #0F1F3D;
+  --bg-surface-3: #162440;
+
+  --accent-cyan: #00D4FF;
+  --accent-cyan-dim: #0096B8;
+  --accent-orange: #FF6B35;
+  --accent-ai: #7C3AED;
+
+  --text-primary: #E8F4FF;
+  --text-secondary: #5A7A99;
+  --text-muted: #2D4A6B;
+
+  --positive: #10D98A;
+  --negative: #FF4757;
+  --warning: #FFB627;
+
+  --border-subtle: #0F2040;
+  --border-active: #1E3A5F;
+  --border-strong: #2A4A75;
+
+  --glow-cyan: rgba(0, 212, 255, 0.15);
+  --glow-cyan-hot: rgba(0, 212, 255, 0.45);
+  --glow-ai: rgba(124, 58, 237, 0.18);
+
+  --font-display: "Barlow Condensed", system-ui, sans-serif;
+  --font-body: "DM Sans", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+
+  --ease-glide: cubic-bezier(.4, 0, .2, 1);
+  --ease-snap: cubic-bezier(.2, .8, .2, 1);
+
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+
+  /* Sidebar metrikák */
+  --sb-w-expanded: 240px;
+  --sb-w-collapsed: 64px;
+  --sb-w: var(--sb-w-expanded);
+  --sb-transition: 220ms cubic-bezier(.4, 0, .2, 1);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+body {
+  background-image:
+    radial-gradient(circle at 1px 1px, rgba(0,212,255,0.045) 1px, transparent 0),
+    radial-gradient(1200px 600px at 20% -10%, rgba(0,212,255,.05), transparent 60%),
+    radial-gradient(900px 500px at 95% 110%, rgba(255,107,53,.04), transparent 60%);
+  background-size: 24px 24px, 100% 100%, 100% 100%;
+  background-attachment: fixed;
+}
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: var(--bg-surface-1); }
+::-webkit-scrollbar-thumb { background: var(--border-active); border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: var(--accent-cyan-dim); }
+
+/* =====================================================
+   LAYOUT SHELL
+   ===================================================== */
+.app-shell {
+  display: grid;
+  grid-template-columns: var(--sb-w) 1fr;
+  min-height: 100vh;
+  transition: grid-template-columns var(--sb-transition);
+}
+
+/* =====================================================
+   SIDEBAR
+   ===================================================== */
+.sidebar {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  width: var(--sb-w);
+  background: var(--bg-surface-1);
+  border-right: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  transition: width var(--sb-transition);
+  z-index: 40;
+}
+
+/* --- HEADER --- */
+.sb-header {
+  height: 64px;
+  display: flex;
+  align-items: center;
+  padding: 0 18px;
+  gap: 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  position: relative;
+  overflow: hidden;
+}
+.sb-logo {
+  width: 28px; height: 28px;
+  flex: 0 0 28px;
+  border-radius: var(--radius-sm);
+  background:
+    radial-gradient(circle at 30% 30%, rgba(0,212,255,.22), transparent 60%),
+    var(--bg-surface-3);
+  border: 1px solid var(--border-active);
+  display: grid; place-items: center;
+  position: relative;
+}
+.sb-logo svg { width: 18px; height: 18px; color: var(--accent-cyan); filter: drop-shadow(0 0 6px var(--glow-cyan-hot)); }
+
+.sb-brand {
+  display: flex; flex-direction: column;
+  line-height: 1;
+  white-space: nowrap;
+  opacity: 1;
+  transition: opacity 160ms var(--ease-glide);
+}
+.sb-brand .wordmark {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  font-size: 1.05rem;
+  color: var(--text-primary);
+}
+.sb-brand .sub {
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.18em;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  margin-top: 4px;
+}
+
+/* --- TOGGLE — chevron a sidebar jobb szélén, közepén --- */
+.sb-toggle {
+  position: absolute;
+  top: 50%;
+  right: -14px;
+  transform: translateY(-50%);
+  width: 28px; height: 28px;
+  border-radius: 999px;
+  background: var(--bg-surface-2);
+  border: 1px solid var(--border-active);
+  color: var(--text-secondary);
+  display: grid; place-items: center;
+  cursor: pointer;
+  z-index: 50;
+  transition: all 160ms var(--ease-snap);
+}
+.sb-toggle:hover {
+  color: var(--accent-cyan);
+  border-color: var(--accent-cyan-dim);
+  box-shadow: 0 0 16px var(--glow-cyan);
+}
+.sb-toggle svg {
+  width: 14px; height: 14px;
+  transition: transform var(--sb-transition);
+}
+.sidebar[data-collapsed="true"] .sb-toggle svg { transform: rotate(180deg); }
+
+/* --- NAV --- */
+.sb-nav {
+  flex: 1;
+  padding: 14px 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  display: flex; flex-direction: column;
+  gap: 18px;
+}
+
+.sb-group { display: flex; flex-direction: column; gap: 2px; padding: 0 12px; }
+.sb-group-label {
+  font-family: var(--font-display);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  padding: 4px 10px 8px;
+  white-space: nowrap;
+  transition: opacity 120ms var(--ease-glide);
+}
+
+/* --- NAV ITEM --- */
+.nav-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 38px;
+  padding: 0 10px;
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  background: transparent;
+  border: 0;
+  text-decoration: none;
+  cursor: pointer;
+  font-family: var(--font-body);
+  font-size: 0.875rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  transition:
+    background 150ms var(--ease-glide),
+    color 150ms var(--ease-glide);
+}
+.nav-item:hover {
+  background: var(--bg-surface-2);
+  color: var(--text-primary);
+}
+.nav-item .ico {
+  width: 20px; height: 20px;
+  flex: 0 0 20px;
+  display: grid; place-items: center;
+  color: inherit;
+  transition: filter 200ms var(--ease-glide);
+}
+.nav-item .ico svg { width: 18px; height: 18px; stroke-width: 1.6; }
+.nav-item .label {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 1;
+  transition: opacity 120ms var(--ease-glide);
+}
+.nav-item .meta {
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+  padding: 2px 5px;
+  border: 1px solid var(--border-active);
+  border-radius: var(--radius-xs);
+}
+
+/* aktív állapot */
+.nav-item.active {
+  background: var(--bg-surface-1);
+  color: var(--text-primary);
+  box-shadow: inset 3px 0 0 0 var(--accent-cyan);
+}
+.nav-item.active .ico { color: var(--accent-cyan); }
+
+/* AI csoport — lila accent az aktív állapotnál */
+.sb-group[data-tone="ai"] .nav-item.active {
+  box-shadow: inset 3px 0 0 0 var(--accent-ai);
+}
+.sb-group[data-tone="ai"] .nav-item.active .ico {
+  color: #C4B5FD;
+  filter: drop-shadow(0 0 10px var(--glow-ai));
+}
+
+/* COLLAPSED MÓD ============================================ */
+.sidebar[data-collapsed="true"] {
+  --sb-w: var(--sb-w-collapsed);
+}
+.app-shell.is-collapsed {
+  grid-template-columns: var(--sb-w-collapsed) 1fr;
+}
+.sidebar[data-collapsed="true"] .sb-brand,
+.sidebar[data-collapsed="true"] .sb-group-label,
+.sidebar[data-collapsed="true"] .nav-item .label,
+.sidebar[data-collapsed="true"] .nav-item .meta {
+  opacity: 0;
+  pointer-events: none;
+}
+.sidebar[data-collapsed="true"] .sb-header { padding: 0; justify-content: center; }
+.sidebar[data-collapsed="true"] .sb-group { padding: 0 10px; }
+.sidebar[data-collapsed="true"] .sb-group-label { height: 0; padding: 0; overflow: hidden; }
+.sidebar[data-collapsed="true"] .nav-item {
+  justify-content: center;
+  padding: 0;
+  width: 44px;
+  margin: 0 auto;
+}
+/* collapsed + active: cián glow az ikonon */
+.sidebar[data-collapsed="true"] .nav-item.active {
+  box-shadow: none;
+  background: var(--bg-surface-2);
+  border: 1px solid color-mix(in oklab, var(--accent-cyan) 35%, transparent);
+}
+.sidebar[data-collapsed="true"] .nav-item.active .ico {
+  filter: drop-shadow(0 0 10px var(--glow-cyan-hot));
+}
+.sidebar[data-collapsed="true"] .sb-group[data-tone="ai"] .nav-item.active {
+  border-color: color-mix(in oklab, var(--accent-ai) 45%, transparent);
+}
+.sidebar[data-collapsed="true"] .sb-group[data-tone="ai"] .nav-item.active .ico {
+  filter: drop-shadow(0 0 12px var(--glow-ai));
+}
+
+/* TOOLTIP — csak collapsed módban */
+.nav-item .tip {
+  position: absolute;
+  left: calc(100% + 14px);
+  top: 50%;
+  transform: translateY(-50%) translateX(-6px);
+  background: var(--bg-surface-3);
+  border: 1px solid var(--border-active);
+  color: var(--text-primary);
+  font-size: 0.78rem;
+  font-family: var(--font-body);
+  font-weight: 500;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 120ms var(--ease-glide), transform 120ms var(--ease-glide);
+  z-index: 60;
+  box-shadow: 0 8px 24px rgba(0,0,0,.5);
+}
+.nav-item .tip::before {
+  content: "";
+  position: absolute;
+  left: -5px; top: 50%; transform: translateY(-50%) rotate(45deg);
+  width: 8px; height: 8px;
+  background: var(--bg-surface-3);
+  border-left: 1px solid var(--border-active);
+  border-bottom: 1px solid var(--border-active);
+}
+.sidebar[data-collapsed="true"] .nav-item:hover .tip {
+  opacity: 1;
+  transform: translateY(-50%) translateX(0);
+}
+
+/* --- FOOTER (user row) --- */
+.sb-footer {
+  border-top: 1px solid var(--border-subtle);
+  padding: 12px;
+  display: flex; align-items: center; gap: 10px;
+  overflow: hidden;
+}
+.sb-avatar {
+  width: 32px; height: 32px; flex: 0 0 32px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--accent-cyan-dim), var(--accent-ai));
+  display: grid; place-items: center;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.78rem;
+  color: var(--bg-base);
+  letter-spacing: 0.04em;
+  position: relative;
+}
+.sb-avatar::after {
+  content: "";
+  position: absolute; right: -1px; bottom: -1px;
+  width: 9px; height: 9px; border-radius: 999px;
+  background: var(--positive);
+  border: 2px solid var(--bg-surface-1);
+}
+.sb-user {
+  display: flex; flex-direction: column;
+  white-space: nowrap;
+  overflow: hidden;
+  transition: opacity 120ms var(--ease-glide);
+}
+.sb-user .name {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  text-overflow: ellipsis; overflow: hidden;
+}
+.sb-user .role {
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.12em;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+}
+.sidebar[data-collapsed="true"] .sb-footer { justify-content: center; padding: 12px 0; }
+.sidebar[data-collapsed="true"] .sb-user { opacity: 0; pointer-events: none; width: 0; }
+
+/* =====================================================
+   MAIN CONTENT (DEMO PLACEHOLDER)
+   ===================================================== */
+.main {
+  padding: 28px 36px 80px;
+  min-width: 0;
+}
+.topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 28px;
+  gap: 16px;
+}
+.crumb {
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+  display: flex; align-items: center; gap: 10px;
+}
+.crumb .sep { color: var(--text-muted); }
+.crumb .cur { color: var(--accent-cyan); }
+.topbar h1 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 2rem;
+  letter-spacing: -0.01em;
+  line-height: 1;
+  color: var(--text-primary);
+  margin-top: 8px;
+}
+.live-pill {
+  display: inline-flex; align-items: center; gap: 8px;
+  background: var(--bg-surface-1);
+  border: 1px solid var(--border-active);
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+}
+.live-pill .dot {
+  width: 8px; height: 8px; border-radius: 999px;
+  background: var(--positive);
+  box-shadow: 0 0 8px var(--positive);
+  animation: pulse 1.6s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%,100% { opacity: 1; transform: scale(1); }
+  50% { opacity: .5; transform: scale(.85); }
+}
+
+.grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.card {
+  background: var(--bg-surface-1);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: 18px;
+  display: flex; flex-direction: column;
+  gap: 10px;
+  min-height: 130px;
+}
+.card .lbl {
+  font-family: var(--font-display);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+}
+.card .val {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 2rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+}
+.card .delta {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--positive);
+}
+.card .delta.neg { color: var(--negative); }
+.card.accent .val { color: var(--accent-cyan); }
+
+.demo-panel {
+  margin-top: 22px;
+  background: var(--bg-surface-1);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  min-height: 340px;
+  background-image: linear-gradient(to right, var(--border-subtle) 1px, transparent 1px),
+                    linear-gradient(to bottom, var(--border-subtle) 1px, transparent 1px);
+  background-size: 32px 32px;
+  background-position: 24px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.demo-panel .stub {
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-size: 0.7rem;
+  text-align: center;
+}
+.demo-panel .stub strong {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 1.2rem;
+  color: var(--text-secondary);
+  letter-spacing: 0.18em;
+  margin-bottom: 6px;
+}
+
+/* =====================================================
+   MOBILE — bottom nav (< 768px)
+   ===================================================== */
+@media (max-width: 768px) {
+  .app-shell { grid-template-columns: 1fr !important; }
+  .sidebar {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    top: auto; height: auto; width: 100%;
+    border-right: 0;
+    border-top: 1px solid var(--border-active);
+    background: var(--bg-surface-1);
+    box-shadow: 0 -12px 32px rgba(0,0,0,.5);
+    flex-direction: row;
+  }
+  .sb-header, .sb-footer, .sb-toggle, .sb-group-label { display: none; }
+  .sb-nav {
+    flex-direction: row;
+    flex: 1;
+    padding: 8px 6px;
+    gap: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    justify-content: space-around;
+    align-items: center;
+  }
+  .sb-group {
+    flex-direction: row;
+    padding: 0;
+    gap: 0;
+  }
+  .sb-group + .sb-group::before {
+    content: "";
+    width: 1px;
+    background: var(--border-subtle);
+    margin: 8px 4px;
+  }
+  .nav-item {
+    flex-direction: column;
+    height: auto;
+    width: 56px;
+    padding: 6px 4px;
+    gap: 4px;
+  }
+  .nav-item .label {
+    font-size: 0.62rem;
+    text-align: center;
+    opacity: 1 !important;
+    pointer-events: auto !important;
+    letter-spacing: 0.02em;
+  }
+  .nav-item .meta, .nav-item .tip { display: none; }
+  .nav-item.active {
+    background: var(--bg-surface-2);
+    box-shadow: none;
+  }
+  .nav-item.active::after {
+    content: "";
+    position: absolute;
+    top: -8px; left: 50%; transform: translateX(-50%);
+    width: 24px; height: 3px;
+    background: var(--accent-cyan);
+    border-radius: 0 0 3px 3px;
+    box-shadow: 0 0 12px var(--glow-cyan-hot);
+  }
+  .main { padding: 20px 18px 96px; }
+  .grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
+}
+
+/* Small focus polish */
+.nav-item:focus-visible, .sb-toggle:focus-visible {
+  outline: 2px solid var(--accent-cyan);
+  outline-offset: 2px;
+}
+
+/* Subtle scan line on sidebar — telemetria érzet */
+.sidebar::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(to bottom, transparent 0%, rgba(0,212,255,.015) 50%, transparent 100%);
+  mix-blend-mode: screen;
+}
+</style>
+</head>
+<body>
+
+<div class="app-shell" id="shell">
+  <!-- =================== SIDEBAR =================== -->
+  <aside class="sidebar" id="sidebar" data-collapsed="false">
+    <!-- HEADER -->
+    <div class="sb-header">
+      <div class="sb-logo" aria-hidden="true">
+        <!-- kosárlabda SVG: kör + két ív -->
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="9"/>
+          <path d="M3 12h18"/>
+          <path d="M12 3v18"/>
+          <path d="M5.5 5.5c3.5 3 3.5 10 0 13"/>
+          <path d="M18.5 5.5c-3.5 3-3.5 10 0 13"/>
+        </svg>
+      </div>
+      <div class="sb-brand">
+        <span class="wordmark">ASE</span>
+        <span class="sub">STATS · v2.1</span>
+      </div>
+
+      <button class="sb-toggle" id="toggle" aria-label="Sidebar kibontás / összecsukás">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="15 18 9 12 15 6"/>
+        </svg>
+      </button>
+    </div>
+
+    <!-- NAV -->
+    <nav class="sb-nav" aria-label="Fő navigáció">
+
+      <!-- =============== ANALITIKA =============== -->
+      <div class="sb-group" data-tone="cyan">
+        <div class="sb-group-label">Analitika</div>
+
+        <button class="nav-item active" data-key="dashboard">
+          <span class="ico">
+            <!-- dashboard / grid -->
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1.2"/><rect x="14" y="3" width="7" height="5" rx="1.2"/><rect x="14" y="12" width="7" height="9" rx="1.2"/><rect x="3" y="16" width="7" height="5" rx="1.2"/></svg>
+          </span>
+          <span class="label">Dashboard</span>
+          <span class="meta">⌘1</span>
+          <span class="tip">Dashboard</span>
+        </button>
+
+        <button class="nav-item" data-key="players">
+          <span class="ico">
+            <!-- player -->
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.5"/><path d="M4.5 20c1-3.5 4-5.5 7.5-5.5s6.5 2 7.5 5.5"/></svg>
+          </span>
+          <span class="label">Játékosok</span>
+          <span class="meta">312</span>
+          <span class="tip">Játékosok</span>
+        </button>
+
+        <button class="nav-item" data-key="games">
+          <span class="ico">
+            <!-- ball/hoop -->
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17"/><path d="M12 3.5v17"/><path d="M6 6c2.5 2 2.5 10 0 12"/><path d="M18 6c-2.5 2-2.5 10 0 12"/></svg>
+          </span>
+          <span class="label">Mérkőzések</span>
+          <span class="meta">48</span>
+          <span class="tip">Mérkőzések</span>
+        </button>
+
+        <button class="nav-item" data-key="stats">
+          <span class="ico">
+            <!-- bars / chart -->
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10"/><path d="M10 20V4"/><path d="M16 20v-8"/><path d="M22 20H2"/></svg>
+          </span>
+          <span class="label">Statisztikák</span>
+          <span class="tip">Statisztikák</span>
+        </button>
+
+        <button class="nav-item" data-key="compare">
+          <span class="ico">
+            <!-- compare arrows -->
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h13"/><path d="m14 4 3 3-3 3"/><path d="M20 17H7"/><path d="m10 14-3 3 3 3"/></svg>
+          </span>
+          <span class="label">Összehasonlítás</span>
+          <span class="tip">Összehasonlítás</span>
+        </button>
+      </div>
+
+      <!-- =============== CSAPAT =============== -->
+      <div class="sb-group" data-tone="cyan">
+        <div class="sb-group-label">Csapat</div>
+
+        <button class="nav-item" data-key="table">
+          <span class="ico">
+            <!-- trophy -->
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4h10v5a5 5 0 0 1-10 0V4Z"/><path d="M17 6h2.5a2.5 2.5 0 0 1 0 5H17"/><path d="M7 6H4.5a2.5 2.5 0 0 0 0 5H7"/><path d="M9.5 17h5"/><path d="M12 14v3"/><path d="M8 20h8"/></svg>
+          </span>
+          <span class="label">Tabella</span>
+          <span class="tip">Tabella</span>
+        </button>
+
+        <button class="nav-item" data-key="season">
+          <span class="ico">
+            <!-- trend line -->
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17 9 11l4 4 8-9"/><path d="M14 6h7v7"/></svg>
+          </span>
+          <span class="label">Szezon elemzés</span>
+          <span class="tip">Szezon elemzés</span>
+        </button>
+
+        <button class="nav-item" data-key="situation">
+          <span class="ico">
+            <!-- target -->
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5"/></svg>
+          </span>
+          <span class="label">Szituációs elemzés</span>
+          <span class="tip">Szituációs elemzés</span>
+        </button>
+      </div>
+
+      <!-- =============== AI =============== -->
+      <div class="sb-group" data-tone="ai">
+        <div class="sb-group-label">AI</div>
+
+        <button class="nav-item" data-key="pregame">
+          <span class="ico">
+            <!-- spark / AI -->
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v4"/><path d="M12 17v4"/><path d="M3 12h4"/><path d="M17 12h4"/><path d="M6 6l2.5 2.5"/><path d="M15.5 15.5 18 18"/><path d="M6 18l2.5-2.5"/><path d="M15.5 8.5 18 6"/><circle cx="12" cy="12" r="2.5"/></svg>
+          </span>
+          <span class="label">Pregame scouting</span>
+          <span class="tip">Pregame scouting</span>
+        </button>
+
+        <button class="nav-item" data-key="postgame">
+          <span class="ico">
+            <!-- doc / report -->
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6"/><path d="M9 17h4"/></svg>
+          </span>
+          <span class="label">Postgame riport</span>
+          <span class="tip">Postgame riport</span>
+        </button>
+      </div>
+
+      <!-- =============== ADMIN =============== -->
+      <div class="sb-group" data-tone="cyan">
+        <div class="sb-group-label">Admin</div>
+
+        <button class="nav-item" data-key="import">
+          <span class="ico">
+            <!-- import / download arrow -->
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
+          </span>
+          <span class="label">Adatimport</span>
+          <span class="tip">Adatimport</span>
+        </button>
+
+        <button class="nav-item" data-key="manage">
+          <span class="ico">
+            <!-- users gear -->
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3"/><path d="M3 20c.8-3 3.4-5 6-5s4.2 1 5 3"/><circle cx="17.5" cy="17.5" r="2.5"/><path d="M17.5 13.5v1.2"/><path d="M17.5 20.3v1.2"/><path d="M13.5 17.5h1.2"/><path d="M20.3 17.5h1.2"/></svg>
+          </span>
+          <span class="label">Játékoskezelés</span>
+          <span class="tip">Játékoskezelés</span>
+        </button>
+      </div>
+    </nav>
+
+    <!-- FOOTER -->
+    <div class="sb-footer">
+      <div class="sb-avatar">KB</div>
+      <div class="sb-user">
+        <span class="name">Kovács Bence</span>
+        <span class="role">Coach · ASE</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- =================== MAIN (placeholder content) =================== -->
+  <main class="main">
+    <div class="topbar">
+      <div>
+        <div class="crumb">
+          <span>ASEStats</span>
+          <span class="sep">›</span>
+          <span>Analitika</span>
+          <span class="sep">›</span>
+          <span class="cur" id="cur-section">Dashboard</span>
+        </div>
+        <h1 id="page-title">Dashboard</h1>
+      </div>
+      <div class="live-pill">
+        <span class="dot"></span>
+        <span>LIVE · 2025/26 SZEZON</span>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="card accent">
+        <span class="lbl">Csapat PPG</span>
+        <span class="val">84.2</span>
+        <span class="delta">▲ +3.4 vs előző</span>
+      </div>
+      <div class="card">
+        <span class="lbl">Ellenfél PPG</span>
+        <span class="val">78.9</span>
+        <span class="delta neg">▲ +1.1</span>
+      </div>
+      <div class="card">
+        <span class="lbl">Mérkőzés / win%</span>
+        <span class="val">48 · 67%</span>
+        <span class="delta">▲ +4%</span>
+      </div>
+      <div class="card">
+        <span class="lbl">Net rating</span>
+        <span class="val">+5.3</span>
+        <span class="delta">▲ +2.2</span>
+      </div>
+    </div>
+
+    <div class="demo-panel">
+      <div class="stub">
+        <strong>CONTENT AREA</strong>
+        a kiválasztott szekció renderelt komponense ide kerül<br/>
+        — a meglévő Tabs onClick handler-ek itt érintetlenül megmaradnak —
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+(function () {
+  const sidebar = document.getElementById('sidebar');
+  const shell   = document.getElementById('shell');
+  const toggle  = document.getElementById('toggle');
+  const items   = document.querySelectorAll('.nav-item');
+  const titleEl = document.getElementById('page-title');
+  const curEl   = document.getElementById('cur-section');
+
+  // localStorage állapot
+  const KEY = 'ase.sidebar.collapsed';
+  const initCollapsed = localStorage.getItem(KEY) === '1';
+  setCollapsed(initCollapsed, false);
+
+  toggle.addEventListener('click', () => {
+    const next = sidebar.getAttribute('data-collapsed') !== 'true';
+    setCollapsed(next, true);
+  });
+
+  function setCollapsed(state, persist) {
+    sidebar.setAttribute('data-collapsed', state ? 'true' : 'false');
+    shell.classList.toggle('is-collapsed', state);
+    if (persist) localStorage.setItem(KEY, state ? '1' : '0');
+  }
+
+  // Aktív elem váltás (demo)
+  const groupLabel = { cyan: 'Analitika', ai: 'AI' };
+  const groupNameByItem = (item) => {
+    const g = item.closest('.sb-group');
+    const lab = g && g.querySelector('.sb-group-label');
+    return lab ? lab.textContent.trim() : '';
+  };
+  items.forEach(it => {
+    it.addEventListener('click', () => {
+      items.forEach(x => x.classList.remove('active'));
+      it.classList.add('active');
+      const label = it.querySelector('.label').textContent.trim();
+      titleEl.textContent = label;
+      curEl.textContent = label;
+      // group breadcrumb
+      const g = groupNameByItem(it);
+      const crumb = curEl.parentElement;
+      crumb.children[2].textContent = g;
+    });
+  });
+
+  // Billentyűzet: ctrl/cmd + B toggle (gyakori UX konvenció)
+  window.addEventListener('keydown', (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'b') {
+      e.preventDefault();
+      setCollapsed(sidebar.getAttribute('data-collapsed') !== 'true', true);
+    }
+  });
+})();
+</script>
+</body>
+</html>
