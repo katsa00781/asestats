@@ -2,9 +2,9 @@
 
 import { TerminologyGlossary } from './TerminologyGlossary';
 import Image from 'next/image';
-import { Loader2, Copy } from 'lucide-react';
+import { Loader2, Download } from 'lucide-react';
 import { toast } from 'sonner';
-
+import { playerSeasonToMd, teamStatsToMd, pregameReportToMd, postgameReportToMd } from '@/lib/export-to-md';
 import { useEffect, useMemo, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, Cell, LabelList, Legend, Line, LineChart, ResponsiveContainer, Scatter, ScatterChart, Tooltip, XAxis, YAxis, ZAxis } from 'recharts';
 import type { Props as RechartsLabelProps } from 'recharts/types/component/Label';
@@ -18,7 +18,7 @@ import { PostgameShotScatterChart } from '@/components/PostgameShotScatterChart'
 import { PostgameZoneHeatmapChart } from '@/components/PostgameZoneHeatmapChart';
 import { supabase, type Database } from '@/lib/supabase';
 import { buildPositionMetadata } from '@/lib/positions';
-import type { PlayerStats, TeamGame } from '@/lib/dashboard-types';
+import type { PlayerStats, TeamGame, GameAggregate } from '@/lib/dashboard-types';
 import {
   analyzePlayerSeason,
   buildLeagueBenchmarks,
@@ -11659,12 +11659,20 @@ export function SeasonComparison({
                         size="sm"
                         className="border-cyan-800 hover:bg-slate-800 text-cyan-400"
                         onClick={() => {
-                          navigator.clipboard.writeText(playerNarratives[selectedPlayer.id]?.text ?? '').catch(() => null);
-                          toast.success('Szöveg vágólapra másolva');
+                          const md = playerSeasonToMd(selectedPlayer);
+                          const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
+                          const url = URL.createObjectURL(blob);
+                          const a = document.createElement('a');
+                          a.href = url;
+                          a.download = `jatekos-${selectedPlayer.name.replace(/\s+/g, '-')}.md`;
+                          a.click();
+                          URL.revokeObjectURL(url);
+                          navigator.clipboard.writeText(md).catch(() => null);
+                          toast.success('MD exportálva – vágólapra másolva és letöltve');
                         }}
                       >
-                        <Copy className="w-3 h-3 mr-1.5" />
-                        Másolás
+                        <Download className="w-3 h-3 mr-1.5" />
+                        Export MD
                       </Button>
                     </>
                   )}
@@ -12296,7 +12304,43 @@ export function SeasonComparison({
 
       {showTeamSection && <Card className="bg-slate-900 border-slate-800">
         <CardHeader>
-          <CardTitle className="text-slate-50">Csapat elemzés</CardTitle>
+          <div className="flex items-center justify-between gap-4">
+            <CardTitle className="text-slate-50">Csapat elemzés</CardTitle>
+            <Button
+              variant="outline"
+              size="sm"
+              className="border-cyan-800 hover:bg-slate-800 text-cyan-400 shrink-0"
+              onClick={() => {
+                const teamPlayers = activeSeasonPlayers.filter(p => String(p.teamId ?? '') === String(resolvedTeamId));
+                const n = Math.max(games.length, 1);
+                const agg: GameAggregate = {
+                  totalGames: games.length,
+                  avgPoints: games.reduce((s, g) => s + g.ourScore, 0) / n,
+                  avgRebounds: games.reduce((s, g) => s + g.players.reduce((ps, p) => ps + p.rebounds.total, 0), 0) / n,
+                  avgAssists: games.reduce((s, g) => s + g.players.reduce((ps, p) => ps + p.assists, 0), 0) / n,
+                  avgSteals: games.reduce((s, g) => s + g.players.reduce((ps, p) => ps + p.steals, 0), 0) / n,
+                  avgBlocks: games.reduce((s, g) => s + g.players.reduce((ps, p) => ps + p.blocks, 0), 0) / n,
+                  avgTurnovers: games.reduce((s, g) => s + g.players.reduce((ps, p) => ps + p.turnovers, 0), 0) / n,
+                  avgValuation: games.reduce((s, g) => s + g.players.reduce((ps, p) => ps + p.valuation, 0), 0) / n,
+                };
+                const tName = allTeams.find(t => t.id === resolvedTeamId)?.name;
+                const sName = allSeasons.find(s => s.id === resolvedSeasonId)?.name;
+                const md = teamStatsToMd(teamPlayers, games, agg, tName, sName);
+                const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `csapat-${(tName ?? 'statisztika').replace(/\s+/g, '-')}.md`;
+                a.click();
+                URL.revokeObjectURL(url);
+                navigator.clipboard.writeText(md).catch(() => null);
+                toast.success('MD exportálva – vágólapra másolva és letöltve');
+              }}
+            >
+              <Download className="w-4 h-4 mr-2" />
+              Export MD
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
           {resolvedTeamId === 'all' && (
@@ -12361,18 +12405,6 @@ export function SeasonComparison({
                     <div className="rounded-md border border-slate-800 bg-slate-950/50 px-3 py-2 text-sm text-slate-100 whitespace-pre-line">
                       {teamNarrative.text}
                     </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="border-cyan-800 hover:bg-slate-800 text-cyan-400"
-                      onClick={() => {
-                        navigator.clipboard.writeText(teamNarrative.text ?? '').catch(() => null);
-                        toast.success('Szöveg vágólapra másolva');
-                      }}
-                    >
-                      <Copy className="w-3 h-3 mr-1.5" />
-                      Másolás
-                    </Button>
                   </div>
                 )}
                 {teamNarrative.status === 'idle' && (
@@ -15329,18 +15361,28 @@ export function SeasonComparison({
                 <div className="text-sm text-slate-50 whitespace-pre-line bg-slate-800/60 border border-slate-700 rounded-lg px-4 py-3">
                   {pregameText}
                 </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="border-cyan-800 hover:bg-slate-800 text-cyan-400"
-                  onClick={() => {
-                    navigator.clipboard.writeText(pregameText).catch(() => null);
-                    toast.success('Szöveg vágólapra másolva');
-                  }}
-                >
-                  <Copy className="w-3 h-3 mr-1.5" />
-                  Másolás
-                </Button>
+                {pregameReport && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="border-cyan-800 hover:bg-slate-800 text-cyan-400"
+                    onClick={() => {
+                      const md = pregameReportToMd(pregameReport);
+                      const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = `pregame-${pregameReport.ownTeamName.replace(/\s+/g, '-')}-vs-${pregameReport.opponentTeamName.replace(/\s+/g, '-')}.md`;
+                      a.click();
+                      URL.revokeObjectURL(url);
+                      navigator.clipboard.writeText(md).catch(() => null);
+                      toast.success('MD exportálva – vágólapra másolva és letöltve');
+                    }}
+                  >
+                    <Download className="w-3 h-3 mr-1.5" />
+                    Export MD
+                  </Button>
+                )}
               </div>
             )}
           </div>
@@ -16932,18 +16974,28 @@ export function SeasonComparison({
               <div className="text-sm text-slate-50 whitespace-pre-line bg-slate-800/60 border border-slate-700 rounded-lg px-4 py-3">
                 {textReport}
               </div>
-              <Button
-                variant="outline"
-                size="sm"
-                className="border-cyan-800 hover:bg-slate-800 text-cyan-400"
-                onClick={() => {
-                  navigator.clipboard.writeText(textReport).catch(() => null);
-                  toast.success('Szöveg vágólapra másolva');
-                }}
-              >
-                <Copy className="w-3 h-3 mr-1.5" />
-                Másolás
-              </Button>
+              {postgameReport && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="border-cyan-800 hover:bg-slate-800 text-cyan-400"
+                  onClick={() => {
+                    const md = postgameReportToMd(postgameReport);
+                    const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `postgame-${postgameReport.teamName.replace(/\s+/g, '-')}-vs-${postgameReport.opponentName.replace(/\s+/g, '-')}.md`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                    navigator.clipboard.writeText(md).catch(() => null);
+                    toast.success('MD exportálva – vágólapra másolva és letöltve');
+                  }}
+                >
+                  <Download className="w-3 h-3 mr-1.5" />
+                  Export MD
+                </Button>
+              )}
             </div>
           )}
 

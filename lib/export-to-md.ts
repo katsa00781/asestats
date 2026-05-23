@@ -1,4 +1,6 @@
 import type { PlayerStats, TeamGame, GameAggregate } from './dashboard-types';
+import type { ScoutingReport } from './pregame-scouting';
+import type { PostGameReport } from './postgame-report';
 
 function fmtPct(made: number, attempted: number): string {
   return attempted > 0 ? `${((made / attempted) * 100).toFixed(1)}%` : '-';
@@ -212,6 +214,166 @@ export function teamStatsToMd(
     const hv = g.homeAway === 'home' ? 'Hazai' : 'Vendég';
     const res = g.result === 'win' ? 'Győzelem' : 'Vereség';
     lines.push(`| ${g.date} | ${g.opponent} | ${hv} | ${g.ourScore} | ${g.oppScore} | ${res} |`);
+  }
+
+  return lines.join('\n');
+}
+
+export function pregameReportToMd(report: ScoutingReport): string {
+  const lines: string[] = [
+    `# Pregame scouting: ${report.ownTeamName} vs ${report.opponentTeamName}`,
+    ``,
+    `**Liga:** ${report.league} | **Szezon:** ${report.season}`,
+    ``,
+    `## Győzelmi valószínűség`,
+    ``,
+    `| Csapat | Esély |`,
+    `|--------|-------|`,
+    `| ${report.ownTeamName} | ${report.winProbability.ownPct.toFixed(1)}% |`,
+    `| ${report.opponentTeamName} | ${report.winProbability.opponentPct.toFixed(1)}% |`,
+    ``,
+    `**Jósolt győztes:** ${
+      report.winProbability.predictedWinner === 'own' ? report.ownTeamName :
+      report.winProbability.predictedWinner === 'opponent' ? report.opponentTeamName : 'Egyenlő'
+    } | **Bizonyosság:** ${report.winProbability.confidence}`,
+  ];
+
+  if (report.positionComparison.length > 0) {
+    lines.push(``, `## Pozíció összehasonlítás (VAL/36)`, ``);
+    lines.push(`| Poz | ${report.ownTeamName} | ${report.opponentTeamName} | Delta |`);
+    lines.push(`|-----|---|---|-------|`);
+    for (const pos of report.positionComparison) {
+      const sign = pos.deltaValPer36 >= 0 ? '+' : '';
+      const flag = pos.matchupFlag === 'critical_disadvantage' ? ' (!!)' : pos.matchupFlag === 'clear_advantage' ? ' (+)' : '';
+      lines.push(`| ${pos.position} | ${pos.ownValPer36.toFixed(1)} | ${pos.oppValPer36.toFixed(1)} | ${sign}${pos.deltaValPer36.toFixed(1)}${flag} |`);
+    }
+  }
+
+  if (report.ownTeamProfile) {
+    lines.push(``, `## Saját csapat profil`, ``);
+    lines.push(`**Tempó:** ${report.ownTeamProfile.tempo}`);
+    if (report.ownTeamProfile.offense.length > 0) lines.push(`**Támadás:** ${report.ownTeamProfile.offense.join(', ')}`);
+    if (report.ownTeamProfile.defense.length > 0) lines.push(`**Védekezés:** ${report.ownTeamProfile.defense.join(', ')}`);
+  }
+
+  lines.push(``, `## Ellenfél profil`, ``);
+  lines.push(`**Tempó:** ${report.profile.tempo}`);
+  if (report.profile.offense.length > 0) lines.push(`**Támadás:** ${report.profile.offense.join(', ')}`);
+  if (report.profile.defense.length > 0) lines.push(`**Védekezés:** ${report.profile.defense.join(', ')}`);
+
+  if (report.threats.length > 0) {
+    lines.push(``, `## Ellenfél veszélyek`, ``);
+    for (const t of report.threats) lines.push(`- ${t}`);
+  }
+
+  if (report.vulnerabilities.length > 0) {
+    lines.push(``, `## Ellenfél gyenge pontok`, ``);
+    for (const v of report.vulnerabilities) lines.push(`- ${v}`);
+  }
+
+  if (report.focusPoints.length > 0) {
+    lines.push(``, `## Fókuszpontok`, ``);
+    for (const fp of report.focusPoints) lines.push(`- ${fp}`);
+  }
+
+  if (report.riskScenarios && report.riskScenarios.length > 0) {
+    lines.push(``, `## Kockázati forgatókönyvek`, ``);
+    lines.push(`| Forgatókönyv | Trigger | Azonnali válasz | Saját swing |`);
+    lines.push(`|---|---|---|---|`);
+    for (const s of report.riskScenarios) {
+      const swing = s.estimatedOwnSwingPct >= 0 ? `+${s.estimatedOwnSwingPct.toFixed(1)}%` : `${s.estimatedOwnSwingPct.toFixed(1)}%`;
+      lines.push(`| ${s.title} | ${s.trigger} | ${s.instantResponse} | ${swing} |`);
+    }
+  }
+
+  if (report.advancedPlayers) {
+    if (report.advancedPlayers.own.length > 0) {
+      lines.push(``, `## Saját kulcsjátékosok`, ``);
+      lines.push(`| Játékos | Poz | Perc/meccs | VAL/36 | Pont/36 |`);
+      lines.push(`|---------|-----|------------|--------|---------|`);
+      for (const p of report.advancedPlayers.own) {
+        lines.push(`| ${p.name} | ${p.position} | ${p.minutesPerGame.toFixed(1)} | ${p.valPer36.toFixed(1)} | ${p.pointsPer36.toFixed(1)} |`);
+      }
+    }
+    if (report.advancedPlayers.opponent.length > 0) {
+      lines.push(``, `## Ellenfél kulcsjátékosok`, ``);
+      lines.push(`| Játékos | Poz | Perc/meccs | VAL/36 | Pont/36 |`);
+      lines.push(`|---------|-----|------------|--------|---------|`);
+      for (const p of report.advancedPlayers.opponent) {
+        lines.push(`| ${p.name} | ${p.position} | ${p.minutesPerGame.toFixed(1)} | ${p.valPer36.toFixed(1)} | ${p.pointsPer36.toFixed(1)} |`);
+      }
+    }
+  }
+
+  if (report.summary) {
+    lines.push(``, `## Összefoglalás`, ``);
+    lines.push(report.summary);
+  }
+
+  return lines.join('\n');
+}
+
+export function postgameReportToMd(report: PostGameReport): string {
+  const result = report.result === 'win' ? 'Győzelem' : 'Vereség';
+  const margin = report.metrics.margin;
+  const marginStr = margin > 0 ? `+${margin}` : `${margin}`;
+
+  const lines: string[] = [
+    `# Postgame elemzés: ${report.teamName} vs ${report.opponentName}`,
+    ``,
+    `**Szezon:** ${report.season} | **Liga:** ${report.league}`,
+    `**Eredmény:** ${result} ${report.metrics.pointsFor}–${report.metrics.pointsAgainst} (különbség: ${marginStr})`,
+    ``,
+    `## Kulcs mutatók`,
+    ``,
+    `| Mutató | Meccs | Szezon átl. | Delta |`,
+    `|--------|-------|-------------|-------|`,
+    `| EFG% | ${report.metrics.efg.toFixed(1)}% | – | – |`,
+    `| Tempó | ${report.metrics.pace.toFixed(1)} | – | – |`,
+  ];
+
+  for (const stat of report.metrics.keyStats) {
+    const gameVal = stat.unit === 'pct' ? `${stat.game.toFixed(1)}%` : stat.game.toFixed(1);
+    const seasonVal = stat.unit === 'pct' ? `${stat.season.toFixed(1)}%` : stat.season.toFixed(1);
+    const delta = stat.delta >= 0 ? `+${stat.delta.toFixed(1)}${stat.unit === 'pct' ? '%' : ''}` : `${stat.delta.toFixed(1)}${stat.unit === 'pct' ? '%' : ''}`;
+    lines.push(`| ${stat.label} | ${gameVal} | ${seasonVal} | ${delta} |`);
+  }
+
+  if (report.decisiveFactors.offense.length > 0 || report.decisiveFactors.defense.length > 0) {
+    lines.push(``, `## Döntő tényezők`, ``);
+    if (report.decisiveFactors.offense.length > 0) {
+      lines.push(`**Támadás:**`);
+      for (const f of report.decisiveFactors.offense) lines.push(`- ${f}`);
+    }
+    if (report.decisiveFactors.defense.length > 0) {
+      lines.push(`**Védekezés:**`);
+      for (const f of report.decisiveFactors.defense) lines.push(`- ${f}`);
+    }
+  }
+
+  if (report.playerReport.players.length > 0) {
+    lines.push(``, `## Játékos bontás`, ``);
+    lines.push(`| Játékos | Poz | Perc | Pont | Lep | Gp | St+Bl | LV | TS% | VAL | Hatás |`);
+    lines.push(`|---------|-----|------|------|-----|----|-------|-----|-----|-----|-------|`);
+    for (const p of report.playerReport.players) {
+      const ts = p.hasShotAttempts ? `${(p.tsPct * 100).toFixed(1)}%` : '-';
+      lines.push(`| ${p.name} | ${p.position} | ${p.minutes} | ${p.points} | ${p.rebounds} | ${p.assists} | ${p.stocks} | ${p.turnovers} | ${ts} | ${p.val.toFixed(1)} | ${p.impactLabel} |`);
+    }
+  }
+
+  if (report.strengths.length > 0) {
+    lines.push(``, `## Erősségek`, ``);
+    for (const s of report.strengths) lines.push(`- ${s}`);
+  }
+
+  if (report.problems.length > 0) {
+    lines.push(``, `## Problémák`, ``);
+    for (const p of report.problems) lines.push(`- ${p}`);
+  }
+
+  if (report.nextFocus.length > 0) {
+    lines.push(``, `## Következő fókusz`, ``);
+    for (const f of report.nextFocus) lines.push(`- ${f}`);
   }
 
   return lines.join('\n');
