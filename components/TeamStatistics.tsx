@@ -1,17 +1,73 @@
+'use client';
+
+import { useState, useCallback } from 'react';
 import type { PlayerStats, TeamGame, GameAggregate } from '@/lib/dashboard-types';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
-import { Trophy, Target, TrendingUp, Users, Award, Activity } from 'lucide-react';
+import { Button } from './ui/button';
+import { Textarea } from './ui/textarea';
+import { Trophy, Target, TrendingUp, Users, Award, Activity, Download, Save, ClipboardList, Loader2 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import { toast } from 'sonner';
+import { teamStatsToMd } from '@/lib/export-to-md';
 
 type TeamStatisticsProps = {
   players: PlayerStats[];
   games: TeamGame[];
   gameStats: GameAggregate;
   teamName?: string;
+  seasonId?: string;
+  teamId?: string;
+  seasonName?: string;
 };
 
-export function TeamStatistics({ players, games, gameStats, teamName }: TeamStatisticsProps) {
+export function TeamStatistics({ players, games, gameStats, teamName, seasonId, teamId, seasonName }: TeamStatisticsProps) {
+  const [manualText, setManualText] = useState('');
+  const [savingManual, setSavingManual] = useState(false);
+
+  const exportTeamMd = useCallback(() => {
+    const md = teamStatsToMd(players, games, gameStats, teamName, seasonName);
+    const filename = `csapat-${(teamName ?? 'statisztikak').replace(/\s+/g, '-')}-${seasonName ?? ''}.md`;
+    const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+    navigator.clipboard.writeText(md).catch(() => null);
+    toast.success('MD exportálva – vágólapra másolva és letöltve');
+  }, [players, games, gameStats, teamName, seasonName]);
+
+  const saveManualReport = useCallback(async () => {
+    if (!manualText.trim()) return;
+    if (!seasonId || !teamId) {
+      toast.error('Hiányzó szezon vagy csapat azonosító – nem menthető');
+      return;
+    }
+    setSavingManual(true);
+    try {
+      const resp = await fetch('/api/save-manual-report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          reportTarget: 'team_season',
+          seasonId,
+          teamId,
+          narrative: manualText.trim(),
+        }),
+      });
+      const json = (await resp.json()) as { ok: boolean; error?: string };
+      if (!json.ok) throw new Error(json.error ?? 'Mentési hiba');
+      toast.success('Elemzés elmentve');
+      setManualText('');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Mentési hiba');
+    } finally {
+      setSavingManual(false);
+    }
+  }, [manualText, seasonId, teamId]);
+
   // Ha nincsenek játékosok, jelenítünk meg egy üzenetet
   if (players.length === 0) {
     return (
@@ -113,9 +169,15 @@ export function TeamStatistics({ players, games, gameStats, teamName }: TeamStat
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-slate-50 mb-2 text-xl sm:text-2xl">Csapat Statisztikák</h2>
-        <p className="text-slate-400 text-sm sm:text-base">{teamName || 'Csapat'} teljesítménye</p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-slate-50 mb-2 text-xl sm:text-2xl">Csapat Statisztikák</h2>
+          <p className="text-slate-400 text-sm sm:text-base">{teamName || 'Csapat'} teljesítménye</p>
+        </div>
+        <Button onClick={exportTeamMd} variant="outline" size="sm" className="border-cyan-800 hover:bg-slate-800 text-cyan-400 shrink-0">
+          <Download className="w-4 h-4 mr-2" />
+          Export MD
+        </Button>
       </div>
 
       {/* Összesítő kártyák */}
@@ -308,6 +370,40 @@ export function TeamStatistics({ players, games, gameStats, teamName }: TeamStat
               <Bar dataKey="Gólpasszok" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
+        </CardContent>
+      </Card>
+
+      {/* Manuális elemzés beillesztése */}
+      <Card className="bg-slate-900 border-slate-800">
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-slate-50 text-base">
+            <ClipboardList className="h-4 w-4 text-cyan-400" />
+            Manuális csapatelemzés beillesztése
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-xs text-slate-400">
+            Exportáld a statokat MD-be, add át Claude-nak, majd illeszd be az elemzés szövegét és mentsd el.
+          </p>
+          <Textarea
+            placeholder="Illeszd be a Claude-csapatelemzés szövegét..."
+            value={manualText}
+            onChange={(e) => setManualText(e.target.value)}
+            className="min-h-25 bg-slate-800 border-slate-700 text-slate-200 placeholder:text-slate-500"
+          />
+          <Button
+            onClick={saveManualReport}
+            disabled={!manualText.trim() || savingManual}
+            size="sm"
+            className="bg-cyan-700 hover:bg-cyan-600 text-white"
+          >
+            {savingManual ? (
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            ) : (
+              <Save className="w-4 h-4 mr-2" />
+            )}
+            {savingManual ? 'Mentés...' : 'Mentés'}
+          </Button>
         </CardContent>
       </Card>
 

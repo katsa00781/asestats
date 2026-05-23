@@ -44,6 +44,18 @@ Update this file after every meaningful implementation change.
 
 ## Completed (legutóbbi)
 
+- **MD export + manuális elemzés mentése** (2026-05-22):
+  - `lib/export-to-md.ts`: `gameStatsToMd`, `playerSeasonToMd`, `teamStatsToMd` – MD generálás statokból
+  - `migrations/add-manual-report-type.sql`: 'manual' report_type hozzáadva – **kézzel kell futtatni Supabase SQL Editorban**
+  - `app/api/save-manual-report/route.ts`: manuális riport mentése 3 táblába (game_text_reports, team_text_reports, player_text_reports)
+  - `lib/supabase.ts`: 'manual' hozzáadva a game_text_reports és team_text_reports report_type union típushoz
+  - `components/GameDetails.tsx`: "Export MD" gomb (letölt + vágólapra másol) + paste-and-save textarea
+  - `components/PlayerDetails.tsx`: "Export MD" gomb + paste-and-save textarea szezonértékeléshez
+  - `components/TeamStatistics.tsx`: 'use client' hozzáadva, új props (seasonId, teamId, seasonName), "Export MD" gomb + paste-and-save textarea
+  - `app/page.tsx`: seasonId, teamId, seasonName props átadva TeamStatistics-nak
+
+### Korábbi
+
 - **Per-játékos AI értékelések a GameDetails-ban + DB perzisztencia** (2026-05-22):
   - Migráció: `migrations/add-player-game-text-reports.sql` – kézzel futtatandó Supabase SQL Editorban
   - `lib/supabase.ts`: `player_game_text_reports` tábla típus hozzáadva

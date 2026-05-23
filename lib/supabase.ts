@@ -95,7 +95,7 @@ export type Database = {
           id: string
           game_id: string | null
           team_pair_key: string | null
-          report_type: 'pregame' | 'postgame' | 'combined'
+          report_type: 'pregame' | 'postgame' | 'combined' | 'manual'
           narrative: string
           own_team_id: string | null
           own_team_name: string | null
@@ -110,7 +110,7 @@ export type Database = {
         Insert: {
           game_id?: string | null
           team_pair_key?: string | null
-          report_type: 'pregame' | 'postgame' | 'combined'
+          report_type: 'pregame' | 'postgame' | 'combined' | 'manual'
           narrative: string
           own_team_id?: string | null
           own_team_name?: string | null
@@ -149,7 +149,7 @@ export type Database = {
           id: string
           season_id: string
           team_id: string
-          report_type: 'season' | 'season_fan' | 'season_coach' | 'season_scouting'
+          report_type: 'season' | 'season_fan' | 'season_coach' | 'season_scouting' | 'manual'
           narrative: string
           analysis_snapshot: Json | null
           generated_by: string | null
@@ -160,7 +160,7 @@ export type Database = {
         Insert: {
           season_id: string
           team_id: string
-          report_type?: 'season' | 'season_fan' | 'season_coach' | 'season_scouting'
+          report_type?: 'season' | 'season_fan' | 'season_coach' | 'season_scouting' | 'manual'
           narrative: string
           analysis_snapshot?: Json | null
           generated_by?: string | null

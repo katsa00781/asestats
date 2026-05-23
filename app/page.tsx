@@ -249,6 +249,9 @@ export default function Home() {
                   games={games}
                   gameStats={gameStats}
                   teamName={allTeams.find(t => t.id === selectedTeamId)?.name}
+                  seasonId={selectedSeasonId ?? undefined}
+                  teamId={selectedTeamId ?? undefined}
+                  seasonName={allSeasons.find(s => s.id === selectedSeasonId)?.name}
                 />
               </div>
             )}

@@ -1,4 +1,4 @@
-import { useState, useMemo, type ReactNode } from 'react';
+import { useState, useMemo, useCallback, type ReactNode } from 'react';
 import type { PlayerStats } from '@/lib/dashboard-types';
 
 import {
@@ -11,23 +11,30 @@ import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
 import { Label } from "./ui/label";
 import { Input } from "./ui/input";
+import { Textarea } from "./ui/textarea";
 import { PlayerTrends } from "./PlayerTrends";
 import { StatInfoTooltip } from "./StatInfoTooltip";
-import { 
-  ArrowLeft, 
-  User, 
-  Activity, 
-  Target, 
-  Shield, 
-  TrendingUp, 
+import {
+  ArrowLeft,
+  User,
+  Activity,
+  Target,
+  Shield,
+  TrendingUp,
   TrendingDown,
   Calendar,
   X,
   ArrowUp,
   ArrowDown,
   AlertTriangle,
-  Minus
+  Minus,
+  Download,
+  Save,
+  ClipboardList,
+  Loader2,
 } from "lucide-react";
+import { toast } from 'sonner';
+import { playerSeasonToMd } from '@/lib/export-to-md';
 import { buildPlayerTrendReport, type PlayerTrend } from '@/lib/player-analysis';
 import {
   ResponsiveContainer,
@@ -52,6 +59,54 @@ type PlayerDetailProps = {
 
 function PlayerDetails( { player, onBack }: PlayerDetailProps) {
   const [lastNGames, setLastNGames] = useState<number | null>(null);
+  const [manualText, setManualText] = useState('');
+  const [savingManual, setSavingManual] = useState(false);
+
+  const exportPlayerMd = useCallback(() => {
+    if (!player) return;
+    const md = playerSeasonToMd(player);
+    const filename = `jatekos-${player.name.replace(/\s+/g, '-')}-${player.seasonName ?? 'szezonelemzes'}.md`;
+    const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+    navigator.clipboard.writeText(md).catch(() => null);
+    toast.success('MD exportálva – vágólapra másolva és letöltve');
+  }, [player]);
+
+  const saveManualReport = useCallback(async () => {
+    if (!player || !manualText.trim()) return;
+    if (!player.seasonId) {
+      toast.error('Hiányzó szezon azonosító – nem menthető');
+      return;
+    }
+    setSavingManual(true);
+    try {
+      const resp = await fetch('/api/save-manual-report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          reportTarget: 'player_season',
+          playerId: player.id,
+          playerName: player.name,
+          seasonId: player.seasonId,
+          teamId: player.teamId ?? null,
+          narrative: manualText.trim(),
+        }),
+      });
+      const json = (await resp.json()) as { ok: boolean; error?: string };
+      if (!json.ok) throw new Error(json.error ?? 'Mentési hiba');
+      toast.success('Elemzés elmentve');
+      setManualText('');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Mentési hiba');
+    } finally {
+      setSavingManual(false);
+    }
+  }, [player, manualText]);
 
   // Szűrt meccsek az utolsó N meccs alapján
   const filteredGames = useMemo(() => {
@@ -270,10 +325,16 @@ function PlayerDetails( { player, onBack }: PlayerDetailProps) {
   ];
   return (
     <div>
-        <Button onClick={onBack} variant={"ghost"} className="mb-4 sm:mb-6 text-slate-400 hover:bg-slate-800 text-sm sm:text-base">
+        <div className="flex items-center gap-2 mb-4 sm:mb-6">
+          <Button onClick={onBack} variant={"ghost"} className="text-slate-400 hover:bg-slate-800 text-sm sm:text-base">
             <ArrowLeft size={18} className="mr-2" />
             Vissza a játékosokhoz
-        </Button>
+          </Button>
+          <Button onClick={exportPlayerMd} variant="outline" size="sm" className="border-cyan-800 hover:bg-slate-800 text-cyan-400 ml-auto">
+            <Download className="w-4 h-4 mr-2" />
+            Export MD
+          </Button>
+        </div>
 
       {/* Utolsó N meccs szűrő */}
       <Card className="mb-4 sm:mb-6 bg-slate-900 border-slate-800">
@@ -848,6 +909,40 @@ function PlayerDetails( { player, onBack }: PlayerDetailProps) {
           ) : (
             <div className="text-slate-400">Nincs elérhető trend riport.</div>
           )}
+        </CardContent>
+      </Card>
+
+      {/* Manuális elemzés beillesztése */}
+      <Card className="mt-6 bg-slate-900 border-slate-800">
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-slate-50 text-base">
+            <ClipboardList className="h-4 w-4 text-cyan-400" />
+            Manuális szezonértékelés beillesztése
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-xs text-slate-400">
+            Exportáld a statokat MD-be, add át Claude-nak, majd illeszd be az elemzés szövegét és mentsd el.
+          </p>
+          <Textarea
+            placeholder="Illeszd be a Claude-szezonértékelés szövegét..."
+            value={manualText}
+            onChange={(e) => setManualText(e.target.value)}
+            className="min-h-25 bg-slate-800 border-slate-700 text-slate-200 placeholder:text-slate-500"
+          />
+          <Button
+            onClick={saveManualReport}
+            disabled={!manualText.trim() || savingManual}
+            size="sm"
+            className="bg-cyan-700 hover:bg-cyan-600 text-white"
+          >
+            {savingManual ? (
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            ) : (
+              <Save className="w-4 h-4 mr-2" />
+            )}
+            {savingManual ? 'Mentés...' : 'Mentés'}
+          </Button>
         </CardContent>
       </Card>
     </div>

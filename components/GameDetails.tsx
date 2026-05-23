@@ -4,9 +4,11 @@ import { useCallback, useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
-import { ArrowLeft, TrendingUp, TrendingDown, Minus, FileText, Sparkles, Loader2 } from 'lucide-react';
+import { Textarea } from './ui/textarea';
+import { ArrowLeft, TrendingUp, TrendingDown, Minus, FileText, Sparkles, Loader2, Download, Save, ClipboardList } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
+import { gameStatsToMd } from '@/lib/export-to-md';
 import { GamePbpCharts } from './GamePbpCharts';
 import { buildPlayerPostGameReport } from '@/lib/player-postgame';
 import type { PlayerPostGameBreakdown } from '@/lib/player-postgame';
@@ -142,7 +144,7 @@ type PlayerGameStatsRow = {
 
 type TextReport = {
   id: string;
-  report_type: 'pregame' | 'postgame' | 'combined';
+  report_type: 'pregame' | 'postgame' | 'combined' | 'manual';
   narrative: string;
   generated_at: string;
 };
@@ -178,6 +180,8 @@ export function GameDetails({ gameId, onBack }: GameDetailsProps) {
   const [playerBreakdowns, setPlayerBreakdowns] = useState<PlayerPostGameBreakdown[]>([]);
   const [playerTexts, setPlayerTexts] = useState<Record<string, string>>({});
   const [generatingPlayerTexts, setGeneratingPlayerTexts] = useState(false);
+  const [manualText, setManualText] = useState('');
+  const [savingManual, setSavingManual] = useState(false);
 
   const loadGameDetails = useCallback(async () => {
     setLoading(true);
@@ -391,6 +395,50 @@ export function GameDetails({ gameId, onBack }: GameDetailsProps) {
     }
   }, [gameComparison, playerStats]);
 
+  const exportGameMd = useCallback(() => {
+    if (!gameComparison) return;
+    const md = gameStatsToMd(gameComparison, playerStats);
+    const filename = `meccs-${gameComparison.date}-${gameComparison.opponent.replace(/\s+/g, '-')}.md`;
+    const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+    navigator.clipboard.writeText(md).catch(() => null);
+    toast.success('MD exportálva – vágólapra másolva és letöltve');
+  }, [gameComparison, playerStats]);
+
+  const saveManualReport = useCallback(async () => {
+    if (!gameComparison || !manualText.trim()) return;
+    setSavingManual(true);
+    try {
+      const resp = await fetch('/api/save-manual-report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          reportTarget: 'game',
+          gameId: gameComparison.game_id,
+          narrative: manualText.trim(),
+          opponentName: gameComparison.opponent,
+        }),
+      });
+      const json = (await resp.json()) as { ok: boolean; error?: string };
+      if (!json.ok) throw new Error(json.error ?? 'Mentési hiba');
+      toast.success('Elemzés elmentve');
+      setTextReports(prev => {
+        const filtered = prev.filter(r => r.report_type !== 'manual');
+        return [...filtered, { id: Date.now().toString(), report_type: 'manual', narrative: manualText.trim(), generated_at: new Date().toISOString() }];
+      });
+      setManualText('');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Mentési hiba');
+    } finally {
+      setSavingManual(false);
+    }
+  }, [gameComparison, manualText]);
+
   const renderDiffIndicator = (diff: number) => {
     if (diff > 0) {
       return (
@@ -454,8 +502,12 @@ export function GameDetails({ gameId, onBack }: GameDetailsProps) {
             {new Date(gameComparison.date).toLocaleDateString('hu-HU')} • {gameComparison.season_name}
           </p>
         </div>
-        <Badge 
-          className={`ml-auto ${gameComparison.result === 'win' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-red-600 hover:bg-red-700'} text-white`}
+        <Button onClick={exportGameMd} variant="outline" size="sm" className="border-cyan-800 hover:bg-slate-800 text-cyan-400">
+          <Download className="w-4 h-4 mr-2" />
+          Export MD
+        </Button>
+        <Badge
+          className={`ml-auto sm:ml-0 ${gameComparison.result === 'win' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-red-600 hover:bg-red-700'} text-white`}
         >
           {gameComparison.our_score} - {gameComparison.opp_score}
         </Badge>
@@ -705,12 +757,47 @@ export function GameDetails({ gameId, onBack }: GameDetailsProps) {
         opponent={gameComparison.opponent}
       />
 
+      {/* Manuális elemzés beillesztése */}
+      <Card className="bg-slate-900 border-slate-800">
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-slate-50 text-base">
+            <ClipboardList className="h-4 w-4 text-cyan-400" />
+            Manuális elemzés beillesztése
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-xs text-slate-400">
+            Exportáld a statokat MD-be, add át Claude-nak, majd illeszd be az elemzés szövegét és mentsd el.
+          </p>
+          <Textarea
+            placeholder="Illeszd be a Claude-elemzés szövegét..."
+            value={manualText}
+            onChange={(e) => setManualText(e.target.value)}
+            className="min-h-25 bg-slate-800 border-slate-700 text-slate-200 placeholder:text-slate-500"
+          />
+          <Button
+            onClick={saveManualReport}
+            disabled={!manualText.trim() || savingManual}
+            size="sm"
+            className="bg-cyan-700 hover:bg-cyan-600 text-white"
+          >
+            {savingManual ? (
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            ) : (
+              <Save className="w-4 h-4 mr-2" />
+            )}
+            {savingManual ? 'Mentés...' : 'Mentés'}
+          </Button>
+        </CardContent>
+      </Card>
+
       {textReports.length > 0 && (
         <div className="space-y-4">
           {textReports.map((report) => {
             const typeLabel =
               report.report_type === 'pregame' ? 'Pregame scouting' :
               report.report_type === 'postgame' ? 'Postgame elemzés' :
+              report.report_type === 'manual' ? 'Manuális elemzés' :
               'Összesített riport';
             const generatedAt = new Date(report.generated_at).toLocaleDateString('hu-HU', {
               year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit',

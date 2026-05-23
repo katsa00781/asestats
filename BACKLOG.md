@@ -137,6 +137,8 @@ Az `app/page.tsx` ~1090 sornyi, tartalmaz típusdefiníciókat, adatlekérdezés
 
 - [x] **`.env.local.example` kiegészítése** – Hozzáadva: `SUPABASE_SERVICE_ROLE_KEY`, `OPENAI_API_KEY`, `OPENAI_API_URL`, `OPENAI_MODEL` kommentekkel. _Kész: 2026-05-22_
 
+- [x] **MD export + manuális elemzés mentése** – `lib/export-to-md.ts` (3 export függvény), `app/api/save-manual-report/route.ts`, "Export MD" gomb + paste-and-save textarea a GameDetails, PlayerDetails és TeamStatistics komponensekben. Migráció: `migrations/add-manual-report-type.sql` – **kézzel kell futtatni Supabase SQL Editorban.** _Kész: 2026-05-22_
+
 - [ ] **`fouls_drawn` mező javítása a view-ban** – SQL migráció (`migrations/add-fouls-drawn-to-view.sql`) már létezik és tartalmazza a javítást. Kézzel kell futtatni a Supabase SQL Editorban. _Migráció kész, futtatás szükséges._
 
 - [x] **`offensiveRating` / `defensiveRating` névkorrekció vagy dokumentálás** – `StatInfoTooltip.tsx` `ortg`/`drtg` leírások javítva: helyes formulák és „nem NBA-féle" figyelmeztetés hozzáadva. _Kész: 2026-05-22_

@@ -2,7 +2,8 @@
 
 import { TerminologyGlossary } from './TerminologyGlossary';
 import Image from 'next/image';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Copy } from 'lucide-react';
+import { toast } from 'sonner';
 
 import { useEffect, useMemo, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, Cell, LabelList, Legend, Line, LineChart, ResponsiveContainer, Scatter, ScatterChart, Tooltip, XAxis, YAxis, ZAxis } from 'recharts';
@@ -11653,6 +11654,18 @@ export function SeasonComparison({
                       <div className="text-sm text-slate-100 whitespace-pre-line leading-relaxed">
                         {playerNarratives[selectedPlayer.id]?.text}
                       </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="border-cyan-800 hover:bg-slate-800 text-cyan-400"
+                        onClick={() => {
+                          navigator.clipboard.writeText(playerNarratives[selectedPlayer.id]?.text ?? '').catch(() => null);
+                          toast.success('Szöveg vágólapra másolva');
+                        }}
+                      >
+                        <Copy className="w-3 h-3 mr-1.5" />
+                        Másolás
+                      </Button>
                     </>
                   )}
                 </div>
@@ -12348,6 +12361,18 @@ export function SeasonComparison({
                     <div className="rounded-md border border-slate-800 bg-slate-950/50 px-3 py-2 text-sm text-slate-100 whitespace-pre-line">
                       {teamNarrative.text}
                     </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="border-cyan-800 hover:bg-slate-800 text-cyan-400"
+                      onClick={() => {
+                        navigator.clipboard.writeText(teamNarrative.text ?? '').catch(() => null);
+                        toast.success('Szöveg vágólapra másolva');
+                      }}
+                    >
+                      <Copy className="w-3 h-3 mr-1.5" />
+                      Másolás
+                    </Button>
                   </div>
                 )}
                 {teamNarrative.status === 'idle' && (
@@ -15304,6 +15329,18 @@ export function SeasonComparison({
                 <div className="text-sm text-slate-50 whitespace-pre-line bg-slate-800/60 border border-slate-700 rounded-lg px-4 py-3">
                   {pregameText}
                 </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="border-cyan-800 hover:bg-slate-800 text-cyan-400"
+                  onClick={() => {
+                    navigator.clipboard.writeText(pregameText).catch(() => null);
+                    toast.success('Szöveg vágólapra másolva');
+                  }}
+                >
+                  <Copy className="w-3 h-3 mr-1.5" />
+                  Másolás
+                </Button>
               </div>
             )}
           </div>
@@ -16895,6 +16932,18 @@ export function SeasonComparison({
               <div className="text-sm text-slate-50 whitespace-pre-line bg-slate-800/60 border border-slate-700 rounded-lg px-4 py-3">
                 {textReport}
               </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-cyan-800 hover:bg-slate-800 text-cyan-400"
+                onClick={() => {
+                  navigator.clipboard.writeText(textReport).catch(() => null);
+                  toast.success('Szöveg vágólapra másolva');
+                }}
+              >
+                <Copy className="w-3 h-3 mr-1.5" />
+                Másolás
+              </Button>
             </div>
           )}
 
