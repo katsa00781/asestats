@@ -261,6 +261,10 @@ export type ScoutingReport = {
     notes: string[];
     defenseNotes: string[];
   };
+  teamStats?: {
+    own: { pace: number; efg: number; threeRate: number; threePct: number; turnoverRate: number; ftRate: number; orebRate: number; assistRate: number };
+    opponent: { pace: number; efg: number; threeRate: number; threePct: number; turnoverRate: number; ftRate: number; orebRate: number; assistRate: number };
+  };
   summary: string;
 };
 
@@ -2207,6 +2211,28 @@ export const analyzePreGameScouting = (
     shotProfileContext,
     advancedPlayers,
     advancedPlayersEligibility,
+    teamStats: {
+      own: {
+        pace: normalizedOwn.pace,
+        efg: normalizedOwn.efg,
+        threeRate: round(normalizedOwn.threeRate * 100, 1),
+        threePct: normalizedOwn.threePct,
+        turnoverRate: round(normalizedOwn.turnoverRate * 100, 1),
+        ftRate: round(normalizedOwn.ftRate * 100, 1),
+        orebRate: round(normalizedOwn.orebRate * 100, 1),
+        assistRate: round(normalizedOwn.assistRate * 100, 1),
+      },
+      opponent: {
+        pace: normalizedOpponent.pace,
+        efg: normalizedOpponent.efg,
+        threeRate: round(normalizedOpponent.threeRate * 100, 1),
+        threePct: normalizedOpponent.threePct,
+        turnoverRate: round(normalizedOpponent.turnoverRate * 100, 1),
+        ftRate: round(normalizedOpponent.ftRate * 100, 1),
+        orebRate: round(normalizedOpponent.orebRate * 100, 1),
+        assistRate: round(normalizedOpponent.assistRate * 100, 1),
+      },
+    },
     riskFlags: riskNotes.flags,
     positionComparisonNote: positionComparisonNote || undefined,
     llmContext,
