@@ -163,17 +163,11 @@ export function TeamStatistics({ players, games, gameStats, teamName, seasonId, 
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h2 className="font-display uppercase tracking-wide text-primary mb-2 text-xl sm:text-2xl">
-            Csapat Statisztikák
-          </h2>
-          <p className="text-secondary text-sm sm:text-base">{teamName || 'Csapat'} teljesítménye</p>
-        </div>
-        <Button onClick={exportTeamMd} variant="outline" size="sm" className="shrink-0">
-          <Download className="w-4 h-4 mr-2" strokeWidth={1.6} />
-          Export MD
-        </Button>
+      <div>
+        <h2 className="font-display uppercase tracking-wide text-primary mb-2 text-xl sm:text-2xl">
+          Csapat Statisztikák
+        </h2>
+        <p className="text-secondary text-sm sm:text-base">{teamName || 'Csapat'} teljesítménye</p>
       </div>
 
       {/* KPI StatCard sor */}
@@ -371,10 +365,16 @@ export function TeamStatistics({ players, games, gameStats, teamName, seasonId, 
       {/* Manuális elemzés beillesztése */}
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2 text-base">
-            <ClipboardList className="h-4 w-4 text-cyan" strokeWidth={1.6} />
-            Manuális csapatelemzés beillesztése
-          </CardTitle>
+          <div className="flex items-center justify-between gap-3">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <ClipboardList className="h-4 w-4 text-cyan" strokeWidth={1.6} />
+              Manuális csapatelemzés beillesztése
+            </CardTitle>
+            <Button onClick={exportTeamMd} variant="outline" size="sm" className="text-cyan shrink-0">
+              <Download className="w-4 h-4 mr-2" strokeWidth={1.6} />
+              Export MD
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="space-y-3">
           <p className="text-xs text-secondary">

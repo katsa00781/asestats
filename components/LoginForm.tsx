@@ -23,8 +23,8 @@ export function LoginForm() {
 
     if (error) {
       toast.error('Bejelentkezési hiba', {
-        description: error.message === 'Invalid login credentials' 
-          ? 'Hibás email vagy jelszó' 
+        description: error.message === 'Invalid login credentials'
+          ? 'Hibás email vagy jelszó'
           : error.message,
       });
     } else {
@@ -35,21 +35,32 @@ export function LoginForm() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-950 dark p-4">
-      <Card className="w-full max-w-md bg-slate-900 border-slate-800">
-        <CardHeader className="space-y-3">
-          <div className="flex items-center justify-center gap-2 text-orange-500">
-            <Trophy className="h-12 w-12" />
+    <div className="min-h-screen flex items-center justify-center bg-base p-4">
+      <Card className="w-full max-w-md border-border-active shadow-panel animate-fade-slide-up">
+        <CardHeader className="space-y-4 pb-6">
+          <div className="flex items-center justify-center">
+            <div className="flex items-center justify-center w-16 h-16 rounded-xl bg-surface-2 border border-border-active shadow-glow-orange">
+              <Trophy className="h-8 w-8 text-orange" strokeWidth={1.6} />
+            </div>
           </div>
-          <CardTitle className="text-2xl text-center text-white">ASE Statisztika Kezelő</CardTitle>
-          <CardDescription className="text-center text-slate-400">
-            Jelentkezz be a statisztikák kezeléséhez
-          </CardDescription>
+          <div className="space-y-1 text-center">
+            <CardTitle className="font-display text-2xl uppercase tracking-widest text-primary">
+              ASE Statisztika
+            </CardTitle>
+            <CardDescription className="text-secondary text-sm">
+              Jelentkezz be a statisztikák kezeléséhez
+            </CardDescription>
+          </div>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="email" className="text-slate-200">Email</Label>
+            <div className="space-y-1.5">
+              <Label
+                htmlFor="email"
+                className="font-display text-xs uppercase tracking-widest text-secondary"
+              >
+                Email
+              </Label>
               <Input
                 id="email"
                 type="email"
@@ -58,11 +69,15 @@ export function LoginForm() {
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 disabled={isLoading}
-                className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500"
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="password" className="text-slate-200">Jelszó</Label>
+            <div className="space-y-1.5">
+              <Label
+                htmlFor="password"
+                className="font-display text-xs uppercase tracking-widest text-secondary"
+              >
+                Jelszó
+              </Label>
               <Input
                 id="password"
                 type="password"
@@ -71,13 +86,12 @@ export function LoginForm() {
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 disabled={isLoading}
-                className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500"
               />
             </div>
-            <Button 
-              type="submit" 
-              className="w-full bg-orange-600 hover:bg-orange-700 text-white" 
+            <Button
+              type="submit"
               disabled={isLoading}
+              className="w-full mt-2 bg-orange text-base font-display uppercase tracking-widest text-sm hover:bg-orange-dim transition-all duration-200 hover:shadow-glow-orange-hot disabled:opacity-50"
             >
               {isLoading ? 'Bejelentkezés...' : 'Bejelentkezés'}
             </Button>

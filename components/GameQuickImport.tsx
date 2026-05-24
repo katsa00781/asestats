@@ -354,10 +354,10 @@ export function GameQuickImport({ onImportComplete, selectedSeasonId }: GameQuic
   return (
     <div className="space-y-6">
       {!selectedSeasonId && (
-        <Card className="bg-orange-900/20 border-orange-500/30">
+        <Card className="border-orange-500/30 bg-orange-900/20">
           <CardContent className="p-4">
-            <div className="flex items-center gap-2 text-orange-400">
-              <AlertCircle size={20} />
+            <div className="flex items-center gap-2 text-orange">
+              <AlertCircle size={20} strokeWidth={1.6} />
               <span className="text-sm">
                 Válassz szezont fent a gyors meccs importálásához!
               </span>
@@ -366,16 +366,16 @@ export function GameQuickImport({ onImportComplete, selectedSeasonId }: GameQuic
         </Card>
       )}
       
-      <Card className="bg-slate-900 border-slate-800">
+      <Card>
         <CardHeader>
-          <CardTitle className="text-slate-50 flex items-center gap-2">
-            <Calendar className="text-emerald-400" size={20} />
+          <CardTitle className="flex items-center gap-2">
+            <Calendar className="text-positive" size={20} strokeWidth={1.6} />
             Gyors Meccs Import
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <label className="text-sm text-slate-300">
+            <label className="text-sm text-secondary">
               Illeszd be a meccs adatait
             </label>
             <Textarea
@@ -388,7 +388,7 @@ export function GameQuickImport({ onImportComplete, selectedSeasonId }: GameQuic
 Kometa-KVGY Kaposvári KK
 104 - 96
 Endo Plus Service-Honvéd`}
-              className="min-h-[200px] bg-slate-800 border-slate-700 text-slate-300 font-mono text-sm"
+              className="min-h-[200px] font-mono text-sm"
             />
           </div>
 
@@ -396,28 +396,27 @@ Endo Plus Service-Honvéd`}
             <Button
               onClick={handlePreview}
               disabled={!inputText.trim()}
-              className="bg-blue-600 hover:bg-blue-700"
+              variant="secondary"
             >
-              <Eye size={16} className="mr-2" />
+              <Eye size={16} className="mr-2" strokeWidth={1.6} />
               Előnézet
             </Button>
             {showPreview && parsedData?.isValid && (
               <Button
                 onClick={handleImport}
                 disabled={importing}
-                className="bg-emerald-600 hover:bg-emerald-700"
               >
-                <CheckCircle size={16} className="mr-2" />
+                <CheckCircle size={16} className="mr-2" strokeWidth={1.6} />
                 {importing ? 'Importálás...' : 'Import'}
               </Button>
             )}
           </div>
 
           {message && (
-            <div className={`p-4 rounded-lg ${
-              message.type === 'success' 
-                ? 'bg-emerald-900/20 border border-emerald-500/30 text-emerald-400' 
-                : 'bg-red-900/20 border border-red-500/30 text-red-400'
+            <div className={`p-4 rounded-lg border ${
+              message.type === 'success'
+                ? 'bg-emerald-900/20 border-emerald-500/30 text-positive'
+                : 'bg-red-900/20 border-red-500/30 text-negative'
             }`}>
               {message.text}
             </div>
@@ -427,66 +426,66 @@ Endo Plus Service-Honvéd`}
 
       {/* Előnézet */}
       {showPreview && parsedData && (
-        <Card className="bg-slate-900 border-slate-800">
+        <Card>
           <CardHeader>
-            <CardTitle className="text-slate-50 text-lg">Előnézet</CardTitle>
+            <CardTitle className="text-lg">Előnézet</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             {parsedData.isValid ? (
               <div className="space-y-3">
                 <div className="flex items-center gap-2">
-                  <CheckCircle className="text-emerald-400" size={20} />
-                  <span className="text-emerald-400 font-medium">Sikeres feldolgozás</span>
+                  <CheckCircle className="text-positive" size={20} strokeWidth={1.6} />
+                  <span className="text-positive font-medium">Sikeres feldolgozás</span>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4 p-4 bg-slate-800/50 rounded-lg">
+                <div className="grid grid-cols-2 gap-4 p-4 bg-surface-2 rounded-lg">
                   <div>
-                    <div className="text-xs text-slate-500 mb-1">Dátum</div>
-                    <div className="text-slate-200">{parsedData.date}</div>
+                    <div className="text-xs text-muted mb-1">Dátum</div>
+                    <div className="text-primary">{parsedData.date}</div>
                   </div>
                   <div>
-                    <div className="text-xs text-slate-500 mb-1">Időpont</div>
-                    <div className="text-slate-200">{parsedData.time}</div>
+                    <div className="text-xs text-muted mb-1">Időpont</div>
+                    <div className="text-primary">{parsedData.time}</div>
                   </div>
                   {parsedData.round && (
                     <div>
-                      <div className="text-xs text-slate-500 mb-1">Forduló</div>
-                      <div className="text-slate-200">{parsedData.round}. forduló</div>
+                      <div className="text-xs text-muted mb-1">Forduló</div>
+                      <div className="text-primary">{parsedData.round}. forduló</div>
                     </div>
                   )}
                 </div>
 
-                <div className="p-4 bg-slate-800/50 rounded-lg">
+                <div className="p-4 bg-surface-2 rounded-lg">
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex-1">
                       <Badge variant="secondary" className="mb-2">Hazai</Badge>
-                      <div className="text-slate-200 font-medium">{parsedData.homeTeam}</div>
+                      <div className="text-primary font-medium">{parsedData.homeTeam}</div>
                     </div>
                     <div className="px-4">
-                      <div className="text-2xl font-bold text-slate-50">
+                      <div className="text-2xl font-bold text-primary">
                         {parsedData.homeScore} - {parsedData.awayScore}
                       </div>
                     </div>
                     <div className="flex-1 text-right">
                       <Badge variant="secondary" className="mb-2">Vendég</Badge>
-                      <div className="text-slate-200 font-medium">{parsedData.awayTeam}</div>
+                      <div className="text-primary font-medium">{parsedData.awayTeam}</div>
                     </div>
                   </div>
                 </div>
 
-                <div className="p-4 bg-slate-800/40 rounded-lg space-y-4">
-                  <div className="text-xs text-slate-500 uppercase tracking-wide">Csapat-hozzárendelés</div>
+                <div className="p-4 bg-surface-2 rounded-lg space-y-4">
+                  <div className="text-xs text-muted uppercase tracking-wide">Csapat-hozzárendelés</div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <div className="text-sm text-slate-400">Hazai csapat a rendszerben</div>
+                      <div className="text-sm text-secondary">Hazai csapat a rendszerben</div>
                       {teamsLoading ? (
-                        <div className="h-10 rounded-md bg-slate-800 animate-pulse" />
+                        <div className="h-10 rounded-md bg-surface-2 animate-pulse" />
                       ) : (
                         <Select value={homeTeamId} onValueChange={setHomeTeamId}>
-                          <SelectTrigger className="bg-slate-800 border-slate-700 text-slate-200">
+                          <SelectTrigger>
                             <SelectValue placeholder="Válassz hazai csapatot..." />
                           </SelectTrigger>
-                          <SelectContent className="bg-slate-800 border-slate-700 text-slate-200">
+                          <SelectContent>
                             {teams.map(team => (
                               <SelectItem key={team.id} value={team.id}>
                                 {team.name}{team.is_primary ? ' ⭐' : ''}
@@ -495,20 +494,20 @@ Endo Plus Service-Honvéd`}
                           </SelectContent>
                         </Select>
                       )}
-                      <p className="text-xs text-slate-500">
+                      <p className="text-xs text-muted">
                         Automatikusan próbáljuk felismerni a megadott hazai csapatot, de itt felülírhatod.
                       </p>
                     </div>
                     <div className="space-y-2">
-                      <div className="text-sm text-slate-400">Vendég csapat a rendszerben</div>
+                      <div className="text-sm text-secondary">Vendég csapat a rendszerben</div>
                       {teamsLoading ? (
-                        <div className="h-10 rounded-md bg-slate-800 animate-pulse" />
+                        <div className="h-10 rounded-md bg-surface-2 animate-pulse" />
                       ) : (
                         <Select value={awayTeamId} onValueChange={setAwayTeamId}>
-                          <SelectTrigger className="bg-slate-800 border-slate-700 text-slate-200">
+                          <SelectTrigger>
                             <SelectValue placeholder="Válassz vendég csapatot..." />
                           </SelectTrigger>
-                          <SelectContent className="bg-slate-800 border-slate-700 text-slate-200">
+                          <SelectContent>
                             {teams.map(team => (
                               <SelectItem key={team.id} value={team.id}>
                                 {team.name}{team.is_primary ? ' ⭐' : ''}
@@ -517,24 +516,24 @@ Endo Plus Service-Honvéd`}
                           </SelectContent>
                         </Select>
                       )}
-                      <p className="text-xs text-slate-500">
+                      <p className="text-xs text-muted">
                         Fontos, hogy a vendég csapat is a megfelelő sorba kerüljön a Supabase-ben.
                       </p>
                     </div>
                   </div>
                 </div>
 
-                <div className="text-xs text-slate-500">
-                  💡 Ellenőrizd az adatokat importálás előtt!
+                <div className="text-xs text-muted">
+                  Ellenőrizd az adatokat importálás előtt!
                 </div>
               </div>
             ) : (
               <div className="space-y-3">
                 <div className="flex items-center gap-2">
-                  <AlertCircle className="text-red-400" size={20} />
-                  <span className="text-red-400 font-medium">Hibák a feldolgozás során</span>
+                  <AlertCircle className="text-negative" size={20} strokeWidth={1.6} />
+                  <span className="text-negative font-medium">Hibák a feldolgozás során</span>
                 </div>
-                <ul className="list-disc list-inside space-y-1 text-red-300 text-sm">
+                <ul className="list-disc list-inside space-y-1 text-negative text-sm">
                   {parsedData.errors.map((error, idx) => (
                     <li key={idx}>{error}</li>
                   ))}

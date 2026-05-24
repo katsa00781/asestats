@@ -23,10 +23,10 @@ type Props = {
 }
 
 const TOOLTIP_STYLE = {
-  backgroundColor: '#1e293b',
-  border: '1px solid #475569',
+  backgroundColor: 'var(--bg-surface-2)',
+  border: '1px solid var(--border-subtle)',
   borderRadius: '8px',
-  color: '#f1f5f9',
+  color: 'var(--text-primary)',
   fontSize: '13px',
 }
 
@@ -40,16 +40,16 @@ function round1(v: number) {
 
 function WinRateBar({ result }: { result: SituationResult }) {
   const wr = result.winRate
-  const color = wr >= 0.6 ? '#22c55e' : wr >= 0.4 ? '#eab308' : '#ef4444'
+  const color = wr >= 0.6 ? 'var(--positive)' : wr >= 0.4 ? 'var(--warning)' : 'var(--negative)'
   return (
     <div className="space-y-1">
-      <div className="flex justify-between text-xs text-slate-400">
+      <div className="flex justify-between text-xs text-secondary">
         <span>{result.label}</span>
         <span className="font-medium" style={{ color }}>
           {result.wins}-{result.losses} ({pct(wr)})
         </span>
       </div>
-      <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
+      <div className="h-2 bg-surface-3 rounded-full overflow-hidden">
         <div
           className="h-full rounded-full transition-all"
           style={{ width: `${Math.round(wr * 100)}%`, backgroundColor: color }}
@@ -61,27 +61,27 @@ function WinRateBar({ result }: { result: SituationResult }) {
 
 function MetricCard({ label, value, unit = '' }: { label: string; value: number; unit?: string }) {
   return (
-    <div className="bg-slate-800 rounded-lg p-3 text-center">
-      <div className="text-lg font-bold text-slate-100">{round1(value)}{unit}</div>
-      <div className="text-xs text-slate-400 mt-0.5">{label}</div>
+    <div className="bg-surface-2 rounded-lg p-3 text-center border border-border-subtle">
+      <div className="text-lg font-mono tabular-nums text-primary">{round1(value)}{unit}</div>
+      <div className="text-xs text-secondary mt-0.5">{label}</div>
     </div>
   )
 }
 
 function HomeAwayMetric({ label, home, away }: { label: string; home: number; away: number }) {
-  const homeColor = home >= away ? '#22c55e' : '#ef4444'
-  const awayColor = away >= home ? '#22c55e' : '#ef4444'
+  const homeColor = home >= away ? 'var(--positive)' : 'var(--negative)'
+  const awayColor = away >= home ? 'var(--positive)' : 'var(--negative)'
   return (
-    <div className="bg-slate-800 rounded-lg p-3">
-      <div className="text-xs text-slate-400 mb-2 text-center">{label}</div>
+    <div className="bg-surface-2 rounded-lg p-3 border border-border-subtle">
+      <div className="text-xs text-secondary mb-2 text-center">{label}</div>
       <div className="flex justify-around">
         <div className="text-center">
-          <div className="text-sm font-bold" style={{ color: homeColor }}>{round1(home)}</div>
-          <div className="text-xs text-slate-500">Hazai</div>
+          <div className="text-sm font-bold font-mono tabular-nums" style={{ color: homeColor }}>{round1(home)}</div>
+          <div className="text-xs text-muted">Hazai</div>
         </div>
         <div className="text-center">
-          <div className="text-sm font-bold" style={{ color: awayColor }}>{round1(away)}</div>
-          <div className="text-xs text-slate-500">Vendég</div>
+          <div className="text-sm font-bold font-mono tabular-nums" style={{ color: awayColor }}>{round1(away)}</div>
+          <div className="text-xs text-muted">Vendég</div>
         </div>
       </div>
     </div>
@@ -138,7 +138,7 @@ export function SituationalAnalysis({ selectedTeamId, selectedSeasonId, teamName
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-16 text-slate-400">
+      <div className="flex items-center justify-center py-16 text-secondary">
         <Loader2 className="animate-spin mr-2" size={20} />
         Betöltés...
       </div>
@@ -147,7 +147,7 @@ export function SituationalAnalysis({ selectedTeamId, selectedSeasonId, teamName
 
   if (error) {
     return (
-      <div className="text-center py-16 text-red-400">
+      <div className="text-center py-16 text-negative">
         <p>{error}</p>
       </div>
     )
@@ -182,34 +182,34 @@ export function SituationalAnalysis({ selectedTeamId, selectedSeasonId, teamName
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold text-slate-100">Szituációs Elemzés</h2>
-        {teamName && <Badge variant="outline" className="border-slate-600 text-slate-300">{teamName}</Badge>}
+        <h2 className="text-xl font-display uppercase tracking-wide text-primary">Szituációs Elemzés</h2>
+        {teamName && <Badge className="badge-neutral">{teamName}</Badge>}
       </div>
 
       <div className="grid grid-cols-3 gap-3 text-center">
-        <div className="bg-slate-800 rounded-lg p-3">
-          <div className="text-2xl font-bold text-slate-100">{totalGames}</div>
-          <div className="text-xs text-slate-400">Mérkőzés</div>
+        <div className="bg-surface-2 rounded-lg p-3 border border-border-subtle">
+          <div className="text-2xl font-mono tabular-nums text-primary">{totalGames}</div>
+          <div className="text-xs text-secondary">Mérkőzés</div>
         </div>
-        <div className="bg-slate-800 rounded-lg p-3">
-          <div className="text-2xl font-bold text-blue-400">{gamesWithQuarterData}</div>
-          <div className="text-xs text-slate-400">Negyed adat</div>
+        <div className="bg-surface-2 rounded-lg p-3 border border-border-subtle">
+          <div className="text-2xl font-mono tabular-nums text-cyan">{gamesWithQuarterData}</div>
+          <div className="text-xs text-secondary">Negyed adat</div>
         </div>
-        <div className="bg-slate-800 rounded-lg p-3">
-          <div className="text-2xl font-bold text-purple-400">{gamesWithMetricsData}</div>
-          <div className="text-xs text-slate-400">Metrika adat</div>
+        <div className="bg-surface-2 rounded-lg p-3 border border-border-subtle">
+          <div className="text-2xl font-mono tabular-nums text-ai">{gamesWithMetricsData}</div>
+          <div className="text-xs text-secondary">Metrika adat</div>
         </div>
       </div>
 
       <Tabs defaultValue="quarters" className="space-y-4">
-        <TabsList className="bg-slate-800 border border-slate-700">
-          <TabsTrigger value="quarters" className="data-[state=active]:bg-slate-700 text-slate-300">
+        <TabsList>
+          <TabsTrigger value="quarters">
             Negyedek
           </TabsTrigger>
-          <TabsTrigger value="situations" className="data-[state=active]:bg-slate-700 text-slate-300">
+          <TabsTrigger value="situations">
             Játékhelyzetek
           </TabsTrigger>
-          <TabsTrigger value="form" className="data-[state=active]:bg-slate-700 text-slate-300">
+          <TabsTrigger value="form">
             Forma
           </TabsTrigger>
         </TabsList>
@@ -217,43 +217,43 @@ export function SituationalAnalysis({ selectedTeamId, selectedSeasonId, teamName
         {/* NEGYEDEK TAB */}
         <TabsContent value="quarters" className="space-y-4">
           {gamesWithQuarterData === 0 ? (
-            <div className="text-center py-10 text-slate-500">Nincs negyed-szintű adat ehhez a szezonhoz.</div>
+            <div className="text-center py-10 text-muted">Nincs negyed-szintű adat ehhez a szezonhoz.</div>
           ) : (
             <>
-              <Card className="bg-slate-900 border-slate-700">
+              <Card>
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-slate-200 text-sm">Átlagos pontok negyedenként</CardTitle>
+                  <CardTitle className="text-sm">Átlagos pontok negyedenként</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <ResponsiveContainer width="100%" height={220}>
                     <BarChart data={quarterChartData} barCategoryGap="30%">
-                      <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                      <XAxis dataKey="name" stroke="#94a3b8" tick={{ fontSize: 12 }} />
-                      <YAxis stroke="#94a3b8" tick={{ fontSize: 11 }} domain={[0, 'auto']} />
+                      <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" />
+                      <XAxis dataKey="name" stroke="var(--text-secondary)" tick={{ fontSize: 12 }} />
+                      <YAxis stroke="var(--text-secondary)" tick={{ fontSize: 11 }} domain={[0, 'auto']} />
                       <Tooltip contentStyle={TOOLTIP_STYLE} />
-                      <Bar dataKey="Szerzett" fill="#3b82f6" radius={[3, 3, 0, 0]} />
-                      <Bar dataKey="Kapott" fill="#ef4444" radius={[3, 3, 0, 0]} />
+                      <Bar dataKey="Szerzett" fill="var(--accent-cyan)" radius={[3, 3, 0, 0]} />
+                      <Bar dataKey="Kapott" fill="var(--negative)" radius={[3, 3, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 </CardContent>
               </Card>
 
-              <Card className="bg-slate-900 border-slate-700">
+              <Card>
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-slate-200 text-sm">Negyed mérleg és különbség</CardTitle>
+                  <CardTitle className="text-sm">Negyed mérleg és különbség</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="grid grid-cols-4 gap-3">
                     {quarters.map(q => {
-                      const color = q.avgMargin > 0 ? '#22c55e' : q.avgMargin < 0 ? '#ef4444' : '#94a3b8'
+                      const color = q.avgMargin > 0 ? 'var(--positive)' : q.avgMargin < 0 ? 'var(--negative)' : 'var(--text-secondary)'
                       return (
-                        <div key={q.quarter} className="bg-slate-800 rounded-lg p-3 text-center space-y-1">
-                          <div className="text-sm font-bold text-slate-200">{q.label}</div>
-                          <div className="text-xs text-slate-400">{q.wins}Gy – {q.losses}V</div>
-                          <div className="text-base font-semibold" style={{ color }}>
+                        <div key={q.quarter} className="bg-surface-2 rounded-lg p-3 text-center space-y-1 border border-border-subtle">
+                          <div className="text-sm font-bold text-primary">{q.label}</div>
+                          <div className="text-xs text-secondary">{q.wins}Gy – {q.losses}V</div>
+                          <div className="text-base font-mono tabular-nums font-semibold" style={{ color }}>
                             {q.avgMargin > 0 ? '+' : ''}{round1(q.avgMargin)}
                           </div>
-                          <div className="text-xs text-slate-500">{round1(q.avgScored)} / {round1(q.avgAllowed)}</div>
+                          <div className="text-xs text-muted">{round1(q.avgScored)} / {round1(q.avgAllowed)}</div>
                         </div>
                       )
                     })}
@@ -262,9 +262,9 @@ export function SituationalAnalysis({ selectedTeamId, selectedSeasonId, teamName
               </Card>
 
               {gamesWithMetricsData > 0 && (
-                <Card className="bg-slate-900 border-slate-700">
+                <Card>
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-slate-200 text-sm">Csapat metrikák ({gamesWithMetricsData} meccs)</CardTitle>
+                    <CardTitle className="text-sm">Csapat metrikák ({gamesWithMetricsData} meccs)</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
@@ -288,9 +288,9 @@ export function SituationalAnalysis({ selectedTeamId, selectedSeasonId, teamName
         {/* JÁTÉKHELYZETEK TAB */}
         <TabsContent value="situations" className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Card className="bg-slate-900 border-slate-700">
+            <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-slate-200 text-sm">Hazai / Vendég</CardTitle>
+                <CardTitle className="text-sm">Hazai / Vendég</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 <WinRateBar result={situations.home} />
@@ -298,9 +298,9 @@ export function SituationalAnalysis({ selectedTeamId, selectedSeasonId, teamName
               </CardContent>
             </Card>
 
-            <Card className="bg-slate-900 border-slate-700">
+            <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-slate-200 text-sm">Marzsok</CardTitle>
+                <CardTitle className="text-sm">Marzsok</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 <WinRateBar result={situations.closeGames} />
@@ -310,9 +310,9 @@ export function SituationalAnalysis({ selectedTeamId, selectedSeasonId, teamName
 
             {gamesWithQuarterData > 0 && (
               <>
-                <Card className="bg-slate-900 border-slate-700">
+                <Card>
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-slate-200 text-sm">Félidős állás</CardTitle>
+                    <CardTitle className="text-sm">Félidős állás</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-3">
                     <WinRateBar result={situations.leadingAtHalf} />
@@ -320,9 +320,9 @@ export function SituationalAnalysis({ selectedTeamId, selectedSeasonId, teamName
                   </CardContent>
                 </Card>
 
-                <Card className="bg-slate-900 border-slate-700">
+                <Card>
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-slate-200 text-sm">1. negyed hatása</CardTitle>
+                    <CardTitle className="text-sm">1. negyed hatása</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-3">
                     <WinRateBar result={situations.wonQ1} />
@@ -333,23 +333,23 @@ export function SituationalAnalysis({ selectedTeamId, selectedSeasonId, teamName
             )}
           </div>
 
-          <Card className="bg-slate-900 border-slate-700">
+          <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-slate-200 text-sm">Összefoglalás</CardTitle>
+              <CardTitle className="text-sm">Összefoglalás</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
                 {Object.values(situations).map(s => (
-                  <div key={s.label} className="flex items-center justify-between text-sm py-1 border-b border-slate-800 last:border-0">
-                    <span className="text-slate-300">{s.label}</span>
+                  <div key={s.label} className="flex items-center justify-between text-sm py-1 border-b border-border-subtle last:border-0">
+                    <span className="text-primary">{s.label}</span>
                     <div className="flex items-center gap-3">
-                      <span className="text-slate-400 text-xs">{s.wins}-{s.losses}</span>
+                      <span className="text-secondary text-xs">{s.wins}-{s.losses}</span>
                       <Badge
-                        variant="outline"
                         className="text-xs w-14 justify-center"
                         style={{
-                          borderColor: s.winRate >= 0.6 ? '#22c55e' : s.winRate >= 0.4 ? '#eab308' : '#ef4444',
-                          color: s.winRate >= 0.6 ? '#22c55e' : s.winRate >= 0.4 ? '#eab308' : '#ef4444',
+                          borderColor: s.winRate >= 0.6 ? 'var(--positive)' : s.winRate >= 0.4 ? 'var(--warning)' : 'var(--negative)',
+                          color: s.winRate >= 0.6 ? 'var(--positive)' : s.winRate >= 0.4 ? 'var(--warning)' : 'var(--negative)',
+                          backgroundColor: 'transparent',
                         }}
                       >
                         {pct(s.winRate)}
@@ -364,16 +364,16 @@ export function SituationalAnalysis({ selectedTeamId, selectedSeasonId, teamName
 
         {/* FORMA TAB */}
         <TabsContent value="form" className="space-y-4">
-          <Card className="bg-slate-900 border-slate-700">
+          <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-slate-200 text-sm">Meccsenkénti különbség</CardTitle>
+              <CardTitle className="text-sm">Meccsenkénti különbség</CardTitle>
             </CardHeader>
             <CardContent>
               <ResponsiveContainer width="100%" height={200}>
                 <BarChart data={marginChartData} barCategoryGap="15%">
-                  <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                  <XAxis dataKey="name" stroke="#94a3b8" tick={{ fontSize: 10 }} />
-                  <YAxis stroke="#94a3b8" tick={{ fontSize: 11 }} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" />
+                  <XAxis dataKey="name" stroke="var(--text-secondary)" tick={{ fontSize: 10 }} />
+                  <YAxis stroke="var(--text-secondary)" tick={{ fontSize: 11 }} />
                   <Tooltip
                     contentStyle={TOOLTIP_STYLE}
                     formatter={(value, _name, props) => [
@@ -383,7 +383,7 @@ export function SituationalAnalysis({ selectedTeamId, selectedSeasonId, teamName
                   />
                   <Bar dataKey="Különbség" radius={[3, 3, 0, 0]}>
                     {marginChartData.map((entry, idx) => (
-                      <Cell key={idx} fill={entry.result === 'W' ? '#3b82f6' : '#ef4444'} />
+                      <Cell key={idx} fill={entry.result === 'W' ? 'var(--accent-cyan)' : 'var(--negative)'} />
                     ))}
                   </Bar>
                 </BarChart>
@@ -392,23 +392,23 @@ export function SituationalAnalysis({ selectedTeamId, selectedSeasonId, teamName
           </Card>
 
           {formChartData.length > 0 && (
-            <Card className="bg-slate-900 border-slate-700">
+            <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-slate-200 text-sm">Gördülő győzési% (5 meccs)</CardTitle>
+                <CardTitle className="text-sm">Gördülő győzési% (5 meccs)</CardTitle>
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={180}>
                   <LineChart data={formChartData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                    <XAxis dataKey="name" stroke="#94a3b8" tick={{ fontSize: 9 }} interval="preserveStartEnd" />
-                    <YAxis stroke="#94a3b8" tick={{ fontSize: 11 }} domain={[0, 100]} unit="%" />
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" />
+                    <XAxis dataKey="name" stroke="var(--text-secondary)" tick={{ fontSize: 9 }} interval="preserveStartEnd" />
+                    <YAxis stroke="var(--text-secondary)" tick={{ fontSize: 11 }} domain={[0, 100]} unit="%" />
                     <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v) => [`${v}%`, 'Győz%']} />
                     <Line
                       type="monotone"
                       dataKey="Gördülő győz% (5)"
-                      stroke="#a78bfa"
+                      stroke="var(--accent-ai)"
                       strokeWidth={2}
-                      dot={{ r: 3, fill: '#a78bfa' }}
+                      dot={{ r: 3, fill: 'var(--accent-ai)' }}
                     />
                   </LineChart>
                 </ResponsiveContainer>
@@ -416,36 +416,36 @@ export function SituationalAnalysis({ selectedTeamId, selectedSeasonId, teamName
             </Card>
           )}
 
-          <Card className="bg-slate-900 border-slate-700">
+          <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-slate-200 text-sm">Meccs lista</CardTitle>
+              <CardTitle className="text-sm">Meccs lista</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-1 max-h-72 overflow-y-auto pr-1">
                 {[...form].reverse().map(f => (
-                  <div key={f.gameIndex} className="flex items-center justify-between text-xs py-1.5 border-b border-slate-800 last:border-0">
+                  <div key={f.gameIndex} className="flex items-center justify-between text-xs py-1.5 border-b border-border-subtle last:border-0">
                     <div className="flex items-center gap-2">
                       <Badge
-                        variant="outline"
                         className="w-6 h-5 text-xs flex items-center justify-center p-0"
                         style={{
-                          borderColor: f.result === 'W' ? '#3b82f6' : '#ef4444',
-                          color: f.result === 'W' ? '#3b82f6' : '#ef4444',
+                          borderColor: f.result === 'W' ? 'var(--accent-cyan)' : 'var(--negative)',
+                          color: f.result === 'W' ? 'var(--accent-cyan)' : 'var(--negative)',
+                          backgroundColor: 'transparent',
                         }}
                       >
                         {f.result}
                       </Badge>
-                      <span className="text-slate-300">{f.opponent}</span>
+                      <span className="text-primary">{f.opponent}</span>
                     </div>
                     <div className="flex items-center gap-3">
-                      <span className="text-slate-400">{f.ourScore}–{f.oppScore}</span>
+                      <span className="text-secondary">{f.ourScore}–{f.oppScore}</span>
                       <span
-                        className="w-10 text-right font-medium"
-                        style={{ color: f.margin > 0 ? '#22c55e' : '#ef4444' }}
+                        className="w-10 text-right font-mono tabular-nums font-medium"
+                        style={{ color: f.margin > 0 ? 'var(--positive)' : 'var(--negative)' }}
                       >
                         {f.margin > 0 ? '+' : ''}{f.margin}
                       </span>
-                      <span className="text-slate-600 text-xs w-16 text-right">
+                      <span className="text-muted text-xs w-16 text-right">
                         {f.date.slice(0, 10)}
                       </span>
                     </div>

@@ -177,7 +177,7 @@ export function StandingsImport({ onImportComplete, selectedSeasonId, selectedSe
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-muted">
             Aktív szezon: {selectedSeasonName || 'nincs kiválasztva'}
           </p>
 
@@ -213,21 +213,21 @@ export function StandingsImport({ onImportComplete, selectedSeasonId, selectedSe
               rows={10}
               className="font-mono text-xs sm:text-sm"
             />
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-muted">
               Másold ki a teljes tabellát (fejléccel együtt) és illeszd be ide.
             </p>
           </div>
 
-          <Button 
-            onClick={handleImport} 
+          <Button
+            onClick={handleImport}
             disabled={isImporting || !selectedSeasonId || !textData.trim() || !matchday.trim()}
-            className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-600 disabled:opacity-50"
+            className="w-full"
           >
             {isImporting ? 'Importálás...' : 'Importálás'}
           </Button>
           {!matchday.trim() && textData.trim() && (
-            <p className="text-sm text-amber-600">
-              ⚠️ Add meg a fordulószámot az importáláshoz!
+            <p className="text-sm text-warning">
+              Add meg a fordulószámot az importáláshoz!
             </p>
           )}
         </CardContent>
@@ -258,22 +258,22 @@ export function StandingsImport({ onImportComplete, selectedSeasonId, selectedSe
                 </thead>
                 <tbody>
                   {previewStandings.map((row, idx) => (
-                    <tr key={idx} className="border-b hover:bg-slate-100">
-                      <td className="p-2 font-semibold text-xs sm:text-sm">{row.position}</td>
-                      <td className="p-2 text-xs sm:text-sm">{row.team}</td>
-                      <td className="text-center p-2">{row.matches}</td>
-                      <td className="text-center p-2 hidden sm:table-cell">{(row.winPct * 100).toFixed(0)}%</td>
-                      <td className="text-center p-2 font-semibold">{row.points}</td>
-                      <td className="text-center p-2 text-green-600">{row.wins}</td>
-                      <td className="text-center p-2 text-red-600">{row.losses}</td>
-                      <td className="text-center p-2 hidden md:table-cell">{row.scored}</td>
-                      <td className="text-center p-2 hidden md:table-cell">{row.conceded}</td>
+                    <tr key={idx} className="border-b border-border-subtle hover:bg-surface-2/50">
+                      <td className="p-2 font-semibold text-xs sm:text-sm text-primary">{row.position}</td>
+                      <td className="p-2 text-xs sm:text-sm text-primary">{row.team}</td>
+                      <td className="text-center p-2 text-secondary">{row.matches}</td>
+                      <td className="text-center p-2 hidden sm:table-cell text-secondary">{(row.winPct * 100).toFixed(0)}%</td>
+                      <td className="text-center p-2 font-semibold text-primary">{row.points}</td>
+                      <td className="text-center p-2 text-positive">{row.wins}</td>
+                      <td className="text-center p-2 text-negative">{row.losses}</td>
+                      <td className="text-center p-2 hidden md:table-cell text-secondary">{row.scored}</td>
+                      <td className="text-center p-2 hidden md:table-cell text-secondary">{row.conceded}</td>
                       <td className="text-center p-2">
-                        <span className={row.scored - row.conceded > 0 ? 'text-green-600' : 'text-red-600'}>
+                        <span className={row.scored - row.conceded > 0 ? 'text-positive' : 'text-negative'}>
                           {row.scored - row.conceded > 0 ? '+' : ''}{row.scored - row.conceded}
                         </span>
                       </td>
-                      <td className="text-center p-2 hidden lg:table-cell">{row.streak}</td>
+                      <td className="text-center p-2 hidden lg:table-cell text-secondary">{row.streak}</td>
                     </tr>
                   ))}
                 </tbody>

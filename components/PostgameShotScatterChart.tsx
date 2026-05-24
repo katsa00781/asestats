@@ -12,6 +12,7 @@ import {
   type Plugin,
 } from 'chart.js';
 import { Scatter } from 'react-chartjs-2';
+import { CHART_COLORS, CHARTJS_TOOLTIP_STYLE } from '@/lib/chart-theme';
 
 ChartJS.register(LinearScale, PointElement, Tooltip, Legend);
 
@@ -312,8 +313,8 @@ export function PostgameShotScatterChart({ shots, showPoints, showHeatmap, heatm
         {
           label: 'Bement',
           data: showPoints ? made.map(shot => ({ x: shot.y, y: shot.x, player: shot.player })) : [],
-          backgroundColor: 'rgba(34, 197, 94, 0.92)',
-          borderColor: '#0f172a',
+          backgroundColor: `${CHART_COLORS.positive}EB`,
+          borderColor: '#050B14',
           borderWidth: 1,
           pointRadius: 5,
           pointHoverRadius: 7,
@@ -321,8 +322,8 @@ export function PostgameShotScatterChart({ shots, showPoints, showHeatmap, heatm
         {
           label: 'Kimaradt',
           data: showPoints ? missed.map(shot => ({ x: shot.y, y: shot.x, player: shot.player })) : [],
-          backgroundColor: 'rgba(239, 68, 68, 0.92)',
-          borderColor: '#0f172a',
+          backgroundColor: `${CHART_COLORS.negative}EB`,
+          borderColor: '#050B14',
           borderWidth: 1,
           pointRadius: 5,
           pointHoverRadius: 7,
@@ -363,6 +364,7 @@ export function PostgameShotScatterChart({ shots, showPoints, showHeatmap, heatm
       },
       tooltip: {
         enabled: showPoints,
+        ...CHARTJS_TOOLTIP_STYLE,
         callbacks: {
           label(context) {
             const raw = context.raw as { x: number; y: number; player?: string };
@@ -374,7 +376,7 @@ export function PostgameShotScatterChart({ shots, showPoints, showHeatmap, heatm
   }), [showPoints]);
 
   return (
-    <div className="h-130 rounded-lg border border-slate-700 bg-slate-950/40">
+    <div className="h-130 rounded-lg border border-border-active bg-base/40">
       <Scatter key={chartRenderKey} data={chartData} options={options} plugins={[courtPlugin, heatmapPlugin]} />
     </div>
   );

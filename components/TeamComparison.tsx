@@ -312,7 +312,7 @@ const buildRadarDataset = (profiles: TeamProfile[]): RadarDatum[] => {
 	});
 };
 
-const TEAM_COLORS = ['#10b981', '#8b5cf6'];
+const TEAM_COLORS = ['var(--positive)', 'var(--accent-ai)'];
 
 export function TeamComparison({ allSeasons, allTeams, currentSeasonId, currentTeamId, onBack }: TeamComparisonProps) {
 	const [filterSeasonId, setFilterSeasonId] = useState<string>(currentSeasonId || 'all');
@@ -621,10 +621,10 @@ export function TeamComparison({ allSeasons, allTeams, currentSeasonId, currentT
 	};
 
 	const renderMetricRow = (label: string, fn: (team: TeamProfile) => string) => (
-		<tr key={label} className="border-b border-slate-800">
-			<td className="py-2 text-sm text-slate-400">{label}</td>
+		<tr key={label} className="border-b border-border-subtle">
+			<td className="py-2 text-sm text-secondary">{label}</td>
 			{selectedProfiles.map((team) => (
-				<td key={`${team.key}-${label}`} className="py-2 text-right text-sm text-slate-100">
+				<td key={`${team.key}-${label}`} className="py-2 text-right text-sm font-mono tabular-nums text-primary">
 					{fn(team)}
 				</td>
 			))}
@@ -656,18 +656,18 @@ export function TeamComparison({ allSeasons, allTeams, currentSeasonId, currentT
 		<div className="space-y-6">
 			<div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
 				<div>
-					<p className="text-sm text-emerald-400 uppercase tracking-wide">Hunbasket hivatalos statisztikák</p>
-					<h2 className="text-2xl text-slate-50">Csapatok összehasonlítása</h2>
-					<p className="text-sm text-slate-400">Válassz ki két csapatot és vizsgáld meg a formát, fejlett mutatókat és egymás elleni teljesítményt.</p>
+					<p className="text-sm text-positive uppercase tracking-wide">Hunbasket hivatalos statisztikák</p>
+					<h2 className="text-2xl font-display uppercase tracking-wide text-primary">Csapatok összehasonlítása</h2>
+					<p className="text-sm text-secondary">Válassz ki két csapatot és vizsgáld meg a formát, fejlett mutatókat és egymás elleni teljesítményt.</p>
 				</div>
 				<div className="flex flex-wrap gap-2">
-					<Button variant="ghost" className="gap-2 text-slate-300" onClick={onBack}>
+					<Button variant="ghost" className="gap-2 text-secondary hover:bg-surface-2" onClick={onBack}>
 						<ArrowLeft className="h-4 w-4" />
 						Vissza
 					</Button>
 					<Button
 						variant="outline"
-						className="gap-2 border-slate-700 text-slate-200"
+						className="gap-2 border-border-subtle text-secondary hover:bg-surface-2"
 						onClick={resetSelection}
 						disabled={!selectedKeys.length}
 					>
@@ -677,20 +677,20 @@ export function TeamComparison({ allSeasons, allTeams, currentSeasonId, currentT
 				</div>
 			</div>
 
-			<Card className="border-slate-800 bg-slate-900/60">
+			<Card>
 				<CardHeader>
-					<CardTitle className="text-slate-50 text-lg">Szűrők</CardTitle>
+					<CardTitle className="text-lg">Szűrők</CardTitle>
 				</CardHeader>
 				<CardContent className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-					<div className="flex flex-col gap-2 text-sm text-slate-400">
+					<div className="flex flex-col gap-2 text-sm text-secondary">
 						<span>Válaszd ki a szezont, amelyből a Hunbasket adatokat használjuk.</span>
-						<span className="text-xs text-slate-500">Minden mutató hivatalos jegyzőkönyvből készül.</span>
+						<span className="text-xs text-muted">Minden mutató hivatalos jegyzőkönyvből készül.</span>
 					</div>
 					<Select value={filterSeasonId} onValueChange={(value) => setFilterSeasonId(value)}>
-						<SelectTrigger className="w-full bg-slate-800 text-slate-200 lg:w-64">
+						<SelectTrigger className="w-full lg:w-64">
 							<SelectValue placeholder="Szezon kiválasztása" />
 						</SelectTrigger>
-						<SelectContent className="bg-slate-900 text-slate-100">
+						<SelectContent>
 							<SelectItem value="all">Mindegyik szezon</SelectItem>
 							{allSeasons.map((season) => (
 								<SelectItem key={season.id} value={season.id}>
@@ -708,18 +708,18 @@ export function TeamComparison({ allSeasons, allTeams, currentSeasonId, currentT
 				</div>
 			)}
 
-			<Card className="border-slate-800 bg-slate-900/70">
+			<Card>
 				<CardHeader>
-					<CardTitle className="text-slate-50 text-lg">Csapat szezonszintű listája</CardTitle>
+					<CardTitle className="text-lg">Csapat szezonszintű listája</CardTitle>
 				</CardHeader>
 				<CardContent className="space-y-4">
-					<div className="flex items-center justify-between text-sm text-slate-400">
+					<div className="flex items-center justify-between text-sm text-secondary">
 						<span>Válassz ki maximum két csapatot az összehasonlításhoz.</span>
-						{listLoading && <span className="text-emerald-400">Betöltés...</span>}
+						{listLoading && <span className="text-positive">Betöltés...</span>}
 					</div>
-					<div className="overflow-auto rounded-lg border border-slate-800">
+					<div className="overflow-auto rounded-lg border border-border-subtle">
 						<table className="min-w-full text-sm">
-							<thead className="bg-slate-800 text-slate-400">
+							<thead className="bg-surface-2 text-secondary">
 								<tr>
 									<th className="px-4 py-2 text-left font-medium">Csapat</th>
 									<th className="px-4 py-2 text-left font-medium">Szezon</th>
@@ -733,15 +733,15 @@ export function TeamComparison({ allSeasons, allTeams, currentSeasonId, currentT
 								{teamSummaries.map((summary) => {
 									const selected = selectedKeys.includes(summary.key);
 									return (
-										<tr key={summary.key} className="border-b border-slate-800/60">
-											<td className="px-4 py-3 text-slate-100">{summary.teamName}</td>
-											<td className="px-4 py-3 text-slate-300">{summary.seasonName}</td>
-											<td className="px-4 py-3 text-center text-slate-200">
+										<tr key={summary.key} className="border-b border-border-subtle/60">
+											<td className="px-4 py-3 text-primary">{summary.teamName}</td>
+											<td className="px-4 py-3 text-secondary">{summary.seasonName}</td>
+											<td className="px-4 py-3 text-center font-mono tabular-nums text-primary">
 												{summary.wins}-{summary.losses}
 											</td>
-											<td className="px-4 py-3 text-center text-slate-200">{formatNumber(summary.avgPoints)}</td>
-											<td className="px-4 py-3 text-center text-slate-200">
-												<span className={summary.pointDiff >= 0 ? 'text-emerald-400' : 'text-red-400'}>
+											<td className="px-4 py-3 text-center font-mono tabular-nums text-primary">{formatNumber(summary.avgPoints)}</td>
+											<td className="px-4 py-3 text-center font-mono tabular-nums">
+												<span className={summary.pointDiff >= 0 ? 'text-positive' : 'text-negative'}>
 													{formatNumber(summary.pointDiff)}
 												</span>
 											</td>
@@ -749,7 +749,7 @@ export function TeamComparison({ allSeasons, allTeams, currentSeasonId, currentT
 												<Button
 													size="sm"
 													variant={selected ? 'default' : 'outline'}
-													className={selected ? 'bg-emerald-500 hover:bg-emerald-600' : 'border-slate-700 text-slate-200'}
+													className={selected ? '' : 'border-border-subtle text-secondary hover:bg-surface-2'}
 													onClick={() => handleSelectTeam(summary)}
 													disabled={selectedKeys.length >= 2 && !selected}
 												>
@@ -763,13 +763,13 @@ export function TeamComparison({ allSeasons, allTeams, currentSeasonId, currentT
 						</table>
 					</div>
 					{!teamSummaries.length && !listLoading && (
-						<p className="text-center text-sm text-slate-500">Nincs Hunbasket adat a választott szezonból.</p>
+						<p className="text-center text-sm text-muted">Nincs Hunbasket adat a választott szezonból.</p>
 					)}
 				</CardContent>
 			</Card>
 
 			{!selectedProfiles.length && (
-				<div className="rounded border border-dashed border-slate-700 bg-slate-900/40 px-6 py-8 text-center text-slate-400">
+				<div className="rounded border border-dashed border-border-subtle bg-surface-1/40 px-6 py-8 text-center text-secondary">
 					Válassz ki legalább egy csapatot a részletes összehasonlításhoz.
 				</div>
 			)}
@@ -777,13 +777,13 @@ export function TeamComparison({ allSeasons, allTeams, currentSeasonId, currentT
 			{selectedProfiles.length > 0 && (
 				<div className="grid gap-4 lg:grid-cols-2">
 					{selectedProfiles.map((team, index) => (
-						<Card key={team.key} className="border-slate-800 bg-slate-900/70">
+						<Card key={team.key}>
 							<CardHeader className="flex flex-row items-center justify-between">
 								<div>
-									<CardTitle className="text-lg text-slate-50">{team.teamName}</CardTitle>
-									<p className="text-sm text-slate-400">{team.seasonName}</p>
+									<CardTitle className="text-lg">{team.teamName}</CardTitle>
+									<p className="text-sm text-secondary">{team.seasonName}</p>
 								</div>
-								<Badge className="bg-slate-800 text-slate-200">
+								<Badge className={team.form.trend === 'positive' ? 'badge-positive' : team.form.trend === 'negative' ? 'badge-negative' : 'badge-neutral'}>
 									{team.form.trend === 'positive' && 'Formában'}
 									{team.form.trend === 'neutral' && 'Stabil forma'}
 									{team.form.trend === 'negative' && 'Hullámzó forma'}
@@ -791,47 +791,47 @@ export function TeamComparison({ allSeasons, allTeams, currentSeasonId, currentT
 							</CardHeader>
 							<CardContent className="space-y-4">
 								<div className="grid grid-cols-3 gap-3 text-center text-sm">
-									<div className="rounded-lg border border-slate-800 bg-slate-900/40 p-3">
-										<p className="text-xs uppercase text-slate-400">Pontok</p>
-										<p className="text-lg text-slate-50">{formatNumber(team.base.avgPoints)}</p>
+									<div className="rounded-lg border border-border-subtle bg-surface-2/40 p-3">
+										<p className="text-xs uppercase text-secondary">Pontok</p>
+										<p className="text-lg font-mono tabular-nums text-primary">{formatNumber(team.base.avgPoints)}</p>
 									</div>
-									<div className="rounded-lg border border-slate-800 bg-slate-900/40 p-3">
-										<p className="text-xs uppercase text-slate-400">Kapott</p>
-										<p className="text-lg text-slate-50">{formatNumber(team.base.avgOppPoints)}</p>
+									<div className="rounded-lg border border-border-subtle bg-surface-2/40 p-3">
+										<p className="text-xs uppercase text-secondary">Kapott</p>
+										<p className="text-lg font-mono tabular-nums text-primary">{formatNumber(team.base.avgOppPoints)}</p>
 									</div>
-									<div className="rounded-lg border border-slate-800 bg-slate-900/40 p-3">
-										<p className="text-xs uppercase text-slate-400">Pont diff.</p>
-										<p className={team.base.pointDiff >= 0 ? 'text-lg text-emerald-400' : 'text-lg text-red-400'}>
+									<div className="rounded-lg border border-border-subtle bg-surface-2/40 p-3">
+										<p className="text-xs uppercase text-secondary">Pont diff.</p>
+										<p className={`text-lg font-mono tabular-nums ${team.base.pointDiff >= 0 ? 'text-positive' : 'text-negative'}`}>
 											{formatNumber(team.base.pointDiff)}
 										</p>
 									</div>
 								</div>
-								<div className="rounded-lg border border-slate-900/70 bg-slate-900/40 p-4 text-sm text-slate-300">
-									<p className="text-xs text-slate-400">Utolsó 5 meccs</p>
+								<div className="rounded-lg border border-border-subtle bg-surface-2/40 p-4 text-sm text-primary">
+									<p className="text-xs text-secondary">Utolsó 5 meccs</p>
 									<div className="mt-2 flex flex-wrap gap-2">
 										{team.form.lastFive.games.map((game) => (
-											<span key={game.id} className={`rounded-full px-3 py-1 text-xs ${game.result === 'win' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-red-500/20 text-red-200'}`}>
+											<span key={game.id} className={`rounded-full px-3 py-1 text-xs font-mono tabular-nums ${game.result === 'win' ? 'bg-positive/15 text-positive' : 'bg-negative/15 text-negative'}`}>
 												{game.result === 'win' ? 'W' : 'L'} {game.our_score}-{game.opp_score}
 											</span>
 										))}
-										{!team.form.lastFive.games.length && <span className="text-slate-500">Nincs adat</span>}
+										{!team.form.lastFive.games.length && <span className="text-muted">Nincs adat</span>}
 									</div>
 								</div>
 								{strengthReports[team.key] && (
 									<div className="grid gap-2">
 										{strengthReports[team.key].map((item) => (
-											<div key={`${team.key}-${item.label}`} className="rounded-lg border border-slate-800/80 bg-slate-900/30 p-3 text-sm">
-												<div className="flex items-center justify-between text-slate-200">
+											<div key={`${team.key}-${item.label}`} className="rounded-lg border border-border-subtle bg-surface-2/30 p-3 text-sm">
+												<div className="flex items-center justify-between text-primary">
 													<span>{item.label}</span>
-													<strong className="text-slate-50">{item.value}</strong>
+													<strong className="font-mono tabular-nums">{item.value}</strong>
 												</div>
-												<p className="text-xs text-slate-400">{item.detail}</p>
+												<p className="text-xs text-secondary">{item.detail}</p>
 											</div>
 										))}
 									</div>
 								)}
 								{index === 0 && profilesLoading && (
-									<p className="text-xs text-slate-500">Statisztikák betöltése...</p>
+									<p className="text-xs text-muted">Statisztikák betöltése...</p>
 								)}
 							</CardContent>
 						</Card>
@@ -840,10 +840,10 @@ export function TeamComparison({ allSeasons, allTeams, currentSeasonId, currentT
 			)}
 
 			{selectedProfiles.length > 0 && (
-				<Card className="border-slate-800 bg-slate-900/70">
+				<Card>
 					<CardHeader>
-						<CardTitle className="flex items-center gap-2 text-slate-50">
-							<BarChart2 className="h-4 w-4 text-emerald-400" /> Fejlett mutatók
+						<CardTitle className="flex items-center gap-2">
+							<BarChart2 className="h-4 w-4 text-positive" /> Fejlett mutatók
 						</CardTitle>
 					</CardHeader>
 					<CardContent className="overflow-x-auto">
@@ -869,29 +869,29 @@ export function TeamComparison({ allSeasons, allTeams, currentSeasonId, currentT
 			)}
 
 			{radarDataset.length > 0 && (
-				<Card className="border-slate-800 bg-slate-900/70">
+				<Card>
 					<CardHeader>
-						<CardTitle className="flex items-center gap-2 text-slate-50">
-							<Target className="h-4 w-4 text-cyan-400" /> Profil erősségek
+						<CardTitle className="flex items-center gap-2">
+							<Target className="h-4 w-4 text-cyan" /> Profil erősségek
 						</CardTitle>
 					</CardHeader>
 					<CardContent className="h-80">
 						<ResponsiveContainer>
 							<RadarChart data={radarDataset} outerRadius={120}>
-								<PolarGrid stroke="#1f2937" />
-								<PolarAngleAxis dataKey="metric" tick={{ fill: '#94a3b8', fontSize: 12 }} />
-								<PolarRadiusAxis tick={{ fill: '#64748b', fontSize: 10 }} />
+								<PolarGrid stroke="var(--border-subtle)" />
+								<PolarAngleAxis dataKey="metric" tick={{ fill: 'var(--text-secondary)', fontSize: 12 }} />
+								<PolarRadiusAxis tick={{ fill: 'var(--text-muted)', fontSize: 10 }} />
 								{selectedProfiles.map((team, index) => (
 									<Radar
 										key={team.key}
 										name={`${team.teamName} ${team.seasonName}`}
 										dataKey={team.key}
-										stroke={TEAM_COLORS[index] || '#22d3ee'}
-										fill={TEAM_COLORS[index] || '#22d3ee'}
+										stroke={TEAM_COLORS[index] || 'var(--accent-cyan)'}
+										fill={TEAM_COLORS[index] || 'var(--accent-cyan)'}
 										fillOpacity={0.3}
 									/>
 								))}
-								<Legend wrapperStyle={{ color: '#cbd5f5' }} />
+								<Legend wrapperStyle={{ color: 'var(--text-secondary)' }} />
 							</RadarChart>
 						</ResponsiveContainer>
 					</CardContent>
@@ -899,30 +899,30 @@ export function TeamComparison({ allSeasons, allTeams, currentSeasonId, currentT
 			)}
 
 			{trendDataset.length > 0 && (
-				<Card className="border-slate-800 bg-slate-900/70">
+				<Card>
 					<CardHeader>
-						<CardTitle className="flex items-center gap-2 text-slate-50">
-							<TrendingUp className="h-4 w-4 text-emerald-400" /> Forma trend (pontkülönbség)
+						<CardTitle className="flex items-center gap-2">
+							<TrendingUp className="h-4 w-4 text-positive" /> Forma trend (pontkülönbség)
 						</CardTitle>
 					</CardHeader>
 					<CardContent className="h-80">
 						<ResponsiveContainer>
 							<LineChart data={trendDataset} margin={{ left: 12, right: 12 }}>
-								<CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
-								<XAxis dataKey="label" stroke="#94a3b8" fontSize={12} />
-								<YAxis stroke="#94a3b8" fontSize={12} />
+								<CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" />
+								<XAxis dataKey="label" stroke="var(--text-secondary)" fontSize={12} />
+								<YAxis stroke="var(--text-secondary)" fontSize={12} />
 								<Tooltip
-									contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #334155', borderRadius: 8 }}
-									labelStyle={{ color: '#e2e8f0' }}
+									contentStyle={{ backgroundColor: 'var(--bg-surface-2)', border: '1px solid var(--border-subtle)', borderRadius: 8 }}
+									labelStyle={{ color: 'var(--text-primary)' }}
 								/>
-								<Legend wrapperStyle={{ color: '#94a3b8' }} />
+								<Legend wrapperStyle={{ color: 'var(--text-secondary)' }} />
 								{selectedProfiles.map((team, index) => (
 									<Line
 										key={team.key}
 										type="monotone"
 										dataKey={team.key}
 										name={`${team.teamName} ${team.seasonName}`}
-										stroke={TEAM_COLORS[index] || '#22d3ee'}
+										stroke={TEAM_COLORS[index] || 'var(--accent-cyan)'}
 										strokeWidth={2}
 										dot={false}
 									/>
@@ -934,31 +934,31 @@ export function TeamComparison({ allSeasons, allTeams, currentSeasonId, currentT
 			)}
 
 			{teamA && teamB && headToHead && (
-				<Card className="border-slate-800 bg-slate-900/70">
+				<Card>
 					<CardHeader>
-						<CardTitle className="flex items-center gap-2 text-slate-50">
-							<Shield className="h-4 w-4 text-amber-400" /> Egymás elleni mérleg
+						<CardTitle className="flex items-center gap-2">
+							<Shield className="h-4 w-4 text-warning" /> Egymás elleni mérleg
 						</CardTitle>
 					</CardHeader>
 					<CardContent className="space-y-4">
-						<div className="flex flex-wrap gap-6 text-sm text-slate-200">
+						<div className="flex flex-wrap gap-6 text-sm text-primary">
 							<div>
-								<p className="text-xs uppercase text-slate-500">Győzelem / Vereség</p>
-								<p className="text-lg text-slate-50">
+								<p className="text-xs uppercase text-muted">Győzelem / Vereség</p>
+								<p className="text-lg font-mono tabular-nums text-primary">
 									{headToHead.wins}-{headToHead.losses}
 								</p>
 							</div>
 							<div>
-								<p className="text-xs uppercase text-slate-500">Átlag pont</p>
-								<p className="text-lg text-slate-50">{formatNumber(headToHead.avgPoints)}</p>
+								<p className="text-xs uppercase text-muted">Átlag pont</p>
+								<p className="text-lg font-mono tabular-nums text-primary">{formatNumber(headToHead.avgPoints)}</p>
 							</div>
 							<div>
-								<p className="text-xs uppercase text-slate-500">Kapott pont</p>
-								<p className="text-lg text-slate-50">{formatNumber(headToHead.avgOppPoints)}</p>
+								<p className="text-xs uppercase text-muted">Kapott pont</p>
+								<p className="text-lg font-mono tabular-nums text-primary">{formatNumber(headToHead.avgOppPoints)}</p>
 							</div>
 							<div>
-								<p className="text-xs uppercase text-slate-500">Pont diff.</p>
-								<p className={headToHead.pointDiff >= 0 ? 'text-lg text-emerald-400' : 'text-lg text-red-400'}>
+								<p className="text-xs uppercase text-muted">Pont diff.</p>
+								<p className={`text-lg font-mono tabular-nums ${headToHead.pointDiff >= 0 ? 'text-positive' : 'text-negative'}`}>
 									{formatNumber(headToHead.pointDiff)}
 								</p>
 							</div>
@@ -967,27 +967,27 @@ export function TeamComparison({ allSeasons, allTeams, currentSeasonId, currentT
 							{headToHead.games.map((game) => (
 								<div
 									key={game.id}
-									className="flex flex-col gap-2 rounded-lg border border-slate-800/80 bg-slate-900/30 p-3 text-sm text-slate-200 md:flex-row md:items-center md:justify-between"
+									className="flex flex-col gap-2 rounded-lg border border-border-subtle bg-surface-2/30 p-3 text-sm text-primary md:flex-row md:items-center md:justify-between"
 								>
 									<div>
-										<p className="text-slate-100">{teamA.teamName} vs {game.opponent}</p>
-										<p className="text-xs text-slate-500">
+										<p className="text-primary">{teamA.teamName} vs {game.opponent}</p>
+										<p className="text-xs text-muted">
 											{game.round ? `${game.round} • ` : ''}
 											{new Date(game.date).toLocaleDateString('hu-HU')}
 										</p>
 									</div>
 									<div className="flex items-center gap-3">
-										<span className="text-lg font-semibold text-slate-50">
+										<span className="text-lg font-semibold font-mono tabular-nums text-primary">
 											{game.our_score} - {game.opp_score}
 										</span>
-										<Badge className={game.result === 'win' ? 'bg-emerald-500 text-white' : 'bg-red-500/30 text-red-200'}>
+										<Badge className={game.result === 'win' ? 'badge-positive' : 'badge-negative'}>
 											{game.result === 'win' ? 'Győzelem' : 'Vereség'}
 										</Badge>
 									</div>
 								</div>
 							))}
 							{!headToHead.games.length && (
-								<p className="text-sm text-slate-500">Nincs egymás elleni hivatalos mérkőzés.</p>
+								<p className="text-sm text-muted">Nincs egymás elleni hivatalos mérkőzés.</p>
 							)}
 						</div>
 					</CardContent>
@@ -995,13 +995,13 @@ export function TeamComparison({ allSeasons, allTeams, currentSeasonId, currentT
 			)}
 
 			{selectedProfiles.length > 0 && (
-				<Card className="border-slate-800 bg-slate-900/70">
+				<Card>
 					<CardHeader>
-						<CardTitle className="flex items-center gap-2 text-slate-50">
-							<Activity className="h-4 w-4 text-pink-400" /> Kontextus & megjegyzések
+						<CardTitle className="flex items-center gap-2">
+							<Activity className="h-4 w-4 text-orange" /> Kontextus & megjegyzések
 						</CardTitle>
 					</CardHeader>
-					<CardContent className="space-y-2 text-sm text-slate-300">
+					<CardContent className="space-y-2 text-sm text-secondary">
 						<p>Minden szám hivatalos hunbasket.hu jegyzőkönyvből érkezik, így kizárólag validált meccsekre támaszkodunk.</p>
 						<p>Az AST/TO, eFG% és rebound mutatók segítenek megérteni a játék stílusát. Használd a radar- és trendgrafikonokat a taktikai felkészüléshez.</p>
 					</CardContent>

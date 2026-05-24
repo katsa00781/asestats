@@ -604,10 +604,10 @@ export function PlayersManagement({ onPlayersChanged }: PlayersManagementProps) 
 
   if (loading && players.length === 0) {
     return (
-      <Card className="bg-slate-900 border-slate-800">
+      <Card>
         <CardContent className="py-12">
-          <div className="text-center text-slate-400">
-            <Loader2 size={48} className="mx-auto mb-4 opacity-50 animate-spin" />
+          <div className="text-center text-secondary">
+            <Loader2 size={48} className="mx-auto mb-4 opacity-50 animate-spin" strokeWidth={1.5} />
             <p>Játékosok betöltése...</p>
           </div>
         </CardContent>
@@ -618,28 +618,28 @@ export function PlayersManagement({ onPlayersChanged }: PlayersManagementProps) 
   return (
     <div className="space-y-4">
       <div className="mb-6">
-        <h2 className="text-2xl font-bold text-slate-50 mb-2 flex items-center gap-2">
-          <Users size={28} />
+        <h2 className="text-2xl font-bold font-display uppercase tracking-wide text-primary mb-2 flex items-center gap-2">
+          <Users size={28} strokeWidth={1.5} />
           Játékosok kezelése
         </h2>
-        <p className="text-slate-400">Összesen {filteredPlayers.length} játékos {searchQuery || selectedTeamFilter !== 'all' ? `(${players.length} közül)` : ''}</p>
+        <p className="text-secondary">Összesen {filteredPlayers.length} játékos {searchQuery || selectedTeamFilter !== 'all' ? `(${players.length} közül)` : ''}</p>
       </div>
 
       {/* Keresés és szűrés */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-secondary" size={20} strokeWidth={1.6} />
           <Input
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Keresés név vagy mezszám szerint..."
-            className="pl-10 bg-slate-800 border-slate-700 text-slate-100"
+            className="pl-10"
           />
         </div>
         <select
           value={selectedSeasonFilter}
           onChange={(e) => setSelectedSeasonFilter(e.target.value)}
-          className="h-10 px-3 bg-slate-800 border border-slate-700 text-slate-300 rounded-md"
+          className="h-10 px-3 bg-surface-2 border border-border-subtle text-secondary rounded-md"
         >
           <option value="all">Összes szezon</option>
           {seasons.map(season => (
@@ -649,7 +649,7 @@ export function PlayersManagement({ onPlayersChanged }: PlayersManagementProps) 
         <select
           value={selectedTeamFilter}
           onChange={(e) => setSelectedTeamFilter(e.target.value)}
-          className="h-10 px-3 bg-slate-800 border border-slate-700 text-slate-300 rounded-md"
+          className="h-10 px-3 bg-surface-2 border border-border-subtle text-secondary rounded-md"
         >
           <option value="all">Összes csapat</option>
           {teams.map(team => (
@@ -659,10 +659,10 @@ export function PlayersManagement({ onPlayersChanged }: PlayersManagementProps) 
       </div>
 
       {filteredPlayers.length === 0 ? (
-        <Card className="bg-slate-900 border-slate-800">
+        <Card>
           <CardContent className="py-12">
-            <div className="text-center text-slate-400">
-              <Users size={48} className="mx-auto mb-4 opacity-50" />
+            <div className="text-center text-secondary">
+              <Users size={48} className="mx-auto mb-4 opacity-50" strokeWidth={1.5} />
               <p>{searchQuery || selectedTeamFilter !== 'all' ? 'Nincs találat a keresésre' : 'Még nincsenek játékosok az adatbázisban'}</p>
             </div>
           </CardContent>
@@ -673,8 +673,8 @@ export function PlayersManagement({ onPlayersChanged }: PlayersManagementProps) 
           <Card className="bg-amber-900/20 border-amber-700/50">
             <CardContent className="py-4">
               <div className="flex items-start gap-3">
-                <AlertTriangle className="text-amber-400 mt-0.5" size={20} />
-                <div className="text-amber-300 text-sm">
+                <AlertTriangle className="text-warning mt-0.5" size={20} strokeWidth={1.6} />
+                <div className="text-warning text-sm">
                   <strong>Figyelem!</strong> A játékos törlése az összes hozzá tartozó meccs statisztikát is törli.
                   Ez a művelet nem visszavonható!
                 </div>
@@ -691,7 +691,7 @@ export function PlayersManagement({ onPlayersChanged }: PlayersManagementProps) 
               return (
                 <Card
                   key={player.id}
-                  className={`bg-slate-900 border-slate-800 hover:border-slate-700 transition-colors ${
+                  className={`hover:border-border-active transition-colors ${
                     isDeleting ? 'opacity-50' : ''
                   }`}
                 >
@@ -704,13 +704,13 @@ export function PlayersManagement({ onPlayersChanged }: PlayersManagementProps) 
                             type="number"
                             value={editedNumber}
                             onChange={(e) => setEditedNumber(parseInt(e.target.value) || 0)}
-                            className="w-20 bg-slate-800 border-slate-700 text-slate-100 text-center font-bold"
+                            className="w-20 text-center font-bold"
                             min={0}
                             max={99}
                           />
                         ) : (
-                          <div className="flex items-center justify-center w-12 h-12 bg-slate-800 rounded-lg shrink-0">
-                            <span className="text-slate-50 font-bold text-lg">#{player.number}</span>
+                          <div className="flex items-center justify-center w-12 h-12 bg-surface-2 rounded-lg shrink-0">
+                            <span className="text-primary font-bold text-lg font-mono">#{player.number}</span>
                           </div>
                         )}
 
@@ -720,7 +720,6 @@ export function PlayersManagement({ onPlayersChanged }: PlayersManagementProps) 
                             <Input
                               value={editedName}
                               onChange={(e) => setEditedName(e.target.value)}
-                              className="bg-slate-800 border-slate-700 text-slate-100"
                               placeholder="Játékos neve"
                               autoFocus
                               onKeyDown={(e) => {
@@ -734,7 +733,7 @@ export function PlayersManagement({ onPlayersChanged }: PlayersManagementProps) 
                             <select
                               value={editedTeamId}
                               onChange={(e) => setEditedTeamId(e.target.value)}
-                              className="w-full h-10 px-3 bg-slate-800 border border-slate-700 text-slate-300 rounded-md"
+                              className="w-full h-10 px-3 bg-surface-2 border border-border-subtle text-secondary rounded-md"
                             >
                               {teams.map(team => (
                                 <option key={team.id} value={team.id}>{team.name}</option>
@@ -743,14 +742,14 @@ export function PlayersManagement({ onPlayersChanged }: PlayersManagementProps) 
                           </div>
                         ) : (
                           <div className="flex-1">
-                            <div className="text-slate-50 font-medium">{player.name}</div>
-                            <div className="flex items-center gap-2 mt-1 text-slate-400 text-sm">
-                              <Badge variant="outline" className="border-slate-700 text-slate-300">
+                            <div className="text-primary font-medium">{player.name}</div>
+                            <div className="flex items-center gap-2 mt-1 text-secondary text-sm">
+                              <Badge variant="outline" className="border-border-subtle text-secondary">
                                 {positionLabels[player.position] || player.position}
                               </Badge>
                               <Badge
                                 variant="outline"
-                                className={player.is_active ? 'border-emerald-700 text-emerald-300' : 'border-slate-700 text-slate-400'}
+                                className={player.is_active ? 'border-positive/50 text-positive' : 'border-border-subtle text-muted'}
                               >
                                 {player.is_active ? 'Aktív' : 'Inaktív'}
                               </Badge>
@@ -771,18 +770,17 @@ export function PlayersManagement({ onPlayersChanged }: PlayersManagementProps) 
                               variant="default"
                               size="sm"
                               onClick={() => savePlayerEdits(player.id)}
-                              className="bg-emerald-600 hover:bg-emerald-700"
                             >
-                              <Check className="mr-2" size={16} />
+                              <Check className="mr-2" size={16} strokeWidth={1.6} />
                               Mentés
                             </Button>
                             <Button
                               variant="outline"
                               size="sm"
                               onClick={cancelEditing}
-                              className="border-slate-700 text-slate-300 hover:bg-slate-800"
+                              className="border-border-subtle text-secondary hover:bg-surface-2"
                             >
-                              <X className="mr-2" size={16} />
+                              <X className="mr-2" size={16} strokeWidth={1.6} />
                               Mégse
                             </Button>
                           </>
@@ -793,9 +791,9 @@ export function PlayersManagement({ onPlayersChanged }: PlayersManagementProps) 
                               size="sm"
                               onClick={() => startEditingPlayer(player)}
                               disabled={isDeleting}
-                              className="border-slate-700 text-slate-300 hover:bg-slate-800"
+                              className="border-border-subtle text-secondary hover:bg-surface-2"
                             >
-                              <Edit2 className="mr-2" size={16} />
+                              <Edit2 className="mr-2" size={16} strokeWidth={1.6} />
                               Szerkesztés
                             </Button>
                             <Button
@@ -803,7 +801,7 @@ export function PlayersManagement({ onPlayersChanged }: PlayersManagementProps) 
                               size="sm"
                               onClick={() => togglePlayerActive(player.id, !player.is_active)}
                               disabled={isDeleting}
-                              className={player.is_active ? 'border-amber-700 text-amber-300 hover:bg-amber-900/20' : 'border-emerald-700 text-emerald-300 hover:bg-emerald-900/20'}
+                              className={player.is_active ? 'border-warning/50 text-warning hover:bg-amber-900/20' : 'border-positive/50 text-positive hover:bg-emerald-900/20'}
                             >
                               {player.is_active ? 'Inaktiválás' : 'Aktiválás'}
                             </Button>
@@ -812,7 +810,6 @@ export function PlayersManagement({ onPlayersChanged }: PlayersManagementProps) 
                               size="sm"
                               onClick={() => handleDeletePlayer(player)}
                               disabled={isDeleting}
-                              className="bg-red-600 hover:bg-red-700"
                             >
                               {isDeleting ? (
                                 <>
@@ -821,7 +818,7 @@ export function PlayersManagement({ onPlayersChanged }: PlayersManagementProps) 
                                 </>
                               ) : (
                                 <>
-                                  <Trash2 className="mr-2" size={16} />
+                                  <Trash2 className="mr-2" size={16} strokeWidth={1.6} />
                                   Törlés
                                 </>
                               )}
@@ -843,7 +840,7 @@ export function PlayersManagement({ onPlayersChanged }: PlayersManagementProps) 
           variant="outline"
           onClick={cleanupInvalidPlayers}
           disabled={loading}
-          className="border-amber-700 text-amber-300 hover:bg-amber-900/20"
+          className="border-warning/50 text-warning hover:bg-amber-900/20"
         >
           {loading ? (
             <>
@@ -852,7 +849,7 @@ export function PlayersManagement({ onPlayersChanged }: PlayersManagementProps) 
             </>
           ) : (
             <>
-              <AlertTriangle className="mr-2" size={16} />
+              <AlertTriangle className="mr-2" size={16} strokeWidth={1.6} />
               Érvénytelen játékosok törlése
             </>
           )}
@@ -862,7 +859,7 @@ export function PlayersManagement({ onPlayersChanged }: PlayersManagementProps) 
           variant="outline"
           onClick={loadPlayers}
           disabled={loading}
-          className="border-slate-700 text-slate-300 hover:bg-slate-800"
+          className="border-border-subtle text-secondary hover:bg-surface-2"
         >
           {loading ? (
             <>

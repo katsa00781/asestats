@@ -322,9 +322,9 @@ const updates: UpdateItem[] = [
 ];
 
 const categoryColors = {
-  feature: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/50',
-  improvement: 'bg-blue-500/20 text-blue-400 border-blue-500/50',
-  fix: 'bg-orange-500/20 text-orange-400 border-orange-500/50',
+  feature: 'badge-positive',
+  improvement: 'badge-cyan',
+  fix: 'badge-orange',
 };
 
 const categoryLabels = {
@@ -397,76 +397,76 @@ export function Updates() {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">
-        <Sparkles className="text-emerald-400" size={28} />
-        <h2 className="text-2xl font-bold text-slate-50">Frissítések és újdonságok</h2>
+        <Sparkles className="text-positive" size={28} strokeWidth={1.5} />
+        <h2 className="text-xl sm:text-2xl font-display uppercase tracking-wide text-primary">Frissítések és újdonságok</h2>
       </div>
 
-      <Card className="bg-slate-900 border-slate-700">
+      <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-slate-50 flex items-center gap-2 text-base">
-            <Clock className="text-blue-400" size={18} />
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Clock className="text-cyan" size={18} strokeWidth={1.6} />
             Legutóbbi adatfrissítések
           </CardTitle>
         </CardHeader>
         <CardContent>
           {loadingTs ? (
-            <div className="flex items-center gap-2 text-slate-400 text-sm">
+            <div className="flex items-center gap-2 text-secondary text-sm">
               <RefreshCw className="h-4 w-4 animate-spin" />
               Betöltés...
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="space-y-1">
-                <div className="text-xs text-slate-500 uppercase tracking-wide">Meccsadatok</div>
-                <div className="text-sm text-slate-200 font-medium">{formatTimestamp(timestamps.lastGameImport)}</div>
+                <div className="text-xs text-muted uppercase tracking-wide">Meccsadatok</div>
+                <div className="text-sm text-primary font-mono tabular-nums">{formatTimestamp(timestamps.lastGameImport)}</div>
               </div>
               <div className="space-y-1">
-                <div className="text-xs text-slate-500 uppercase tracking-wide">Játékosstatisztikák</div>
-                <div className="text-sm text-slate-200 font-medium">{formatTimestamp(timestamps.lastStatsImport)}</div>
+                <div className="text-xs text-muted uppercase tracking-wide">Játékosstatisztikák</div>
+                <div className="text-sm text-primary font-mono tabular-nums">{formatTimestamp(timestamps.lastStatsImport)}</div>
               </div>
               <div className="space-y-1">
-                <div className="text-xs text-slate-500 uppercase tracking-wide">Menetrend</div>
-                <div className="text-sm text-slate-200 font-medium">{formatTimestamp(timestamps.lastFixtureImport)}</div>
+                <div className="text-xs text-muted uppercase tracking-wide">Menetrend</div>
+                <div className="text-sm text-primary font-mono tabular-nums">{formatTimestamp(timestamps.lastFixtureImport)}</div>
               </div>
             </div>
           )}
         </CardContent>
       </Card>
 
-      <Card className="bg-slate-900 border-slate-800">
+      <Card>
         <CardHeader>
-          <CardTitle className="text-slate-50 flex items-center gap-2">
-            <Trophy className="text-emerald-400" size={20} />
+          <CardTitle className="flex items-center gap-2">
+            <Trophy className="text-positive" size={20} strokeWidth={1.6} />
             ASE Stats – Funkciók összefoglaló
           </CardTitle>
         </CardHeader>
-        <CardContent className="text-slate-300 text-sm space-y-3">
+        <CardContent className="text-secondary text-sm space-y-3">
           <div>
-            <span className="text-slate-100 font-medium">Elemzések:</span> játékos-, csapat-, pregame- és postgame riportok, erősségek/korlátok, fókuszpontok, poszt-összehasonlítás és részletes insightok.
+            <span className="text-primary font-medium">Elemzések:</span> játékos-, csapat-, pregame- és postgame riportok, erősségek/korlátok, fókuszpontok, poszt-összehasonlítás és részletes insightok.
           </div>
           <div>
-            <span className="text-slate-100 font-medium">Vizualizációk:</span> radarok, trendek, oszlopdiagramok (dobásprofil, hatékonyság, kulcsmutatók), összehasonlítások.
+            <span className="text-primary font-medium">Vizualizációk:</span> radarok, trendek, oszlopdiagramok (dobásprofil, hatékonyság, kulcsmutatók), összehasonlítások.
           </div>
           <div>
-            <span className="text-slate-100 font-medium">Importok:</span> Hunbasket forduló alapú import, menetrend import (következő meccsekkel), gyors meccs import, JSON import, játékos- és tabella-import.
+            <span className="text-primary font-medium">Importok:</span> Hunbasket forduló alapú import, menetrend import (következő meccsekkel), gyors meccs import, JSON import, játékos- és tabella-import.
           </div>
           <div>
-            <span className="text-slate-100 font-medium">Menedszment:</span> játékos- és meccskezelés, törlések, szezon- és csapatválasztás.
+            <span className="text-primary font-medium">Menedszment:</span> játékos- és meccskezelés, törlések, szezon- és csapatválasztás.
           </div>
           <div>
-            <span className="text-slate-100 font-medium">Összehasonlítások:</span> játékosok és csapatok több szezonon át, pozíció szerinti szűrők, head-to-head és trendek.
+            <span className="text-primary font-medium">Összehasonlítások:</span> játékosok és csapatok több szezonon át, pozíció szerinti szűrők, head-to-head és trendek.
           </div>
         </CardContent>
       </Card>
 
-      <Card className="bg-linear-to-br from-emerald-900/20 to-blue-900/20 border-emerald-500/30">
+      <Card>
         <CardHeader>
-          <CardTitle className="text-slate-50 flex items-center gap-2">
-            <TrendingUp className="text-emerald-400" size={20} />
+          <CardTitle className="flex items-center gap-2">
+            <TrendingUp className="text-positive" size={20} strokeWidth={1.6} />
             Frissítések részletesen
           </CardTitle>
         </CardHeader>
-        <CardContent className="text-slate-300 text-sm">
+        <CardContent className="text-secondary text-sm">
           Kövesd nyomon az alkalmazás fejlesztését! Itt találod a legfrissebb funkciókat,
           fejlesztéseket és javításokat, amelyek jobbá teszik a statisztikai elemzést.
         </CardContent>
@@ -474,28 +474,27 @@ export function Updates() {
 
       <div className="space-y-4">
         {updates.map((update, index) => (
-          <Card 
-            key={index} 
-            className="bg-slate-900 border-slate-800 hover:border-slate-700 transition-colors"
+          <Card
+            key={index}
+            className="transition-colors"
           >
             <CardContent className="p-6">
               <div className="flex flex-col sm:flex-row gap-4">
                 {/* Ikon és kategória */}
                 <div className="flex items-start gap-3 sm:w-48 shrink-0">
-                  <div className="p-3 rounded-lg bg-slate-800 text-emerald-400">
+                  <div className="p-3 rounded-lg bg-surface-2 text-positive">
                     {update.icon}
                   </div>
                   <div className="flex flex-col gap-2">
-                    <Badge 
-                      variant="outline" 
+                    <Badge
                       className={`w-fit text-xs ${categoryColors[update.category]}`}
                     >
                       {categoryLabels[update.category]}
                     </Badge>
-                    <div className="text-xs text-slate-500">
+                    <div className="text-xs text-muted">
                       {update.date}
                     </div>
-                    <Badge variant="secondary" className="w-fit text-xs">
+                    <Badge className="badge-neutral w-fit text-xs">
                       v{update.version}
                     </Badge>
                   </div>
@@ -503,10 +502,10 @@ export function Updates() {
 
                 {/* Tartalom */}
                 <div className="flex-1 space-y-2">
-                  <h3 className="text-lg font-semibold text-slate-50">
+                  <h3 className="text-base/snug font-display uppercase tracking-wide text-primary">
                     {update.title}
                   </h3>
-                  <p className="text-slate-400 text-sm leading-relaxed">
+                  <p className="text-secondary text-sm leading-relaxed">
                     {update.description}
                   </p>
                 </div>
@@ -516,10 +515,10 @@ export function Updates() {
         ))}
       </div>
 
-      <Card className="bg-slate-900/50 border-slate-800">
+      <Card>
         <CardContent className="p-6 text-center">
-          <p className="text-slate-400 text-sm">
-            További fejlesztések és újdonságok hamarosan! 🚀
+          <p className="text-secondary text-sm">
+            További fejlesztések és újdonságok hamarosan!
           </p>
         </CardContent>
       </Card>

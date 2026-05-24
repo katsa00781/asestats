@@ -10,6 +10,7 @@ import {
   Tooltip,
 } from 'chart.js';
 import { Bubble } from 'react-chartjs-2';
+import { CHART_COLORS, CHARTJS_AXIS_TICK_COLOR, CHARTJS_GRID_COLOR, CHARTJS_TOOLTIP_STYLE } from '@/lib/chart-theme';
 
 ChartJS.register(LinearScale, PointElement, Tooltip);
 
@@ -32,11 +33,18 @@ const rows = [
   { key: 'pctDelta', label: 'FG% delta (pp)' },
 ] as const;
 
+const hexToRgb = (hex: string) => {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `${r}, ${g}, ${b}`;
+};
+
 const colorFromDelta = (value: number) => {
   const clamped = Math.max(-10, Math.min(10, value));
   const alpha = 0.22 + (Math.abs(clamped) / 10) * 0.55;
-  if (clamped >= 0) return `rgba(34, 197, 94, ${alpha.toFixed(3)})`;
-  return `rgba(244, 63, 94, ${alpha.toFixed(3)})`;
+  if (clamped >= 0) return `rgba(${hexToRgb(CHART_COLORS.positive)}, ${alpha.toFixed(3)})`;
+  return `rgba(${hexToRgb(CHART_COLORS.negative)}, ${alpha.toFixed(3)})`;
 };
 
 export function PostgameZoneHeatmapChart({
@@ -66,7 +74,7 @@ export function PostgameZoneHeatmapChart({
           label: 'Zóna delta',
           data: points,
           backgroundColor: points.map(point => colorFromDelta(point.value)),
-          borderColor: points.map(point => (point.value >= 0 ? 'rgba(34, 197, 94, 0.95)' : 'rgba(244, 63, 94, 0.95)')),
+          borderColor: points.map(point => (point.value >= 0 ? `${CHART_COLORS.positive}F2` : `${CHART_COLORS.negative}F2`)),
           borderWidth: 1.2,
           hoverBorderWidth: 2,
         },
@@ -83,39 +91,31 @@ export function PostgameZoneHeatmapChart({
         min: 0.5,
         max: cells.length + 0.5,
         ticks: {
-          color: '#94a3b8',
+          color: CHARTJS_AXIS_TICK_COLOR,
           callback(value) {
             const idx = Number(value) - 1;
             return cells[idx]?.label ?? '';
           },
           maxRotation: 0,
           autoSkip: false,
-          font: {
-            size: 10,
-          },
+          font: { size: 10 },
         },
-        grid: {
-          color: 'rgba(71, 85, 105, 0.22)',
-        },
+        grid: { color: CHARTJS_GRID_COLOR },
       },
       y: {
         type: 'linear',
         min: 0.5,
         max: rows.length + 0.5,
         ticks: {
-          color: '#94a3b8',
+          color: CHARTJS_AXIS_TICK_COLOR,
           stepSize: 1,
           callback(value) {
             const idx = Number(value) - 1;
             return rows[idx]?.label ?? '';
           },
-          font: {
-            size: 10,
-          },
+          font: { size: 10 },
         },
-        grid: {
-          color: 'rgba(71, 85, 105, 0.22)',
-        },
+        grid: { color: CHARTJS_GRID_COLOR },
       },
     },
     plugins: {
@@ -123,6 +123,7 @@ export function PostgameZoneHeatmapChart({
         display: false,
       },
       tooltip: {
+        ...CHARTJS_TOOLTIP_STYLE,
         callbacks: {
           label(context) {
             const raw = context.raw as { value: number; zoneLabel: string; metricLabel: string };

@@ -371,13 +371,13 @@ export function KosarstatPbpImport({ selectedSeasonId, selectedSeasonName, onImp
   };
 
   return (
-    <Card className="bg-slate-900 border-slate-800">
+    <Card>
       <CardHeader>
-        <CardTitle className="text-slate-50 flex items-center gap-2">
-          <DatabaseZap className="text-orange-400" size={20} />
+        <CardTitle className="flex items-center gap-2">
+          <DatabaseZap className="text-orange" size={20} strokeWidth={1.6} />
           Kosarstat play-by-play / lineup import
         </CardTitle>
-        <CardDescription className="text-slate-400">
+        <CardDescription>
           A Kosarstat szezon oldalrol osszegyujti a meccsazonositokat, majd beolvassa a meccs aloldalakat a
           `kosarstat_game_pages_raw` es `kosarstat_game_page_tables` tablaba.
         </CardDescription>
@@ -385,138 +385,130 @@ export function KosarstatPbpImport({ selectedSeasonId, selectedSeasonName, onImp
       <CardContent className="space-y-4">
         {!selectedSeasonId && (
           <div className="flex items-center gap-3 rounded-lg border border-amber-500/40 bg-amber-900/20 px-3 py-2 text-amber-200">
-            <ShieldAlert size={18} />
+            <ShieldAlert size={18} strokeWidth={1.6} />
             <span className="text-sm">Az importhoz elobb valassz szezont!</span>
           </div>
         )}
 
         {selectedSeasonId && (
-          <p className="text-xs text-slate-500">Aktiv szezon: {selectedSeasonName || 'ismeretlen nev'}</p>
+          <p className="text-xs text-muted">Aktiv szezon: {selectedSeasonName || 'ismeretlen nev'}</p>
         )}
 
         <div className="grid gap-4 md:grid-cols-4">
           <div className="space-y-2">
-            <label className="text-sm text-slate-300">Kosarstat season code</label>
+            <label className="text-sm text-secondary">Kosarstat season code</label>
             <Input
               value={seasonCode}
               onChange={event => setSeasonCode(event.target.value)}
               placeholder="pl. 2526"
-              className="bg-slate-800 border-slate-700 text-slate-100"
             />
           </div>
           <div className="space-y-2">
-            <label className="text-sm text-slate-300">Game limit</label>
+            <label className="text-sm text-secondary">Game limit</label>
             <Input
               value={gameLimit}
               onChange={event => setGameLimit(event.target.value)}
               placeholder="0 = osszes"
-              className="bg-slate-800 border-slate-700 text-slate-100"
             />
           </div>
           <div className="space-y-2">
-            <label className="text-sm text-slate-300">Kezdes meccs sorszam</label>
+            <label className="text-sm text-secondary">Kezdes meccs sorszam</label>
             <Input
               value={startGameIndex}
               onChange={event => setStartGameIndex(event.target.value)}
               placeholder="71"
-              className="bg-slate-800 border-slate-700 text-slate-100"
             />
           </div>
           <div className="space-y-2">
-            <label className="text-sm text-slate-300">Forduló szűrő</label>
+            <label className="text-sm text-secondary">Forduló szűrő</label>
             <Input
               value={roundFilter}
               onChange={event => setRoundFilter(event.target.value)}
               placeholder="pl. 24 vagy 20-24 vagy 22,24"
-              className="bg-slate-800 border-slate-700 text-slate-100"
             />
           </div>
           <div className="space-y-2">
-            <label className="text-sm text-slate-300">Kezdő dátum</label>
+            <label className="text-sm text-secondary">Kezdő dátum</label>
             <Input
               type="date"
               value={dateFrom}
               onChange={event => setDateFrom(event.target.value)}
-              className="bg-slate-800 border-slate-700 text-slate-100"
             />
           </div>
           <div className="space-y-2">
-            <label className="text-sm text-slate-300">Vég dátum</label>
+            <label className="text-sm text-secondary">Vég dátum</label>
             <Input
               type="date"
               value={dateTo}
               onChange={event => setDateTo(event.target.value)}
-              className="bg-slate-800 border-slate-700 text-slate-100"
             />
           </div>
           <div className="space-y-2">
-            <label className="text-sm text-slate-300">Game ID szűrő</label>
+            <label className="text-sm text-secondary">Game ID szűrő</label>
             <Input
               value={gameIdFilter}
               onChange={event => setGameIdFilter(event.target.value)}
               placeholder="pl. 20260328102119 vagy vesszővel több"
-              className="bg-slate-800 border-slate-700 text-slate-100"
             />
           </div>
           <div className="space-y-2">
-            <label className="text-sm text-slate-300">Bongeszo mod</label>
+            <label className="text-sm text-secondary">Bongeszo mod</label>
             <button
               type="button"
               onClick={() => setHeadless(prev => !prev)}
-              className="w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-left text-sm text-slate-100 hover:bg-slate-700"
+              className="w-full rounded-md border border-border-subtle bg-surface-2 px-3 py-2 text-left text-sm text-primary hover:bg-surface-3"
             >
               {headless ? 'Headless (gyorsabb)' : 'Lathato bongo (debug)'}
             </button>
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3 rounded-md border border-slate-800 bg-slate-950/30 px-3 py-2">
+        <div className="flex flex-wrap items-center gap-3 rounded-md border border-border-subtle bg-surface-1 px-3 py-2">
           <button
             type="button"
             onClick={() => setForceReimport(prev => !prev)}
-            className="rounded-md border border-slate-700 bg-slate-800 px-3 py-1 text-xs text-slate-100 hover:bg-slate-700"
+            className="rounded-md border border-border-subtle bg-surface-2 px-3 py-1 text-xs text-primary hover:bg-surface-3"
           >
             {forceReimport ? 'Teljes missing-check: BE' : 'Teljes missing-check: KI'}
           </button>
-          <span className="text-xs text-slate-400">
+          <span className="text-xs text-secondary">
             Soha nem ir felul meglevo adatot: csak hianyzo tablakat/DOM metadata mezoket potol. BE allasban minden mar importalt meccset is vegignez.
           </span>
         </div>
 
-        <div className="rounded-md border border-slate-800 bg-slate-950/30 px-3 py-2 text-xs text-slate-400">
+        <div className="rounded-md border border-border-subtle bg-surface-1 px-3 py-2 text-xs text-secondary">
           Tipp: fordulo szerinti gyors importhoz hasznald a &quot;Forduló szűrő&quot; mezőt. Formátum: 24, 20-24, vagy 22,24.
           Dátum alapú importhoz töltsd ki a &quot;Kezdő dátum&quot; és/vagy &quot;Vég dátum&quot; mezőt.
           Ha forduló vagy game ID szűrőt adsz meg, a rendszer automatikusan újraimportálja a kiválasztott meccseket.
         </div>
 
         <div className="grid gap-4 md:grid-cols-2">
-          <div className="space-y-2 rounded-lg border border-slate-800 bg-slate-950/30 p-3">
-            <div className="text-xs uppercase tracking-wide text-slate-400">Import vezerles</div>
-            <Button onClick={handleImport} disabled={!canRun} className="w-full bg-orange-600 hover:bg-orange-700">
-              {status === 'running' ? <Loader2 size={16} className="mr-2 animate-spin" /> : <DatabaseZap size={16} className="mr-2" />}
+          <div className="space-y-2 rounded-lg border border-border-subtle bg-surface-1 p-3">
+            <div className="text-xs uppercase tracking-wide text-secondary">Import vezerles</div>
+            <Button onClick={handleImport} disabled={!canRun} className="w-full">
+              {status === 'running' ? <Loader2 size={16} className="mr-2 animate-spin" /> : <DatabaseZap size={16} className="mr-2" strokeWidth={1.6} />}
               Kosarstat import inditasa
             </Button>
             <Button
               onClick={handleStopImport}
               disabled={!canStop}
               variant="secondary"
-              className="w-full bg-amber-700 text-amber-50 hover:bg-amber-600 disabled:bg-slate-700 disabled:text-slate-300"
+              className="w-full"
             >
-              {isStopping ? <Loader2 size={16} className="mr-2 animate-spin" /> : <Square size={16} className="mr-2" />}
+              {isStopping ? <Loader2 size={16} className="mr-2 animate-spin" /> : <Square size={16} className="mr-2" strokeWidth={1.6} />}
               Import leallitasa
             </Button>
           </div>
 
-          <div className="space-y-2 rounded-lg border border-slate-800 bg-slate-950/30 p-3">
-            <div className="text-xs uppercase tracking-wide text-slate-400">Torles</div>
-            <div className="text-xs text-amber-300">
+          <div className="space-y-2 rounded-lg border border-border-subtle bg-surface-1 p-3">
+            <div className="text-xs uppercase tracking-wide text-secondary">Torles</div>
+            <div className="text-xs text-warning">
               Torles megerositesehez ird be: <span className="font-semibold">{cleanupConfirmWord}</span>
             </div>
             <Input
               value={cleanupConfirmInput}
               onChange={event => setCleanupConfirmInput(event.target.value)}
               placeholder={cleanupConfirmWord}
-              className="bg-slate-800 border-slate-700 text-slate-100"
             />
             <Button
               onClick={handleCleanup}
@@ -524,7 +516,7 @@ export function KosarstatPbpImport({ selectedSeasonId, selectedSeasonName, onImp
               variant="destructive"
               className="w-full bg-red-700 hover:bg-red-800"
             >
-              {cleanupStatus === 'running' ? <Loader2 size={16} className="mr-2 animate-spin" /> : <Trash2 size={16} className="mr-2" />}
+              {cleanupStatus === 'running' ? <Loader2 size={16} className="mr-2 animate-spin" /> : <Trash2 size={16} className="mr-2" strokeWidth={1.6} />}
               Kosarstat adatok torlese (aktualis szezon)
             </Button>
           </div>
@@ -544,12 +536,12 @@ export function KosarstatPbpImport({ selectedSeasonId, selectedSeasonName, onImp
                     : 'Import hiba'}
                 </Badge>
                 {status === 'running' && lastOutputAt && (
-                  <span className="text-xs text-slate-400 break-all">
+                  <span className="text-xs text-secondary break-all">
                     Utolso naplo frissites: {new Date(lastOutputAt).toLocaleTimeString('hu-HU')}
                   </span>
                 )}
                 {durationMs !== null && status === 'success' && (
-                  <span className="text-sm text-slate-400">Futasi ido: {(durationMs / 1000).toFixed(1)} mp</span>
+                  <span className="text-sm text-secondary">Futasi ido: {(durationMs / 1000).toFixed(1)} mp</span>
                 )}
               </div>
             )}
@@ -558,9 +550,9 @@ export function KosarstatPbpImport({ selectedSeasonId, selectedSeasonName, onImp
                 {cleanupStatus === 'running' ? 'Torles folyamatban...' : cleanupStatus === 'success' ? 'Torles kesz' : 'Torles hiba'}
               </Badge>
             )}
-            {error && <p className="text-sm text-red-400 wrap-break-word">{error}</p>}
-            {cleanupError && <p className="text-sm text-red-400 wrap-break-word">{cleanupError}</p>}
-            {cleanupInfo && <p className="text-sm text-slate-300 wrap-break-word">{cleanupInfo}</p>}
+            {error && <p className="text-sm text-negative wrap-break-word">{error}</p>}
+            {cleanupError && <p className="text-sm text-negative wrap-break-word">{cleanupError}</p>}
+            {cleanupInfo && <p className="text-sm text-primary wrap-break-word">{cleanupInfo}</p>}
           </div>
         )}
 
@@ -568,22 +560,22 @@ export function KosarstatPbpImport({ selectedSeasonId, selectedSeasonName, onImp
           <div className="grid gap-4 md:grid-cols-2 max-w-full overflow-hidden">
             {stdout && (
               <div className="min-w-0">
-                <div className="text-xs text-slate-400 mb-2">Folyamat naplo</div>
+                <div className="text-xs text-secondary mb-2">Folyamat naplo</div>
                 <Textarea
                   value={stdout}
                   readOnly
-                  className="bg-slate-950/60 border-slate-800 text-slate-300 font-mono text-xs h-72 resize-none overflow-y-auto whitespace-pre-wrap wrap-break-word"
+                  className="bg-surface-2 border-border-subtle text-primary font-mono text-xs h-72 resize-none overflow-y-auto whitespace-pre-wrap wrap-break-word"
                   style={{ minHeight: 160, maxHeight: 288, overflowY: 'auto' }}
                 />
               </div>
             )}
             {stderr && (
               <div className="min-w-0">
-                <div className="text-xs text-red-400 mb-2">Figyelmeztetesek / hibak</div>
+                <div className="text-xs text-negative mb-2">Figyelmeztetesek / hibak</div>
                 <Textarea
                   value={stderr}
                   readOnly
-                  className="bg-red-950/30 border-red-500/30 text-red-200 font-mono text-xs h-72 resize-none overflow-y-auto whitespace-pre-wrap wrap-break-word"
+                  className="bg-red-950/30 border-red-500/30 text-negative font-mono text-xs h-72 resize-none overflow-y-auto whitespace-pre-wrap wrap-break-word"
                   style={{ minHeight: 160, maxHeight: 288, overflowY: 'auto' }}
                 />
               </div>

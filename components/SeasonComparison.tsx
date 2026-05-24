@@ -1665,16 +1665,16 @@ const formatNullableNumber = (value: number | null | undefined, digits = 1, suff
 };
 
 const getInsightToneClass = (tone: 'good' | 'neutral' | 'risk' | 'na') => {
-  if (tone === 'good') return 'text-emerald-300';
-  if (tone === 'risk') return 'text-rose-300';
-  if (tone === 'neutral') return 'text-amber-300';
-  return 'text-slate-400';
+  if (tone === 'good') return 'text-positive';
+  if (tone === 'risk') return 'text-negative';
+  if (tone === 'neutral') return 'text-warning';
+  return 'text-secondary';
 };
 
 const getSampleConfidenceBadgeClass = (confidence: 'alacsony' | 'kozepes' | 'magas') => {
-  if (confidence === 'magas') return 'bg-emerald-950/30 text-emerald-200 border border-emerald-700/50';
-  if (confidence === 'kozepes') return 'bg-amber-950/30 text-amber-200 border border-amber-700/50';
-  return 'bg-slate-800 text-slate-300 border border-slate-700';
+  if (confidence === 'magas') return 'bg-positive/15 text-positive border border-positive/30';
+  if (confidence === 'kozepes') return 'bg-warning/15 text-warning border border-warning/30';
+  return 'bg-surface-2 text-primary border border-border-subtle';
 };
 
 const normalizeSampleConfidence = (confidence: string | undefined): 'alacsony' | 'kozepes' | 'magas' => {
@@ -2167,11 +2167,11 @@ const buildSimilarityReason = (base: PlayerAnalysis, other: PlayerAnalysis) => {
 const getConfidenceTone = (confidence: PlayerAnalysis['confidence']) => {
   switch (confidence) {
     case 'Magas':
-      return 'text-emerald-400';
+      return 'text-positive';
     case 'Közepes':
-      return 'text-amber-400';
+      return 'text-warning';
     default:
-      return 'text-rose-400';
+      return 'text-negative';
   }
 };
 
@@ -2206,8 +2206,8 @@ const formatShotDeltaPp = (value: number) => {
 };
 
 const shotDeltaTone = (value: number) => {
-  if (!Number.isFinite(value) || Math.abs(value) < 0.2) return 'text-slate-400';
-  return value > 0 ? 'text-emerald-400' : 'text-rose-400';
+  if (!Number.isFinite(value) || Math.abs(value) < 0.2) return 'text-secondary';
+  return value > 0 ? 'text-positive' : 'text-negative';
 };
 
 const normalizeShotX = (point: ShotPoint) => (point.shotSide === 'away' ? 100 - point.x : point.x);
@@ -5517,10 +5517,10 @@ export function SeasonComparison({
         ? 'Forma romlik'
         : 'Forma stabil';
     const badgeClass = status === 'up'
-      ? 'bg-emerald-600/20 text-emerald-200 border border-emerald-500/60'
+      ? 'bg-positive/15 text-positive border border-positive/30'
       : status === 'down'
-        ? 'bg-rose-600/20 text-rose-200 border border-rose-500/60'
-        : 'bg-slate-800 text-slate-200 border border-slate-700';
+        ? 'bg-negative/15 text-negative border border-negative/30'
+        : 'bg-surface-2 text-primary border border-border-subtle';
 
     const descriptionParts = [
       `Pontkülönbség átlag: ${marginAvg >= 0 ? '+' : ''}${roundValue(marginAvg, 1)} (szezon: ${seasonMargin >= 0 ? '+' : ''}${roundValue(seasonMargin, 1)})`,
@@ -5697,12 +5697,12 @@ export function SeasonComparison({
     if (!latest) return null;
 
     const latestBadgeClass = latest.phase === 'Felfelé'
-      ? 'bg-emerald-600/20 text-emerald-200 border border-emerald-500/60'
+      ? 'bg-positive/15 text-positive border border-positive/30'
       : latest.phase === 'Lejtmenet'
-        ? 'bg-rose-600/20 text-rose-200 border border-rose-500/60'
+        ? 'bg-negative/15 text-negative border border-negative/30'
         : latest.phase === 'Hektikus'
-          ? 'bg-amber-600/20 text-amber-200 border border-amber-500/60'
-          : 'bg-slate-800 text-slate-200 border border-slate-700';
+          ? 'bg-warning/15 text-warning border border-warning/30'
+          : 'bg-surface-2 text-primary border border-border-subtle';
 
     return {
       counts,
@@ -6787,11 +6787,11 @@ export function SeasonComparison({
   };
 
   const getPercentileColor = (value: number) => {
-    if (value >= 80) return '#22c55e';
-    if (value >= 60) return '#38bdf8';
-    if (value >= 40) return '#a3e635';
-    if (value >= 20) return '#f97316';
-    return '#ef4444';
+    if (value >= 80) return 'var(--positive)';
+    if (value >= 60) return 'var(--accent-cyan)';
+    if (value >= 40) return 'var(--warning)';
+    if (value >= 20) return 'var(--accent-orange)';
+    return 'var(--negative)';
   };
 
   const formatLeagueValue = (key: string, value: number) => {
@@ -7575,11 +7575,11 @@ export function SeasonComparison({
     }
 
     const zoneDefinitions: Array<{ key: ShotZoneKey; label: string; fillClass: string }> = [
-      { key: 'rim', label: 'Gyűrű', fillClass: 'bg-emerald-400' },
-      { key: 'paint', label: 'Festék', fillClass: 'bg-lime-400' },
-      { key: 'mid', label: 'Középtáv', fillClass: 'bg-amber-400' },
-      { key: 'corner3', label: 'Sarok tripla', fillClass: 'bg-sky-400' },
-      { key: 'aboveBreak3', label: 'Egyéb tripla', fillClass: 'bg-violet-400' },
+      { key: 'rim', label: 'Gyűrű', fillClass: 'bg-positive' },
+      { key: 'paint', label: 'Festék', fillClass: 'bg-cyan' },
+      { key: 'mid', label: 'Középtáv', fillClass: 'bg-warning' },
+      { key: 'corner3', label: 'Sarok tripla', fillClass: 'bg-orange' },
+      { key: 'aboveBreak3', label: 'Egyéb tripla', fillClass: 'bg-ai' },
     ];
     const leagueTotal = Math.max(leagueSeasonShotSummary.attempts, 1);
     const stripAnnotation = (value: string) => value.replace(/\s*\([^)]*\)\s*$/u, '').trim();
@@ -10082,7 +10082,7 @@ export function SeasonComparison({
         <text
           x={x + offset.dx}
           y={y + offset.dy + 2}
-          fill="#e2e8f0"
+          fill="var(--text-primary)"
           textAnchor="middle"
           fontSize={10}
           fontWeight={500}
@@ -11428,7 +11428,7 @@ export function SeasonComparison({
         <span
           role="button"
           tabIndex={0}
-          className="inline-flex h-4 w-4 cursor-help items-center justify-center rounded-full border border-slate-600 text-[10px] text-slate-300 hover:bg-slate-800"
+          className="inline-flex h-4 w-4 cursor-help items-center justify-center rounded-full border border-border-subtle text-[10px] text-secondary hover:bg-surface-2"
           aria-label="Küszöb információ"
         >
           i
@@ -11443,20 +11443,20 @@ export function SeasonComparison({
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center gap-3">
-        <h1 className="text-2xl font-semibold text-slate-50">Elemzés</h1>
-        <Badge variant="secondary" className="bg-slate-800 text-slate-200">
+        <h1 className="text-2xl font-display uppercase tracking-wide text-primary">Elemzés</h1>
+        <Badge className="badge-neutral">
           {league}
         </Badge>
       </div>
 
-      <Card className="bg-slate-900 border-slate-800">
+      <Card>
         <CardHeader>
-          <CardTitle className="text-slate-50">Játékos kiválasztása</CardTitle>
+          <CardTitle className="font-display uppercase tracking-wide text-primary">Játékos kiválasztása</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
-              <label className="text-sm text-slate-400 mb-2 block">Szezon</label>
+              <label className="text-sm text-secondary mb-2 block">Szezon</label>
               <Select
                 value={resolvedSeasonId || ''}
                 onValueChange={(value) => {
@@ -11466,10 +11466,10 @@ export function SeasonComparison({
                   setSelectedOpponentTeamId('');
                 }}
               >
-                <SelectTrigger className="bg-slate-800 border-slate-700 w-full">
+                <SelectTrigger className="w-full">
                   <SelectValue placeholder="Válassz szezont..." className="truncate" />
                 </SelectTrigger>
-                <SelectContent className="bg-slate-800 border-slate-700 text-slate-100 placeholder:text-slate-400">
+                <SelectContent>
                   {allSeasons.map(season => (
                     <SelectItem key={season.id} value={String(season.id)}>
                       {season.name}
@@ -11480,7 +11480,7 @@ export function SeasonComparison({
             </div>
 
             <div>
-              <label className="text-sm text-slate-400 mb-2 block">Csapat</label>
+              <label className="text-sm text-secondary mb-2 block">Csapat</label>
               <Select
                 value={resolvedTeamId}
                 onValueChange={(value) => {
@@ -11494,10 +11494,10 @@ export function SeasonComparison({
                   }
                 }}
               >
-                <SelectTrigger className="bg-slate-800 border-slate-700 w-full">
+                <SelectTrigger className="w-full">
                   <SelectValue placeholder="Válassz csapatot..." className="truncate" />
                 </SelectTrigger>
-                <SelectContent className="bg-slate-800 border-slate-700 text-slate-100 placeholder:text-slate-400">
+                <SelectContent>
                   <SelectItem value="all">Összes csapat</SelectItem>
                   {allTeams.map(team => (
                     <SelectItem key={team.id} value={team.id}>
@@ -11509,16 +11509,16 @@ export function SeasonComparison({
             </div>
 
             <div>
-              <label className="text-sm text-slate-400 mb-2 block">Játékos</label>
+              <label className="text-sm text-secondary mb-2 block">Játékos</label>
               <Select
                 key={`${resolvedSeasonId ?? 'none'}-${resolvedTeamId}`}
                 value={selectedPlayerId}
                 onValueChange={setSelectedPlayerId}
               >
-                <SelectTrigger className="bg-slate-800 border-slate-700 w-full">
+                <SelectTrigger className="w-full">
                   <SelectValue placeholder="Válassz játékost..." className="truncate" />
                 </SelectTrigger>
-                <SelectContent className="bg-slate-800 border-slate-700 text-slate-100 placeholder:text-slate-400">
+                <SelectContent>
                   {filteredPlayers.map(player => (
                     <SelectItem key={`${player.id}-${player.seasonId}`} value={player.id}>
                       #{player.number} {player.name} ({player.teamName})
@@ -11529,7 +11529,7 @@ export function SeasonComparison({
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400">
+          <div className="flex flex-wrap items-center gap-3 text-xs text-secondary">
             <span>Mintaszűrés: meccs ≥ 10, perc/meccs ≥ 15</span>
             <span>Aktív minták: {eligibleCount}</span>
           </div>
@@ -11537,7 +11537,7 @@ export function SeasonComparison({
       </Card>
       <TerminologyGlossary />
 
-      <Card className="bg-slate-900 border-slate-800">
+      <Card>
         <CardContent className="p-3">
           <div className="flex flex-wrap gap-2">
             {[
@@ -11554,8 +11554,8 @@ export function SeasonComparison({
                 variant={activeSection === item.key ? 'default' : 'outline'}
                 className={
                   activeSection === item.key
-                    ? 'bg-cyan-600 hover:bg-cyan-500 text-white'
-                    : 'border-slate-700 text-slate-300 hover:bg-slate-800'
+                    ? ''
+                    : 'border-border-subtle text-secondary hover:bg-surface-2'
                 }
                 onClick={() => setActiveSection(item.key as typeof activeSection)}
               >
@@ -11567,8 +11567,8 @@ export function SeasonComparison({
       </Card>
 
       {showPlayerSection && selectedPlayer && !analysis && (
-        <Card className="bg-slate-900 border-slate-800">
-          <CardContent className="p-6 text-sm text-slate-300">
+        <Card>
+          <CardContent className="p-6 text-sm text-secondary">
             A kiválasztott játékos nem felel meg a minimum mintaszűrésnek.
           </CardContent>
         </Card>
@@ -11577,9 +11577,9 @@ export function SeasonComparison({
       {showPlayerSection && analysis && selectedPlayer && (
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
           <div className="xl:col-span-2 space-y-6">
-            <Card className="bg-slate-900 border-slate-800">
+            <Card>
               <CardHeader>
-                <CardTitle className="text-slate-50">
+                <CardTitle className="font-display uppercase tracking-wide text-primary">
                   {selectedPlayer.name} • {getPositionLabel(analysis.position)}
                 </CardTitle>
               </CardHeader>
@@ -11587,30 +11587,29 @@ export function SeasonComparison({
                 <div className="flex flex-wrap items-center gap-2">
 
                   {analysis.roles.map(role => (
-                    <Badge key={role} className="bg-orange-600/20 text-orange-300 border border-orange-600/40">
+                    <Badge key={role} className="badge-orange">
                       {role}
                     </Badge>
                   ))}
                   {analysis.roles.length === 0 && (
-                    <Badge variant="secondary" className="bg-slate-800 text-slate-200">
+                    <Badge className="badge-neutral">
                       Nincs egyértelmű szerepkör
                     </Badge>
                   )}
                 </div>
 
-                <div className="text-sm text-slate-200 leading-relaxed">{analysis.summary}</div>
-                <div className="text-sm text-slate-300">{buildCoachSummary(analysis)}</div>
+                <div className="text-sm text-primary leading-relaxed">{analysis.summary}</div>
+                <div className="text-sm text-secondary">{buildCoachSummary(analysis)}</div>
 
-                <div className="rounded-lg border border-slate-800 bg-slate-900/40 p-3 space-y-2">
+                <div className="rounded-lg border border-border-subtle bg-surface-2/40 p-3 space-y-2">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="text-sm text-slate-300 font-medium">GPT szezonértékelés</div>
+                    <div className="text-sm text-secondary font-medium">GPT szezonértékelés</div>
                     <div className="flex items-center gap-2">
                       <Button
                         type="button"
                         size="sm"
                         onClick={handleGeneratePlayerSeasonNarrative}
                         disabled={isGeneratingPlayerSeasonText}
-                        className="bg-emerald-600 hover:bg-emerald-500 text-white"
                       >
                         {isGeneratingPlayerSeasonText ? 'Generálás...' : 'Komplex játékos elemzés'}
                       </Button>
@@ -11623,7 +11622,7 @@ export function SeasonComparison({
                           isSavingPlayerSeasonText
                           || !playerNarratives[selectedPlayer.id]?.text
                         }
-                        className="border-slate-700 text-slate-200 hover:bg-slate-800"
+                        className="border-border-subtle text-secondary hover:bg-surface-2"
                       >
                         {isSavingPlayerSeasonText ? 'Mentés...' : 'Mentés'}
                       </Button>
@@ -11631,33 +11630,33 @@ export function SeasonComparison({
                   </div>
 
                   {playerSeasonSaveStatus && (
-                    <div className={`text-xs ${playerSeasonSaveStatus.type === 'success' ? 'text-emerald-300' : 'text-rose-300'}`}>
+                    <div className={`text-xs ${playerSeasonSaveStatus.type === 'success' ? 'text-positive' : 'text-negative'}`}>
                       {playerSeasonSaveStatus.message}
                     </div>
                   )}
 
                   {playerNarratives[selectedPlayer.id]?.status === 'loading' && (
-                    <div className="text-sm text-slate-400">Játékos szezonértékelés generálása folyamatban...</div>
+                    <div className="text-sm text-secondary">Játékos szezonértékelés generálása folyamatban...</div>
                   )}
 
                   {playerNarratives[selectedPlayer.id]?.status === 'error' && (
-                    <div className="text-sm text-rose-300">{playerNarratives[selectedPlayer.id]?.error ?? 'Hiba történt.'}</div>
+                    <div className="text-sm text-negative">{playerNarratives[selectedPlayer.id]?.error ?? 'Hiba történt.'}</div>
                   )}
 
                   {playerNarratives[selectedPlayer.id]?.status === 'success' && playerNarratives[selectedPlayer.id]?.text && (
                     <>
-                      <div className="text-xs text-slate-500">
+                      <div className="text-xs text-muted">
                         {playerNarratives[selectedPlayer.id]?.generatedAt
                           ? `Mentve: ${formatGeneratedAt(playerNarratives[selectedPlayer.id]?.generatedAt) ?? 'ismeretlen'}${playerNarratives[selectedPlayer.id]?.generatedBy ? ` • Forrás: ${playerNarratives[selectedPlayer.id]?.generatedBy}` : ''}`
                           : 'Mentett játékos szezonértékelés'}
                       </div>
-                      <div className="text-sm text-slate-100 whitespace-pre-line leading-relaxed">
+                      <div className="text-sm text-primary whitespace-pre-line leading-relaxed">
                         {playerNarratives[selectedPlayer.id]?.text}
                       </div>
                       <Button
                         variant="outline"
                         size="sm"
-                        className="border-cyan-800 hover:bg-slate-800 text-cyan-400"
+                        className="border-border-subtle hover:bg-surface-2 text-cyan"
                         onClick={() => {
                           const md = playerSeasonToMd(selectedPlayer);
                           const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
@@ -11682,183 +11681,183 @@ export function SeasonComparison({
                   <span className={`font-semibold ${getConfidenceTone(analysis.confidence)}`}>
                     Bizonyosság: {analysis.confidence}
                   </span>
-                  <span className="text-slate-400">Szerep biztonság: {(analysis.roleConfidence * 100).toFixed(0)}%</span>
+                  <span className="text-secondary">Szerep biztonság: {(analysis.roleConfidence * 100).toFixed(0)}%</span>
                 </div>
               </CardContent>
             </Card>
 
-            <Card className="bg-slate-900 border-slate-800">
+            <Card>
               <CardHeader>
-                <CardTitle className="text-slate-50">Szezonos alapkontekstus</CardTitle>
+                <CardTitle className="font-display uppercase tracking-wide text-primary">Szezonos alapkontekstus</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 {playerSeasonOverview ? (
                   <>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-                      <div className="p-3 bg-slate-800/50 rounded-lg">
-                        <div className="text-xs text-slate-400">Meccs</div>
-                        <div className="text-slate-50 text-lg font-medium">{playerSeasonOverview.games}</div>
+                      <div className="p-3 bg-surface-2 rounded-lg">
+                        <div className="text-xs text-muted">Meccs</div>
+                        <div className="text-primary font-mono tabular-nums text-lg font-medium">{playerSeasonOverview.games}</div>
                       </div>
-                      <div className="p-3 bg-slate-800/50 rounded-lg">
-                        <div className="text-xs text-slate-400">MPG</div>
-                        <div className="text-slate-50 text-lg font-medium">{playerSeasonOverview.minutesPerGame.toFixed(1)}</div>
+                      <div className="p-3 bg-surface-2 rounded-lg">
+                        <div className="text-xs text-muted">MPG</div>
+                        <div className="text-primary font-mono tabular-nums text-lg font-medium">{playerSeasonOverview.minutesPerGame.toFixed(1)}</div>
                       </div>
-                      <div className="p-3 bg-slate-800/50 rounded-lg">
-                        <div className="text-xs text-slate-400">PPG</div>
-                        <div className="text-slate-50 text-lg font-medium">{playerSeasonOverview.pointsPerGame.toFixed(1)}</div>
+                      <div className="p-3 bg-surface-2 rounded-lg">
+                        <div className="text-xs text-muted">PPG</div>
+                        <div className="text-primary font-mono tabular-nums text-lg font-medium">{playerSeasonOverview.pointsPerGame.toFixed(1)}</div>
                       </div>
-                      <div className="p-3 bg-slate-800/50 rounded-lg">
-                        <div className="text-xs text-slate-400">RPG</div>
-                        <div className="text-slate-50 text-lg font-medium">{playerSeasonOverview.reboundsPerGame.toFixed(1)}</div>
+                      <div className="p-3 bg-surface-2 rounded-lg">
+                        <div className="text-xs text-muted">RPG</div>
+                        <div className="text-primary font-mono tabular-nums text-lg font-medium">{playerSeasonOverview.reboundsPerGame.toFixed(1)}</div>
                       </div>
                     </div>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-                      <div className="text-slate-300">AST: <span className="text-slate-100">{playerSeasonOverview.assistsPerGame.toFixed(1)}</span></div>
-                      <div className="text-slate-300">BLK: <span className="text-slate-100">{playerSeasonOverview.blocksPerGame.toFixed(1)}</span></div>
-                      <div className="text-slate-300">STL: <span className="text-slate-100">{playerSeasonOverview.stealsPerGame.toFixed(1)}</span></div>
-                      <div className="text-slate-300">Fault/meccs: <span className="text-slate-100">{playerSeasonOverview.foulsPerGame.toFixed(1)}</span></div>
-                      <div className="text-slate-300">FG%: <span className="text-slate-100">{formatNullableNumber(playerSeasonOverview.fgPct, 1, '%')}</span></div>
-                      <div className="text-slate-300">2P%: <span className="text-slate-100">{formatNullableNumber(playerSeasonOverview.twoPct, 1, '%')}</span></div>
-                      <div className="text-slate-300">3P%: <span className="text-slate-100">{formatNullableNumber(playerSeasonOverview.threePct, 1, '%')}</span></div>
-                      <div className="text-slate-300">FT%: <span className="text-slate-100">{formatNullableNumber(playerSeasonOverview.ftPct, 1, '%')}</span></div>
-                      <div className="text-slate-300">TS%: <span className="text-slate-100">{formatNullableNumber(playerSeasonOverview.tsPct, 1, '%')}</span></div>
-                      <div className="text-slate-300">VAL/36: <span className="text-slate-100">{playerSeasonOverview.valPer36.toFixed(1)}</span></div>
-                      <div className="text-slate-300">Usage proxy/36: <span className="text-slate-100">{playerSeasonOverview.usageProxyPer36.toFixed(1)}</span></div>
-                      <div className="text-slate-300">Fault/36: <span className="text-slate-100">{formatNullableNumber(playerSeasonOverview.foulsPer36, 1)}</span></div>
+                      <div className="text-secondary">AST: <span className="text-primary font-mono tabular-nums">{playerSeasonOverview.assistsPerGame.toFixed(1)}</span></div>
+                      <div className="text-secondary">BLK: <span className="text-primary font-mono tabular-nums">{playerSeasonOverview.blocksPerGame.toFixed(1)}</span></div>
+                      <div className="text-secondary">STL: <span className="text-primary font-mono tabular-nums">{playerSeasonOverview.stealsPerGame.toFixed(1)}</span></div>
+                      <div className="text-secondary">Fault/meccs: <span className="text-primary font-mono tabular-nums">{playerSeasonOverview.foulsPerGame.toFixed(1)}</span></div>
+                      <div className="text-secondary">FG%: <span className="text-primary font-mono tabular-nums">{formatNullableNumber(playerSeasonOverview.fgPct, 1, '%')}</span></div>
+                      <div className="text-secondary">2P%: <span className="text-primary font-mono tabular-nums">{formatNullableNumber(playerSeasonOverview.twoPct, 1, '%')}</span></div>
+                      <div className="text-secondary">3P%: <span className="text-primary font-mono tabular-nums">{formatNullableNumber(playerSeasonOverview.threePct, 1, '%')}</span></div>
+                      <div className="text-secondary">FT%: <span className="text-primary font-mono tabular-nums">{formatNullableNumber(playerSeasonOverview.ftPct, 1, '%')}</span></div>
+                      <div className="text-secondary">TS%: <span className="text-primary font-mono tabular-nums">{formatNullableNumber(playerSeasonOverview.tsPct, 1, '%')}</span></div>
+                      <div className="text-secondary">VAL/36: <span className="text-primary font-mono tabular-nums">{playerSeasonOverview.valPer36.toFixed(1)}</span></div>
+                      <div className="text-secondary">Usage proxy/36: <span className="text-primary font-mono tabular-nums">{playerSeasonOverview.usageProxyPer36.toFixed(1)}</span></div>
+                      <div className="text-secondary">Fault/36: <span className="text-primary font-mono tabular-nums">{formatNullableNumber(playerSeasonOverview.foulsPer36, 1)}</span></div>
                     </div>
-                    <div className="text-xs text-slate-500">
+                    <div className="text-xs text-muted">
                       Ezek nyers szezonos alapmutatók. A képesség pontszámok ettől külön, 0-100-as posztos benchmark-indexek, nem nyers PPG/usage mutatók.
                     </div>
                   </>
                 ) : (
-                  <div className="text-sm text-slate-400">Nincs elég szezonos adat az összesített kontextushoz.</div>
+                  <div className="text-sm text-secondary">Nincs elég szezonos adat az összesített kontextushoz.</div>
                 )}
               </CardContent>
             </Card>
 
-            <Card className="bg-slate-900 border-slate-800">
+            <Card>
               <CardHeader>
-                <CardTitle className="text-slate-50">Képesség pontszámok</CardTitle>
+                <CardTitle className="font-display uppercase tracking-wide text-primary">Képesség pontszámok</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 {Object.entries(analysis.skillScores).map(([key, value]) => (
                   <div key={key} className="space-y-1">
                     <div className="flex items-center justify-between text-sm">
-                      <span className="text-slate-300">{SKILL_LABELS_HU[key] ?? key}</span>
+                      <span className="text-secondary">{SKILL_LABELS_HU[key] ?? key}</span>
                       <div className="flex items-center gap-3">
-                        <div className="h-2 w-32 bg-slate-800 rounded-full overflow-hidden">
+                        <div className="h-2 w-32 bg-surface-2 rounded-full overflow-hidden">
                           <div
-                            className="h-full bg-emerald-500/80"
+                            className="h-full bg-positive/80"
                             style={{ width: `${value}%` }}
                           />
                         </div>
-                        <span className="text-slate-200 font-semibold w-10 text-right">{value}</span>
+                        <span className="text-primary font-mono tabular-nums font-semibold w-10 text-right">{value}</span>
                       </div>
                     </div>
-                    <div className="text-[11px] text-slate-500">{SKILL_SCORE_HELPERS_HU[key] ?? 'Pozíciós benchmark-index.'}</div>
+                    <div className="text-[11px] text-muted">{SKILL_SCORE_HELPERS_HU[key] ?? 'Pozíciós benchmark-index.'}</div>
                   </div>
                 ))}
-                <div className="text-[11px] text-slate-500">
+                <div className="text-[11px] text-muted">
                   A magas pontszám önmagában nem jelent elsődleges scorer vagy playmaker szerepet; a szezonos volumen- és usage-kontekstust mindig az alapkártyával együtt kell olvasni.
                 </div>
               </CardContent>
             </Card>
 
-            <Card className="bg-slate-900 border-slate-800">
+            <Card>
               <CardHeader>
-                <CardTitle className="text-slate-50">Last 5 Trend (VAL / perc)</CardTitle>
+                <CardTitle className="font-display uppercase tracking-wide text-primary">Last 5 Trend (VAL / perc)</CardTitle>
               </CardHeader>
               <CardContent>
                 {lastFiveChartData.length > 0 ? (
                   <ResponsiveContainer width="100%" height={220}>
                     <LineChart data={lastFiveChartData} margin={{ left: 8, right: 16 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
-                      <XAxis dataKey="label" stroke="#94a3b8" />
-                      <YAxis stroke="#94a3b8" />
+                      <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" />
+                      <XAxis dataKey="label" stroke="var(--text-secondary)" />
+                      <YAxis stroke="var(--text-secondary)" />
                       <Tooltip
                         contentStyle={{
-                          backgroundColor: '#1e293b',
-                          border: '1px solid #334155',
+                          backgroundColor: 'var(--bg-surface-2)',
+                          border: '1px solid var(--border-subtle)',
                           borderRadius: '8px',
-                          color: '#f1f5f9',
+                          color: 'var(--text-primary)',
                         }}
                       />
-                      <Line type="monotone" dataKey="val" stroke="#22c55e" strokeWidth={2} dot={{ r: 3 }} name="VAL" />
-                      <Line type="monotone" dataKey="minutes" stroke="#38bdf8" strokeWidth={2} dot={{ r: 3 }} name="Perc" />
+                      <Line type="monotone" dataKey="val" stroke="var(--positive)" strokeWidth={2} dot={{ r: 3 }} name="VAL" />
+                      <Line type="monotone" dataKey="minutes" stroke="var(--accent-cyan)" strokeWidth={2} dot={{ r: 3 }} name="Perc" />
                     </LineChart>
                   </ResponsiveContainer>
                 ) : (
-                  <div className="text-sm text-slate-400">Nincs elérhető meccs adat.</div>
+                  <div className="text-sm text-secondary">Nincs elérhető meccs adat.</div>
                 )}
               </CardContent>
             </Card>
 
-            <Card className="bg-slate-900 border-slate-800">
+            <Card>
               <CardHeader>
-                <CardTitle className="text-slate-50">Személyes dobásprofil (szezon)</CardTitle>
+                <CardTitle className="font-display uppercase tracking-wide text-primary">Személyes dobásprofil (szezon)</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 {playerSeasonShotSummary ? (
                   <>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                      <div className="p-3 bg-slate-800/50 rounded-lg">
-                        <div className="text-xs text-slate-400">Kísérlet</div>
-                        <div className="text-slate-50 text-lg font-medium">{playerSeasonShotSummary.attempts}</div>
+                      <div className="p-3 bg-surface-2 rounded-lg">
+                        <div className="text-xs text-muted">Kísérlet</div>
+                        <div className="text-primary font-mono tabular-nums text-lg font-medium">{playerSeasonShotSummary.attempts}</div>
                       </div>
-                      <div className="p-3 bg-slate-800/50 rounded-lg">
-                        <div className="text-xs text-slate-400">Bedobott</div>
-                        <div className="text-slate-50 text-lg font-medium">{playerSeasonShotSummary.made}</div>
+                      <div className="p-3 bg-surface-2 rounded-lg">
+                        <div className="text-xs text-muted">Bedobott</div>
+                        <div className="text-primary font-mono tabular-nums text-lg font-medium">{playerSeasonShotSummary.made}</div>
                       </div>
-                      <div className="p-3 bg-slate-800/50 rounded-lg">
-                        <div className="text-xs text-slate-400">FG%</div>
-                        <div className="text-slate-50 text-lg font-medium">{formatShotPct(playerSeasonShotSummary.fgPct)}</div>
+                      <div className="p-3 bg-surface-2 rounded-lg">
+                        <div className="text-xs text-muted">FG%</div>
+                        <div className="text-primary font-mono tabular-nums text-lg font-medium">{formatShotPct(playerSeasonShotSummary.fgPct)}</div>
                       </div>
-                      <div className="p-3 bg-slate-800/50 rounded-lg">
-                        <div className="text-xs text-slate-400">Mintanagyság</div>
-                        <div className="text-slate-50 text-lg font-medium">Hunbasket</div>
+                      <div className="p-3 bg-surface-2 rounded-lg">
+                        <div className="text-xs text-muted">Mintanagyság</div>
+                        <div className="text-primary font-mono tabular-nums text-lg font-medium">Hunbasket</div>
                       </div>
                     </div>
 
                     <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                      <div className="p-3 bg-slate-800/40 rounded-lg">
-                        <div className="text-sm text-slate-300 font-medium mb-2">Zónavolumen (kísérlet)</div>
+                      <div className="p-3 bg-surface-2/40 rounded-lg">
+                        <div className="text-sm text-secondary font-medium mb-2">Zónavolumen (kísérlet)</div>
                         <ResponsiveContainer width="100%" height={220}>
                           <BarChart data={playerShotZoneRows} margin={{ left: 8, right: 8 }}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                            <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" />
                             <XAxis
                               dataKey="label"
-                              stroke="#94a3b8"
+                              stroke="var(--text-secondary)"
                               tick={{ fontSize: 10 }}
                               interval={0}
                               angle={-18}
                               textAnchor="end"
                               tickMargin={10}
                               height={52}
-                
+
                             />
-                            <YAxis stroke="#94a3b8" tick={{ fontSize: 10 }} allowDecimals={false} />
+                            <YAxis stroke="var(--text-secondary)" tick={{ fontSize: 10 }} allowDecimals={false} />
                             <Tooltip
                               contentStyle={{
-                                backgroundColor: '#0f172a',
-                                border: '1px solid #475569',
+                                backgroundColor: 'var(--bg-surface-2)',
+                                border: '1px solid var(--border-subtle)',
                                 borderRadius: '8px',
-                                color: '#f1f5f9',
+                                color: 'var(--text-primary)',
                               }}
-                              labelStyle={{ color: '#f1f5f9', fontWeight: 'bold' }}
-                              itemStyle={{ color: '#e2e8f0' }}
+                              labelStyle={{ color: 'var(--text-primary)', fontWeight: 'bold' }}
+                              itemStyle={{ color: 'var(--text-primary)' }}
                             />
-                            <Bar dataKey="attempts" name="Kísérlet" fill="#38bdf8" radius={[6, 6, 0, 0]} />
+                            <Bar dataKey="attempts" name="Kísérlet" fill="var(--accent-cyan)" radius={[6, 6, 0, 0]} />
                           </BarChart>
                         </ResponsiveContainer>
                       </div>
-                      <div className="p-3 bg-slate-800/40 rounded-lg">
-                        <div className="text-sm text-slate-300 font-medium mb-2">Zónahatékonyság (FG%)</div>
+                      <div className="p-3 bg-surface-2/40 rounded-lg">
+                        <div className="text-sm text-secondary font-medium mb-2">Zónahatékonyság (FG%)</div>
                         <ResponsiveContainer width="100%" height={220}>
                           <BarChart data={playerShotZoneRows} margin={{ left: 8, right: 8 }}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                            <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" />
                             <XAxis
                               dataKey="label"
-                              stroke="#94a3b8"
+                              stroke="var(--text-secondary)"
                               tick={{ fontSize: 10 }}
                               interval={0}
                               angle={-18}
@@ -11866,44 +11865,44 @@ export function SeasonComparison({
                               tickMargin={10}
                               height={52}
                             />
-                            <YAxis stroke="#94a3b8" tick={{ fontSize: 10 }} domain={[0, 100]} />
+                            <YAxis stroke="var(--text-secondary)" tick={{ fontSize: 10 }} domain={[0, 100]} />
                             <Tooltip
                               formatter={(value: number | string | undefined) => `${Number(value ?? 0).toFixed(1)}%`}
                               contentStyle={{
-                                backgroundColor: '#0f172a',
-                                border: '1px solid #475569',
+                                backgroundColor: 'var(--bg-surface-2)',
+                                border: '1px solid var(--border-subtle)',
                                 borderRadius: '8px',
-                                color: '#f1f5f9',
+                                color: 'var(--text-primary)',
                               }}
-                              labelStyle={{ color: '#f1f5f9', fontWeight: 'bold' }}
-                              itemStyle={{ color: '#e2e8f0' }}
+                              labelStyle={{ color: 'var(--text-primary)', fontWeight: 'bold' }}
+                              itemStyle={{ color: 'var(--text-primary)' }}
                             />
-                            <Bar dataKey="pct" name="FG%" fill="#22c55e" radius={[6, 6, 0, 0]} />
+                            <Bar dataKey="pct" name="FG%" fill="var(--positive)" radius={[6, 6, 0, 0]} />
                           </BarChart>
                         </ResponsiveContainer>
                       </div>
                     </div>
                   </>
                 ) : (
-                  <div className="text-sm text-slate-400">Ehhez a játékoshoz még nincs elég Hunbasket dobástérkép adat.</div>
+                  <div className="text-sm text-secondary">Ehhez a játékoshoz még nincs elég Hunbasket dobástérkép adat.</div>
                 )}
               </CardContent>
             </Card>
 
             {playerAdvancedInsights && (
-              <Card className="bg-slate-900 border-slate-800">
+              <Card>
                 <CardHeader>
-                  <CardTitle className="text-slate-50">Haladó játékos blokkok (új statok)</CardTitle>
+                  <CardTitle className="font-display uppercase tracking-wide text-primary">Haladó játékos blokkok (új statok)</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <TooltipProvider delayDuration={120}>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
 
                     {/* 1) Shot quality vs shot making */}
-                    <div className="rounded-md border border-slate-800 bg-slate-900/50 p-3 space-y-2">
+                    <div className="rounded-md border border-border-subtle bg-surface-2/50 p-3 space-y-2">
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-1.5">
-                          <div className="text-slate-200 font-medium">1) Dobásminőség vs kivitelezés</div>
+                          <div className="text-primary font-medium">1) Dobásminőség vs kivitelezés</div>
                           {renderThresholdTooltip(playerAdvancedInsights.thresholdHints.shot)}
                         </div>
                         {'confidence' in playerAdvancedInsights.shotQualityVsMaking && (
@@ -11916,24 +11915,24 @@ export function SeasonComparison({
                           ? ` (${playerAdvancedInsights.shotQualityVsMaking.interpretation})` : ''}
                       </p>
                       <div className="flex flex-wrap gap-1.5">
-                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">Várt eFG: {formatNullableNumber(playerAdvancedInsights.shotQualityVsMaking.expectedEfg, 1, '%')}</span>
-                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">Tényleges eFG: {formatNullableNumber(playerAdvancedInsights.shotQualityVsMaking.actualEfg, 1, '%')}</span>
-                        <span className={`px-1.5 py-0.5 rounded bg-slate-800 text-[10px] ${Number(playerAdvancedInsights.shotQualityVsMaking.valueAdd ?? 0) >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
+                        <span className="px-1.5 py-0.5 rounded bg-surface-2 text-[10px] text-secondary">Várt eFG: {formatNullableNumber(playerAdvancedInsights.shotQualityVsMaking.expectedEfg, 1, '%')}</span>
+                        <span className="px-1.5 py-0.5 rounded bg-surface-2 text-[10px] text-secondary">Tényleges eFG: {formatNullableNumber(playerAdvancedInsights.shotQualityVsMaking.actualEfg, 1, '%')}</span>
+                        <span className={`px-1.5 py-0.5 rounded bg-surface-2 text-[10px] ${Number(playerAdvancedInsights.shotQualityVsMaking.valueAdd ?? 0) >= 0 ? 'text-positive' : 'text-negative'}`}>
                           Értéktöbblet: {formatNullableNumber(playerAdvancedInsights.shotQualityVsMaking.valueAdd, 1, ' pp')}
                         </span>
                       </div>
                       {playerAdvancedInsights.shotQualityVsMaking.zoneAdds.length > 0 && (
-                        <div className="text-[10px] text-slate-500">
+                        <div className="text-[10px] text-muted">
                           Zóna delta: {playerAdvancedInsights.shotQualityVsMaking.zoneAdds.slice(0, 3).map(item => `${item.label} ${item.delta >= 0 ? '+' : ''}${item.delta.toFixed(1)}`).join(' • ')}
                         </div>
                       )}
                     </div>
 
                     {/* 2) Clutch identitás */}
-                    <div className="rounded-md border border-slate-800 bg-slate-900/50 p-3 space-y-2">
+                    <div className="rounded-md border border-border-subtle bg-surface-2/50 p-3 space-y-2">
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-1.5">
-                          <div className="text-slate-200 font-medium">2) Clutch identitás</div>
+                          <div className="text-primary font-medium">2) Clutch identitás</div>
                           {renderThresholdTooltip(playerAdvancedInsights.thresholdHints.clutch)}
                         </div>
                         {'confidence' in playerAdvancedInsights.clutchIdentity && (
@@ -11946,26 +11945,26 @@ export function SeasonComparison({
                           ? ` ${playerAdvancedInsights.clutchIdentity.roleNote}` : ''}
                       </p>
                       {playerAdvancedInsights.clutchIdentity.games === 0 && (
-                        <div className="text-[10px] text-rose-400 font-semibold">Nincs clutch minta – adatok tájékoztató jellegűek.</div>
+                        <div className="text-[10px] text-negative font-semibold">Nincs clutch minta – adatok tájékoztató jellegűek.</div>
                       )}
                       {'sampleWarning' in playerAdvancedInsights.clutchIdentity && playerAdvancedInsights.clutchIdentity.sampleWarning && (
-                        <div className="text-[10px] text-amber-300 font-semibold">{playerAdvancedInsights.clutchIdentity.sampleWarning}</div>
+                        <div className="text-[10px] text-warning font-semibold">{playerAdvancedInsights.clutchIdentity.sampleWarning}</div>
                       )}
                       <div className="flex flex-wrap gap-1.5">
-                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">Minta: {playerAdvancedInsights.clutchIdentity.games} meccs</span>
-                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">Usage: {formatNullableNumber(playerAdvancedInsights.clutchIdentity.usagePct, 1, '%')}</span>
-                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">TS%: {formatNullableNumber(playerAdvancedInsights.clutchIdentity.tsPct, 1, '%')}</span>
-                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">TOV%: {formatNullableNumber(playerAdvancedInsights.clutchIdentity.tovPct, 1, '%')}</span>
-                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">AST/TO: {formatNullableNumber(playerAdvancedInsights.clutchIdentity.astTo, 2)}</span>
-                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">PPP: {formatNullableNumber(playerAdvancedInsights.clutchIdentity.ppp, 3)}</span>
+                        <span className="px-1.5 py-0.5 rounded bg-surface-2 text-[10px] text-secondary">Minta: {playerAdvancedInsights.clutchIdentity.games} meccs</span>
+                        <span className="px-1.5 py-0.5 rounded bg-surface-2 text-[10px] text-secondary">Usage: {formatNullableNumber(playerAdvancedInsights.clutchIdentity.usagePct, 1, '%')}</span>
+                        <span className="px-1.5 py-0.5 rounded bg-surface-2 text-[10px] text-secondary">TS%: {formatNullableNumber(playerAdvancedInsights.clutchIdentity.tsPct, 1, '%')}</span>
+                        <span className="px-1.5 py-0.5 rounded bg-surface-2 text-[10px] text-secondary">TOV%: {formatNullableNumber(playerAdvancedInsights.clutchIdentity.tovPct, 1, '%')}</span>
+                        <span className="px-1.5 py-0.5 rounded bg-surface-2 text-[10px] text-secondary">AST/TO: {formatNullableNumber(playerAdvancedInsights.clutchIdentity.astTo, 2)}</span>
+                        <span className="px-1.5 py-0.5 rounded bg-surface-2 text-[10px] text-secondary">PPP: {formatNullableNumber(playerAdvancedInsights.clutchIdentity.ppp, 3)}</span>
                       </div>
                     </div>
 
                     {/* 3) Kontextusos +/- (lineup) */}
-                    <div className="rounded-md border border-slate-800 bg-slate-900/50 p-3 space-y-2">
+                    <div className="rounded-md border border-border-subtle bg-surface-2/50 p-3 space-y-2">
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-1.5">
-                          <div className="text-slate-200 font-medium">3) Kontextusos +/- (lineup)</div>
+                          <div className="text-primary font-medium">3) Kontextusos +/- (lineup)</div>
                           {renderThresholdTooltip(playerAdvancedInsights.thresholdHints.impact)}
                         </div>
                         {'confidence' in playerAdvancedInsights.plusMinusContext && (
@@ -11976,25 +11975,25 @@ export function SeasonComparison({
                         {playerAdvancedInsights.blockVerdicts.impact.text}
                       </p>
                       <div className="flex flex-wrap gap-1.5">
-                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">Pályán: {formatNullableNumber(playerAdvancedInsights.plusMinusContext.onNet40, 1)} net/40</span>
-                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">Pályán kívül: {formatNullableNumber(playerAdvancedInsights.plusMinusContext.offNet40, 1)} net/40</span>
-                        <span className={`px-1.5 py-0.5 rounded bg-slate-800 text-[10px] ${Number(playerAdvancedInsights.plusMinusContext.delta ?? 0) >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
+                        <span className="px-1.5 py-0.5 rounded bg-surface-2 text-[10px] text-secondary">Pályán: {formatNullableNumber(playerAdvancedInsights.plusMinusContext.onNet40, 1)} net/40</span>
+                        <span className="px-1.5 py-0.5 rounded bg-surface-2 text-[10px] text-secondary">Pályán kívül: {formatNullableNumber(playerAdvancedInsights.plusMinusContext.offNet40, 1)} net/40</span>
+                        <span className={`px-1.5 py-0.5 rounded bg-surface-2 text-[10px] ${Number(playerAdvancedInsights.plusMinusContext.delta ?? 0) >= 0 ? 'text-positive' : 'text-negative'}`}>
                           On/Off delta: {formatNullableNumber(playerAdvancedInsights.plusMinusContext.delta, 1)}
                         </span>
-                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-400">Minta: {playerAdvancedInsights.plusMinusContext.lineupMinutes.toFixed(0)} perc</span>
+                        <span className="px-1.5 py-0.5 rounded bg-surface-2 text-[10px] text-muted">Minta: {playerAdvancedInsights.plusMinusContext.lineupMinutes.toFixed(0)} perc</span>
                       </div>
                       {playerAdvancedInsights.plusMinusContext.topPair && (
-                        <div className="text-[10px] text-slate-500">
+                        <div className="text-[10px] text-muted">
                           Legjobb páros: {playerAdvancedInsights.plusMinusContext.topPair.label} ({playerAdvancedInsights.plusMinusContext.topPair.netPer40.toFixed(1)} net/40)
                         </div>
                       )}
                     </div>
 
                     {/* 4) Szerepkör-hatékonyság */}
-                    <div className="rounded-md border border-slate-800 bg-slate-900/50 p-3 space-y-2">
+                    <div className="rounded-md border border-border-subtle bg-surface-2/50 p-3 space-y-2">
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-1.5">
-                          <div className="text-slate-200 font-medium">4) Szerepkör-hatékonyság</div>
+                          <div className="text-primary font-medium">4) Szerepkör-hatékonyság</div>
                           {renderThresholdTooltip(playerAdvancedInsights.thresholdHints.role)}
                         </div>
                         {'confidence' in playerAdvancedInsights.roleEfficiency && (
@@ -12005,21 +12004,21 @@ export function SeasonComparison({
                         {playerAdvancedInsights.blockVerdicts.role.text}
                       </p>
                       <div className="flex flex-wrap gap-1.5">
-                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">Ball-handler TS/PPP: {formatNullableNumber(playerAdvancedInsights.roleEfficiency.ballHandlerTs, 1, '%')} / {formatNullableNumber(playerAdvancedInsights.roleEfficiency.ballHandlerPpp, 3)}</span>
-                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">Off-ball TS/PPP: {formatNullableNumber(playerAdvancedInsights.roleEfficiency.offBallTs, 1, '%')} / {formatNullableNumber(playerAdvancedInsights.roleEfficiency.offBallPpp, 3)}</span>
-                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">Rim nyomás TS%: {formatNullableNumber(playerAdvancedInsights.roleEfficiency.rimPressureTs, 1, '%')}</span>
-                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">Magas 3PA TS%: {formatNullableNumber(playerAdvancedInsights.roleEfficiency.highThreeTs, 1, '%')}</span>
+                        <span className="px-1.5 py-0.5 rounded bg-surface-2 text-[10px] text-secondary">Ball-handler TS/PPP: {formatNullableNumber(playerAdvancedInsights.roleEfficiency.ballHandlerTs, 1, '%')} / {formatNullableNumber(playerAdvancedInsights.roleEfficiency.ballHandlerPpp, 3)}</span>
+                        <span className="px-1.5 py-0.5 rounded bg-surface-2 text-[10px] text-secondary">Off-ball TS/PPP: {formatNullableNumber(playerAdvancedInsights.roleEfficiency.offBallTs, 1, '%')} / {formatNullableNumber(playerAdvancedInsights.roleEfficiency.offBallPpp, 3)}</span>
+                        <span className="px-1.5 py-0.5 rounded bg-surface-2 text-[10px] text-secondary">Rim nyomás TS%: {formatNullableNumber(playerAdvancedInsights.roleEfficiency.rimPressureTs, 1, '%')}</span>
+                        <span className="px-1.5 py-0.5 rounded bg-surface-2 text-[10px] text-secondary">Magas 3PA TS%: {formatNullableNumber(playerAdvancedInsights.roleEfficiency.highThreeTs, 1, '%')}</span>
                       </div>
                       {'ballHandlerSample' in playerAdvancedInsights.roleEfficiency && 'offBallSample' in playerAdvancedInsights.roleEfficiency && (
-                        <div className="text-[10px] text-slate-500">Minta: ball-handler {playerAdvancedInsights.roleEfficiency.ballHandlerSample} • off-ball {playerAdvancedInsights.roleEfficiency.offBallSample} meccs</div>
+                        <div className="text-[10px] text-muted">Minta: ball-handler {playerAdvancedInsights.roleEfficiency.ballHandlerSample} • off-ball {playerAdvancedInsights.roleEfficiency.offBallSample} meccs</div>
                       )}
                     </div>
 
                     {/* 5) Döntésminőség index */}
-                    <div className="rounded-md border border-slate-800 bg-slate-900/50 p-3 space-y-2">
+                    <div className="rounded-md border border-border-subtle bg-surface-2/50 p-3 space-y-2">
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-1.5">
-                          <div className="text-slate-200 font-medium">5) Döntésminőség index</div>
+                          <div className="text-primary font-medium">5) Döntésminőség index</div>
                           {renderThresholdTooltip(playerAdvancedInsights.thresholdHints.decision)}
                         </div>
                         {'confidence' in playerAdvancedInsights.decisionQuality && (
@@ -12030,18 +12029,18 @@ export function SeasonComparison({
                         {playerAdvancedInsights.blockVerdicts.decision.text}
                       </p>
                       <div className="flex flex-wrap gap-1.5">
-                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-cyan-300 font-semibold">{playerAdvancedInsights.decisionQuality.score.toFixed(1)} / 100 — {playerAdvancedInsights.decisionQuality.tier}</span>
-                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">AST/TO: {playerAdvancedInsights.decisionQuality.astTo.toFixed(2)}</span>
-                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">TOV%: {playerAdvancedInsights.decisionQuality.tovPct.toFixed(1)}%</span>
-                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">Midrange arány: {playerAdvancedInsights.decisionQuality.midRate.toFixed(1)}%</span>
+                        <span className="px-1.5 py-0.5 rounded bg-surface-2 text-[10px] text-cyan font-semibold">{playerAdvancedInsights.decisionQuality.score.toFixed(1)} / 100 — {playerAdvancedInsights.decisionQuality.tier}</span>
+                        <span className="px-1.5 py-0.5 rounded bg-surface-2 text-[10px] text-secondary">AST/TO: {playerAdvancedInsights.decisionQuality.astTo.toFixed(2)}</span>
+                        <span className="px-1.5 py-0.5 rounded bg-surface-2 text-[10px] text-secondary">TOV%: {playerAdvancedInsights.decisionQuality.tovPct.toFixed(1)}%</span>
+                        <span className="px-1.5 py-0.5 rounded bg-surface-2 text-[10px] text-secondary">Midrange arány: {playerAdvancedInsights.decisionQuality.midRate.toFixed(1)}%</span>
                       </div>
                     </div>
 
                     {/* 6) Stabilitás és hullámzás */}
-                    <div className="rounded-md border border-slate-800 bg-slate-900/50 p-3 space-y-2">
+                    <div className="rounded-md border border-border-subtle bg-surface-2/50 p-3 space-y-2">
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-1.5">
-                          <div className="text-slate-200 font-medium">6) Stabilitás és hullámzás</div>
+                          <div className="text-primary font-medium">6) Stabilitás és hullámzás</div>
                           {renderThresholdTooltip(playerAdvancedInsights.thresholdHints.stability)}
                         </div>
                         {'confidence' in playerAdvancedInsights.stability && (
@@ -12052,21 +12051,21 @@ export function SeasonComparison({
                         {playerAdvancedInsights.blockVerdicts.stability.text}
                       </p>
                       <div className="flex flex-wrap gap-1.5">
-                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">Volatilitás: {playerAdvancedInsights.stability.volatility.toFixed(1)} / 100</span>
-                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">TS szórás: {playerAdvancedInsights.stability.tsStd.toFixed(1)}</span>
-                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">PPP szórás: {playerAdvancedInsights.stability.pppStd.toFixed(3)}</span>
-                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">TO szórás: {playerAdvancedInsights.stability.tovStd.toFixed(1)} pp</span>
-                        <span className={`px-1.5 py-0.5 rounded bg-slate-800 text-[10px] ${playerAdvancedInsights.stability.trend >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
+                        <span className="px-1.5 py-0.5 rounded bg-surface-2 text-[10px] text-secondary">Volatilitás: {playerAdvancedInsights.stability.volatility.toFixed(1)} / 100</span>
+                        <span className="px-1.5 py-0.5 rounded bg-surface-2 text-[10px] text-secondary">TS szórás: {playerAdvancedInsights.stability.tsStd.toFixed(1)}</span>
+                        <span className="px-1.5 py-0.5 rounded bg-surface-2 text-[10px] text-secondary">PPP szórás: {playerAdvancedInsights.stability.pppStd.toFixed(3)}</span>
+                        <span className="px-1.5 py-0.5 rounded bg-surface-2 text-[10px] text-secondary">TO szórás: {playerAdvancedInsights.stability.tovStd.toFixed(1)} pp</span>
+                        <span className={`px-1.5 py-0.5 rounded bg-surface-2 text-[10px] ${playerAdvancedInsights.stability.trend >= 0 ? 'text-positive' : 'text-negative'}`}>
                           Trend (TS): {playerAdvancedInsights.stability.trend >= 0 ? '+' : ''}{playerAdvancedInsights.stability.trend.toFixed(1)} pp
                         </span>
                       </div>
                     </div>
 
                     {/* 7) Matchup érzékenység */}
-                    <div className="rounded-md border border-slate-800 bg-slate-900/50 p-3 space-y-2">
+                    <div className="rounded-md border border-border-subtle bg-surface-2/50 p-3 space-y-2">
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-1.5">
-                          <div className="text-slate-200 font-medium">7) Matchup érzékenység</div>
+                          <div className="text-primary font-medium">7) Matchup érzékenység</div>
                           {renderThresholdTooltip(playerAdvancedInsights.thresholdHints.matchup)}
                         </div>
                         {'confidence' in playerAdvancedInsights.matchupSensitivity && (
@@ -12081,29 +12080,29 @@ export function SeasonComparison({
                       {playerAdvancedInsights.matchupSensitivity.available ? (
                         <>
                           <div className="flex flex-wrap gap-1.5">
-                            <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">Erős véd. TS/PPP: {formatNullableNumber(playerAdvancedInsights.matchupSensitivity.strongTs, 1, '%')} / {formatNullableNumber(playerAdvancedInsights.matchupSensitivity.strongPpp, 3)}</span>
-                            <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">Gyengébb véd. TS/PPP: {formatNullableNumber(playerAdvancedInsights.matchupSensitivity.weakTs, 1, '%')} / {formatNullableNumber(playerAdvancedInsights.matchupSensitivity.weakPpp, 3)}</span>
-                            <span className={`px-1.5 py-0.5 rounded bg-slate-800 text-[10px] ${Number(playerAdvancedInsights.matchupSensitivity.tsDelta ?? 0) >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
+                            <span className="px-1.5 py-0.5 rounded bg-surface-2 text-[10px] text-secondary">Erős véd. TS/PPP: {formatNullableNumber(playerAdvancedInsights.matchupSensitivity.strongTs, 1, '%')} / {formatNullableNumber(playerAdvancedInsights.matchupSensitivity.strongPpp, 3)}</span>
+                            <span className="px-1.5 py-0.5 rounded bg-surface-2 text-[10px] text-secondary">Gyengébb véd. TS/PPP: {formatNullableNumber(playerAdvancedInsights.matchupSensitivity.weakTs, 1, '%')} / {formatNullableNumber(playerAdvancedInsights.matchupSensitivity.weakPpp, 3)}</span>
+                            <span className={`px-1.5 py-0.5 rounded bg-surface-2 text-[10px] ${Number(playerAdvancedInsights.matchupSensitivity.tsDelta ?? 0) >= 0 ? 'text-positive' : 'text-negative'}`}>
                               TS delta: {formatNullableNumber(playerAdvancedInsights.matchupSensitivity.tsDelta, 1, ' pp')}
                             </span>
                           </div>
                           {'strongOpponents' in playerAdvancedInsights.matchupSensitivity && playerAdvancedInsights.matchupSensitivity.strongOpponents?.length > 0 && (
-                            <div className="text-[10px] text-slate-500">Erős: {playerAdvancedInsights.matchupSensitivity.strongOpponents.join(' • ')}</div>
+                            <div className="text-[10px] text-muted">Erős: {playerAdvancedInsights.matchupSensitivity.strongOpponents.join(' • ')}</div>
                           )}
                           {'weakOpponents' in playerAdvancedInsights.matchupSensitivity && playerAdvancedInsights.matchupSensitivity.weakOpponents?.length > 0 && (
-                            <div className="text-[10px] text-slate-500">Gyengébb: {playerAdvancedInsights.matchupSensitivity.weakOpponents.join(' • ')}</div>
+                            <div className="text-[10px] text-muted">Gyengébb: {playerAdvancedInsights.matchupSensitivity.weakOpponents.join(' • ')}</div>
                           )}
                         </>
                       ) : (
-                        <div className="text-[10px] text-slate-400">Nincs elég minta az ellenfél-minőség szerinti splithez.</div>
+                        <div className="text-[10px] text-secondary">Nincs elég minta az ellenfél-minőség szerinti splithez.</div>
                       )}
                     </div>
 
                     {/* 8) Fáradás és terhelés */}
-                    <div className="rounded-md border border-slate-800 bg-slate-900/50 p-3 space-y-2">
+                    <div className="rounded-md border border-border-subtle bg-surface-2/50 p-3 space-y-2">
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-1.5">
-                          <div className="text-slate-200 font-medium">8) Fáradás és terhelés</div>
+                          <div className="text-primary font-medium">8) Fáradás és terhelés</div>
                           {renderThresholdTooltip(playerAdvancedInsights.thresholdHints.fatigue)}
                         </div>
                         {'confidence' in playerAdvancedInsights.fatigueLoad && (
@@ -12116,71 +12115,71 @@ export function SeasonComparison({
                           ? ` ${playerAdvancedInsights.fatigueLoad.note}` : ''}
                       </p>
                       <div className="flex flex-wrap gap-1.5">
-                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">High-load meccsek: {playerAdvancedInsights.fatigueLoad.highLoadGames}</span>
-                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">B2B minta: {playerAdvancedInsights.fatigueLoad.b2bGames}</span>
-                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">High-load TS%: {formatNullableNumber(playerAdvancedInsights.fatigueLoad.highLoadTs, 1, '%')}</span>
-                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">Normál TS%: {formatNullableNumber(playerAdvancedInsights.fatigueLoad.normalLoadTs, 1, '%')}</span>
-                        <span className={`px-1.5 py-0.5 rounded bg-slate-800 text-[10px] ${Number(playerAdvancedInsights.fatigueLoad.tsDrop ?? 0) >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
+                        <span className="px-1.5 py-0.5 rounded bg-surface-2 text-[10px] text-secondary">High-load meccsek: {playerAdvancedInsights.fatigueLoad.highLoadGames}</span>
+                        <span className="px-1.5 py-0.5 rounded bg-surface-2 text-[10px] text-secondary">B2B minta: {playerAdvancedInsights.fatigueLoad.b2bGames}</span>
+                        <span className="px-1.5 py-0.5 rounded bg-surface-2 text-[10px] text-secondary">High-load TS%: {formatNullableNumber(playerAdvancedInsights.fatigueLoad.highLoadTs, 1, '%')}</span>
+                        <span className="px-1.5 py-0.5 rounded bg-surface-2 text-[10px] text-secondary">Normál TS%: {formatNullableNumber(playerAdvancedInsights.fatigueLoad.normalLoadTs, 1, '%')}</span>
+                        <span className={`px-1.5 py-0.5 rounded bg-surface-2 text-[10px] ${Number(playerAdvancedInsights.fatigueLoad.tsDrop ?? 0) >= 0 ? 'text-positive' : 'text-negative'}`}>
                           TS különbség: {formatNullableNumber(playerAdvancedInsights.fatigueLoad.tsDrop, 1, ' pp')}
                         </span>
-                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">B2B TOV%: {formatNullableNumber(playerAdvancedInsights.fatigueLoad.b2bTovPct, 1, '%')}</span>
+                        <span className="px-1.5 py-0.5 rounded bg-surface-2 text-[10px] text-secondary">B2B TOV%: {formatNullableNumber(playerAdvancedInsights.fatigueLoad.b2bTovPct, 1, '%')}</span>
                       </div>
                     </div>
 
                     {/* 9–13) advancedBlocks — dobásprofil, játéképítés, védekezés, pontszerzés, hatékonyság */}
                     {advancedBlocks && (<>
-                    <div className="rounded-md border border-slate-800 bg-slate-900/50 p-3 space-y-2">
-                      <div className="text-slate-200 font-medium">9) Dobásprofil (per-36)</div>
-                      <p className="text-[11px] leading-relaxed text-slate-300">{advancedBlocks.shooting.narrative}</p>
+                    <div className="rounded-md border border-border-subtle bg-surface-2/50 p-3 space-y-2">
+                      <div className="text-primary font-medium">9) Dobásprofil (per-36)</div>
+                      <p className="text-[11px] leading-relaxed text-secondary">{advancedBlocks.shooting.narrative}</p>
                       <div className="flex flex-wrap gap-1.5">
-                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">TS%: {advancedBlocks.shooting.tsPct.toFixed(1)}%</span>
-                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">eFG%: {advancedBlocks.shooting.efg.toFixed(1)}%</span>
-                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">3P%: {advancedBlocks.shooting.threePct.toFixed(1)}%</span>
-                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">FT%: {advancedBlocks.shooting.ftPct.toFixed(1)}%</span>
-                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">Rim: {(advancedBlocks.shooting.rimRate * 100).toFixed(0)}% ({advancedBlocks.shooting.closeEffPct.toFixed(0)}%)</span>
-                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">Mid: {(advancedBlocks.shooting.midRate * 100).toFixed(0)}% ({advancedBlocks.shooting.midEffPct.toFixed(0)}%)</span>
-                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">3P-arány: {(advancedBlocks.shooting.threeRate * 100).toFixed(0)}%</span>
+                        <span className="px-1.5 py-0.5 rounded bg-surface-2 text-[10px] text-secondary">TS%: {advancedBlocks.shooting.tsPct.toFixed(1)}%</span>
+                        <span className="px-1.5 py-0.5 rounded bg-surface-2 text-[10px] text-secondary">eFG%: {advancedBlocks.shooting.efg.toFixed(1)}%</span>
+                        <span className="px-1.5 py-0.5 rounded bg-surface-2 text-[10px] text-secondary">3P%: {advancedBlocks.shooting.threePct.toFixed(1)}%</span>
+                        <span className="px-1.5 py-0.5 rounded bg-surface-2 text-[10px] text-secondary">FT%: {advancedBlocks.shooting.ftPct.toFixed(1)}%</span>
+                        <span className="px-1.5 py-0.5 rounded bg-surface-2 text-[10px] text-secondary">Rim: {(advancedBlocks.shooting.rimRate * 100).toFixed(0)}% ({advancedBlocks.shooting.closeEffPct.toFixed(0)}%)</span>
+                        <span className="px-1.5 py-0.5 rounded bg-surface-2 text-[10px] text-secondary">Mid: {(advancedBlocks.shooting.midRate * 100).toFixed(0)}% ({advancedBlocks.shooting.midEffPct.toFixed(0)}%)</span>
+                        <span className="px-1.5 py-0.5 rounded bg-surface-2 text-[10px] text-secondary">3P-arány: {(advancedBlocks.shooting.threeRate * 100).toFixed(0)}%</span>
                       </div>
                     </div>
 
-                    <div className="rounded-md border border-slate-800 bg-slate-900/50 p-3 space-y-2">
-                      <div className="text-slate-200 font-medium">10) Játéképítés (per-36)</div>
-                      <p className="text-[11px] leading-relaxed text-slate-300">{advancedBlocks.playmaking.narrative}</p>
+                    <div className="rounded-md border border-border-subtle bg-surface-2/50 p-3 space-y-2">
+                      <div className="text-primary font-medium">10) Játéképítés (per-36)</div>
+                      <p className="text-[11px] leading-relaxed text-secondary">{advancedBlocks.playmaking.narrative}</p>
                       <div className="flex flex-wrap gap-1.5">
-                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">AST/36: {advancedBlocks.playmaking.astPer36.toFixed(1)}</span>
-                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">AST/TO: {advancedBlocks.playmaking.astTo.toFixed(2)}</span>
-                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">Usage/36: {advancedBlocks.playmaking.usageProxy.toFixed(1)}</span>
+                        <span className="px-1.5 py-0.5 rounded bg-surface-2 text-[10px] text-secondary">AST/36: {advancedBlocks.playmaking.astPer36.toFixed(1)}</span>
+                        <span className="px-1.5 py-0.5 rounded bg-surface-2 text-[10px] text-secondary">AST/TO: {advancedBlocks.playmaking.astTo.toFixed(2)}</span>
+                        <span className="px-1.5 py-0.5 rounded bg-surface-2 text-[10px] text-secondary">Usage/36: {advancedBlocks.playmaking.usageProxy.toFixed(1)}</span>
                       </div>
                     </div>
 
-                    <div className="rounded-md border border-slate-800 bg-slate-900/50 p-3 space-y-2">
-                      <div className="text-slate-200 font-medium">11) Védekezés (per-36)</div>
-                      <p className="text-[11px] leading-relaxed text-slate-300">{advancedBlocks.defense.narrative}</p>
+                    <div className="rounded-md border border-border-subtle bg-surface-2/50 p-3 space-y-2">
+                      <div className="text-primary font-medium">11) Védekezés (per-36)</div>
+                      <p className="text-[11px] leading-relaxed text-secondary">{advancedBlocks.defense.narrative}</p>
                       <div className="flex flex-wrap gap-1.5">
-                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">STL/36: {advancedBlocks.defense.stlPer36.toFixed(1)}</span>
-                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">BLK/36: {advancedBlocks.defense.blkPer36.toFixed(1)}</span>
-                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">DREB/36: {advancedBlocks.defense.defRebPer36.toFixed(1)}</span>
-                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">Faultok/36: {advancedBlocks.defense.foulsPer36.toFixed(1)}</span>
+                        <span className="px-1.5 py-0.5 rounded bg-surface-2 text-[10px] text-secondary">STL/36: {advancedBlocks.defense.stlPer36.toFixed(1)}</span>
+                        <span className="px-1.5 py-0.5 rounded bg-surface-2 text-[10px] text-secondary">BLK/36: {advancedBlocks.defense.blkPer36.toFixed(1)}</span>
+                        <span className="px-1.5 py-0.5 rounded bg-surface-2 text-[10px] text-secondary">DREB/36: {advancedBlocks.defense.defRebPer36.toFixed(1)}</span>
+                        <span className="px-1.5 py-0.5 rounded bg-surface-2 text-[10px] text-secondary">Faultok/36: {advancedBlocks.defense.foulsPer36.toFixed(1)}</span>
                       </div>
                     </div>
 
-                    <div className="rounded-md border border-slate-800 bg-slate-900/50 p-3 space-y-2">
-                      <div className="text-slate-200 font-medium">12) Pontszerzés (per-36)</div>
-                      <p className="text-[11px] leading-relaxed text-slate-300">{advancedBlocks.scoring.narrative}</p>
+                    <div className="rounded-md border border-border-subtle bg-surface-2/50 p-3 space-y-2">
+                      <div className="text-primary font-medium">12) Pontszerzés (per-36)</div>
+                      <p className="text-[11px] leading-relaxed text-secondary">{advancedBlocks.scoring.narrative}</p>
                       <div className="flex flex-wrap gap-1.5">
-                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">PTS/36: {advancedBlocks.scoring.ptsPer36.toFixed(1)}</span>
-                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">TS%: {advancedBlocks.scoring.tsPct.toFixed(1)}%</span>
-                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">Usage/36: {advancedBlocks.scoring.usageProxy.toFixed(1)}</span>
+                        <span className="px-1.5 py-0.5 rounded bg-surface-2 text-[10px] text-secondary">PTS/36: {advancedBlocks.scoring.ptsPer36.toFixed(1)}</span>
+                        <span className="px-1.5 py-0.5 rounded bg-surface-2 text-[10px] text-secondary">TS%: {advancedBlocks.scoring.tsPct.toFixed(1)}%</span>
+                        <span className="px-1.5 py-0.5 rounded bg-surface-2 text-[10px] text-secondary">Usage/36: {advancedBlocks.scoring.usageProxy.toFixed(1)}</span>
                       </div>
                     </div>
 
-                    <div className="rounded-md border border-slate-800 bg-slate-900/50 p-3 space-y-2">
-                      <div className="text-slate-200 font-medium">13) Összhatékonyság (per-36)</div>
-                      <p className="text-[11px] leading-relaxed text-slate-300">{advancedBlocks.efficiency.narrative}</p>
+                    <div className="rounded-md border border-border-subtle bg-surface-2/50 p-3 space-y-2">
+                      <div className="text-primary font-medium">13) Összhatékonyság (per-36)</div>
+                      <p className="text-[11px] leading-relaxed text-secondary">{advancedBlocks.efficiency.narrative}</p>
                       <div className="flex flex-wrap gap-1.5">
-                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">VAL/36: {advancedBlocks.efficiency.valPer36.toFixed(1)}</span>
-                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">TS%: {advancedBlocks.efficiency.tsPct.toFixed(1)}%</span>
-                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">eFG%: {advancedBlocks.efficiency.efg.toFixed(1)}%</span>
+                        <span className="px-1.5 py-0.5 rounded bg-surface-2 text-[10px] text-secondary">VAL/36: {advancedBlocks.efficiency.valPer36.toFixed(1)}</span>
+                        <span className="px-1.5 py-0.5 rounded bg-surface-2 text-[10px] text-secondary">TS%: {advancedBlocks.efficiency.tsPct.toFixed(1)}%</span>
+                        <span className="px-1.5 py-0.5 rounded bg-surface-2 text-[10px] text-secondary">eFG%: {advancedBlocks.efficiency.efg.toFixed(1)}%</span>
                       </div>
                     </div>
                     </>)}
@@ -12197,20 +12196,20 @@ export function SeasonComparison({
                     </div>
                   )}
 
-                  <div className="text-[11px] text-slate-500">
+                  <div className="text-[11px] text-muted">
                     Megjegyzés: több blokk továbbra is proxy mutatókat használ (lineup/pályahatás), de a clutch blokk ezen a nézeten már a Kosarstat clutch stat oldalról épül.
                   </div>
                 </CardContent>
               </Card>
             )}
 
-            <Card className="bg-slate-900 border-slate-800">
+            <Card>
               <CardHeader>
-                <CardTitle className="text-slate-50">Összegzett értékelés</CardTitle>
+                <CardTitle className="font-display uppercase tracking-wide text-primary">Összegzett értékelés</CardTitle>
               </CardHeader>
               <CardContent className="grid grid-cols-1 gap-4 text-sm sm:grid-cols-2 lg:grid-cols-3">
-                <div className="space-y-2 text-slate-200">
-                  <div className="text-slate-300 font-medium">Erősségek</div>
+                <div className="space-y-2 text-primary">
+                  <div className="text-secondary font-medium">Erősségek</div>
                   {analysis.strengths.length > 0 ? (
                     <ul className="list-disc list-inside space-y-1 text-pretty leading-relaxed">
                       {analysis.strengths.map(item => (
@@ -12218,11 +12217,11 @@ export function SeasonComparison({
                       ))}
                     </ul>
                   ) : (
-                    <div className="text-slate-400">Nincs kiemelt erősség.</div>
+                    <div className="text-secondary">Nincs kiemelt erősség.</div>
                   )}
                 </div>
-                <div className="space-y-2 text-slate-200">
-                  <div className="text-slate-300 font-medium">Limitációk</div>
+                <div className="space-y-2 text-primary">
+                  <div className="text-secondary font-medium">Limitációk</div>
                   {analysis.limitations.length > 0 ? (
                     <ul className="list-disc list-inside space-y-1 text-pretty leading-relaxed">
                       {analysis.limitations.map(item => (
@@ -12230,11 +12229,11 @@ export function SeasonComparison({
                       ))}
                     </ul>
                   ) : (
-                    <div className="text-slate-400">Nincs kiemelt limitáció.</div>
+                    <div className="text-secondary">Nincs kiemelt limitáció.</div>
                   )}
                 </div>
-                <div className="space-y-2 text-slate-200">
-                  <div className="text-slate-300 font-medium">Javítandó pontok</div>
+                <div className="space-y-2 text-primary">
+                  <div className="text-secondary font-medium">Javítandó pontok</div>
                   {analysis.improvements.length > 0 ? (
                     <ul className="list-disc list-inside space-y-1 text-pretty leading-relaxed">
                       {analysis.improvements.map(item => (
@@ -12242,7 +12241,7 @@ export function SeasonComparison({
                       ))}
                     </ul>
                   ) : (
-                    <div className="text-slate-400">Nincs kiemelt javítandó pont.</div>
+                    <div className="text-secondary">Nincs kiemelt javítandó pont.</div>
                   )}
                 </div>
               </CardContent>
@@ -12251,21 +12250,21 @@ export function SeasonComparison({
           </div>
 
           <div className="space-y-6">
-            <Card className="bg-slate-900 border-slate-800">
+            <Card>
               <CardHeader>
-                <CardTitle className="text-slate-50">Last 5 Games Performance</CardTitle>
+                <CardTitle className="font-display uppercase tracking-wide text-primary">Last 5 Games Performance</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3 text-sm">
                 {lastFiveGames.length > 0 ? (
                   lastFiveGames.map(game => (
-                    <div key={game.id} className="rounded-lg border border-slate-800 bg-slate-900/40 p-3">
-                      <div className="flex items-center justify-between text-slate-200">
+                    <div key={game.id} className="rounded-lg border border-border-subtle bg-surface-2/40 p-3">
+                      <div className="flex items-center justify-between text-primary">
                         <span>{game.games?.opponent ?? 'Ismeretlen ellenfél'}</span>
-                        <span className="text-xs text-slate-400">
+                        <span className="text-xs text-secondary">
                           {game.games?.date ? new Date(game.games.date).toLocaleDateString('hu-HU') : 'Ismeretlen dátum'}
                         </span>
                       </div>
-                      <div className="mt-2 grid grid-cols-3 gap-2 text-xs text-slate-300">
+                      <div className="mt-2 grid grid-cols-3 gap-2 text-xs text-secondary">
                         <div>PTS: {game.points}</div>
                         <div>MIN: {game.minutes}</div>
                         <div>VAL: {game.valuation}</div>
@@ -12276,25 +12275,25 @@ export function SeasonComparison({
                     </div>
                   ))
                 ) : (
-                  <div className="text-slate-400">Nincs elérhető meccs adat az utolsó 5 mérkőzéshez.</div>
+                  <div className="text-secondary">Nincs elérhető meccs adat az utolsó 5 mérkőzéshez.</div>
                 )}
               </CardContent>
             </Card>
 
-            <Card className="bg-slate-900 border-slate-800">
+            <Card>
               <CardHeader>
-                <CardTitle className="text-slate-50">Hasonló profilok</CardTitle>
+                <CardTitle className="font-display uppercase tracking-wide text-primary">Hasonló profilok</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3 text-sm">
                 {similarityList.length > 0 ? (
                   similarityList.map(item => (
-                    <div key={item.playerId} className="flex items-center justify-between text-slate-200">
+                    <div key={item.playerId} className="flex items-center justify-between text-primary">
                       <span>{item.name}</span>
-                      <span className="text-slate-400">{(item.similarity * 100).toFixed(0)}% – {item.reason}</span>
+                      <span className="text-secondary">{(item.similarity * 100).toFixed(0)}% – {item.reason}</span>
                     </div>
                   ))
                 ) : (
-                  <div className="text-slate-400">Nincs elég összehasonlítható minta.</div>
+                  <div className="text-secondary">Nincs elég összehasonlítható minta.</div>
                 )}
               </CardContent>
             </Card>
@@ -12302,14 +12301,14 @@ export function SeasonComparison({
         </div>
       )}
 
-      {showTeamSection && <Card className="bg-slate-900 border-slate-800">
+      {showTeamSection && <Card>
         <CardHeader>
           <div className="flex items-center justify-between gap-4">
-            <CardTitle className="text-slate-50">Csapat elemzés</CardTitle>
+            <CardTitle className="font-display uppercase tracking-wide text-primary">Csapat elemzés</CardTitle>
             <Button
               variant="outline"
               size="sm"
-              className="border-cyan-800 hover:bg-slate-800 text-cyan-400 shrink-0"
+              className="border-border-subtle hover:bg-surface-2 text-cyan shrink-0"
               onClick={() => {
                 const teamPlayers = activeSeasonPlayers.filter(p => String(p.teamId ?? '') === String(resolvedTeamId));
                 const n = Math.max(games.length, 1);
@@ -12344,25 +12343,25 @@ export function SeasonComparison({
         </CardHeader>
         <CardContent className="space-y-4">
           {resolvedTeamId === 'all' && (
-            <div className="text-sm text-slate-300">
+            <div className="text-sm text-secondary">
               Válassz csapatot a csapat elemzéshez.
             </div>
           )}
 
           {resolvedTeamId !== 'all' && !effectiveTeamAnalysis && (
-            <div className="text-sm text-slate-300">
+            <div className="text-sm text-secondary">
               Nincs elég adat a csapat elemzéséhez.
             </div>
           )}
 
           {resolvedTeamId !== 'all' && effectiveTeamAnalysis && (
             <div className="space-y-4 text-sm">
-              <div className="text-sm text-slate-200 leading-relaxed">{effectiveTeamAnalysis.summary}</div>
+              <div className="text-sm text-primary leading-relaxed">{effectiveTeamAnalysis.summary}</div>
               <div className="space-y-2">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="text-sm text-slate-300 font-medium">LLM csapatértékelés (gyenge pontok és matchup következmény)</div>
+                  <div className="text-sm text-secondary font-medium">LLM csapatértékelés (gyenge pontok és matchup következmény)</div>
                   <div className="flex flex-wrap items-center gap-2">
-                    <div className="flex items-center gap-1 rounded-md border border-slate-700 bg-slate-900/60 p-1">
+                    <div className="flex items-center gap-1 rounded-md border border-border-subtlebg-surface-1/80 p-1">
                       {[
                         { key: 'fan', label: 'Szurkolóbarát' },
                         { key: 'coach', label: 'Edzői' },
@@ -12374,8 +12373,8 @@ export function SeasonComparison({
                           size="sm"
                           variant={teamNarrativeStyle === option.key ? 'default' : 'outline'}
                           className={teamNarrativeStyle === option.key
-                            ? 'h-7 px-2 bg-cyan-300 text-slate-900 hover:bg-cyan-200'
-                            : 'h-7 px-2 border-slate-700 text-slate-300 hover:bg-slate-800'}
+                            ? 'h-7 px-2 bg-cyan text-base hover:bg-cyan/80'
+                            : 'h-7 px-2 border-border-subtle text-secondary hover:bg-surface-2'}
                           onClick={() => setTeamNarrativeStyle(option.key as 'fan' | 'coach' | 'scouting')}
                         >
                           {option.label}
@@ -12394,21 +12393,21 @@ export function SeasonComparison({
                   </div>
                 </div>
                 {teamNarrative.status === 'error' && (
-                  <div className="text-xs text-rose-300">{teamNarrative.error}</div>
+                  <div className="text-xs text-negative">{teamNarrative.error}</div>
                 )}
                 {teamNarrative.status === 'success' && teamNarrative.text && (
                   <div className="space-y-1">
-                    <div className="text-[11px] text-slate-500">
+                    <div className="text-[11px] text-muted">
                       Generálva: {formatGeneratedAt(teamNarrative.generatedAt) ?? 'ismeretlen'}
                       {teamNarrative.generatedBy ? ` • Forrás: ${teamNarrative.generatedBy}` : ''}
                     </div>
-                    <div className="rounded-md border border-slate-800 bg-slate-950/50 px-3 py-2 text-sm text-slate-100 whitespace-pre-line">
+                    <div className="rounded-md border border-border-subtle bg-surface-2/40 px-3 py-2 text-sm text-primary whitespace-pre-line">
                       {teamNarrative.text}
                     </div>
                   </div>
                 )}
                 {teamNarrative.status === 'idle' && (
-                  <div className="text-xs text-slate-400">
+                  <div className="text-xs text-secondary">
                     Aktív stílus: {teamNarrativeStyle === 'fan' ? 'szurkolóbarát' : teamNarrativeStyle === 'coach' ? 'edzői' : 'scouting'}.
                     A gomb a meglévő csapat metrikákból és dobásprofilból készít szöveges taktikai értékelést.
                   </div>
@@ -12417,17 +12416,17 @@ export function SeasonComparison({
 
               <div className="flex flex-wrap gap-2">
                 {effectiveTeamAnalysis.style.offense.map(style => (
-                  <Badge key={style} className="bg-cyan-600/20 text-cyan-200 border border-cyan-600/40">
+                  <Badge key={style} className="badge-cyan">
                     {style}
                   </Badge>
                 ))}
                 {effectiveTeamAnalysis.style.defense.map(style => (
-                  <Badge key={style} className="bg-emerald-600/20 text-emerald-200 border border-emerald-600/40">
+                  <Badge key={style} className="badge-positive">
                     {style}
                   </Badge>
                 ))}
                 {effectiveTeamAnalysis.style.offense.length === 0 && effectiveTeamAnalysis.style.defense.length === 0 && (
-                  <Badge variant="secondary" className="bg-slate-800 text-slate-200">
+                  <Badge variant="secondary" className="badge-neutral">
                     Nincs egyértelmű stílusprofil
                   </Badge>
                 )}
@@ -12436,20 +12435,20 @@ export function SeasonComparison({
               {teamFormSummary && (
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                   <div className="space-y-2">
-                    <div className="text-sm text-slate-300 font-medium">
+                    <div className="text-sm text-secondary font-medium">
                       Forma trend (utolsó {teamFormSummary.windowSize} meccs)
                     </div>
                     <Badge className={teamFormSummary.badgeClass}>{teamFormSummary.badgeLabel}</Badge>
-                    <div className="text-sm text-slate-200">{teamFormSummary.description}</div>
-                    <div className="text-xs text-slate-400">
+                    <div className="text-sm text-primary">{teamFormSummary.description}</div>
+                    <div className="text-xs text-secondary">
                       Pontkülönbség: {teamFormSummary.marginAvg >= 0 ? '+' : ''}{teamFormSummary.marginAvg.toFixed(1)} • Szezon: {teamFormSummary.seasonMargin >= 0 ? '+' : ''}{teamFormSummary.seasonMargin.toFixed(1)}
                     </div>
                     {teamFormSummary.recentEfgAvg !== null && teamFormSummary.efgDelta !== null && (
-                      <div className="text-xs text-slate-400">
+                      <div className="text-xs text-secondary">
                         eFG: {teamFormSummary.recentEfgAvg.toFixed(1)}% ({teamFormSummary.efgDelta >= 0 ? '+' : ''}{teamFormSummary.efgDelta.toFixed(1)} pp)
                       </div>
                     )}
-                    <div className="text-xs text-slate-400">
+                    <div className="text-xs text-secondary">
                       Volatilitás-index: {teamFormSummary.volatilityIndex.toFixed(1)} / 100
                       {' '}• eFG szórás: {teamFormSummary.efgStd.toFixed(1)}
                       {' '}• TS szórás: {teamFormSummary.tsStd.toFixed(1)}
@@ -12457,7 +12456,7 @@ export function SeasonComparison({
                     </div>
                   </div>
                   <div className="lg:col-span-2">
-                    <div className="h-56 rounded-lg border border-slate-800 bg-slate-950/40 p-3">
+                    <div className="h-56 rounded-lg border border-border-subtle bg-surface-1/60 p-3">
                       {teamFormChartData.length > 0 ? (
                         <ResponsiveContainer width="100%" height="100%">
                           <LineChart data={teamFormChartData} margin={{ left: 8, right: 16 }}>
@@ -12487,8 +12486,8 @@ export function SeasonComparison({
                                 };
                                 if (!datum) return null;
                                 return (
-                                  <div className="rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-100 space-y-1">
-                                    <div className="font-semibold text-slate-50">
+                                  <div className="rounded-md border border-border-subtle bg-surface-1 px-3 py-2 text-xs text-primary space-y-1">
+                                    <div className="font-semibold text-primary">
                                       {datum.label} • {datum.opponent}
                                     </div>
                                     <div>
@@ -12552,7 +12551,7 @@ export function SeasonComparison({
                           </LineChart>
                         </ResponsiveContainer>
                       ) : (
-                        <div className="text-sm text-slate-400">Nincs trend adat.</div>
+                        <div className="text-sm text-secondary">Nincs trend adat.</div>
                       )}
                     </div>
                   </div>
@@ -12562,25 +12561,25 @@ export function SeasonComparison({
               {teamFormVolatilityData.length > 0 && teamFormPhaseSummary && (
                 <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
                   <div className="space-y-2">
-                    <div className="text-sm text-slate-300 font-medium">
+                    <div className="text-sm text-secondary font-medium">
                       Teljesítmény-hullámzás (rolling {TEAM_FORM_ROLLING_WINDOW} meccs)
                     </div>
                     <Badge className={teamFormPhaseSummary.latestBadgeClass}>
                       Aktuális fázis: {teamFormPhaseSummary.latest.phase}
                     </Badge>
-                    <div className="text-xs text-slate-400">
+                    <div className="text-xs text-secondary">
                       Fázis-pontszám: {teamFormPhaseSummary.latest.phaseScore.toFixed(1)} / 100
                     </div>
-                    <div className="text-xs text-slate-400">
+                    <div className="text-xs text-secondary">
                       Felfelé: {teamFormPhaseSummary.counts.Felfelé} • Stabil: {teamFormPhaseSummary.counts.Stabil}
                       {' '}• Hektikus: {teamFormPhaseSummary.counts.Hektikus} • Lejtmenet: {teamFormPhaseSummary.counts.Lejtmenet}
                     </div>
-                    <div className="text-xs text-slate-400">
+                    <div className="text-xs text-secondary">
                       A rolling panel megmutatja, hogy a hatékonyság trendje stabilan javul-e, vagy inkább variancia-vezérelt hullámzás látszik.
                     </div>
                   </div>
                   <div className="xl:col-span-2 space-y-3">
-                    <div className="h-56 rounded-lg border border-slate-800 bg-slate-950/40 p-3">
+                    <div className="h-56 rounded-lg border border-border-subtle bg-surface-1/60 p-3">
                       <ResponsiveContainer width="100%" height="100%">
                         <LineChart data={teamFormVolatilityData} margin={{ left: 8, right: 16 }}>
                           <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
@@ -12600,8 +12599,8 @@ export function SeasonComparison({
                               };
                               if (!datum) return null;
                               return (
-                                <div className="rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-100 space-y-1">
-                                  <div className="font-semibold text-slate-50">{datum.label} • {datum.phase}</div>
+                                <div className="rounded-md border border-border-subtle bg-surface-1 px-3 py-2 text-xs text-primary space-y-1">
+                                  <div className="font-semibold text-primary">{datum.label} • {datum.phase}</div>
                                   {typeof datum.rollEfg === 'number' && <div>Rolling eFG: {datum.rollEfg.toFixed(1)}%</div>}
                                   {typeof datum.rollTs === 'number' && <div>Rolling TS: {datum.rollTs.toFixed(1)}%</div>}
                                   {typeof datum.rollTo === 'number' && <div>Rolling TO: {datum.rollTo.toFixed(1)}%</div>}
@@ -12616,7 +12615,7 @@ export function SeasonComparison({
                         </LineChart>
                       </ResponsiveContainer>
                     </div>
-                    <div className="h-44 rounded-lg border border-slate-800 bg-slate-950/40 p-3">
+                    <div className="h-44 rounded-lg border border-border-subtle bg-surface-1/60 p-3">
                       <ResponsiveContainer width="100%" height="100%">
                         <LineChart data={teamFormVolatilityData} margin={{ left: 8, right: 16 }}>
                           <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
@@ -12643,27 +12642,27 @@ export function SeasonComparison({
               )}
 
               <div className="space-y-2">
-                <div className="text-sm text-slate-300 font-medium">Szezon dobásprofil (Hunbasket)</div>
+                <div className="text-sm text-secondary font-medium">Szezon dobásprofil (Hunbasket)</div>
                 {teamSeasonShotSummary ? (
                   <div className="space-y-3">
                     <div className="grid grid-cols-3 gap-2 text-sm">
-                      <div className="rounded-md bg-slate-900/50 border border-slate-800 px-3 py-2">
-                        <div className="text-xs text-slate-400">Kísérlet</div>
-                        <div className="text-slate-100 font-medium">{teamSeasonShotSummary.attempts}</div>
+                      <div className="rounded-md bg-surface-2 border border-border-subtle px-3 py-2">
+                        <div className="text-xs text-secondary">Kísérlet</div>
+                        <div className="text-primary font-mono tabular-nums font-medium">{teamSeasonShotSummary.attempts}</div>
                       </div>
-                      <div className="rounded-md bg-slate-900/50 border border-slate-800 px-3 py-2">
-                        <div className="text-xs text-slate-400">Bedobott</div>
-                        <div className="text-slate-100 font-medium">{teamSeasonShotSummary.made}</div>
+                      <div className="rounded-md bg-surface-2 border border-border-subtle px-3 py-2">
+                        <div className="text-xs text-secondary">Bedobott</div>
+                        <div className="text-primary font-mono tabular-nums font-medium">{teamSeasonShotSummary.made}</div>
                       </div>
-                      <div className="rounded-md bg-slate-900/50 border border-slate-800 px-3 py-2">
-                        <div className="text-xs text-slate-400">FG%</div>
-                        <div className="text-slate-100 font-medium">{formatShotPct(teamSeasonShotSummary.fgPct)}</div>
+                      <div className="rounded-md bg-surface-2 border border-border-subtle px-3 py-2">
+                        <div className="text-xs text-secondary">FG%</div>
+                        <div className="text-primary font-mono tabular-nums font-medium">{formatShotPct(teamSeasonShotSummary.fgPct)}</div>
                       </div>
                     </div>
 
                     <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                      <div className="p-3 bg-slate-800/40 rounded-lg">
-                        <div className="text-sm text-slate-300 font-medium mb-2">Zónaeloszlás (%)</div>
+                      <div className="p-3 bg-surface-2/40 rounded-lg">
+                        <div className="text-sm text-secondary font-medium mb-2">Zónaeloszlás (%)</div>
                         <ResponsiveContainer width="100%" height={280}>
                           <BarChart data={teamSeasonShotZoneRows} margin={{ left: 8, right: 8 }}>
                             <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
@@ -12685,8 +12684,8 @@ export function SeasonComparison({
                           </BarChart>
                         </ResponsiveContainer>
                       </div>
-                      <div className="p-3 bg-slate-800/40 rounded-lg">
-                        <div className="text-sm text-slate-300 font-medium mb-2">Zónahatékonyság (FG%)</div>
+                      <div className="p-3 bg-surface-2/40 rounded-lg">
+                        <div className="text-sm text-secondary font-medium mb-2">Zónahatékonyság (FG%)</div>
                         <ResponsiveContainer width="100%" height={280}>
                           <BarChart data={teamSeasonShotZoneRows} margin={{ left: 8, right: 8 }}>
                             <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
@@ -12711,31 +12710,31 @@ export function SeasonComparison({
                     </div>
 
                     {teamSeasonHeatmapRows.length > 0 && (
-                      <div className="p-3 bg-slate-800/40 rounded-lg space-y-2">
-                        <div className="text-sm text-slate-300 font-medium">Szezon zóna heatmap</div>
+                      <div className="p-3 bg-surface-2/40 rounded-lg space-y-2">
+                        <div className="text-sm text-secondary font-medium">Szezon zóna heatmap</div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                           <div className="space-y-1">
-                            <div className="text-xs text-slate-400">Volumen (kísérlet)</div>
+                            <div className="text-xs text-secondary">Volumen (kísérlet)</div>
                             {teamSeasonHeatmapRows.map(row => (
-                              <div key={`team-heat-rate-${row.label}`} className="rounded-md border border-slate-700/80 px-2 py-1" style={{
+                              <div key={`team-heat-rate-${row.label}`} className="rounded-md border border-border-subtle px-2 py-1" style={{
                                 backgroundColor: `rgba(56, 189, 248, ${0.14 + row.rateNorm * 0.56})`,
                               }}>
                                 <div className="flex items-center justify-between text-xs">
-                                  <span className="text-slate-100">{row.label}</span>
-                                  <span className="text-slate-900/90 font-semibold">{row.attempts} ({row.rate.toFixed(1)}%)</span>
+                                  <span className="text-primary">{row.label}</span>
+                                  <span className="text-base font-semibold">{row.attempts} ({row.rate.toFixed(1)}%)</span>
                                 </div>
                               </div>
                             ))}
                           </div>
                           <div className="space-y-1">
-                            <div className="text-xs text-slate-400">Hatékonyság (FG%)</div>
+                            <div className="text-xs text-secondary">Hatékonyság (FG%)</div>
                             {teamSeasonHeatmapRows.map(row => (
-                              <div key={`team-heat-pct-${row.label}`} className="rounded-md border border-slate-700/80 px-2 py-1" style={{
+                              <div key={`team-heat-pct-${row.label}`} className="rounded-md border border-border-subtle px-2 py-1" style={{
                                 backgroundColor: `rgba(34, 197, 94, ${0.14 + row.pctNorm * 0.56})`,
                               }}>
                                 <div className="flex items-center justify-between text-xs">
-                                  <span className="text-slate-100">{row.label}</span>
-                                  <span className="text-slate-900/90 font-semibold">{row.pct.toFixed(1)}%</span>
+                                  <span className="text-primary">{row.label}</span>
+                                  <span className="text-base font-semibold">{row.pct.toFixed(1)}%</span>
                                 </div>
                               </div>
                             ))}
@@ -12745,84 +12744,84 @@ export function SeasonComparison({
                     )}
 
                     {teamLeagueRelativeZoneRows.length > 0 && (
-                      <div className="p-3 bg-slate-800/40 rounded-lg space-y-2">
-                        <div className="text-sm text-slate-300 font-medium">Liga-átlag overlay (relatív zónadelta)</div>
+                      <div className="p-3 bg-surface-2/40 rounded-lg space-y-2">
+                        <div className="text-sm text-secondary font-medium">Liga-átlag overlay (relatív zónadelta)</div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                           {teamLeagueRelativeZoneRows.map(row => {
-                            const tone = row.rateDelta >= 0 ? 'text-emerald-300' : 'text-rose-300';
-                            const tonePct = row.pctDelta >= 0 ? 'text-emerald-300' : 'text-rose-300';
+                            const tone = row.rateDelta >= 0 ? 'text-positive' : 'text-negative';
+                            const tonePct = row.pctDelta >= 0 ? 'text-positive' : 'text-negative';
                             const bgAlpha = Math.min(0.12 + Math.abs(row.rateDelta) / 25, 0.5);
                             return (
                               <div
                                 key={`league-overlay-${row.label}`}
-                                className="rounded-md border border-slate-700/80 px-2.5 py-2"
+                                className="rounded-md border border-border-subtle px-2.5 py-2"
                                 style={{
                                   backgroundColor: row.rateDelta >= 0
                                     ? `rgba(16, 185, 129, ${bgAlpha})`
                                     : `rgba(244, 63, 94, ${bgAlpha})`,
                                 }}
                               >
-                                <div className="text-xs text-slate-100 font-medium">{row.label}</div>
-                                <div className="text-xs text-slate-300 mt-1">
+                                <div className="text-xs text-primary font-medium">{row.label}</div>
+                                <div className="text-xs text-secondary mt-1">
                                   Volumen delta: <span className={tone}>{row.rateDelta >= 0 ? '+' : ''}{row.rateDelta.toFixed(1)} pp</span>
                                 </div>
-                                <div className="text-xs text-slate-300">
+                                <div className="text-xs text-secondary">
                                   FG% delta: <span className={tonePct}>{row.pctDelta >= 0 ? '+' : ''}{row.pctDelta.toFixed(1)} pp</span>
                                 </div>
                               </div>
                             );
                           })}
                         </div>
-                        <div className="text-[11px] text-slate-500">Pozitív delta: csapat a ligaátlag felett, negatív delta: ligaátlag alatt.</div>
+                        <div className="text-[11px] text-muted">Pozitív delta: csapat a ligaátlag felett, negatív delta: ligaátlag alatt.</div>
                       </div>
                     )}
                   </div>
                 ) : (
-                  <div className="text-sm text-slate-400">Nincs elérhető szezon dobástérkép adat ehhez a csapathoz.</div>
+                  <div className="text-sm text-secondary">Nincs elérhető szezon dobástérkép adat ehhez a csapathoz.</div>
                 )}
               </div>
 
               {teamTacticalWeaknesses.length > 0 && (
                 <div className="space-y-2">
-                  <div className="text-sm text-slate-300 font-medium">Adatalapú taktikai gyenge pontok</div>
+                  <div className="text-sm text-secondary font-medium">Adatalapú taktikai gyenge pontok</div>
                   {teamTacticalWeaknesses.map(item => (
-                    <div key={item} className="text-sm text-amber-100 rounded-md border border-amber-700/40 bg-amber-950/20 px-3 py-2">• {item}</div>
+                    <div key={item} className="text-sm text-warning rounded-md border border-warning/30 bg-warning/10 px-3 py-2">• {item}</div>
                   ))}
                 </div>
               )}
 
               {(effectiveTeamAnalysis.lineupProfile || effectiveTeamAnalysis.clutchProfile || effectiveTeamAnalysis.impactProfile) && (
                 <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-                  <div className="rounded-lg border border-slate-800 bg-slate-950/40 p-3 space-y-2">
-                    <div className="text-sm text-slate-300 font-medium">Lineup stabilitás és döntéstámogatás</div>
+                  <div className="rounded-lg border border-border-subtle bg-surface-1/60 p-3 space-y-2">
+                    <div className="text-sm text-secondary font-medium">Lineup stabilitás és döntéstámogatás</div>
                     {effectiveTeamAnalysis.lineupProfile?.topLineup && (
-                      <div className="text-xs text-slate-200">
-                        Legjobb 5-ös: <span className="text-emerald-300">{effectiveTeamAnalysis.lineupProfile.topLineup.netPer40.toFixed(1)} net/40</span>
+                      <div className="text-xs text-primary">
+                        Legjobb 5-ös: <span className="text-positive">{effectiveTeamAnalysis.lineupProfile.topLineup.netPer40.toFixed(1)} net/40</span>
                         {' '}• {effectiveTeamAnalysis.lineupProfile.topLineup.players.join(', ')}
-                        {' '}<span className="text-slate-500">({effectiveTeamAnalysis.lineupProfile.topLineup.minutes.toFixed(1)} perc, minta: {effectiveTeamAnalysis.lineupProfile.topLineup.sampleLabel})</span>
+                        {' '}<span className="text-muted">({effectiveTeamAnalysis.lineupProfile.topLineup.minutes.toFixed(1)} perc, minta: {effectiveTeamAnalysis.lineupProfile.topLineup.sampleLabel})</span>
                       </div>
                     )}
                     {effectiveTeamAnalysis.lineupProfile?.bottomLineup && (
-                      <div className="text-xs text-slate-200">
-                        Legrosszabb 5-ös: <span className="text-rose-300">{effectiveTeamAnalysis.lineupProfile.bottomLineup.netPer40.toFixed(1)} net/40</span>
+                      <div className="text-xs text-primary">
+                        Legrosszabb 5-ös: <span className="text-negative">{effectiveTeamAnalysis.lineupProfile.bottomLineup.netPer40.toFixed(1)} net/40</span>
                         {' '}• {effectiveTeamAnalysis.lineupProfile.bottomLineup.players.join(', ')}
-                        {' '}<span className="text-slate-500">({effectiveTeamAnalysis.lineupProfile.bottomLineup.minutes.toFixed(1)} perc, minta: {effectiveTeamAnalysis.lineupProfile.bottomLineup.sampleLabel})</span>
+                        {' '}<span className="text-muted">({effectiveTeamAnalysis.lineupProfile.bottomLineup.minutes.toFixed(1)} perc, minta: {effectiveTeamAnalysis.lineupProfile.bottomLineup.sampleLabel})</span>
                       </div>
                     )}
                     {effectiveTeamAnalysis.lineupProfile?.topPair && (
-                      <div className="text-xs text-slate-300">
+                      <div className="text-xs text-secondary">
                         Legjobb páros: {effectiveTeamAnalysis.lineupProfile.topPair.players.join(' + ')}
-                        {' '}<span className="text-emerald-300">({effectiveTeamAnalysis.lineupProfile.topPair.netPer40.toFixed(1)} net/40)</span>
+                        {' '}<span className="text-positive">({effectiveTeamAnalysis.lineupProfile.topPair.netPer40.toFixed(1)} net/40)</span>
                       </div>
                     )}
                     {effectiveTeamAnalysis.lineupProfile?.bottomPair && (
-                      <div className="text-xs text-slate-300">
+                      <div className="text-xs text-secondary">
                         Legrosszabb páros: {effectiveTeamAnalysis.lineupProfile.bottomPair.players.join(' + ')}
-                        {' '}<span className="text-rose-300">({effectiveTeamAnalysis.lineupProfile.bottomPair.netPer40.toFixed(1)} net/40)</span>
+                        {' '}<span className="text-negative">({effectiveTeamAnalysis.lineupProfile.bottomPair.netPer40.toFixed(1)} net/40)</span>
                       </div>
                     )}
                     {effectiveTeamAnalysis.lineupProfile?.rotationBreakpoint && (
-                      <div className="text-xs text-amber-200 rounded-md border border-amber-700/40 bg-amber-950/20 px-2 py-1.5">
+                      <div className="text-xs text-warning rounded-md border border-warning/30 bg-warning/10px-2 py-1.5">
                         Rotációs töréspont: {effectiveTeamAnalysis.lineupProfile.rotationBreakpoint.minute?.toFixed(1) ?? '-'} perc
                         {' '}• {effectiveTeamAnalysis.lineupProfile.rotationBreakpoint.trigger}
                         {' '}• -{effectiveTeamAnalysis.lineupProfile.rotationBreakpoint.netDropPer40.toFixed(1)} net/40
@@ -12831,33 +12830,33 @@ export function SeasonComparison({
                     )}
                   </div>
 
-                  <div className="rounded-lg border border-slate-800 bg-slate-950/40 p-3 space-y-2">
-                    <div className="text-sm text-slate-300 font-medium">Clutch identitás blokk</div>
+                  <div className="rounded-lg border border-border-subtle bg-surface-1/60 p-3 space-y-2">
+                    <div className="text-sm text-secondary font-medium">Clutch identitás blokk</div>
                     <div className="grid grid-cols-2 gap-2 text-xs">
-                      <div className="rounded-md border border-slate-800 bg-slate-900/60 px-2 py-1.5 text-slate-200">ORtg: {formatNullableNumber(effectiveTeamAnalysis.clutchProfile?.ortg, 1)}</div>
-                      <div className="rounded-md border border-slate-800 bg-slate-900/60 px-2 py-1.5 text-slate-200">DRtg: {formatNullableNumber(effectiveTeamAnalysis.clutchProfile?.drtg, 1)}</div>
-                      <div className="rounded-md border border-slate-800 bg-slate-900/60 px-2 py-1.5 text-slate-200">Net: {formatNullableNumber(effectiveTeamAnalysis.clutchProfile?.net, 1)}</div>
-                      <div className="rounded-md border border-slate-800 bg-slate-900/60 px-2 py-1.5 text-slate-200">TO%: {formatNullableNumber(effectiveTeamAnalysis.clutchProfile?.tovPct, 1, '%')}</div>
-                      <div className="rounded-md border border-slate-800 bg-slate-900/60 px-2 py-1.5 text-slate-200">REB%: {formatNullableNumber(effectiveTeamAnalysis.clutchProfile?.rebPct, 1, '%')}</div>
-                      <div className="rounded-md border border-slate-800 bg-slate-900/60 px-2 py-1.5 text-slate-200">FT-rate: {formatNullableNumber(effectiveTeamAnalysis.clutchProfile?.ftRate, 1)}</div>
+                      <div className="rounded-md border border-border-subtle bg-surface-2 px-2 py-1.5 text-primary">ORtg: {formatNullableNumber(effectiveTeamAnalysis.clutchProfile?.ortg, 1)}</div>
+                      <div className="rounded-md border border-border-subtle bg-surface-2 px-2 py-1.5 text-primary">DRtg: {formatNullableNumber(effectiveTeamAnalysis.clutchProfile?.drtg, 1)}</div>
+                      <div className="rounded-md border border-border-subtle bg-surface-2 px-2 py-1.5 text-primary">Net: {formatNullableNumber(effectiveTeamAnalysis.clutchProfile?.net, 1)}</div>
+                      <div className="rounded-md border border-border-subtle bg-surface-2 px-2 py-1.5 text-primary">TO%: {formatNullableNumber(effectiveTeamAnalysis.clutchProfile?.tovPct, 1, '%')}</div>
+                      <div className="rounded-md border border-border-subtle bg-surface-2 px-2 py-1.5 text-primary">REB%: {formatNullableNumber(effectiveTeamAnalysis.clutchProfile?.rebPct, 1, '%')}</div>
+                      <div className="rounded-md border border-border-subtle bg-surface-2 px-2 py-1.5 text-primary">FT-rate: {formatNullableNumber(effectiveTeamAnalysis.clutchProfile?.ftRate, 1)}</div>
                     </div>
-                    <div className="text-xs text-slate-300">
+                    <div className="text-xs text-secondary">
                       Lezáró profil: {effectiveTeamAnalysis.clutchProfile?.topUsageClosers.length
                         ? effectiveTeamAnalysis.clutchProfile.topUsageClosers.map(item => `${item.player} (${(item.usageShare * 100).toFixed(1)}%)`).join(', ')
                         : 'nincs elegendő minta'}
                     </div>
-                    <div className="text-xs text-slate-400">
+                    <div className="text-xs text-secondary">
                       Assist/TO: {formatNullableNumber(effectiveTeamAnalysis.clutchProfile?.assistToTurnover, 2)} •
                       {' '}minta: {effectiveTeamAnalysis.clutchProfile?.sampleLabel ?? 'n/a'}
                     </div>
                   </div>
 
-                  <div className="rounded-lg border border-slate-800 bg-slate-950/40 p-3 space-y-2">
-                    <div className="text-sm text-slate-300 font-medium">Impact (+/-) kontextus</div>
-                    <div className="text-xs text-slate-200">Best net/40: {formatNullableNumber(effectiveTeamAnalysis.impactProfile?.bestNetPer40, 1)}</div>
-                    <div className="text-xs text-slate-200">Worst net/40: {formatNullableNumber(effectiveTeamAnalysis.impactProfile?.worstNetPer40, 1)}</div>
-                    <div className="text-xs text-slate-200">Adjusted net/40: {formatNullableNumber(effectiveTeamAnalysis.impactProfile?.adjustedNetPer40, 1)}</div>
-                    <div className="text-xs text-slate-400">
+                  <div className="rounded-lg border border-border-subtle bg-surface-1/60 p-3 space-y-2">
+                    <div className="text-sm text-secondary font-medium">Impact (+/-) kontextus</div>
+                    <div className="text-xs text-primary">Best net/40: {formatNullableNumber(effectiveTeamAnalysis.impactProfile?.bestNetPer40, 1)}</div>
+                    <div className="text-xs text-primary">Worst net/40: {formatNullableNumber(effectiveTeamAnalysis.impactProfile?.worstNetPer40, 1)}</div>
+                    <div className="text-xs text-primary">Adjusted net/40: {formatNullableNumber(effectiveTeamAnalysis.impactProfile?.adjustedNetPer40, 1)}</div>
+                    <div className="text-xs text-secondary">
                       SOS súly: {formatNullableNumber(effectiveTeamAnalysis.impactProfile?.sosWeight, 3)}
                       {' '}• Garbage-time szűrve: {effectiveTeamAnalysis.impactProfile?.garbageTimeFiltered ? 'igen' : 'nem'}
                       {' '}• Minta: {formatNullableNumber(effectiveTeamAnalysis.impactProfile?.sampleMinutes, 1)} perc
@@ -12868,23 +12867,23 @@ export function SeasonComparison({
 
               {effectiveTeamAnalysis.shotMapProfile?.available && (
                 <div className="space-y-2">
-                  <div className="text-sm text-slate-300 font-medium">Shot-quality profil</div>
+                  <div className="text-sm text-secondary font-medium">Shot-quality profil</div>
                   <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-2">
                     {effectiveTeamAnalysis.shotMapProfile.zones.map(zone => (
-                      <div key={`sq-${zone.key}`} className="rounded-md border border-slate-800 bg-slate-900/50 px-2.5 py-2 text-xs">
-                        <div className="text-slate-100 font-medium">{zone.label}</div>
-                        <div className="text-slate-300">Vol: {zone.rate.toFixed(1)}%</div>
-                        <div className="text-slate-300">FG%: {zone.pct.toFixed(1)}%</div>
-                        <div className={zone.rateDeltaVsLeague >= 0 ? 'text-emerald-300' : 'text-rose-300'}>
+                      <div key={`sq-${zone.key}`} className="rounded-md border border-border-subtle bg-surface-2 px-2.5 py-2 text-xs">
+                        <div className="text-primary font-mono tabular-nums font-medium">{zone.label}</div>
+                        <div className="text-secondary">Vol: {zone.rate.toFixed(1)}%</div>
+                        <div className="text-secondary">FG%: {zone.pct.toFixed(1)}%</div>
+                        <div className={zone.rateDeltaVsLeague >= 0 ? 'text-positive' : 'text-negative'}>
                           Liga vol delta: {zone.rateDeltaVsLeague >= 0 ? '+' : ''}{zone.rateDeltaVsLeague.toFixed(1)} pp
                         </div>
-                        <div className={zone.pctDeltaVsLeague >= 0 ? 'text-emerald-300' : 'text-rose-300'}>
+                        <div className={zone.pctDeltaVsLeague >= 0 ? 'text-positive' : 'text-negative'}>
                           Liga FG delta: {zone.pctDeltaVsLeague >= 0 ? '+' : ''}{zone.pctDeltaVsLeague.toFixed(1)} pp
                         </div>
                       </div>
                     ))}
                   </div>
-                  <div className="text-xs text-slate-400">
+                  <div className="text-xs text-secondary">
                     Minőség-index (támadás): {formatNullableNumber(effectiveTeamAnalysis.shotMapProfile.offenseQualityIndex, 1)}
                     {' '}• Minőség-index (engedett): {formatNullableNumber(effectiveTeamAnalysis.shotMapProfile.allowedQualityIndex, 1)}
                   </div>
@@ -12893,7 +12892,7 @@ export function SeasonComparison({
 
               {effectiveTeamAnalysis.actionableFocus && effectiveTeamAnalysis.actionableFocus.length > 0 && (
                 <div className="space-y-2">
-                  <div className="text-sm text-slate-300 font-medium">Actionable fókusz (edzői)</div>
+                  <div className="text-sm text-secondary font-medium">Actionable fókusz (edzői)</div>
                   {effectiveTeamAnalysis.actionableFocus.map(item => (
                     <div key={item} className="text-sm text-cyan-100 rounded-md border border-cyan-700/40 bg-cyan-950/20 px-3 py-2">• {item}</div>
                   ))}
@@ -12903,33 +12902,33 @@ export function SeasonComparison({
               {(effectiveTeamAnalysis.formProfile || effectiveTeamAnalysis.defensiveProfile) && (
                 <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
                   {effectiveTeamAnalysis.formProfile && (
-                    <div className="rounded-lg border border-slate-800 bg-slate-950/40 p-3 space-y-2">
-                      <div className="text-sm text-slate-300 font-medium">Forma és volatilitás olvasat</div>
-                      <div className="text-xs text-slate-200">
+                    <div className="rounded-lg border border-border-subtle bg-surface-1/60 p-3 space-y-2">
+                      <div className="text-sm text-secondary font-medium">Forma és volatilitás olvasat</div>
+                      <div className="text-xs text-primary">
                         Trend: {effectiveTeamAnalysis.formProfile.trendLabel}
                         {effectiveTeamAnalysis.formProfile.volatilityLabel ? ` • ${effectiveTeamAnalysis.formProfile.volatilityLabel}` : ''}
                       </div>
                       {effectiveTeamAnalysis.formProfile.volatilityIndex !== null && (
-                        <div className="text-xs text-slate-400">
+                        <div className="text-xs text-secondary">
                           Volatilitás-index: {effectiveTeamAnalysis.formProfile.volatilityIndex.toFixed(1)} / 100
                         </div>
                       )}
                       {effectiveTeamAnalysis.formProfile.notes.map(note => (
-                        <div key={note} className="text-xs text-slate-300">• {note}</div>
+                        <div key={note} className="text-xs text-secondary">• {note}</div>
                       ))}
                     </div>
                   )}
 
                   {effectiveTeamAnalysis.defensiveProfile && (
-                    <div className="rounded-lg border border-slate-800 bg-slate-950/40 p-3 space-y-2">
-                      <div className="text-sm text-slate-300 font-medium">Defensive profile</div>
-                      <div className="text-xs text-slate-400">Adatbiztonság: {effectiveTeamAnalysis.defensiveProfile.availability}</div>
-                      <div className="text-xs text-slate-200">Gyűrűvédekezés: {effectiveTeamAnalysis.defensiveProfile.rimProtection}</div>
-                      <div className="text-xs text-slate-200">Periméter: {effectiveTeamAnalysis.defensiveProfile.perimeterDefense}</div>
-                      <div className="text-xs text-slate-200">Lepattanózás: {effectiveTeamAnalysis.defensiveProfile.rebounding}</div>
-                      <div className="text-xs text-slate-200">Fault-discipline: {effectiveTeamAnalysis.defensiveProfile.foulDiscipline}</div>
+                    <div className="rounded-lg border border-border-subtle bg-surface-1/60 p-3 space-y-2">
+                      <div className="text-sm text-secondary font-medium">Defensive profile</div>
+                      <div className="text-xs text-secondary">Adatbiztonság: {effectiveTeamAnalysis.defensiveProfile.availability}</div>
+                      <div className="text-xs text-primary">Gyűrűvédekezés: {effectiveTeamAnalysis.defensiveProfile.rimProtection}</div>
+                      <div className="text-xs text-primary">Periméter: {effectiveTeamAnalysis.defensiveProfile.perimeterDefense}</div>
+                      <div className="text-xs text-primary">Lepattanózás: {effectiveTeamAnalysis.defensiveProfile.rebounding}</div>
+                      <div className="text-xs text-primary">Fault-discipline: {effectiveTeamAnalysis.defensiveProfile.foulDiscipline}</div>
                       {effectiveTeamAnalysis.defensiveProfile.notes.map(note => (
-                        <div key={note} className="text-xs text-slate-400">• {note}</div>
+                        <div key={note} className="text-xs text-secondary">• {note}</div>
                       ))}
                     </div>
                   )}
@@ -12938,35 +12937,35 @@ export function SeasonComparison({
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <div className="text-sm text-slate-300 font-medium">Erősségek</div>
+                  <div className="text-sm text-secondary font-medium">Erősségek</div>
                   {effectiveTeamAnalysis.strengths.length > 0 ? (
-                    <ul className="list-disc list-inside space-y-1 text-sm text-slate-200 text-pretty leading-relaxed">
+                    <ul className="list-disc list-inside space-y-1 text-sm text-primary text-pretty leading-relaxed">
                       {effectiveTeamAnalysis.strengths.map(item => (
                         <li key={item}>{item}</li>
                       ))}
                     </ul>
                   ) : (
-                    <div className="text-sm text-slate-400">Nincs kiemelt erősség.</div>
+                    <div className="text-sm text-secondary">Nincs kiemelt erősség.</div>
                   )}
                 </div>
                 <div className="space-y-2">
-                  <div className="text-sm text-slate-300 font-medium">Limitációk</div>
+                  <div className="text-sm text-secondary font-medium">Limitációk</div>
                   {effectiveTeamAnalysis.limitations.length > 0 ? (
-                    <ul className="list-disc list-inside space-y-1 text-sm text-slate-200 text-pretty leading-relaxed">
+                    <ul className="list-disc list-inside space-y-1 text-sm text-primary text-pretty leading-relaxed">
                       {effectiveTeamAnalysis.limitations.map(item => (
                         <li key={item}>{item}</li>
                       ))}
                     </ul>
                   ) : (
-                    <div className="text-sm text-slate-400">Nincs kiemelt limitáció.</div>
+                    <div className="text-sm text-secondary">Nincs kiemelt limitáció.</div>
                   )}
                 </div>
               </div>
 
               <div className="space-y-2">
-                <div className="text-sm text-slate-300 font-medium">Liga összevetés (percentilis)</div>
+                <div className="text-sm text-secondary font-medium">Liga összevetés (percentilis)</div>
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                  <div className="h-72 rounded-lg border border-slate-800 bg-slate-950/40 p-3">
+                  <div className="h-72 rounded-lg border border-border-subtle bg-surface-1/60 p-3">
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart
                         data={effectiveTeamAnalysis.leagueProfile.entries}
@@ -12988,11 +12987,11 @@ export function SeasonComparison({
                             };
                             if (!data) return null;
                             return (
-                              <div className="rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-xs text-slate-100">
-                                <div className="text-sm font-semibold text-slate-100">{data.label}</div>
-                                <div className="text-slate-300">Percentilis: {data.percentile}</div>
-                                <div className="text-slate-300">Nyers érték: {formatLeagueValue(data.key, data.value)}</div>
-                                <div className="text-slate-400">{data.tier}</div>
+                              <div className="rounded-md border border-border-subtle bg-surface-1 px-3 py-2 text-xs text-primary">
+                                <div className="text-sm font-semibold text-primary">{data.label}</div>
+                                <div className="text-secondary">Percentilis: {data.percentile}</div>
+                                <div className="text-secondary">Nyers érték: {formatLeagueValue(data.key, data.value)}</div>
+                                <div className="text-secondary">{data.tier}</div>
                               </div>
                             );
                           }}
@@ -13007,21 +13006,21 @@ export function SeasonComparison({
                   </div>
                   <div className="space-y-2 text-sm">
                     {effectiveTeamAnalysis.leagueProfile.entries.map(entry => (
-                      <div key={entry.key} className="flex items-center justify-between text-slate-200">
+                      <div key={entry.key} className="flex items-center justify-between text-primary">
                         <span>{entry.label}</span>
-                        <span className="text-slate-400">
+                        <span className="text-secondary">
                           {entry.tier} • {entry.percentile}. percentilis
                         </span>
                       </div>
                     ))}
-                    <div className="text-xs text-slate-400">
+                    <div className="text-xs text-secondary">
                       Liga-klaszter: {effectiveTeamAnalysis.leagueProfile.clusterLabel}
                       {effectiveTeamAnalysis.leagueProfile.clusterCount && effectiveTeamAnalysis.leagueProfile.teamCount
                         ? ` (${effectiveTeamAnalysis.leagueProfile.clusterCount}/${effectiveTeamAnalysis.leagueProfile.teamCount} csapat)`
                         : ''}
                     </div>
                     {!effectiveTeamAnalysis.leagueProfile.opponentStatsComplete && (
-                      <div className="text-xs text-amber-300">
+                      <div className="text-xs text-warning">
                         Opponent statisztikák hiányosak, védekezési profil korlátozott.
                       </div>
                     )}
@@ -13031,7 +13030,7 @@ export function SeasonComparison({
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-2">
-                  <div className="text-sm text-slate-300 font-medium">Posztmegoszlás</div>
+                  <div className="text-sm text-secondary font-medium">Posztmegoszlás</div>
                   {(Object.entries(effectiveTeamAnalysis.rosterSummary.positionMinutesShare) as Array<[Position, number]>)
                     .map(([pos, share]) => ({
                       pos,
@@ -13040,12 +13039,12 @@ export function SeasonComparison({
                       players: effectiveTeamAnalysis.rosterSummary.positionPlayers[pos] ?? [],
                     }))
                     .map(({ pos, share, label, players }) => (
-                      <div key={pos} className="text-sm text-slate-200 space-y-0.5">
+                      <div key={pos} className="text-sm text-primary space-y-0.5">
                         <div>
                           {label}: {share.toFixed(1)}%
                         </div>
                         {players.length > 0 && (
-                          <div className="text-xs text-slate-400">
+                          <div className="text-xs text-secondary">
                             {players.slice(0, 4).join(', ')}
                             {players.length > 4 ? '…' : ''}
                           </div>
@@ -13053,16 +13052,16 @@ export function SeasonComparison({
                       </div>
                     ))}
                   {effectiveTeamAnalysis.rosterSummary.avgHeightOverall && (
-                    <div className="text-xs text-slate-400">
+                    <div className="text-xs text-secondary">
                       Átlagmagasság: {effectiveTeamAnalysis.rosterSummary.avgHeightOverall.toFixed(1)} cm
                     </div>
                   )}
                 </div>
                 <div className="space-y-2">
-                  <div className="text-sm text-slate-300 font-medium">Role-megoszlás</div>
+                  <div className="text-sm text-secondary font-medium">Role-megoszlás</div>
                   {Object.keys(effectiveTeamAnalysis.rosterSummary.roleCounts).length > 0 ? (
                     Object.entries(effectiveTeamAnalysis.rosterSummary.roleCounts).map(([role, count]) => (
-                      <div key={role} className="text-sm text-slate-200 space-y-0.5">
+                      <div key={role} className="text-sm text-primary space-y-0.5">
                         <div>
                           {count >= 3
                             ? `${role}: redundáns (${count}) – rotációs előny, de szerepütközés lehetséges`
@@ -13078,7 +13077,7 @@ export function SeasonComparison({
                             : rolePlayersByRole.get(role) ?? [];
                           if (inferredNames.length === 0) return null;
                           return (
-                            <div className="text-xs text-slate-400">
+                            <div className="text-xs text-secondary">
                               {inferredNames.slice(0, 4).join(', ')}
                               {inferredNames.length > 4 ? '…' : ''}
                             </div>
@@ -13087,15 +13086,15 @@ export function SeasonComparison({
                       </div>
                     ))
                   ) : (
-                    <div className="text-sm text-slate-400">Nincs szerepkör adat.</div>
+                    <div className="text-sm text-secondary">Nincs szerepkör adat.</div>
                   )}
                 </div>
                 <div className="space-y-2">
-                  <div className="text-sm text-slate-300 font-medium">Usage koncentráció</div>
-                  <div className="text-sm text-slate-200">
+                  <div className="text-sm text-secondary font-medium">Usage koncentráció</div>
+                  <div className="text-sm text-primary">
                     Top2 usage arány: {(effectiveTeamAnalysis.rosterSummary.top2UsageShare * 100).toFixed(1)}%
                   </div>
-                  <div className="text-xs text-slate-400">
+                  <div className="text-xs text-secondary">
                     {effectiveTeamAnalysis.rosterSummary.flags.scorerDependency && '• Túlzott scorer-függőség'}
                     {effectiveTeamAnalysis.rosterSummary.flags.lowPlaymakingDepth && ' • Alacsony playmaking depth'}
                     {effectiveTeamAnalysis.rosterSummary.flags.weakReboundingPresence && ' • Lepattanó hiány posztonként'}
@@ -13105,18 +13104,18 @@ export function SeasonComparison({
 
               {effectiveTeamAnalysis.rosterInsights.length > 0 && (
                 <div className="space-y-2">
-                  <div className="text-sm text-slate-300 font-medium">Roster értelmezés</div>
+                  <div className="text-sm text-secondary font-medium">Roster értelmezés</div>
                   {effectiveTeamAnalysis.rosterInsights.map(item => (
-                    <div key={item} className="text-sm text-slate-200">• {item}</div>
+                    <div key={item} className="text-sm text-primary">• {item}</div>
                   ))}
                 </div>
               )}
 
               {effectiveTeamAnalysis.riskPriorities.length > 0 && (
                 <div className="space-y-2">
-                  <div className="text-sm text-slate-300 font-medium">Kockázatok</div>
+                  <div className="text-sm text-secondary font-medium">Kockázatok</div>
                   {effectiveTeamAnalysis.riskPriorities.map(item => (
-                    <div key={item} className="text-sm text-slate-200">• {item}</div>
+                    <div key={item} className="text-sm text-primary">• {item}</div>
                   ))}
                 </div>
               )}
@@ -13126,63 +13125,63 @@ export function SeasonComparison({
         </CardContent>
       </Card>}
 
-      {showProjectionSection && <Card className="bg-slate-900 border-slate-800">
+      {showProjectionSection && <Card>
         <CardHeader>
-          <CardTitle className="text-slate-50">Várható alapszakasz végeredmény (modell)</CardTitle>
+          <CardTitle className="font-display uppercase tracking-wide text-primary">Várható alapszakasz végeredmény (modell)</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           {projectedStandings.length === 0 ? (
             <div className="space-y-2">
-              <div className="text-sm text-slate-300">
+              <div className="text-sm text-secondary">
                 Az előrejelzéshez nincs elérhető tabella snapshot a kiválasztott szezonhoz.
               </div>
-              <div className="text-xs text-slate-400">
+              <div className="text-xs text-secondary">
                 Importálj tabellát a Tabella fülön a jelenlegi szezonhoz, majd futtasd a menetrend importot az Import fülön.
               </div>
             </div>
           ) : (
             <>
               {usedLegacyStandingsFallback && (
-                <div className="rounded-md border border-amber-700/40 bg-amber-950/20 px-3 py-2 text-xs text-amber-200">
+                <div className="rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning">
                   Legacy tabella snapshot került felhasználásra (season_id nélküli rekord). Érdemes a szezonhoz kötött tabellát újraimportálni.
                 </div>
               )}
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <div className="text-xs uppercase tracking-wide text-slate-400">Szcenárió mód</div>
+                  <div className="text-xs uppercase tracking-wide text-secondary">Szcenárió mód</div>
                   <Select value={projectionScenario} onValueChange={(value: 'baseline' | 'form' | 'upset') => setProjectionScenario(value)}>
-                    <SelectTrigger className="bg-slate-800 border-slate-700 w-full">
+                    <SelectTrigger className="w-full">
                       <SelectValue placeholder="Válassz szcenáriót" />
                     </SelectTrigger>
-                    <SelectContent className="bg-slate-800 border-slate-700 text-slate-100">
+                    <SelectContent className="">
                       <SelectItem value="baseline">Alap</SelectItem>
                       <SelectItem value="form">Forma-követő (utolsó 5 meccs erősebb súly)</SelectItem>
                       <SelectItem value="upset">Upset-figyelő (nagyobb variancia)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="rounded-md border border-slate-700 bg-slate-800/60 px-3 py-2 text-xs text-slate-300">
-                  Aktív profil: <span className="font-semibold text-slate-100">{projectionScenarioSettings.label}</span>
-                  <div className="mt-1 text-slate-400">
+                <div className="rounded-md border border-border-subtlebg-surface-2/60 px-3 py-2 text-xs text-secondary">
+                  Aktív profil: <span className="font-semibold text-primary">{projectionScenarioSettings.label}</span>
+                  <div className="mt-1 text-secondary">
                     A modell csapatstatisztikákból számolt erősségre épül, utolsó 5 meccs súlyozással.
                   </div>
                 </div>
               </div>
 
-              <div className="rounded-md border border-slate-700 bg-slate-800/50 p-3 space-y-3">
-                <div className="text-xs uppercase tracking-wide text-slate-400">What-if panel</div>
-                <div className="rounded-md border border-slate-700/70 bg-slate-900/40 px-3 py-2 text-xs text-slate-300 space-y-1">
-                  <div className="font-medium text-slate-200">Használati útmutató</div>
+              <div className="rounded-md border border-border-subtlebg-surface-2/50 p-3 space-y-3">
+                <div className="text-xs uppercase tracking-wide text-secondary">What-if panel</div>
+                <div className="rounded-md border border-border-subtle bg-surface-1/60 px-3 py-2 text-xs text-secondary space-y-1">
+                  <div className="font-medium text-primary">Használati útmutató</div>
                   <div>1. Válassz szcenárió módot (Alap / Forma-követő / Upset-figyelő).</div>
                   <div>2. Állítsd a Hazai pálya delta és Variancia delta csúszkákat a kívánt modellérzékenységhez.</div>
                   <div>3. Ha egy csapatra külön becslést szeretnél, válaszd ki és adj meg -2 és +2 közötti erősség deltát, majd kattints az Alkalmaz gombra.</div>
                   <div>4. Az aktív korrekciók chipként látszanak; kattintással egyesével törölhetők, a Reset mindent nulláz.</div>
-                  <div className="text-slate-400">Pozitív csapat-delta növeli, negatív csökkenti a csapat matchup esélyeit.</div>
+                  <div className="text-secondary">Pozitív csapat-delta növeli, negatív csökkenti a csapat matchup esélyeit.</div>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <label className="text-xs text-slate-300">
-                    Hazai pálya delta: <span className="font-semibold text-slate-100">{whatIfHomeAdvantageDelta >= 0 ? '+' : ''}{whatIfHomeAdvantageDelta.toFixed(2)}</span>
+                  <label className="text-xs text-secondary">
+                    Hazai pálya delta: <span className="font-semibold text-primary">{whatIfHomeAdvantageDelta >= 0 ? '+' : ''}{whatIfHomeAdvantageDelta.toFixed(2)}</span>
                     <input
                       type="range"
                       min={-0.3}
@@ -13193,8 +13192,8 @@ export function SeasonComparison({
                       className="mt-1 w-full"
                     />
                   </label>
-                  <label className="text-xs text-slate-300">
-                    Variancia delta (logistic): <span className="font-semibold text-slate-100">{whatIfLogisticDelta >= 0 ? '+' : ''}{whatIfLogisticDelta.toFixed(2)}</span>
+                  <label className="text-xs text-secondary">
+                    Variancia delta (logistic): <span className="font-semibold text-primary">{whatIfLogisticDelta >= 0 ? '+' : ''}{whatIfLogisticDelta.toFixed(2)}</span>
                     <input
                       type="range"
                       min={-0.25}
@@ -13209,12 +13208,12 @@ export function SeasonComparison({
 
                 <div className="grid grid-cols-1 md:grid-cols-[1fr_120px_auto_auto] gap-2 items-end">
                   <div>
-                    <div className="text-xs text-slate-400 mb-1">Csapat erősség korrekció</div>
+                    <div className="text-xs text-secondary mb-1">Csapat erősség korrekció</div>
                     <Select value={whatIfTeamKey} onValueChange={setWhatIfTeamKey}>
-                      <SelectTrigger className="bg-slate-800 border-slate-700 w-full">
+                      <SelectTrigger className="w-full">
                         <SelectValue placeholder="Válassz csapatot" />
                       </SelectTrigger>
-                      <SelectContent className="bg-slate-800 border-slate-700 text-slate-100">
+                      <SelectContent className="">
                         {whatIfTeamOptions.map(option => (
                           <SelectItem key={option.key} value={option.key}>{option.label}</SelectItem>
                         ))}
@@ -13222,24 +13221,24 @@ export function SeasonComparison({
                     </Select>
                   </div>
                   <div>
-                    <div className="text-xs text-slate-400 mb-1">Delta (-2..+2)</div>
+                    <div className="text-xs text-secondary mb-1">Delta (-2..+2)</div>
                     <Input
                       value={whatIfTeamDeltaInput}
                       onChange={(event) => setWhatIfTeamDeltaInput(event.target.value)}
-                      className="bg-slate-800 border-slate-700"
+                      className=""
                     />
                   </div>
                   <Button type="button" size="sm" onClick={applyWhatIfTeamAdjustment} className="bg-cyan-600 hover:bg-cyan-500 text-white">
                     Alkalmaz
                   </Button>
-                  <Button type="button" size="sm" variant="outline" onClick={resetWhatIfSettings} className="border-slate-700 text-slate-300 hover:bg-slate-800">
+                  <Button type="button" size="sm" variant="outline" onClick={resetWhatIfSettings} className="border-border-subtle text-secondary hover:bg-surface-2">
                     Reset
                   </Button>
                 </div>
 
                 {Object.keys(whatIfTeamAdjustments).length > 0 && (
                   <div className="space-y-1">
-                    <div className="text-xs text-slate-400">Aktív csapat-korrekciók</div>
+                    <div className="text-xs text-secondary">Aktív csapat-korrekciók</div>
                     <div className="flex flex-wrap gap-2">
                       {Object.entries(whatIfTeamAdjustments).map(([teamKey, delta]) => {
                         const label = whatIfTeamOptions.find(item => item.key === teamKey)?.label ?? teamKey;
@@ -13248,7 +13247,7 @@ export function SeasonComparison({
                             key={teamKey}
                             type="button"
                             onClick={() => removeWhatIfTeamAdjustment(teamKey)}
-                            className="rounded-full border border-slate-600 px-2 py-1 text-xs text-slate-200 hover:bg-slate-700"
+                            className="rounded-full border border-border-subtle px-2 py-1 text-xs text-primary hover:bg-surface-2"
                           >
                             {label}: {delta >= 0 ? '+' : ''}{delta.toFixed(2)} ×
                           </button>
@@ -13259,12 +13258,12 @@ export function SeasonComparison({
                 )}
               </div>
 
-              <div className="rounded-md border border-slate-700 bg-slate-800/40 p-3">
-                <div className="text-xs uppercase tracking-wide text-slate-400 mb-2">Forma ellenőrzés (utolsó 5 meccs)</div>
+              <div className="rounded-md border border-border-subtlebg-surface-2/40 p-3">
+                <div className="text-xs uppercase tracking-wide text-secondary mb-2">Forma ellenőrzés (utolsó 5 meccs)</div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs">
                     <thead>
-                      <tr className="border-b border-slate-700 text-slate-400">
+                      <tr className="border-b border-border-subtle text-secondary">
                         <th className="text-left py-1 pr-2">Csapat</th>
                         <th className="text-right py-1 pr-2">Mérleg</th>
                         <th className="text-right py-1 pr-2">Win%</th>
@@ -13276,11 +13275,11 @@ export function SeasonComparison({
                         .sort((a, b) => b.winRate - a.winRate || b.netPerGame - a.netPerGame)
                         .slice(0, 10)
                         .map(item => (
-                          <tr key={item.team} className="border-b border-slate-800">
-                            <td className="py-1 pr-2 text-slate-200">{item.team}</td>
-                            <td className="py-1 pr-2 text-right text-slate-300">{item.wins}-{item.losses}</td>
-                            <td className="py-1 pr-2 text-right text-slate-300">{(item.winRate * 100).toFixed(0)}%</td>
-                            <td className={`py-1 text-right ${item.netPerGame >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
+                          <tr key={item.team} className="border-b border-border-subtle">
+                            <td className="py-1 pr-2 text-primary">{item.team}</td>
+                            <td className="py-1 pr-2 text-right text-secondary">{item.wins}-{item.losses}</td>
+                            <td className="py-1 pr-2 text-right text-secondary">{(item.winRate * 100).toFixed(0)}%</td>
+                            <td className={`py-1 text-right ${item.netPerGame >= 0 ? 'text-positive' : 'text-negative'}`}>
                               {item.netPerGame >= 0 ? '+' : ''}{item.netPerGame.toFixed(1)}
                             </td>
                           </tr>
@@ -13347,11 +13346,11 @@ export function SeasonComparison({
                 </div>
               )}
 
-              <div className="rounded-md border border-slate-700 bg-slate-800/40 p-3 space-y-3">
+              <div className="rounded-md border border-border-subtlebg-surface-2/40 p-3 space-y-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
-                    <div className="text-xs uppercase tracking-wide text-slate-400">Hátralévő meccsek (interaktív)</div>
-                    <div className="text-sm text-slate-200">
+                    <div className="text-xs uppercase tracking-wide text-secondary">Hátralévő meccsek (interaktív)</div>
+                    <div className="text-sm text-primary">
                       {activeProjectionTeamName
                         ? `${activeProjectionTeamName} hátralévő alapszakasz meccsei`
                         : 'Kattints egy csapatra az előrejelzett tabellában'}
@@ -13362,7 +13361,7 @@ export function SeasonComparison({
                     size="sm"
                     variant="outline"
                     onClick={resetWinnerOverrides}
-                    className="border-slate-700 text-slate-300 hover:bg-slate-800"
+                    className="border-border-subtle text-secondary hover:bg-surface-2"
                   >
                     Győztes-felülírás reset
                   </Button>
@@ -13372,7 +13371,7 @@ export function SeasonComparison({
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
-                        <tr className="border-b border-slate-700 text-slate-400">
+                        <tr className="border-b border-border-subtle text-secondary">
                           <th className="text-left py-2 pr-2">Dátum</th>
                           <th className="text-left py-2 pr-2">Párharc</th>
                           <th className="text-right py-2 pr-2">Modell W%</th>
@@ -13382,13 +13381,13 @@ export function SeasonComparison({
                       </thead>
                       <tbody>
                         {remainingProjectionGamesForSelectedTeam.map(item => (
-                          <tr key={item.fixtureId} className="border-b border-slate-800">
-                            <td className="py-2 pr-2 text-slate-300">{item.gameDate}</td>
-                            <td className="py-2 pr-2 text-slate-100">
+                          <tr key={item.fixtureId} className="border-b border-border-subtle">
+                            <td className="py-2 pr-2 text-secondary">{item.gameDate}</td>
+                            <td className="py-2 pr-2 text-primary">
                               {item.isHome ? 'H' : 'V'}: {item.ownTeam} vs {item.opponent}
                             </td>
-                            <td className="py-2 pr-2 text-right text-slate-300">{(item.ownModelWinProbability * 100).toFixed(1)}%</td>
-                            <td className={`py-2 pr-2 text-right ${item.overrideWinnerSide ? 'text-cyan-300 font-medium' : 'text-slate-300'}`}>
+                            <td className="py-2 pr-2 text-right text-secondary">{(item.ownModelWinProbability * 100).toFixed(1)}%</td>
+                            <td className={`py-2 pr-2 text-right ${item.overrideWinnerSide ? 'text-cyan font-medium' : 'text-secondary'}`}>
                               {(item.ownAppliedWinProbability * 100).toFixed(1)}%
                             </td>
                             <td className="py-2 text-right">
@@ -13396,10 +13395,10 @@ export function SeasonComparison({
                                 value={item.overrideWinnerSide ?? 'model'}
                                 onValueChange={(value) => setFixtureWinnerOverride(item.fixtureId, value as 'model' | 'home' | 'away')}
                               >
-                                <SelectTrigger className="ml-auto w-45 bg-slate-800 border-slate-700">
+                                <SelectTrigger className="ml-auto w-45">
                                   <SelectValue />
                                 </SelectTrigger>
-                                <SelectContent className="bg-slate-800 border-slate-700 text-slate-100">
+                                <SelectContent className="">
                                   <SelectItem value="model">Modell alapján</SelectItem>
                                   <SelectItem value="home">{item.homeTeam}</SelectItem>
                                   <SelectItem value="away">{item.awayTeam}</SelectItem>
@@ -13412,14 +13411,14 @@ export function SeasonComparison({
                     </table>
                   </div>
                 ) : (
-                  <div className="text-xs text-slate-400">Az adott csapatnál nincs több hátralévő meccs a menetrendben.</div>
+                  <div className="text-xs text-secondary">Az adott csapatnál nincs több hátralévő meccs a menetrendben.</div>
                 )}
               </div>
 
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-slate-700 text-slate-400">
+                    <tr className="border-b border-border-subtle text-secondary">
                       <th className="text-left py-2 pr-2">#</th>
                       <th className="text-left py-2 pr-2">Csapat</th>
                       <th className="text-right py-2 pr-2">Jelenlegi</th>
@@ -13439,12 +13438,12 @@ export function SeasonComparison({
                       return (
                         <tr
                           key={row.team}
-                          className={`border-b border-slate-800 ${isSelectedTeam ? 'bg-sky-900/20' : ''}`}
+                          className={`border-b border-border-subtle ${isSelectedTeam ? 'bg-sky-900/20' : ''}`}
                         >
-                          <td className="py-2 pr-2 text-slate-200">
-                            <span className={isTop8 ? 'text-emerald-300 font-semibold' : 'text-slate-300'}>{index + 1}</span>
+                          <td className="py-2 pr-2 text-primary">
+                            <span className={isTop8 ? 'text-positive font-semibold' : 'text-secondary'}>{index + 1}</span>
                           </td>
-                          <td className="py-2 pr-2 text-slate-100">
+                          <td className="py-2 pr-2 text-primary">
                             <button
                               type="button"
                               onClick={() => setSelectedProjectionTeamKey(rowTeamKey)}
@@ -13453,20 +13452,20 @@ export function SeasonComparison({
                               {row.team}
                             </button>
                           </td>
-                          <td className="py-2 pr-2 text-right text-slate-300">
+                          <td className="py-2 pr-2 text-right text-secondary">
                             {row.currentWins}-{row.currentLosses}
                           </td>
-                          <td className="py-2 pr-2 text-right text-slate-100">{row.projectedWins.toFixed(1)}</td>
-                          <td className="py-2 pr-2 text-right text-slate-100">{row.projectedLosses.toFixed(1)}</td>
-                          <td className="py-2 pr-2 text-right text-slate-300">{(row.avgWinProbability * 100).toFixed(1)}%</td>
+                          <td className="py-2 pr-2 text-right text-primary">{row.projectedWins.toFixed(1)}</td>
+                          <td className="py-2 pr-2 text-right text-primary">{row.projectedLosses.toFixed(1)}</td>
+                          <td className="py-2 pr-2 text-right text-secondary">{(row.avgWinProbability * 100).toFixed(1)}%</td>
                           <td className="py-2 text-right text-cyan-300">+{row.expectedExtraWins.toFixed(1)}</td>
                           <td
                             className={`py-2 text-right ${
                               row.certaintyLabel === 'Magas'
-                                ? 'text-emerald-300'
+                                ? 'text-positive'
                                 : row.certaintyLabel === 'Közepes'
-                                  ? 'text-amber-300'
-                                  : 'text-slate-400'
+                                  ? 'text-warning'
+                                  : 'text-secondary'
                             }`}
                           >
                             {row.certaintyLabel}
@@ -13480,9 +13479,9 @@ export function SeasonComparison({
 
               {playoffProjection && (
                 <div className="space-y-3">
-                  <div className="rounded-lg border border-emerald-800/40 bg-emerald-950/20 px-4 py-3 text-sm text-emerald-100">
+                  <div className="rounded-lg border border-positive/30 bg-positive/10px-4 py-3 text-sm text-positive">
                     <div className="font-medium">Rájátszás előrejelzés (modell)</div>
-                    <div className="mt-1 text-emerald-200">
+                    <div className="mt-1 text-positive">
                       Bajnok: <span className="font-semibold">{playoffProjection.champion}</span> •
                       Döntős: {playoffProjection.runnerUp} •
                       Bronz: {playoffProjection.third}
@@ -13492,7 +13491,7 @@ export function SeasonComparison({
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
-                        <tr className="border-b border-slate-700 text-slate-400">
+                        <tr className="border-b border-border-subtle text-secondary">
                           <th className="text-left py-2 pr-2">Kör</th>
                           <th className="text-left py-2 pr-2">Párharc</th>
                           <th className="text-right py-2 pr-2">Hazai ág esély</th>
@@ -13503,12 +13502,12 @@ export function SeasonComparison({
                       </thead>
                       <tbody>
                         {playoffProjection.series.map(item => (
-                          <tr key={`${item.round}-${item.homeTeam}-${item.awayTeam}`} className="border-b border-slate-800">
-                            <td className="py-2 pr-2 text-slate-300">{item.round}</td>
-                            <td className="py-2 pr-2 text-slate-100">
+                          <tr key={`${item.round}-${item.homeTeam}-${item.awayTeam}`} className="border-b border-border-subtle">
+                            <td className="py-2 pr-2 text-secondary">{item.round}</td>
+                            <td className="py-2 pr-2 text-primary">
                               ({item.homeSeed}) {item.homeTeam} vs ({item.awaySeed}) {item.awayTeam}
                             </td>
-                            <td className="py-2 pr-2 text-right text-slate-200">{(item.homeWinProbability * 100).toFixed(1)}%</td>
+                            <td className="py-2 pr-2 text-right text-primary">{(item.homeWinProbability * 100).toFixed(1)}%</td>
                             <td className="py-2 pr-2 text-right text-cyan-300">
                               {item.winner} ({item.mostLikelyScore})
                             </td>
@@ -13517,10 +13516,10 @@ export function SeasonComparison({
                                 value={playoffSeriesWinnerOverrides[item.seriesKey] ?? 'model'}
                                 onValueChange={(value) => setPlayoffSeriesWinnerOverride(item.seriesKey, value as 'model' | 'home' | 'away')}
                               >
-                                <SelectTrigger className="ml-auto w-45 bg-slate-800 border-slate-700">
+                                <SelectTrigger className="ml-auto w-45">
                                   <SelectValue />
                                 </SelectTrigger>
-                                <SelectContent className="bg-slate-800 border-slate-700 text-slate-100">
+                                <SelectContent className="">
                                   <SelectItem value="model">Modell alapján</SelectItem>
                                   <SelectItem value="home">{item.homeTeam}</SelectItem>
                                   <SelectItem value="away">{item.awayTeam}</SelectItem>
@@ -13530,10 +13529,10 @@ export function SeasonComparison({
                             <td
                               className={`py-2 text-right ${
                                 item.certaintyLabel === 'Magas'
-                                  ? 'text-emerald-300'
+                                  ? 'text-positive'
                                   : item.certaintyLabel === 'Közepes'
-                                    ? 'text-amber-300'
-                                    : 'text-slate-400'
+                                    ? 'text-warning'
+                                    : 'text-secondary'
                               }`}
                             >
                               {item.manualOverride ? 'Manuális' : item.certaintyLabel}
@@ -13547,7 +13546,7 @@ export function SeasonComparison({
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
-                        <tr className="border-b border-slate-700 text-slate-400">
+                        <tr className="border-b border-border-subtle text-secondary">
                           <th className="text-left py-2 pr-2">Várható végső hely</th>
                           <th className="text-left py-2 pr-2">Csapat</th>
                           <th className="text-left py-2">Megjegyzés</th>
@@ -13555,10 +13554,10 @@ export function SeasonComparison({
                       </thead>
                       <tbody>
                         {playoffProjection.finalRanking.map(row => (
-                          <tr key={`${row.position}-${row.team}`} className="border-b border-slate-800">
-                            <td className="py-2 pr-2 text-slate-100 font-medium">{row.position}.</td>
-                            <td className="py-2 pr-2 text-slate-100">{row.team}</td>
-                            <td className="py-2 text-slate-400">{row.note || ''}</td>
+                          <tr key={`${row.position}-${row.team}`} className="border-b border-border-subtle">
+                            <td className="py-2 pr-2 text-primary font-mono tabular-nums font-medium">{row.position}.</td>
+                            <td className="py-2 pr-2 text-primary">{row.team}</td>
+                            <td className="py-2 text-secondary">{row.note || ''}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -13567,7 +13566,7 @@ export function SeasonComparison({
                 </div>
               )}
 
-              <div className="text-xs text-slate-400">
+              <div className="text-xs text-secondary">
                 A modell a jelenlegi tabellaállásból indul, és a hátralévő meccsekre várható győzelmi valószínűséget számol
                 csapat-erősség (szezon + utolsó 5 meccs súlyozott statisztika), valamint hazai pálya alapján.
                 A becslés korrigál ellenfél-erősséggel (SOS) is, szezonos és utolsó 5 meccses bontásban.
@@ -13578,19 +13577,19 @@ export function SeasonComparison({
         </CardContent>
       </Card>}
 
-      {showPregameSection && <Card className="bg-slate-900 border-slate-800">
+      {showPregameSection && <Card>
         <CardHeader>
-          <CardTitle className="text-slate-50">Pre-game elemzés</CardTitle>
+          <CardTitle className="font-display uppercase tracking-wide text-primary">Pre-game elemzés</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="text-sm text-slate-400 mb-2 block">Ellenfél</label>
+              <label className="text-sm text-secondary mb-2 block">Ellenfél</label>
               <Select value={selectedOpponentTeamId} onValueChange={setSelectedOpponentTeamId}>
-                <SelectTrigger className="bg-slate-800 border-slate-700 w-full">
+                <SelectTrigger className="w-full">
                   <SelectValue placeholder="Válassz ellenfelet..." className="truncate" />
                 </SelectTrigger>
-                <SelectContent className="bg-slate-800 border-slate-700 text-slate-100 placeholder:text-slate-400">
+                <SelectContent className="">
                   {allTeams
                     .filter(team => team.id !== resolvedTeamId)
                     .map(team => (
@@ -13608,8 +13607,8 @@ export function SeasonComparison({
                 variant={useRecentFormPregame ? 'default' : 'outline'}
                 onClick={() => setUseRecentFormPregame(value => !value)}
                 className={useRecentFormPregame
-                  ? 'bg-emerald-600 hover:bg-emerald-500 text-white'
-                  : 'border-slate-700 text-slate-300 hover:bg-slate-800'}
+                  ? ''
+                  : 'border-border-subtle text-secondary hover:bg-surface-2'}
               >
                 Utolsó 5 meccs súlyozása
               </Button>
@@ -13619,7 +13618,7 @@ export function SeasonComparison({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <div className="flex items-center justify-between gap-2">
-                <label className="text-sm text-slate-400">Saját sérültek / kihagyók</label>
+                <label className="text-sm text-secondary">Saját sérültek / kihagyók</label>
                 <Button
                   type="button"
                   size="sm"
@@ -13627,13 +13626,13 @@ export function SeasonComparison({
                   disabled={pregameOwnRosterOptions.length === 0}
                   onClick={() => setShowOwnInjuryPicker(value => !value)}
                   className={showOwnInjuryPicker
-                    ? 'bg-rose-700 hover:bg-rose-600 text-white'
-                    : 'border-slate-700 text-slate-300 hover:bg-slate-800'}
+                    ? 'bg-negative hover:bg-negative/80 text-white'
+                    : 'border-border-subtle text-secondary hover:bg-surface-2'}
                 >
                   {showOwnInjuryPicker ? 'Kész' : 'Sérültlista szerkesztése'}
                 </Button>
               </div>
-              <div className="text-xs text-slate-400 mt-1">
+              <div className="text-xs text-secondary mt-1">
                 {pregameOwnRosterOptions.length === 0
                   ? 'Válaszd ki a csapatot a lista betöltéséhez.'
                   : pregameOwnInjuryNames.length > 0
@@ -13642,7 +13641,7 @@ export function SeasonComparison({
               </div>
               {showOwnInjuryPicker && pregameOwnRosterOptions.length > 0 && (
                 <>
-                  <div className="max-h-32 overflow-y-auto rounded-md border border-slate-800/70 bg-slate-900/70 p-2 flex flex-wrap gap-2 mt-2">
+                  <div className="max-h-32 overflow-y-auto rounded-md border border-border-subtle bg-surface-2/70 p-2 flex flex-wrap gap-2 mt-2">
                     {pregameOwnRosterOptions.map(player => {
                       const isSelected = pregameOwnInjuries.includes(player.id);
                       return (
@@ -13650,22 +13649,22 @@ export function SeasonComparison({
                           type="button"
                           key={player.id}
                           onClick={() => handleToggleOwnInjury(player.id)}
-                          className={`text-xs px-2 py-1 rounded-md border transition focus:outline-none focus:ring-2 focus:ring-slate-500 ${
+                          className={`text-xs px-2 py-1 rounded-md border transition focus:outline-none focus:ring-2 focus:ring-cyan/50 ${
                             isSelected
-                              ? 'bg-rose-900/40 border-rose-700 text-rose-100'
-                              : 'bg-slate-900/40 border-slate-700 text-slate-200 hover:border-slate-500'
+                              ? 'bg-negative/15 border-negative/50 text-negative'
+                              : 'bg-surface-1/60 border-border-subtle text-primary hover:border-border-active'
                           }`}
                           aria-pressed={isSelected}
                         >
                           {player.name}
-                          <span className="text-[10px] text-slate-400 ml-1">
+                          <span className="text-[10px] text-muted ml-1">
                             ({POSITION_LABELS[player.position] ?? player.position})
                           </span>
                         </button>
                       );
                     })}
                   </div>
-                  <div className="text-xs text-slate-500 mt-1">
+                  <div className="text-xs text-muted mt-1">
                     Válassz ki minden hiányzót, majd zárd a panelt a &quot;Kész&quot; gombbal.
                   </div>
                 </>
@@ -13673,7 +13672,7 @@ export function SeasonComparison({
             </div>
             <div>
               <div className="flex items-center justify-between gap-2">
-                <label className="text-sm text-slate-400">Ellenfél sérültek</label>
+                <label className="text-sm text-secondary">Ellenfél sérültek</label>
                 <Button
                   type="button"
                   size="sm"
@@ -13681,13 +13680,13 @@ export function SeasonComparison({
                   disabled={pregameOpponentRosterOptions.length === 0}
                   onClick={() => setShowOpponentInjuryPicker(value => !value)}
                   className={showOpponentInjuryPicker
-                    ? 'bg-rose-700 hover:bg-rose-600 text-white'
-                    : 'border-slate-700 text-slate-300 hover:bg-slate-800'}
+                    ? 'bg-negative hover:bg-negative/80 text-white'
+                    : 'border-border-subtle text-secondary hover:bg-surface-2'}
                 >
                   {showOpponentInjuryPicker ? 'Kész' : 'Sérültlista szerkesztése'}
                 </Button>
               </div>
-              <div className="text-xs text-slate-400 mt-1">
+              <div className="text-xs text-secondary mt-1">
                 {pregameOpponentRosterOptions.length === 0
                   ? 'Válassz ellenfelet a lista szerkesztéséhez.'
                   : pregameOpponentInjuryNames.length > 0
@@ -13696,7 +13695,7 @@ export function SeasonComparison({
               </div>
               {showOpponentInjuryPicker && pregameOpponentRosterOptions.length > 0 && (
                 <>
-                  <div className="max-h-32 overflow-y-auto rounded-md border border-slate-800/70 bg-slate-900/70 p-2 flex flex-wrap gap-2 mt-2">
+                  <div className="max-h-32 overflow-y-auto rounded-md border border-border-subtle bg-surface-2/70 p-2 flex flex-wrap gap-2 mt-2">
                     {pregameOpponentRosterOptions.map(player => {
                       const isSelected = pregameOpponentInjuries.includes(player.id);
                       return (
@@ -13704,22 +13703,22 @@ export function SeasonComparison({
                           type="button"
                           key={player.id}
                           onClick={() => handleToggleOpponentInjury(player.id)}
-                          className={`text-xs px-2 py-1 rounded-md border transition focus:outline-none focus:ring-2 focus:ring-slate-500 ${
+                          className={`text-xs px-2 py-1 rounded-md border transition focus:outline-none focus:ring-2 focus:ring-cyan/50 ${
                             isSelected
-                              ? 'bg-rose-900/40 border-rose-700 text-rose-100'
-                              : 'bg-slate-900/40 border-slate-700 text-slate-200 hover:border-slate-500'
+                              ? 'bg-negative/15 border-negative/50 text-negative'
+                              : 'bg-surface-1/60 border-border-subtle text-primary hover:border-border-active'
                           }`}
                           aria-pressed={isSelected}
                         >
                           {player.name}
-                          <span className="text-[10px] text-slate-400 ml-1">
+                          <span className="text-[10px] text-muted ml-1">
                             ({POSITION_LABELS[player.position] ?? player.position})
                           </span>
                         </button>
                       );
                     })}
                   </div>
-                  <div className="text-xs text-slate-500 mt-1">
+                  <div className="text-xs text-muted mt-1">
                     A jelöltek nem kerülnek bele a matchup elemzésbe és a GPT jelentésbe; zárd vissza a panelt a &quot;Kész&quot; gombbal.
                   </div>
                 </>
@@ -13728,11 +13727,11 @@ export function SeasonComparison({
           </div>
 
           {!selectedOpponentTeamId && (
-            <div className="text-sm text-slate-300">Válassz ellenfelet a pre-game jelentéshez.</div>
+            <div className="text-sm text-secondary">Válassz ellenfelet a pre-game jelentéshez.</div>
           )}
 
           {selectedOpponentTeamId && !pregameReport && (
-            <div className="text-sm text-slate-300">Nincs elég adat a pre-game scoutinghoz.</div>
+            <div className="text-sm text-secondary">Nincs elég adat a pre-game scoutinghoz.</div>
           )}
 
           {pregameReport && (() => {
@@ -13971,7 +13970,7 @@ export function SeasonComparison({
                   rows.push({
                     teamKey: 'own',
                     teamLabel: ownLabel,
-                    accentClass: 'border-emerald-800/50 bg-emerald-950/10',
+                    accentClass: 'border-positive/30 bg-positive/10',
                     card: ownCard,
                   });
                 }
@@ -13991,20 +13990,20 @@ export function SeasonComparison({
             return (
               <div className="space-y-5">
                 <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)] gap-4">
-                  <div className="p-4 bg-slate-800/50 rounded-lg space-y-3">
-                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-400">
+                  <div className="p-4 bg-surface-2/50 rounded-lg space-y-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-secondary">
                       <span>Elemzés nézőpontja: {ownLabel}</span>
                       <span>Ellenfél: {opponentLabel}</span>
                     </div>
                     <div className="space-y-2">
-                      <div className="text-sm text-slate-300 font-medium">Pregame összkép</div>
+                      <div className="text-sm text-secondary font-medium">Pregame összkép</div>
                       <div className="flex flex-wrap items-end justify-between gap-3">
                         <div>
-                          <div className="text-2xl font-semibold text-slate-50">{favoredTeamLabel}</div>
-                          <div className="text-sm text-slate-400">modellfavorit • {probabilitySpread}</div>
+                          <div className="text-2xl font-semibold text-primary">{favoredTeamLabel}</div>
+                          <div className="text-sm text-secondary">modellfavorit • {probabilitySpread}</div>
                         </div>
                         <div className="flex gap-2 text-xs">
-                          <div className="px-2 py-1 rounded-full border border-emerald-700/50 bg-emerald-950/30 text-emerald-200">
+                          <div className="px-2 py-1 rounded-full border border-positive/30 bg-positive/15 text-positive">
                             {ownLabel}: {pregameReport.winProbability.ownPct.toFixed(1)}%
                           </div>
                           <div className="px-2 py-1 rounded-full border border-orange-700/50 bg-orange-950/30 text-orange-200">
@@ -14013,34 +14012,34 @@ export function SeasonComparison({
                         </div>
                       </div>
                     </div>
-                    <div className="h-2 w-full bg-slate-700 rounded-full overflow-hidden">
+                    <div className="h-2 w-full bg-surface-2 rounded-full overflow-hidden">
                       <div
-                        className="h-full bg-emerald-500"
+                        className="h-full bg-positive"
                         style={{ width: `${pregameReport.winProbability.ownPct}%` }}
                       />
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
-                      <div className="bg-slate-900/40 border border-slate-800 rounded-md px-3 py-2">
-                        <div className="text-slate-500 uppercase tracking-wide text-[10px]">Bizonyosság</div>
-                        <div className="text-slate-100 mt-1">{probabilityConfidenceLabel}</div>
+                      <div className="bg-surface-1/60 border border-border-subtle rounded-md px-3 py-2">
+                        <div className="text-muted uppercase tracking-wide text-[10px]">Bizonyosság</div>
+                        <div className="text-primary mt-1">{probabilityConfidenceLabel}</div>
                       </div>
-                      <div className="bg-slate-900/40 border border-slate-800 rounded-md px-3 py-2">
-                        <div className="text-slate-500 uppercase tracking-wide text-[10px]">Domináns ellenfél-tengely</div>
-                        <div className="text-slate-100 mt-1">{axisLabelMap[llmContext?.opponentDominantAxis ?? 'periméter'] ?? 'periméter'}</div>
+                      <div className="bg-surface-1/60 border border-border-subtle rounded-md px-3 py-2">
+                        <div className="text-muted uppercase tracking-wide text-[10px]">Domináns ellenfél-tengely</div>
+                        <div className="text-primary mt-1">{axisLabelMap[llmContext?.opponentDominantAxis ?? 'periméter'] ?? 'periméter'}</div>
                       </div>
-                      <div className="bg-slate-900/40 border border-slate-800 rounded-md px-3 py-2">
-                        <div className="text-slate-500 uppercase tracking-wide text-[10px]">Fő fókusz</div>
-                        <div className="text-slate-100 mt-1">{topFocusPoints[0] ?? 'Nincs kiemelt fókuszpont'}</div>
+                      <div className="bg-surface-1/60 border border-border-subtle rounded-md px-3 py-2">
+                        <div className="text-muted uppercase tracking-wide text-[10px]">Fő fókusz</div>
+                        <div className="text-primary mt-1">{topFocusPoints[0] ?? 'Nincs kiemelt fókuszpont'}</div>
                       </div>
                     </div>
-                    <div className="text-sm text-slate-200 leading-relaxed whitespace-pre-line">{pregameReport.summary}</div>
+                    <div className="text-sm text-primary leading-relaxed whitespace-pre-line">{pregameReport.summary}</div>
                     {confidenceReasons.length > 0 && (
-                      <div className="text-xs text-amber-200 bg-amber-900/20 border border-amber-700/40 rounded-md px-3 py-2">
+                      <div className="text-xs text-warning bg-warning/10 border border-warning/30 rounded-md px-3 py-2">
                         Bizonyosság oka: {confidenceReasons.join(' • ')}
                       </div>
                     )}
                     {(effectiveTeamAnalysis?.leagueProfile.clusterPeers?.length ?? 0) > 0 && (
-                      <div className="text-xs text-slate-500 space-y-1">
+                      <div className="text-xs text-muted space-y-1">
                         <div>Klaszter-társak: {effectiveTeamAnalysis?.leagueProfile.clusterPeers.join(', ')}</div>
                         <div>Ez stílusrokonságot jelez, nem közvetlen H2H- vagy eredménybizonyítékot.</div>
                       </div>
@@ -14049,74 +14048,74 @@ export function SeasonComparison({
 
                   <div className="space-y-4">
                     {fanSummary && (
-                      <div className="p-3 bg-slate-800/50 rounded-lg space-y-3">
-                        <div className="text-sm text-slate-300 font-medium">Szurkolói gyorskép</div>
-                        <div className="text-sm text-slate-100">{fanSummary.headline}</div>
+                      <div className="p-3 bg-surface-2/50 rounded-lg space-y-3">
+                        <div className="text-sm text-secondary font-medium">Szurkolói gyorskép</div>
+                        <div className="text-sm text-primary">{fanSummary.headline}</div>
                         <div className="grid grid-cols-1 gap-2 text-sm">
-                          <div className="bg-slate-900/40 border border-slate-800 rounded-md p-2">
-                            <div className="text-xs uppercase tracking-wide text-slate-500 mb-1">Előnyeink</div>
+                          <div className="bg-surface-1/60 border border-border-subtle rounded-md p-2">
+                            <div className="text-xs uppercase tracking-wide text-muted mb-1">Előnyeink</div>
                             {fanSummary.keyEdges.length > 0 ? fanSummary.keyEdges.map(item => (
-                              <div key={`fan-edge-${item}`} className="text-slate-200">• {item}</div>
-                            )) : <div className="text-slate-500">Nincs kiemelt előny.</div>}
+                              <div key={`fan-edge-${item}`} className="text-primary">• {item}</div>
+                            )) : <div className="text-muted">Nincs kiemelt előny.</div>}
                           </div>
-                          <div className="bg-slate-900/40 border border-slate-800 rounded-md p-2">
-                            <div className="text-xs uppercase tracking-wide text-slate-500 mb-1">Fő kockázatok</div>
+                          <div className="bg-surface-1/60 border border-border-subtle rounded-md p-2">
+                            <div className="text-xs uppercase tracking-wide text-muted mb-1">Fő kockázatok</div>
                             {fanSummary.majorRisks.length > 0 ? fanSummary.majorRisks.map(item => (
-                              <div key={`fan-risk-${item}`} className="text-slate-200">• {item}</div>
-                            )) : <div className="text-slate-500">Nincs kiemelt kockázat.</div>}
+                              <div key={`fan-risk-${item}`} className="text-primary">• {item}</div>
+                            )) : <div className="text-muted">Nincs kiemelt kockázat.</div>}
                           </div>
                         </div>
                       </div>
                     )}
 
-                    <div className="p-3 bg-slate-800/50 rounded-lg space-y-2">
-                      <div className="text-sm text-slate-300 font-medium">Head-to-head</div>
+                    <div className="p-3 bg-surface-2/50 rounded-lg space-y-2">
+                      <div className="text-sm text-secondary font-medium">Head-to-head</div>
                       {pregameHeadToHeadSummary.games > 0 ? (
                         <>
-                          <div className="text-sm text-slate-100">
+                          <div className="text-sm text-primary">
                             {ownLabel} vs {opponentLabel}: {pregameHeadToHeadSummary.ownWins}-{pregameHeadToHeadSummary.opponentWins}
                           </div>
-                          <div className="text-xs text-slate-400">
+                          <div className="text-xs text-secondary">
                             Átlagpontok: {pregameHeadToHeadSummary.ownAvgPoints.toFixed(1)} - {pregameHeadToHeadSummary.opponentAvgPoints.toFixed(1)}
                             {' '}({pregameHeadToHeadSummary.games} meccs)
                           </div>
                           {pregameHeadToHeadInsight && (
-                            <div className="rounded-md border border-slate-800 bg-slate-900/40 px-3 py-2 space-y-1 text-xs">
-                              <div className="text-slate-200">
+                            <div className="rounded-md border border-border-subtle bg-surface-2/40 px-3 py-2 space-y-1 text-xs">
+                              <div className="text-primary">
                                 Legutóbbi H2H: {pregameHeadToHeadInsight.ownScore}-{pregameHeadToHeadInsight.opponentScore}
                                 {' '}• tripla: {pregameHeadToHeadInsight.ownThreePct.toFixed(1)}% - {pregameHeadToHeadInsight.opponentThreePct.toFixed(1)}%
                               </div>
                               {pregameHeadToHeadInsight.ownStandouts.length > 0 && (
-                                <div className="text-slate-400">Saját húzóemberek: {pregameHeadToHeadInsight.ownStandouts.join(', ')}</div>
+                                <div className="text-secondary">Saját húzóemberek: {pregameHeadToHeadInsight.ownStandouts.join(', ')}</div>
                               )}
                               {pregameHeadToHeadInsight.opponentStandouts.length > 0 && (
-                                <div className="text-slate-400">Ellenfél húzóemberek: {pregameHeadToHeadInsight.opponentStandouts.join(', ')}</div>
+                                <div className="text-secondary">Ellenfél húzóemberek: {pregameHeadToHeadInsight.opponentStandouts.join(', ')}</div>
                               )}
-                              <div className="text-emerald-200">Tanulság: {pregameHeadToHeadInsight.takeaway}</div>
-                              <div className="text-amber-200">Veszély: {pregameHeadToHeadInsight.warning}</div>
+                              <div className="text-positive">Tanulság: {pregameHeadToHeadInsight.takeaway}</div>
+                              <div className="text-warning">Veszély: {pregameHeadToHeadInsight.warning}</div>
                             </div>
                           )}
                         </>
                       ) : (
-                        <div className="text-sm text-slate-400">Első találkozó a szezonban.</div>
+                        <div className="text-sm text-secondary">Első találkozó a szezonban.</div>
                       )}
                     </div>
 
                     {pregameOptimalLineup && (
-                      <div className="p-3 bg-slate-800/50 rounded-lg space-y-3">
+                      <div className="p-3 bg-surface-2/50 rounded-lg space-y-3">
                         <div className="flex items-center justify-between gap-2 flex-wrap">
-                          <div className="text-sm text-slate-300 font-medium">Ajánlott kezdő ötös az ellenfél ellen</div>
+                          <div className="text-sm text-secondary font-medium">Ajánlott kezdő ötös az ellenfél ellen</div>
                           <div className={`text-[11px] px-2 py-1 rounded-full border ${
                             pregameOptimalLineup.best.certainty === 'high'
-                              ? 'border-emerald-700/50 bg-emerald-950/30 text-emerald-200'
+                              ? 'border-positive/30 bg-positive/15 text-positive'
                               : pregameOptimalLineup.best.certainty === 'medium'
-                                ? 'border-amber-700/50 bg-amber-950/30 text-amber-200'
-                                : 'border-slate-700 bg-slate-900/40 text-slate-300'
+                                ? 'border-warning/30 bg-warning/15 text-warning'
+                                : 'border-border-subtle bg-surface-1/60 text-secondary'
                           }`}>
                             Bizonyosság: {pregameOptimalLineup.best.certainty === 'high' ? 'magas' : pregameOptimalLineup.best.certainty === 'medium' ? 'közepes' : 'alacsony'}
                           </div>
                         </div>
-                        <div className="text-xs text-slate-400">{pregameOptimalLineup.headline}</div>
+                        <div className="text-xs text-secondary">{pregameOptimalLineup.headline}</div>
                         <div className="flex flex-wrap gap-2">
                           {pregameOptimalLineup.best.roleAssignments.map(item => (
                             <Badge key={`pregame-optimal-${item.playerId}-${item.role}`} variant="secondary" className="bg-sky-900/30 text-sky-100 border border-sky-700/50">
@@ -14125,70 +14124,70 @@ export function SeasonComparison({
                           ))}
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs">
-                          <div className="rounded-md border border-slate-800 bg-slate-900/40 px-3 py-2">
-                            <div className="text-slate-500">Közvetlen ötösminta</div>
-                            <div className="text-slate-100 mt-1">{pregameOptimalLineup.best.exactSampleMinutes.toFixed(1)} perc</div>
-                            <div className="text-slate-500">{pregameOptimalLineup.best.exactNetPer40 !== null ? `${pregameOptimalLineup.best.exactNetPer40 >= 0 ? '+' : ''}${pregameOptimalLineup.best.exactNetPer40.toFixed(1)} net/40` : 'nincs direkt ötösminta'}</div>
+                          <div className="rounded-md border border-border-subtle bg-surface-2/40 px-3 py-2">
+                            <div className="text-muted">Közvetlen ötösminta</div>
+                            <div className="text-primary mt-1">{pregameOptimalLineup.best.exactSampleMinutes.toFixed(1)} perc</div>
+                            <div className="text-muted">{pregameOptimalLineup.best.exactNetPer40 !== null ? `${pregameOptimalLineup.best.exactNetPer40 >= 0 ? '+' : ''}${pregameOptimalLineup.best.exactNetPer40.toFixed(1)} net/40` : 'nincs direkt ötösminta'}</div>
                           </div>
-                          <div className="rounded-md border border-slate-800 bg-slate-900/40 px-3 py-2">
-                            <div className="text-slate-500">Páros / trió háttér</div>
-                            <div className="text-slate-100 mt-1">{pregameOptimalLineup.best.pairSampleMinutes.toFixed(1)} / {pregameOptimalLineup.best.trioSampleMinutes.toFixed(1)} perc</div>
-                            <div className="text-slate-500">szinergia-shrinkage a kis mintára</div>
+                          <div className="rounded-md border border-border-subtle bg-surface-2/40 px-3 py-2">
+                            <div className="text-muted">Páros / trió háttér</div>
+                            <div className="text-primary mt-1">{pregameOptimalLineup.best.pairSampleMinutes.toFixed(1)} / {pregameOptimalLineup.best.trioSampleMinutes.toFixed(1)} perc</div>
+                            <div className="text-muted">szinergia-shrinkage a kis mintára</div>
                           </div>
-                          <div className="rounded-md border border-slate-800 bg-slate-900/40 px-3 py-2">
-                            <div className="text-slate-500">Matchup-súlyok</div>
-                            <div className="text-slate-100 mt-1">Periméter {pregameOptimalLineup.matchupWeights.perimeter}%</div>
-                            <div className="text-slate-400">Festék {pregameOptimalLineup.matchupWeights.paint}% • Labdabiztonság {pregameOptimalLineup.matchupWeights.ballSecurity}%</div>
+                          <div className="rounded-md border border-border-subtle bg-surface-2/40 px-3 py-2">
+                            <div className="text-muted">Matchup-súlyok</div>
+                            <div className="text-primary mt-1">Periméter {pregameOptimalLineup.matchupWeights.perimeter}%</div>
+                            <div className="text-secondary">Festék {pregameOptimalLineup.matchupWeights.paint}% • Labdabiztonság {pregameOptimalLineup.matchupWeights.ballSecurity}%</div>
                           </div>
                         </div>
-                        <div className="space-y-1 text-xs text-slate-300">
+                        <div className="space-y-1 text-xs text-secondary">
                           {pregameOptimalLineup.best.reasons.map(reason => (
                             <div key={`pregame-optimal-reason-${reason}`}>• {reason}</div>
                           ))}
                         </div>
                         {pregameOptimalLineupNarrative && (
-                          <div className="rounded-md border border-slate-800 bg-slate-900/40 px-3 py-2 text-xs text-slate-200 leading-relaxed">
+                          <div className="rounded-md border border-border-subtle bg-surface-2/40 px-3 py-2 text-xs text-primary leading-relaxed">
                             {pregameOptimalLineupNarrative}
                           </div>
                         )}
                         {pregameOptimalLineup.alternates.length > 0 && (
-                          <div className="rounded-md border border-slate-800 bg-slate-900/40 px-3 py-2 space-y-2">
-                            <div className="text-xs uppercase tracking-wide text-slate-500">Alternatív kezdő variációk</div>
+                          <div className="rounded-md border border-border-subtle bg-surface-2/40 px-3 py-2 space-y-2">
+                            <div className="text-xs uppercase tracking-wide text-muted">Alternatív kezdő variációk</div>
                             {pregameOptimalLineup.alternates.map(option => (
-                              <div key={`pregame-alt-${option.key}`} className="text-xs text-slate-300">
-                                <span className="text-slate-100">{option.roleAssignments.map(item => `${item.role}: ${item.name}`).join(', ')}</span>
+                              <div key={`pregame-alt-${option.key}`} className="text-xs text-secondary">
+                                <span className="text-primary">{option.roleAssignments.map(item => `${item.role}: ${item.name}`).join(', ')}</span>
                                 {' '}• {option.reasons[0] ?? 'alternatív szerkezeti válasz'}
                               </div>
                             ))}
                           </div>
                         )}
-                        <div className="text-[11px] text-slate-500">
+                        <div className="text-[11px] text-muted">
                           Forrás: {pregameOptimalLineup.sourceGames > 0 ? `${pregameOptimalLineup.sourceGames} aggregált Kosarstat lineup-meccs` : 'egyéni és matchup profil'} • {pregameOptimalLineup.candidateCount} vizsgált ötös.
                         </div>
                       </div>
                     )}
 
                     {(pregameInjuryImpactEstimate.own.valPer36 > 0 || pregameInjuryImpactEstimate.opponent.valPer36 > 0) && (
-                      <div className="p-3 bg-slate-800/50 rounded-lg space-y-2">
-                        <div className="text-sm text-slate-300 font-medium">Hiányzások becsült hatása</div>
-                        <div className="text-xs text-slate-500">Csak legalább 4 meccses és 8 perc/meccs mintájú játékosokkal számolva.</div>
+                      <div className="p-3 bg-surface-2/50 rounded-lg space-y-2">
+                        <div className="text-sm text-secondary font-medium">Hiányzások becsült hatása</div>
+                        <div className="text-xs text-muted">Csak legalább 4 meccses és 8 perc/meccs mintájú játékosokkal számolva.</div>
                         <div className="grid grid-cols-1 gap-3 text-sm">
-                          <div className="bg-slate-900/40 border border-slate-800 rounded-md p-2">
-                            <div className="text-xs uppercase tracking-wide text-slate-500 mb-1">Saját kiesés</div>
-                            <div className="text-rose-200">-{pregameInjuryImpactEstimate.own.valPer36.toFixed(1)} VAL/36</div>
-                            <div className="text-rose-200">-{pregameInjuryImpactEstimate.own.pointsPer36.toFixed(1)} pont/36</div>
+                          <div className="bg-surface-1/60 border border-border-subtle rounded-md p-2">
+                            <div className="text-xs uppercase tracking-wide text-muted mb-1">Saját kiesés</div>
+                            <div className="text-negative">-{pregameInjuryImpactEstimate.own.valPer36.toFixed(1)} VAL/36</div>
+                            <div className="text-negative">-{pregameInjuryImpactEstimate.own.pointsPer36.toFixed(1)} pont/36</div>
                             {pregameInjuryImpactEstimate.own.coreNames.length > 0 && (
-                              <div className="text-xs text-slate-300 mt-1">
+                              <div className="text-xs text-secondary mt-1">
                                 Kulcs kiesők: {pregameInjuryImpactEstimate.own.coreNames.join(', ')}
                               </div>
                             )}
                           </div>
-                          <div className="bg-slate-900/40 border border-slate-800 rounded-md p-2">
-                            <div className="text-xs uppercase tracking-wide text-slate-500 mb-1">Ellenfél kiesés</div>
-                            <div className="text-emerald-200">-{pregameInjuryImpactEstimate.opponent.valPer36.toFixed(1)} VAL/36</div>
-                            <div className="text-emerald-200">-{pregameInjuryImpactEstimate.opponent.pointsPer36.toFixed(1)} pont/36</div>
+                          <div className="bg-surface-1/60 border border-border-subtle rounded-md p-2">
+                            <div className="text-xs uppercase tracking-wide text-muted mb-1">Ellenfél kiesés</div>
+                            <div className="text-positive">-{pregameInjuryImpactEstimate.opponent.valPer36.toFixed(1)} VAL/36</div>
+                            <div className="text-positive">-{pregameInjuryImpactEstimate.opponent.pointsPer36.toFixed(1)} pont/36</div>
                             {pregameInjuryImpactEstimate.opponent.coreNames.length > 0 && (
-                              <div className="text-xs text-slate-300 mt-1">
+                              <div className="text-xs text-secondary mt-1">
                                 Kulcs kiesők: {pregameInjuryImpactEstimate.opponent.coreNames.join(', ')}
                               </div>
                             )}
@@ -14199,22 +14198,22 @@ export function SeasonComparison({
                   </div>
                 </div>
 
-                <div className="text-xs uppercase tracking-[0.18em] text-slate-500 px-1">Matchup réteg</div>
+                <div className="text-xs uppercase tracking-[0.18em] text-muted px-1">Matchup réteg</div>
 
                 {(ownProfile || opponentProfile) && (
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                    <div className="p-3 bg-slate-800/50 rounded-lg space-y-3 lg:col-span-2">
-                      <div className="text-sm text-slate-300 font-medium">Játékstílus összevetés</div>
+                    <div className="p-3 bg-surface-2/50 rounded-lg space-y-3 lg:col-span-2">
+                      <div className="text-sm text-secondary font-medium">Játékstílus összevetés</div>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
-                          <div className="flex items-center justify-between text-xs text-slate-400">
+                          <div className="flex items-center justify-between text-xs text-secondary">
                             <span>{ownLabel}</span>
                             <span>Tempó: {ownProfile?.tempo ?? 'n.a.'}</span>
                           </div>
                           {ownProfile ? (
                             <div className="mt-2 space-y-2 text-sm">
                               <div>
-                                <div className="text-[11px] uppercase tracking-wide text-slate-500">Támadás</div>
+                                <div className="text-[11px] uppercase tracking-wide text-muted">Támadás</div>
                                 <div className="mt-1 flex flex-wrap gap-1">
                                   {ownOffenseLabels.map(item => (
                                     <Badge
@@ -14227,12 +14226,12 @@ export function SeasonComparison({
                                 </div>
                               </div>
                               <div>
-                                <div className="text-[11px] uppercase tracking-wide text-slate-500">Védekezés</div>
+                                <div className="text-[11px] uppercase tracking-wide text-muted">Védekezés</div>
                                 <div className="mt-1 flex flex-wrap gap-1">
                                   {ownDefenseLabels.map(item => (
                                     <Badge
                                       key={`own-defense-${item}`}
-                                      className="bg-emerald-600/20 text-emerald-200 border border-emerald-700/40"
+                                      className="bg-positive/15 text-positive border border-positive/30"
                                     >
                                       {item}
                                     </Badge>
@@ -14241,18 +14240,18 @@ export function SeasonComparison({
                               </div>
                             </div>
                           ) : (
-                            <div className="mt-2 text-xs text-slate-500">Ehhez a csapathoz még nincs profil adat.</div>
+                            <div className="mt-2 text-xs text-muted">Ehhez a csapathoz még nincs profil adat.</div>
                           )}
                         </div>
                         <div>
-                          <div className="flex items-center justify-between text-xs text-slate-400">
+                          <div className="flex items-center justify-between text-xs text-secondary">
                             <span>{opponentLabel}</span>
                             <span>Tempó: {opponentProfile?.tempo ?? 'n.a.'}</span>
                           </div>
                           {opponentProfile ? (
                             <div className="mt-2 space-y-2 text-sm">
                               <div>
-                                <div className="text-[11px] uppercase tracking-wide text-slate-500">Támadás</div>
+                                <div className="text-[11px] uppercase tracking-wide text-muted">Támadás</div>
                                 <div className="mt-1 flex flex-wrap gap-1">
                                   {opponentOffenseLabels.map(item => (
                                     <Badge
@@ -14265,12 +14264,12 @@ export function SeasonComparison({
                                 </div>
                               </div>
                               <div>
-                                <div className="text-[11px] uppercase tracking-wide text-slate-500">Védekezés</div>
+                                <div className="text-[11px] uppercase tracking-wide text-muted">Védekezés</div>
                                 <div className="mt-1 flex flex-wrap gap-1">
                                   {opponentDefenseLabels.map(item => (
                                     <Badge
                                       key={`opp-defense-${item}`}
-                                      className="bg-emerald-600/20 text-emerald-200 border border-emerald-700/40"
+                                      className="bg-positive/15 text-positive border border-positive/30"
                                     >
                                       {item}
                                     </Badge>
@@ -14279,7 +14278,7 @@ export function SeasonComparison({
                               </div>
                             </div>
                           ) : (
-                            <div className="mt-2 text-xs text-slate-500">Ehhez az ellenfélhez nincs profil adat.</div>
+                            <div className="mt-2 text-xs text-muted">Ehhez az ellenfélhez nincs profil adat.</div>
                           )}
                         </div>
                       </div>
@@ -14289,11 +14288,11 @@ export function SeasonComparison({
 
                 <div className="space-y-4">
                   {shotProfileContext && (
-                    <div className="p-3 bg-slate-800/50 rounded-lg space-y-3">
-                    <div className="text-sm text-slate-300 font-medium">Dobástérkép matchup</div>
+                    <div className="p-3 bg-surface-2/50 rounded-lg space-y-3">
+                    <div className="text-sm text-secondary font-medium">Dobástérkép matchup</div>
                     <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                      <div className="bg-slate-900/40 border border-slate-800 rounded-md p-2">
-                        <div className="text-xs uppercase tracking-wide text-slate-500 mb-2">Zónaarány összevetés</div>
+                      <div className="bg-surface-1/60 border border-border-subtle rounded-md p-2">
+                        <div className="text-xs uppercase tracking-wide text-muted mb-2">Zónaarány összevetés</div>
                         <ResponsiveContainer width="100%" height={244}>
                           <BarChart data={shotProfileChartData} margin={{ top: 8, right: 8, left: 8, bottom: 22 }}>
                             <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
@@ -14318,21 +14317,21 @@ export function SeasonComparison({
                             <Bar dataKey="opponentRate" name={`${opponentLabel} zónaarány`} fill="#f97316" radius={[6, 6, 0, 0]} />
                           </BarChart>
                         </ResponsiveContainer>
-                        <div className="text-xs text-slate-500 mt-1">A sávok a szezonos dobásmegoszlást mutatják zónánként.</div>
+                        <div className="text-xs text-muted mt-1">A sávok a szezonos dobásmegoszlást mutatják zónánként.</div>
                       </div>
-                      <div className="bg-slate-900/40 border border-slate-800 rounded-md p-2">
-                        <div className="text-xs uppercase tracking-wide text-slate-500 mb-2">Liga-delta heatmap</div>
+                      <div className="bg-surface-1/60 border border-border-subtle rounded-md p-2">
+                        <div className="text-xs uppercase tracking-wide text-muted mb-2">Liga-delta heatmap</div>
                         <PostgameZoneHeatmapChart
                           cells={shotProfileHeatmapCells}
                           interpretation="relative"
                           perspectiveLabel={ownLabel}
                           opponentLabel={opponentLabel}
                         />
-                        <div className="text-xs text-slate-500 mt-1">Pozitív érték: saját liga-delta mínusz ellenfél liga-delta ugyanabban a zónában. Ezért lehet piros akkor is, ha az ellenfél ligaátlag felett dob az adott zónából.</div>
+                        <div className="text-xs text-muted mt-1">Pozitív érték: saját liga-delta mínusz ellenfél liga-delta ugyanabban a zónában. Ezért lehet piros akkor is, ha az ellenfél ligaátlag felett dob az adott zónából.</div>
                       </div>
                     </div>
-                    <div className="bg-slate-900/40 border border-slate-800 rounded-md p-2">
-                      <div className="text-xs uppercase tracking-wide text-slate-500 mb-2">Offense vs defense zóna-matchup</div>
+                    <div className="bg-surface-1/60 border border-border-subtle rounded-md p-2">
+                      <div className="text-xs uppercase tracking-wide text-muted mb-2">Offense vs defense zóna-matchup</div>
                       <ResponsiveContainer width="100%" height={252}>
                         <BarChart data={offenseDefenseZoneData} margin={{ top: 8, right: 8, left: 8, bottom: 14 }}>
                           <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
@@ -14351,58 +14350,58 @@ export function SeasonComparison({
                           <Bar dataKey="opponentAttackEdge" name={`${opponentLabel} támadás vs ${ownLabel} engedett`} fill="#f97316" radius={[6, 6, 0, 0]} />
                         </BarChart>
                       </ResponsiveContainer>
-                      <div className="text-xs text-slate-500 mt-1">A pozitív érték zónaszinten kedvezőbb támadás-védekezés matchupot jelez az adott oldalon.</div>
+                      <div className="text-xs text-muted mt-1">A pozitív érték zónaszinten kedvezőbb támadás-védekezés matchupot jelez az adott oldalon.</div>
                     </div>
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 text-sm">
-                      <div className="bg-slate-900/40 border border-slate-800 rounded-md p-2">
-                        <div className="text-xs uppercase tracking-wide text-slate-500 mb-2">Saját zónafegyverek</div>
+                      <div className="bg-surface-1/60 border border-border-subtle rounded-md p-2">
+                        <div className="text-xs uppercase tracking-wide text-muted mb-2">Saját zónafegyverek</div>
                         {shotProfileContext.ownTopZones.length > 0 ? shotProfileContext.ownTopZones.map(zone => (
-                          <div key={`own-shot-zone-${zone.label}`} className="flex items-center justify-between py-1 border-b border-slate-800 last:border-0">
+                          <div key={`own-shot-zone-${zone.label}`} className="flex items-center justify-between py-1 border-b border-border-subtle last:border-0">
                             <div>
-                              <div className="text-slate-100">{zone.label}</div>
-                              <div className="text-xs text-slate-400">Arány: {zone.rate.toFixed(1)}% • Hatékonyság: {zone.pct.toFixed(1)}%</div>
+                              <div className="text-primary">{zone.label}</div>
+                              <div className="text-xs text-secondary">Arány: {zone.rate.toFixed(1)}% • Hatékonyság: {zone.pct.toFixed(1)}%</div>
                             </div>
                             <div className="text-right text-xs">
-                              <div className={zone.rateDeltaVsLeague >= 0 ? 'text-emerald-300' : 'text-rose-300'}>
+                              <div className={zone.rateDeltaVsLeague >= 0 ? 'text-positive' : 'text-negative'}>
                                 {zone.rateDeltaVsLeague >= 0 ? '+' : ''}{zone.rateDeltaVsLeague.toFixed(1)} pp ráta
                               </div>
-                              <div className={zone.pctDeltaVsLeague >= 0 ? 'text-emerald-300' : 'text-rose-300'}>
+                              <div className={zone.pctDeltaVsLeague >= 0 ? 'text-positive' : 'text-negative'}>
                                 {zone.pctDeltaVsLeague >= 0 ? '+' : ''}{zone.pctDeltaVsLeague.toFixed(1)} pp liga vs
                               </div>
                             </div>
                           </div>
-                        )) : <div className="text-slate-500">Nincs elég saját shot-profile minta.</div>}
+                        )) : <div className="text-muted">Nincs elég saját shot-profile minta.</div>}
                       </div>
-                      <div className="bg-slate-900/40 border border-slate-800 rounded-md p-2">
-                        <div className="text-xs uppercase tracking-wide text-slate-500 mb-2">Ellenfél zónafegyverek</div>
+                      <div className="bg-surface-1/60 border border-border-subtle rounded-md p-2">
+                        <div className="text-xs uppercase tracking-wide text-muted mb-2">Ellenfél zónafegyverek</div>
                         {shotProfileContext.opponentTopZones.length > 0 ? shotProfileContext.opponentTopZones.map(zone => (
-                          <div key={`opp-shot-zone-${zone.label}`} className="flex items-center justify-between py-1 border-b border-slate-800 last:border-0">
+                          <div key={`opp-shot-zone-${zone.label}`} className="flex items-center justify-between py-1 border-b border-border-subtle last:border-0">
                             <div>
-                              <div className="text-slate-100">{zone.label}</div>
-                              <div className="text-xs text-slate-400">Arány: {zone.rate.toFixed(1)}% • Hatékonyság: {zone.pct.toFixed(1)}%</div>
+                              <div className="text-primary">{zone.label}</div>
+                              <div className="text-xs text-secondary">Arány: {zone.rate.toFixed(1)}% • Hatékonyság: {zone.pct.toFixed(1)}%</div>
                             </div>
                             <div className="text-right text-xs">
-                              <div className={zone.rateDeltaVsLeague >= 0 ? 'text-orange-300' : 'text-slate-400'}>
+                              <div className={zone.rateDeltaVsLeague >= 0 ? 'text-orange-300' : 'text-secondary'}>
                                 {zone.rateDeltaVsLeague >= 0 ? '+' : ''}{zone.rateDeltaVsLeague.toFixed(1)} pp ráta
                               </div>
-                              <div className={zone.pctDeltaVsLeague >= 0 ? 'text-orange-300' : 'text-slate-400'}>
+                              <div className={zone.pctDeltaVsLeague >= 0 ? 'text-orange-300' : 'text-secondary'}>
                                 {zone.pctDeltaVsLeague >= 0 ? '+' : ''}{zone.pctDeltaVsLeague.toFixed(1)} pp liga vs
                               </div>
                             </div>
                           </div>
-                        )) : <div className="text-slate-500">Nincs elég ellenfél shot-profile minta.</div>}
+                        )) : <div className="text-muted">Nincs elég ellenfél shot-profile minta.</div>}
                       </div>
                     </div>
                     {(shotProfileContext.notes.length > 0 || shotProfileContext.defenseNotes.length > 0 || shotProfileContext.clashZones.length > 0) && (
-                      <div className="bg-slate-900/40 border border-slate-800 rounded-md p-2 space-y-1">
+                      <div className="bg-surface-1/60 border border-border-subtle rounded-md p-2 space-y-1">
                         {shotProfileContext.notes.map(note => (
-                          <div key={note} className="text-xs text-slate-300">• {note}</div>
+                          <div key={note} className="text-xs text-secondary">• {note}</div>
                         ))}
                         {shotProfileContext.defenseNotes.map(note => (
-                          <div key={note} className="text-xs text-amber-200">• {note}</div>
+                          <div key={note} className="text-xs text-warning">• {note}</div>
                         ))}
                         {shotProfileContext.clashZones.length > 0 && (
-                          <div className="text-xs text-amber-200">
+                          <div className="text-xs text-warning">
                             Közös hangsúlyzónák: {shotProfileContext.clashZones.join(', ')}
                           </div>
                         )}
@@ -14412,14 +14411,14 @@ export function SeasonComparison({
                   )}
 
                   <div className="space-y-4">
-                    <div className="p-3 bg-slate-800/50 rounded-lg">
-                      <div className="text-sm text-slate-300 font-medium mb-2">Kulcsjátékosok</div>
+                    <div className="p-3 bg-surface-2/50 rounded-lg">
+                      <div className="text-sm text-secondary font-medium mb-2">Kulcsjátékosok</div>
                       <div className="grid grid-cols-1 2xl:grid-cols-2 gap-3 mb-4">
                         {[
                           {
                             key: 'own',
                             title: ownLabel,
-                            accentClass: 'border-emerald-800/50 bg-emerald-950/10',
+                            accentClass: 'border-positive/30 bg-positive/10',
                             groups: pregameReport.ownKeyPlayers,
                           },
                           {
@@ -14430,11 +14429,11 @@ export function SeasonComparison({
                           },
                         ].map(section => (
                           <div key={section.key} className={`rounded-md border p-3 space-y-2 ${section.accentClass}`}>
-                            <div className="text-xs uppercase tracking-wide text-slate-400">{section.title}</div>
-                            <div className="text-xs text-slate-300">Pontfelelősök: <span className="text-slate-100">{section.groups.primaryScorers.join(', ') || '-'}</span></div>
-                            <div className="text-xs text-slate-300">Szervezők: <span className="text-slate-100">{section.groups.primaryPlaymakers.join(', ') || '-'}</span></div>
-                            <div className="text-xs text-slate-300">Stretch: <span className="text-slate-100">{section.groups.stretchThreats.join(', ') || '-'}</span></div>
-                            <div className="text-xs text-slate-300">Mismatch: <span className="text-slate-100">{section.groups.mismatchCandidates.join(', ') || '-'}</span></div>
+                            <div className="text-xs uppercase tracking-wide text-secondary">{section.title}</div>
+                            <div className="text-xs text-secondary">Pontfelelősök: <span className="text-primary">{section.groups.primaryScorers.join(', ') || '-'}</span></div>
+                            <div className="text-xs text-secondary">Szervezők: <span className="text-primary">{section.groups.primaryPlaymakers.join(', ') || '-'}</span></div>
+                            <div className="text-xs text-secondary">Stretch: <span className="text-primary">{section.groups.stretchThreats.join(', ') || '-'}</span></div>
+                            <div className="text-xs text-secondary">Mismatch: <span className="text-primary">{section.groups.mismatchCandidates.join(', ') || '-'}</span></div>
                           </div>
                         ))}
                       </div>
@@ -14446,13 +14445,13 @@ export function SeasonComparison({
                             <div key={`${item.teamKey}-${player.playerId}`} className={`rounded-md border p-3 space-y-2 ${item.accentClass}`}>
                               <div className="flex items-start justify-between gap-2">
                                 <div>
-                                  <div className="text-[11px] uppercase tracking-wide text-slate-500">{item.teamLabel}</div>
-                                  <div className="text-sm font-medium text-slate-100">{player.name}</div>
-                                  <div className="text-[11px] text-slate-500">{player.positionLabel} • {player.attempts} kísérlet</div>
+                                  <div className="text-[11px] uppercase tracking-wide text-muted">{item.teamLabel}</div>
+                                  <div className="text-sm font-medium text-primary">{player.name}</div>
+                                  <div className="text-[11px] text-muted">{player.positionLabel} • {player.attempts} kísérlet</div>
                                 </div>
                                 <div className="text-right">
-                                  <div className="text-[11px] text-slate-500">FG%</div>
-                                  <div className="text-sm text-amber-200">{player.fgPct.toFixed(1)}%</div>
+                                  <div className="text-[11px] text-muted">FG%</div>
+                                  <div className="text-sm text-warning">{player.fgPct.toFixed(1)}%</div>
                                 </div>
                               </div>
                               <div className="flex flex-wrap gap-1">
@@ -14460,29 +14459,29 @@ export function SeasonComparison({
                                   <Badge
                                     key={`${item.teamKey}-${player.playerId}-${zone.label}`}
                                     variant="secondary"
-                                    className="border border-slate-700 bg-slate-800/70 text-[11px] text-slate-200"
+                                    className="border border-border-subtle bg-surface-2/70 text-[11px] text-primary"
                                   >
                                     {zone.label} {zone.rate.toFixed(0)}%
                                   </Badge>
                                 ))}
                               </div>
-                              <div className="text-[11px] text-slate-400">{player.profileNote} • {player.sampleNote}</div>
+                              <div className="text-[11px] text-secondary">{player.profileNote} • {player.sampleNote}</div>
                               <div className="space-y-2">
                                 {player.zones.map(zone => (
                                   <div key={`${item.teamKey}-${player.playerId}-${zone.key}`} className="space-y-1">
                                     <div className="flex items-center justify-between text-[11px]">
-                                      <span className="text-slate-300">{zone.label}</span>
-                                      <span className="text-slate-500">{zone.attempts} kís.</span>
+                                      <span className="text-secondary">{zone.label}</span>
+                                      <span className="text-muted">{zone.attempts} kís.</span>
                                     </div>
-                                    <div className="h-2 rounded-full bg-slate-800 overflow-hidden">
+                                    <div className="h-2 rounded-full bg-surface-2 overflow-hidden">
                                       <div
                                         className={`${zone.fillClass} h-full rounded-full`}
                                         style={{ width: `${zone.attempts > 0 ? Math.max(zone.rate, 6) : 0}%` }}
                                       />
                                     </div>
                                     <div className="flex items-center justify-between text-[11px]">
-                                      <span className="text-slate-500">Ráta {zone.rate.toFixed(1)}% • FG {zone.pct.toFixed(1)}%</span>
-                                      <span className={zone.rateDeltaVsLeague >= 0 ? 'text-emerald-300' : 'text-rose-300'}>
+                                      <span className="text-muted">Ráta {zone.rate.toFixed(1)}% • FG {zone.pct.toFixed(1)}%</span>
+                                      <span className={zone.rateDeltaVsLeague >= 0 ? 'text-positive' : 'text-negative'}>
                                         {zone.rateDeltaVsLeague >= 0 ? '+' : ''}{zone.rateDeltaVsLeague.toFixed(1)} pp liga
                                       </span>
                                     </div>
@@ -14496,25 +14495,25 @@ export function SeasonComparison({
 
                       {pregameKeyMatchups.length > 0 && (
                         <div className="mt-4 space-y-2">
-                          <div className="text-sm text-slate-300 font-medium">Kritikus párosítások</div>
+                          <div className="text-sm text-secondary font-medium">Kritikus párosítások</div>
                           <div className="grid grid-cols-1 xl:grid-cols-3 gap-3">
                             {pregameKeyMatchups.map(item => (
-                              <div key={`${item.title}-${item.ownPlayer}-${item.opponentPlayer}`} className="rounded-md border border-slate-800 bg-slate-900/40 p-3 space-y-2">
+                              <div key={`${item.title}-${item.ownPlayer}-${item.opponentPlayer}`} className="rounded-md border border-border-subtle bg-surface-2/40 p-3 space-y-2">
                                 <div className="flex items-center justify-between gap-2">
-                                  <div className="text-sm text-slate-100 font-medium">{item.title}</div>
+                                  <div className="text-sm text-primary font-medium">{item.title}</div>
                                   <div className={`text-[11px] px-2 py-1 rounded-full border ${
                                     item.edge === 'own'
-                                      ? 'border-emerald-700/50 bg-emerald-950/30 text-emerald-200'
+                                      ? 'border-positive/30 bg-positive/15 text-positive'
                                       : item.edge === 'opponent'
-                                        ? 'border-rose-700/50 bg-rose-950/30 text-rose-200'
-                                        : 'border-slate-700 bg-slate-800 text-slate-300'
+                                        ? 'border-negative/30 bg-negative/15 text-negative'
+                                        : 'border-border-subtle bg-surface-2 text-secondary'
                                   }`}>
                                     {item.edge === 'own' ? 'Saját él' : item.edge === 'opponent' ? 'Ellenfél él' : 'Kiegyenlített'}
                                   </div>
                                 </div>
-                                <div className="text-xs text-slate-400">{item.ownPlayer} vs {item.opponentPlayer}</div>
-                                <div className="text-xs text-slate-300">{item.summary}</div>
-                                <div className="text-xs text-amber-200">Taktikai kulcs: {item.tacticalNote}</div>
+                                <div className="text-xs text-secondary">{item.ownPlayer} vs {item.opponentPlayer}</div>
+                                <div className="text-xs text-secondary">{item.summary}</div>
+                                <div className="text-xs text-warning">Taktikai kulcs: {item.tacticalNote}</div>
                               </div>
                             ))}
                           </div>
@@ -14523,60 +14522,60 @@ export function SeasonComparison({
                     </div>
 
                     <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                      <div className="p-3 bg-slate-800/50 rounded-lg">
-                        <div className="text-sm text-slate-300 font-medium mb-2">Fókuszpontok</div>
+                      <div className="p-3 bg-surface-2/50 rounded-lg">
+                        <div className="text-sm text-secondary font-medium mb-2">Fókuszpontok</div>
                         {topFocusPoints.length > 0 ? (
                           <div className="space-y-2">
-                            {topFocusPoints.map(item => <div key={item} className="text-sm text-slate-200">• {item}</div>)}
+                            {topFocusPoints.map(item => <div key={item} className="text-sm text-primary">• {item}</div>)}
                             {secondaryFocusPoints.length > 0 && (
-                              <div className="pt-2 border-t border-slate-800 text-xs text-slate-500">
+                              <div className="pt-2 border-t border-border-subtle text-xs text-muted">
                                 További pontok: {secondaryFocusPoints.join(' • ')}
                               </div>
                             )}
                           </div>
                         ) : (
-                          <div className="text-sm text-slate-400">Nincs kiemelt fókuszpont.</div>
+                          <div className="text-sm text-secondary">Nincs kiemelt fókuszpont.</div>
                         )}
                       </div>
 
-                      <div className="p-3 bg-slate-800/50 rounded-lg">
-                        <div className="text-sm text-slate-300 font-medium mb-2">Kockázati térkép</div>
+                      <div className="p-3 bg-surface-2/50 rounded-lg">
+                        <div className="text-sm text-secondary font-medium mb-2">Kockázati térkép</div>
                         <div className="grid grid-cols-1 gap-3 text-sm">
                           <div>
-                            <div className="text-xs uppercase tracking-wide text-slate-500 mb-1">Fő veszélyek</div>
+                            <div className="text-xs uppercase tracking-wide text-muted mb-1">Fő veszélyek</div>
                             {pregameReport.threats.length > 0 ? (
-                              pregameReport.threats.map(item => <div key={item} className="text-slate-200">• {item}</div>)
+                              pregameReport.threats.map(item => <div key={item} className="text-primary">• {item}</div>)
                             ) : (
-                              <div className="text-slate-400">Kiegyensúlyozott fegyvertár, extrém veszély nélkül.</div>
+                              <div className="text-secondary">Kiegyensúlyozott fegyvertár, extrém veszély nélkül.</div>
                             )}
                           </div>
                           <div>
-                            <div className="text-xs uppercase tracking-wide text-slate-500 mb-1">Feltételes sebezhetőségek</div>
+                            <div className="text-xs uppercase tracking-wide text-muted mb-1">Feltételes sebezhetőségek</div>
                             {pregameReport.vulnerabilities.length > 0 ? (
                               <>
-                                {pregameReport.vulnerabilities.map(item => <div key={item} className="text-slate-200">• {item}</div>)}
+                                {pregameReport.vulnerabilities.map(item => <div key={item} className="text-primary">• {item}</div>)}
                                 {pregameVulnerabilityPlaybook && (
-                                  <div className="mt-2 rounded-md border border-amber-700/40 bg-amber-950/20 px-3 py-2 text-xs text-amber-100 space-y-1">
+                                  <div className="mt-2 rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning space-y-1">
                                     <div>
                                       {pregameVulnerabilityPlaybook.title} ({ownLabel} {pregameVulnerabilityPlaybook.ownFtRatePct.toFixed(1)}% FT rate vs {opponentLabel} {pregameVulnerabilityPlaybook.opponentFtRatePct.toFixed(1)}%)
                                     </div>
                                     {pregameVulnerabilityPlaybook.actions.map(action => (
                                       <div key={action}>• {action}</div>
                                     ))}
-                                    <div className="text-amber-200">Várható hatás: {pregameVulnerabilityPlaybook.expectedImpact}</div>
+                                    <div className="text-warning">Várható hatás: {pregameVulnerabilityPlaybook.expectedImpact}</div>
                                   </div>
                                 )}
                               </>
                             ) : (
-                              <div className="text-slate-400">Matchupfüggő, rendszerszintű rés nem látszik.</div>
+                              <div className="text-secondary">Matchupfüggő, rendszerszintű rés nem látszik.</div>
                             )}
                           </div>
                           <div>
-                            <div className="text-xs uppercase tracking-wide text-slate-500 mb-1">Saját kockázati pontok</div>
+                            <div className="text-xs uppercase tracking-wide text-muted mb-1">Saját kockázati pontok</div>
                             {riskFlags.length > 0 ? (
-                              riskFlags.map(item => <div key={item} className="text-slate-200">• {item}</div>)
+                              riskFlags.map(item => <div key={item} className="text-primary">• {item}</div>)
                             ) : (
-                              <div className="text-slate-400">Általános faultterhelés- és lepattanó-kontroll figyelmeztetés, konkrét riasztás nélkül.</div>
+                              <div className="text-secondary">Általános faultterhelés- és lepattanó-kontroll figyelmeztetés, konkrét riasztás nélkül.</div>
                             )}
                           </div>
                         </div>
@@ -14585,10 +14584,10 @@ export function SeasonComparison({
                   </div>
                 </div>
 
-                <div className="text-xs uppercase tracking-[0.18em] text-slate-500 px-1">Interaktív modellezés</div>
+                <div className="text-xs uppercase tracking-[0.18em] text-muted px-1">Interaktív modellezés</div>
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                  <div className="p-3 bg-slate-800/50 rounded-lg">
-                    <div className="text-sm text-slate-300 font-medium mb-2">Támadó-védő profil mutatók</div>
+                  <div className="p-3 bg-surface-2/50 rounded-lg">
+                    <div className="text-sm text-secondary font-medium mb-2">Támadó-védő profil mutatók</div>
                     <ResponsiveContainer width="100%" height={248}>
                       <BarChart data={pregameStyleMetricChartData} margin={{ top: 8, right: 8, left: 8, bottom: 12 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
@@ -14607,15 +14606,15 @@ export function SeasonComparison({
                         <Bar dataKey="opponent" name={opponentLabel} fill="#f97316" radius={[6, 6, 0, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
-                    <div className="text-xs text-slate-500 mt-1">
+                    <div className="text-xs text-muted mt-1">
                       Tempó, tripla-, TO- és FT-mutatók összevetése gyors meccsképhez.
                     </div>
                   </div>
 
-                  <div className="p-3 bg-slate-800/50 rounded-lg space-y-3">
-                    <div className="text-sm text-slate-300 font-medium">Interaktív fókusz prioritás</div>
-                    <div className="text-xs text-slate-400">Súlyozd a meccsterv hangsúlyait; a kontrollált és a magas varianciás forgatókönyv azonnal újraszámolódik.</div>
-                    <div className="space-y-2 text-xs text-slate-300">
+                  <div className="p-3 bg-surface-2/50 rounded-lg space-y-3">
+                    <div className="text-sm text-secondary font-medium">Interaktív fókusz prioritás</div>
+                    <div className="text-xs text-secondary">Súlyozd a meccsterv hangsúlyait; a kontrollált és a magas varianciás forgatókönyv azonnal újraszámolódik.</div>
+                    <div className="space-y-2 text-xs text-secondary">
                       <label className="block">
                         <div className="flex justify-between mb-1"><span>Labdanyomás</span><span>{pressureWeight}%</span></div>
                         <input
@@ -14625,7 +14624,7 @@ export function SeasonComparison({
                           step={1}
                           value={pressureWeight}
                           onChange={event => setPregamePressureWeight(Math.min(Number(event.target.value), 100 - perimeterWeight))}
-                          className="w-full accent-amber-400"
+                          className="w-full accent-warning"
                         />
                       </label>
                       <label className="block">
@@ -14642,17 +14641,17 @@ export function SeasonComparison({
                       </label>
                       <div className="flex justify-between"><span>Festék kontroll (auto)</span><span>{paintWeight}%</span></div>
                     </div>
-                    <div className="rounded-md border border-slate-800 bg-slate-900/40 px-3 py-2 text-xs text-slate-300 space-y-1">
+                    <div className="rounded-md border border-border-subtle bg-surface-2/40 px-3 py-2 text-xs text-secondary space-y-1">
                       <div>Slider-hatás: labdanyomás emelése a press, visszazárás és TO-kontroll hangsúlyát növeli.</div>
                       <div>Periméter kontroll emelése a closeout-fegyelmet és a tiszta triplahelyzetek elvételét priorizálja.</div>
                       <div>Festék kontroll emelése a help-rotációt, rim protectiont és belső segítséget tolja előtérbe.</div>
                       {recommendedFocusPreset && (
-                        <div className="text-amber-200">
+                        <div className="text-warning">
                           Ajánlott preset ehhez a matchuphoz: {recommendedFocusPreset.label} ({recommendedFocusPreset.pressure}-{recommendedFocusPreset.perimeter}-{recommendedFocusPreset.paint}).
                         </div>
                       )}
                       {(controlledScenario || highVarianceScenario) && (
-                        <div className="text-slate-400">
+                        <div className="text-secondary">
                           Aktuális hatás: kontrollált forgatókönyv {controlledScenario ? `${controlledScenario.deltaVsBase >= 0 ? '+' : ''}${controlledScenario.deltaVsBase.toFixed(1)} pp` : 'n.a.'}, magas variancia {highVarianceScenario ? `${highVarianceScenario.deltaVsBase >= 0 ? '+' : ''}${highVarianceScenario.deltaVsBase.toFixed(1)} pp` : 'n.a.'} az alapmodellhez képest.
                         </div>
                       )}
@@ -14681,18 +14680,18 @@ export function SeasonComparison({
                 </div>
 
                 {efficiencyBaseline && efficiencyModel && (
-                  <div className="p-3 bg-slate-800/50 rounded-lg space-y-4">
+                  <div className="p-3 bg-surface-2/50 rounded-lg space-y-4">
                     <div className="flex items-center justify-between gap-3 flex-wrap">
                       <div>
-                        <div className="text-sm text-slate-300 font-medium">Hatékonysági sandbox</div>
-                        <div className="text-xs text-slate-500 mt-1">
+                        <div className="text-sm text-secondary font-medium">Hatékonysági sandbox</div>
+                        <div className="text-xs text-muted mt-1">
                           Szezonos 2PA, 3PA és FTA volumen mellett modellezi, mennyit mozdít a ponttermelésen a dobáshatékonyság változása.
                         </div>
                       </div>
                       <Button
                         type="button"
                         variant="outline"
-                        className="h-8 border-slate-700 bg-slate-900/40 text-slate-200"
+                        className="h-8 border-border-subtle bg-surface-1/60 text-primary"
                         onClick={() => setPregameEfficiencyInputs({
                           ownPossessions: efficiencyBaseline.own.possessions,
                           ownThreeSharePct: efficiencyBaseline.own.threeSharePct,
@@ -14717,24 +14716,24 @@ export function SeasonComparison({
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
-                      <div className="rounded-lg border border-slate-800 bg-slate-900/40 px-3 py-2">
-                        <div className="text-slate-500 uppercase tracking-wide">Várható nettó pontkülönbség</div>
-                        <div className={`mt-1 text-lg font-semibold ${efficiencyModel.netExpectedPoints >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
+                      <div className="rounded-lg border border-border-subtle bg-surface-2/40 px-3 py-2">
+                        <div className="text-muted uppercase tracking-wide">Várható nettó pontkülönbség</div>
+                        <div className={`mt-1 text-lg font-semibold ${efficiencyModel.netExpectedPoints >= 0 ? 'text-positive' : 'text-negative'}`}>
                           {efficiencyModel.netExpectedPoints >= 0 ? '+' : ''}{efficiencyModel.netExpectedPoints.toFixed(1)}
                         </div>
-                        <div className="text-slate-500">fix volumen, állított hatékonyság</div>
+                        <div className="text-muted">fix volumen, állított hatékonyság</div>
                       </div>
-                      <div className="rounded-lg border border-slate-800 bg-slate-900/40 px-3 py-2">
-                        <div className="text-slate-500 uppercase tracking-wide">Ellenfél pontcsökkentés</div>
+                      <div className="rounded-lg border border-border-subtle bg-surface-2/40 px-3 py-2">
+                        <div className="text-muted uppercase tracking-wide">Ellenfél pontcsökkentés</div>
                         <div className="mt-1 text-lg font-semibold text-cyan-300">{efficiencyModel.opponentSuppression.toFixed(1)}</div>
-                        <div className="text-slate-500">pont/meccs a bázishoz képest</div>
+                        <div className="text-muted">pont/meccs a bázishoz képest</div>
                       </div>
-                      <div className="rounded-lg border border-slate-800 bg-slate-900/40 px-3 py-2">
-                        <div className="text-slate-500 uppercase tracking-wide">Nettó eltolás</div>
-                        <div className={`mt-1 text-lg font-semibold ${efficiencyModel.netDeltaVsBaseline >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
+                      <div className="rounded-lg border border-border-subtle bg-surface-2/40 px-3 py-2">
+                        <div className="text-muted uppercase tracking-wide">Nettó eltolás</div>
+                        <div className={`mt-1 text-lg font-semibold ${efficiencyModel.netDeltaVsBaseline >= 0 ? 'text-positive' : 'text-negative'}`}>
                           {efficiencyModel.netDeltaVsBaseline >= 0 ? '+' : ''}{efficiencyModel.netDeltaVsBaseline.toFixed(1)}
                         </div>
-                        <div className="text-slate-500">pont/meccs a bázis sandboxhoz képest</div>
+                        <div className="text-muted">pont/meccs a bázis sandboxhoz képest</div>
                       </div>
                     </div>
 
@@ -14742,7 +14741,7 @@ export function SeasonComparison({
                       {[
                         {
                           label: ownLabel,
-                          toneClass: 'accent-emerald-400',
+                          toneClass: 'accent-positive',
                           baseline: efficiencyBaseline.own,
                           projection: efficiencyModel.own,
                           values: {
@@ -14789,21 +14788,21 @@ export function SeasonComparison({
                           onFtPct: (value: number) => setPregameEfficiencyInputs(current => ({ ...current, opponentFtPct: value })),
                         },
                       ].map(teamSandbox => (
-                        <div key={teamSandbox.label} className="rounded-lg border border-slate-800 bg-slate-900/40 p-3 space-y-3">
+                        <div key={teamSandbox.label} className="rounded-lg border border-border-subtle bg-surface-2/40 p-3 space-y-3">
                           <div className="flex items-start justify-between gap-3">
                             <div>
-                              <div className="text-sm font-medium text-slate-100">{teamSandbox.label}</div>
-                              <div className="text-xs text-slate-500 mt-1">
+                              <div className="text-sm font-medium text-primary">{teamSandbox.label}</div>
+                              <div className="text-xs text-muted mt-1">
                                   Bázis: {teamSandbox.baseline.possessions.toFixed(1)} poss • {teamSandbox.baseline.twoPA.toFixed(1)} 2PA • {teamSandbox.baseline.threePA.toFixed(1)} 3PA • {teamSandbox.baseline.fta.toFixed(1)} FTA
                               </div>
                             </div>
-                            <div className="text-right text-xs text-slate-400">
+                            <div className="text-right text-xs text-secondary">
                               <div>Valós PPG: {teamSandbox.baseline.actualPointsPerGame.toFixed(1)}</div>
                                 <div>Bázis PPP: {teamSandbox.baseline.ppp.toFixed(3)}</div>
                             </div>
                           </div>
 
-                          <div className="space-y-2 text-xs text-slate-300">
+                          <div className="space-y-2 text-xs text-secondary">
                               <label className="block">
                                 <div className="flex justify-between mb-1"><span>Possz./meccs</span><span>{teamSandbox.values.possessions.toFixed(1)}</span></div>
                                 <input
@@ -14827,7 +14826,7 @@ export function SeasonComparison({
                                   onChange={event => teamSandbox.onThreeSharePct(clampPercent(Number(event.target.value), 15, 65))}
                                   className={`w-full ${teamSandbox.toneClass}`}
                                 />
-                                <div className="mt-1 text-[11px] text-slate-500">
+                                <div className="mt-1 text-[11px] text-muted">
                                   2PA arány automatikusan: {(100 - teamSandbox.values.threeSharePct).toFixed(1)}%
                                 </div>
                               </label>
@@ -14906,29 +14905,29 @@ export function SeasonComparison({
                           </div>
 
                           <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 text-xs">
-                            <div className="rounded-md border border-slate-800 bg-slate-950/30 px-3 py-2">
-                              <div className="text-slate-500">Várható pont</div>
-                              <div className="mt-1 text-slate-100 font-medium">{teamSandbox.projection.expectedPoints.toFixed(1)}</div>
-                              <div className={teamSandbox.projection.deltaPoints >= 0 ? 'text-emerald-300' : 'text-rose-300'}>
+                            <div className="rounded-md border border-border-subtle bg-base/50 px-3 py-2">
+                              <div className="text-muted">Várható pont</div>
+                              <div className="mt-1 text-primary font-medium">{teamSandbox.projection.expectedPoints.toFixed(1)}</div>
+                              <div className={teamSandbox.projection.deltaPoints >= 0 ? 'text-positive' : 'text-negative'}>
                                 {teamSandbox.projection.deltaPoints >= 0 ? '+' : ''}{teamSandbox.projection.deltaPoints.toFixed(1)} vs bázis
                               </div>
                             </div>
-                            <div className="rounded-md border border-slate-800 bg-slate-950/30 px-3 py-2">
-                              <div className="text-slate-500">Származtatott eFG%</div>
-                              <div className="mt-1 text-slate-100 font-medium">{teamSandbox.projection.efg.toFixed(1)}%</div>
-                              <div className={teamSandbox.projection.deltaEfg >= 0 ? 'text-emerald-300' : 'text-rose-300'}>
+                            <div className="rounded-md border border-border-subtle bg-base/50 px-3 py-2">
+                              <div className="text-muted">Származtatott eFG%</div>
+                              <div className="mt-1 text-primary font-medium">{teamSandbox.projection.efg.toFixed(1)}%</div>
+                              <div className={teamSandbox.projection.deltaEfg >= 0 ? 'text-positive' : 'text-negative'}>
                                 {teamSandbox.projection.deltaEfg >= 0 ? '+' : ''}{teamSandbox.projection.deltaEfg.toFixed(1)} pp vs bázis
                               </div>
                             </div>
-                            <div className="rounded-md border border-slate-800 bg-slate-950/30 px-3 py-2">
-                              <div className="text-slate-500">PPP</div>
-                              <div className="mt-1 text-slate-100 font-medium">{teamSandbox.projection.ppp.toFixed(3)}</div>
-                              <div className="text-slate-500">{teamSandbox.projection.possessions.toFixed(1)} poss alapján</div>
+                            <div className="rounded-md border border-border-subtle bg-base/50 px-3 py-2">
+                              <div className="text-muted">PPP</div>
+                              <div className="mt-1 text-primary font-medium">{teamSandbox.projection.ppp.toFixed(3)}</div>
+                              <div className="text-muted">{teamSandbox.projection.possessions.toFixed(1)} poss alapján</div>
                             </div>
-                            <div className="rounded-md border border-slate-800 bg-slate-950/30 px-3 py-2">
-                              <div className="text-slate-500">Kísérletmix</div>
-                              <div className="mt-1 text-slate-100 font-medium">{teamSandbox.projection.twoPA.toFixed(1)} / {teamSandbox.projection.threePA.toFixed(1)}</div>
-                              <div className="text-slate-500">
+                            <div className="rounded-md border border-border-subtle bg-base/50 px-3 py-2">
+                              <div className="text-muted">Kísérletmix</div>
+                              <div className="mt-1 text-primary font-medium">{teamSandbox.projection.twoPA.toFixed(1)} / {teamSandbox.projection.threePA.toFixed(1)}</div>
+                              <div className="text-muted">
                                 2PA / 3PA • {(100 - teamSandbox.projection.threeSharePct).toFixed(1)}% / {teamSandbox.projection.threeSharePct.toFixed(1)}%
                               </div>
                             </div>
@@ -14937,15 +14936,15 @@ export function SeasonComparison({
                       ))}
                     </div>
 
-                    <div className="text-xs text-slate-500 leading-relaxed">
+                    <div className="text-xs text-muted leading-relaxed">
                       Ez a blokk továbbra sem teljes meccs-előrejelzés, hanem expected possessions sandbox. A ponttermelés a possz./meccs, a 3PA arány, a FT rate, a TO% és az OREB bónusz alapján számolt várható dobásvolumenből épül fel, így már a lehetőségek és a hatékonyság együtt mozgatják a kimenetet.
                     </div>
                   </div>
                 )}
 
                 {scenarioChartData.length > 0 && (
-                  <div className="p-3 bg-slate-800/50 rounded-lg space-y-3">
-                    <div className="text-sm text-slate-300 font-medium">Forgatókönyv-modellezés</div>
+                  <div className="p-3 bg-surface-2/50 rounded-lg space-y-3">
+                    <div className="text-sm text-secondary font-medium">Forgatókönyv-modellezés</div>
                     <ResponsiveContainer width="100%" height={248}>
                       <BarChart data={scenarioChartData} margin={{ top: 8, right: 8, left: 8, bottom: 14 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
@@ -14968,15 +14967,15 @@ export function SeasonComparison({
                       {adjustedScenarioOutcomes.map(item => (
                         <div
                           key={item.key}
-                          className="bg-slate-900/40 border border-slate-800 rounded-md px-3 py-2 text-xs text-slate-300"
+                          className="bg-surface-1/60 border border-border-subtle rounded-md px-3 py-2 text-xs text-secondary"
                         >
                           <div className="flex items-center justify-between">
-                            <span className="text-slate-100 font-medium">{item.label}</span>
-                            <span className={item.deltaVsBase >= 0 ? 'text-emerald-300' : 'text-rose-300'}>
+                            <span className="text-primary font-mono tabular-nums font-medium">{item.label}</span>
+                            <span className={item.deltaVsBase >= 0 ? 'text-positive' : 'text-negative'}>
                               {item.deltaVsBase >= 0 ? '+' : ''}{item.deltaVsBase.toFixed(1)} pp vs alap
                             </span>
                           </div>
-                          <div className="mt-1 text-slate-400">{item.note}</div>
+                          <div className="mt-1 text-secondary">{item.note}</div>
                         </div>
                       ))}
                     </div>
@@ -14984,22 +14983,22 @@ export function SeasonComparison({
                 )}
 
                 {calibrationDiagnostics && calibrationChartData.length > 0 && (
-                  <div className="p-3 bg-slate-800/50 rounded-lg space-y-3">
+                  <div className="p-3 bg-surface-2/50 rounded-lg space-y-3">
                     <div className="flex items-center justify-between">
-                      <div className="text-sm text-slate-300 font-medium">Kalibrációs diagnosztika</div>
+                      <div className="text-sm text-secondary font-medium">Kalibrációs diagnosztika</div>
                       <div
                         className={`text-xs px-2 py-1 rounded-full border ${
                           calibrationDiagnostics.overallIntensity >= 70
-                            ? 'bg-rose-900/40 border-rose-700/60 text-rose-200'
+                            ? 'bg-negative/15 border-negative/40 text-negative'
                             : calibrationDiagnostics.overallIntensity >= 45
-                              ? 'bg-amber-900/40 border-amber-700/60 text-amber-200'
-                              : 'bg-emerald-900/40 border-emerald-700/60 text-emerald-200'
+                              ? 'bg-warning/15 border-warning/40 text-warning'
+                              : 'bg-positive/15 border-positive/40 text-positive'
                         }`}
                       >
                         Össz-intenzitás: {calibrationDiagnostics.overallIntensity.toFixed(1)}
                       </div>
                     </div>
-                    <div className="text-xs text-slate-400">
+                    <div className="text-xs text-secondary">
                       {calibrationDiagnostics.scaleLabel ?? '0-100 matchup-intenzitás skála'} • {overallIntensityLabel ? `${overallIntensityLabel} nehézségű matchup.` : ''} {calibrationDiagnostics.summary ?? ''}
                     </div>
                     <ResponsiveContainer width="100%" height={240}>
@@ -15027,22 +15026,22 @@ export function SeasonComparison({
                     </ResponsiveContainer>
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 text-xs">
                       {calibrationChartData.map(item => (
-                        <div key={`calibration-detail-${item.label}`} className="rounded-md border border-slate-800 bg-slate-900/40 px-3 py-2">
+                        <div key={`calibration-detail-${item.label}`} className="rounded-md border border-border-subtle bg-surface-2/40 px-3 py-2">
                           <div className="flex items-center justify-between gap-2">
-                            <span className="text-slate-200">{item.label}</span>
-                            <span className={item.score >= 70 ? 'text-rose-300' : item.score >= 45 ? 'text-amber-300' : 'text-emerald-300'}>
+                            <span className="text-primary">{item.label}</span>
+                            <span className={item.score >= 70 ? 'text-negative' : item.score >= 45 ? 'text-warning' : 'text-positive'}>
                               {item.score.toFixed(1)} • {item.note}
                             </span>
                           </div>
-                          {item.context && <div className="text-slate-500 mt-1">{item.context}</div>}
+                          {item.context && <div className="text-muted mt-1">{item.context}</div>}
                         </div>
                       ))}
                     </div>
                   </div>
                 )}
 
-                <div className="p-3 bg-slate-800/50 rounded-lg">
-                <div className="text-sm text-slate-300 font-medium mb-2">Poszt-összehasonlítás (VAL/36)</div>
+                <div className="p-3 bg-surface-2/50 rounded-lg">
+                <div className="text-sm text-secondary font-medium mb-2">Poszt-összehasonlítás (VAL/36)</div>
                 {(() => {
                   const positionLabels: Record<string, string> = {
                     PG: 'Irányító',
@@ -15081,23 +15080,23 @@ export function SeasonComparison({
                       <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
                         {positionComparisonChart.map(item => {
                           const deltaLabel = `${item.deltaValPer36 >= 0 ? '+' : ''}${item.deltaValPer36.toFixed(1)} VAL/36`;
-                          let tone = 'text-slate-400';
+                          let tone = 'text-secondary';
                           let label = `Kiegyenlített (${deltaLabel})`;
-                          let container = 'bg-slate-900/40 border border-slate-800';
+                          let container = 'bg-surface-1/60 border border-border-subtle';
 
                           if (item.matchupFlag === 'critical_disadvantage') {
-                            tone = 'text-rose-300';
+                            tone = 'text-negative';
                             label = `Kritikus hátrány (${deltaLabel})`;
-                            container = 'bg-rose-950/40 border border-rose-800/60';
+                            container = 'bg-negative/15 border border-negative/40';
                           } else if (item.matchupFlag === 'clear_advantage') {
-                            tone = 'text-emerald-300';
+                            tone = 'text-positive';
                             label = `Egyértelmű előny (${deltaLabel})`;
-                            container = 'bg-emerald-950/30 border border-emerald-800/50';
+                            container = 'bg-positive/15 border border-positive/40';
                           } else if (item.deltaValPer36 >= 2) {
-                            tone = 'text-emerald-400';
+                            tone = 'text-positive';
                             label = `Saját előny (${deltaLabel})`;
                           } else if (item.deltaValPer36 <= -2) {
-                            tone = 'text-rose-400';
+                            tone = 'text-negative';
                             label = `Ellenfél előny (${deltaLabel})`;
                           }
 
@@ -15106,7 +15105,7 @@ export function SeasonComparison({
                               key={item.position}
                               className={`${container} flex items-center justify-between rounded-md px-3 py-2`}
                             >
-                              <span className="text-slate-200">{item.label}</span>
+                              <span className="text-primary">{item.label}</span>
                               <span className={tone}>{label}</span>
                             </div>
                           );
@@ -15114,7 +15113,7 @@ export function SeasonComparison({
                       </div>
 
                       {pregameReport.positionComparisonNote && (
-                        <div className="mt-3 text-xs text-amber-200 bg-amber-900/20 border border-amber-700/40 rounded-md px-3 py-2">
+                        <div className="mt-3 text-xs text-warning bg-warning/10 border border-warning/30 rounded-md px-3 py-2">
                           {pregameReport.positionComparisonNote}
                         </div>
                       )}
@@ -15124,58 +15123,58 @@ export function SeasonComparison({
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                  <div className="p-3 bg-slate-800/50 rounded-lg">
-                    <div className="text-sm text-slate-300 font-medium mb-2">Kockázati forgatókönyvek (mi történik, ha...)</div>
+                  <div className="p-3 bg-surface-2/50 rounded-lg">
+                    <div className="text-sm text-secondary font-medium mb-2">Kockázati forgatókönyvek (mi történik, ha...)</div>
                     {riskScenarios.length > 0 ? (
                       <div className="space-y-2">
                         {riskScenarios.map(item => (
-                          <div key={item.title} className="bg-slate-900/40 border border-slate-800 rounded-md px-3 py-2">
+                          <div key={item.title} className="bg-surface-1/60 border border-border-subtle rounded-md px-3 py-2">
                             <div className="flex items-center justify-between text-sm">
-                              <span className="text-slate-100">{item.title}</span>
-                              <span className="text-rose-300">{item.estimatedOwnSwingPct.toFixed(1)} pp</span>
+                              <span className="text-primary">{item.title}</span>
+                              <span className="text-negative">{item.estimatedOwnSwingPct.toFixed(1)} pp</span>
                             </div>
                             {item.title === 'Kontrollált alapforgatókönyv' && controlledScenarioGuidance ? (
                               <div className="mt-1 space-y-1 text-xs">
-                                <div className="text-slate-400">Triggerek:</div>
+                                <div className="text-secondary">Triggerek:</div>
                                 {controlledScenarioGuidance.triggers.map(trigger => (
-                                  <div key={trigger} className="text-slate-400">• {trigger}</div>
+                                  <div key={trigger} className="text-secondary">• {trigger}</div>
                                 ))}
-                                <div className="text-amber-200 mt-1">Azonnali válaszok:</div>
+                                <div className="text-warning mt-1">Azonnali válaszok:</div>
                                 {controlledScenarioGuidance.response.map(step => (
-                                  <div key={step} className="text-amber-200">• {step}</div>
+                                  <div key={step} className="text-warning">• {step}</div>
                                 ))}
-                                <div className="text-slate-300 mt-1">{controlledScenarioGuidance.expectedOutcome}</div>
+                                <div className="text-secondary mt-1">{controlledScenarioGuidance.expectedOutcome}</div>
                               </div>
                             ) : (
                               <>
-                                <div className="text-xs text-slate-400 mt-1">Trigger: {item.trigger}</div>
-                                <div className="text-xs text-amber-200 mt-1">Azonnali válasz: {item.instantResponse}</div>
+                                <div className="text-xs text-secondary mt-1">Trigger: {item.trigger}</div>
+                                <div className="text-xs text-warning mt-1">Azonnali válasz: {item.instantResponse}</div>
                               </>
                             )}
                           </div>
                         ))}
                       </div>
                     ) : (
-                      <div className="text-sm text-slate-400">Nincs külön kockázati forgatókönyv.</div>
+                      <div className="text-sm text-secondary">Nincs külön kockázati forgatókönyv.</div>
                     )}
                   </div>
 
-                  <div className="p-3 bg-slate-800/50 rounded-lg">
-                    <div className="text-sm text-slate-300 font-medium mb-2">X-faktor számszerűsítés</div>
+                  <div className="p-3 bg-surface-2/50 rounded-lg">
+                    <div className="text-sm text-secondary font-medium mb-2">X-faktor számszerűsítés</div>
                     {xFactorImpact ? (
                       <div className="space-y-2">
-                        <div className="text-xs text-slate-500">Ezek a számok swing-potenciált mutatnak kontrollált forgatókönyvben, nem garantált nyereséget.</div>
-                        <div className="bg-slate-900/40 border border-slate-800 rounded-md px-3 py-2 text-sm text-slate-200">
-                          Elsődleges x-faktor hatás: <span className="text-emerald-300">+{xFactorImpact.primaryDeltaPct.toFixed(1)}%</span>
+                        <div className="text-xs text-muted">Ezek a számok swing-potenciált mutatnak kontrollált forgatókönyvben, nem garantált nyereséget.</div>
+                        <div className="bg-surface-1/60 border border-border-subtle rounded-md px-3 py-2 text-sm text-primary">
+                          Elsődleges x-faktor hatás: <span className="text-positive">+{xFactorImpact.primaryDeltaPct.toFixed(1)}%</span>
                         </div>
-                        <div className="bg-slate-900/40 border border-slate-800 rounded-md px-3 py-2 text-sm text-slate-200">
-                          Másodlagos x-faktor hatás: <span className="text-emerald-300">+{xFactorImpact.secondaryDeltaPct.toFixed(1)}%</span>
+                        <div className="bg-surface-1/60 border border-border-subtle rounded-md px-3 py-2 text-sm text-primary">
+                          Másodlagos x-faktor hatás: <span className="text-positive">+{xFactorImpact.secondaryDeltaPct.toFixed(1)}%</span>
                         </div>
-                        <div className="bg-slate-900/40 border border-slate-800 rounded-md px-3 py-2 text-sm text-slate-200">
-                          Kombinált modellhatás: <span className="text-emerald-300">+{xFactorImpact.combinedDeltaPct.toFixed(1)}%</span>
+                        <div className="bg-surface-1/60 border border-border-subtle rounded-md px-3 py-2 text-sm text-primary">
+                          Kombinált modellhatás: <span className="text-positive">+{xFactorImpact.combinedDeltaPct.toFixed(1)}%</span>
                         </div>
                         {adjustedScenarioOutcomes.find(item => item.key === 'controlled_tempo') && (
-                          <div className="bg-emerald-950/20 border border-emerald-800/40 rounded-md px-3 py-2 text-xs text-emerald-200">
+                          <div className="bg-positive/10 border border-positive/30 rounded-md px-3 py-2 text-xs text-positive">
                             Jelenlegi fókuszsúlyok mellett a kontrollált forgatókönyv tényleges modell-eltolása: {(() => {
                               const controlledScenario = adjustedScenarioOutcomes.find(item => item.key === 'controlled_tempo');
                               return `${controlledScenario && controlledScenario.deltaVsBase >= 0 ? '+' : ''}${controlledScenario?.deltaVsBase.toFixed(1)} pp vs alap`;
@@ -15184,48 +15183,48 @@ export function SeasonComparison({
                         )}
                       </div>
                     ) : (
-                      <div className="text-sm text-slate-400">Nincs számszerűsíthető x-faktor hatás.</div>
+                      <div className="text-sm text-secondary">Nincs számszerűsíthető x-faktor hatás.</div>
                     )}
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <div className="text-sm text-slate-300 font-medium mb-2">Saját sérültek / hiányzók</div>
+                    <div className="text-sm text-secondary font-medium mb-2">Saját sérültek / hiányzók</div>
                     {pregameReport.injuryContext?.own?.length ? (
                       pregameReport.injuryContext.own.map(name => (
-                        <div key={`own-injury-${name}`} className="text-sm text-slate-200">
+                        <div key={`own-injury-${name}`} className="text-sm text-primary">
                           • {name}
                         </div>
                       ))
                     ) : (
-                      <div className="text-sm text-slate-400">Nincs megjelölt kihagyó.</div>
+                      <div className="text-sm text-secondary">Nincs megjelölt kihagyó.</div>
                     )}
                   </div>
                   <div>
-                    <div className="text-sm text-slate-300 font-medium mb-2">Ellenfél sérültek / hiányzók</div>
+                    <div className="text-sm text-secondary font-medium mb-2">Ellenfél sérültek / hiányzók</div>
                     {pregameReport.injuryContext?.opponent?.length ? (
                       pregameReport.injuryContext.opponent.map(name => (
-                        <div key={`opp-injury-${name}`} className="text-sm text-slate-200">
+                        <div key={`opp-injury-${name}`} className="text-sm text-primary">
                           • {name}
                         </div>
                       ))
                     ) : (
-                      <div className="text-sm text-slate-400">Nincs megjelölt kihagyó.</div>
+                      <div className="text-sm text-secondary">Nincs megjelölt kihagyó.</div>
                     )}
                   </div>
                 </div>
 
                 {advancedPlayers && (
-                  <div className="p-3 bg-slate-800/50 rounded-lg space-y-3">
+                  <div className="p-3 bg-surface-2/50 rounded-lg space-y-3">
                     <div className="flex items-center gap-2">
-                      <div className="text-sm text-slate-300 font-medium">Haladó játékosmutatók (proxy PER / proxy WS)</div>
+                      <div className="text-sm text-secondary font-medium">Haladó játékosmutatók (proxy PER / proxy WS)</div>
                       <TooltipProvider>
                         <UiTooltip>
                           <TooltipTrigger asChild>
                             <button
                               type="button"
-                              className="h-5 w-5 rounded-full border border-slate-600 text-[11px] text-slate-300 hover:text-slate-100 hover:border-slate-400"
+                              className="h-5 w-5 rounded-full border border-border-subtle text-[11px] text-secondary hover:text-primary hover:border-border-active"
                               aria-label="Haladó mutatók magyarázata"
                             >
                               i
@@ -15255,43 +15254,43 @@ export function SeasonComparison({
                     </div>
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                       <div>
-                        <div className="text-xs uppercase tracking-wide text-slate-500 mb-1">{ownLabel}</div>
+                        <div className="text-xs uppercase tracking-wide text-muted mb-1">{ownLabel}</div>
                         <div className="space-y-1">
                           {advancedPlayers.own.length > 0 ? advancedPlayers.own.map(player => (
                             <div
                               key={`own-adv-${player.playerId}`}
-                              className="grid grid-cols-[1fr_auto_auto] gap-2 items-center bg-slate-900/40 border border-slate-800 rounded-md px-2 py-1 text-xs"
+                              className="grid grid-cols-[1fr_auto_auto] gap-2 items-center bg-surface-1/60 border border-border-subtle rounded-md px-2 py-1 text-xs"
                             >
-                              <span className="text-slate-200">{player.name} <span className="text-slate-500">({player.minutesPerGame.toFixed(1)} mpg)</span></span>
+                              <span className="text-primary">{player.name} <span className="text-muted">({player.minutesPerGame.toFixed(1)} mpg)</span></span>
                               <span className="text-sky-300">PER*: {player.proxyPer.toFixed(1)}</span>
-                              <span className="text-emerald-300">WS*: {player.proxyWinShare.toFixed(2)}</span>
+                              <span className="text-positive">WS*: {player.proxyWinShare.toFixed(2)}</span>
                             </div>
-                          )) : <div className="text-xs text-slate-500">Nincs elég adat.</div>}
+                          )) : <div className="text-xs text-muted">Nincs elég adat.</div>}
                         </div>
                       </div>
                       <div>
-                        <div className="text-xs uppercase tracking-wide text-slate-500 mb-1">{opponentLabel}</div>
+                        <div className="text-xs uppercase tracking-wide text-muted mb-1">{opponentLabel}</div>
                         <div className="space-y-1">
                           {advancedPlayers.opponent.length > 0 ? advancedPlayers.opponent.map(player => (
                             <div
                               key={`opp-adv-${player.playerId}`}
-                              className="grid grid-cols-[1fr_auto_auto] gap-2 items-center bg-slate-900/40 border border-slate-800 rounded-md px-2 py-1 text-xs"
+                              className="grid grid-cols-[1fr_auto_auto] gap-2 items-center bg-surface-1/60 border border-border-subtle rounded-md px-2 py-1 text-xs"
                             >
-                              <span className="text-slate-200">{player.name} <span className="text-slate-500">({player.minutesPerGame.toFixed(1)} mpg)</span></span>
+                              <span className="text-primary">{player.name} <span className="text-muted">({player.minutesPerGame.toFixed(1)} mpg)</span></span>
                               <span className="text-sky-300">PER*: {player.proxyPer.toFixed(1)}</span>
                               <span className="text-orange-300">WS*: {player.proxyWinShare.toFixed(2)}</span>
                             </div>
-                          )) : <div className="text-xs text-slate-500">Nincs elég adat.</div>}
+                          )) : <div className="text-xs text-muted">Nincs elég adat.</div>}
                         </div>
                       </div>
                     </div>
-                    <div className="text-[11px] text-slate-500">
+                    <div className="text-[11px] text-muted">
                       A PER* és WS* becslés saját, boxscore-alapú proxy mutató, összehasonlító célra.
                     </div>
                   </div>
                 )}
 
-                <div className="border-t border-slate-800 pt-4">
+                <div className="border-t border-border-subtle pt-4">
                   <div className="space-y-1">
                     <div className="flex flex-wrap items-center gap-3">
                       <Button
@@ -15302,7 +15301,7 @@ export function SeasonComparison({
                       >
                         {isGeneratingPregameText ? 'Pre-game értékelés készítése…' : 'Pre-game GPT értékelés'}
                       </Button>
-                      <div className="text-xs text-slate-400">
+                      <div className="text-xs text-secondary">
                         Szigorúan adat-alapú, 6 rövid bekezdéses összefoglaló készül.
                       </div>
                     </div>
@@ -15310,10 +15309,10 @@ export function SeasonComparison({
                       <div
                         className={`text-xs ${
                           pregameSaveStatus.type === 'success'
-                            ? 'text-emerald-400'
+                            ? 'text-positive'
                             : pregameSaveStatus.type === 'warning'
-                              ? 'text-amber-300'
-                              : 'text-rose-300'
+                              ? 'text-warning'
+                              : 'text-negative'
                         }`}
                       >
                         {pregameSaveStatus.message}
@@ -15325,30 +15324,30 @@ export function SeasonComparison({
             );
           })()}
 
-          <div className="border-t border-slate-800 pt-4 space-y-3">
-            <div className="text-sm text-slate-300 font-medium">Mentett pre-game jelentés</div>
+          <div className="border-t border-border-subtle pt-4 space-y-3">
+            <div className="text-sm text-secondary font-medium">Mentett pre-game jelentés</div>
 
             {!hasPregameLookupTarget && (
-              <div className="text-sm text-slate-400">
+              <div className="text-sm text-secondary">
                 Válassz meccset vagy ellenfelet a mentett pre-game szöveg megjelenítéséhez.
               </div>
             )}
 
             {hasPregameLookupTarget && pregameTextError && (
-              <div className="text-sm text-rose-300 bg-rose-900/30 border border-rose-800 rounded-md px-3 py-2">
+              <div className="text-sm text-negative bg-negative/15 border border-negative/40 rounded-md px-3 py-2">
                 {pregameTextError}
               </div>
             )}
 
             {hasPregameLookupTarget && !pregameTextError && !pregameText && (
-              <div className="text-sm text-slate-400">
+              <div className="text-sm text-secondary">
                 Nincs mentett pre-game szöveges értékelés a kiválasztott meccshez vagy ellenfélhez.
               </div>
             )}
 
             {hasPregameLookupTarget && pregameText && (
               <div className="space-y-1">
-                <div className="text-xs text-slate-400">
+                <div className="text-xs text-secondary">
                   {pregameTextMeta.generatedAt ? (
                     <>
                       Mentve: {formatGeneratedAt(pregameTextMeta.generatedAt) ?? 'ismeretlen időpont'} • Forrás:{' '}
@@ -15358,14 +15357,14 @@ export function SeasonComparison({
                     'Ez a szöveg még nincs adatbázisban mentve.'
                   )}
                 </div>
-                <div className="text-sm text-slate-50 whitespace-pre-line bg-slate-800/60 border border-slate-700 rounded-lg px-4 py-3">
+                <div className="text-sm text-primary whitespace-pre-line bg-surface-2/60 border border-border-subtle rounded-lg px-4 py-3">
                   {pregameText}
                 </div>
                 {pregameReport && (
                   <Button
                     variant="outline"
                     size="sm"
-                    className="border-cyan-800 hover:bg-slate-800 text-cyan-400"
+                    className="border-border-subtle hover:bg-surface-2 text-cyan"
                     onClick={() => {
                       const md = pregameReportToMd(pregameReport);
                       const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
@@ -15389,19 +15388,19 @@ export function SeasonComparison({
         </CardContent>
       </Card>}
 
-      {showPostgameSection && <Card className="bg-slate-900 border-slate-800">
+      {showPostgameSection && <Card>
         <CardHeader>
-          <CardTitle className="text-slate-50">Post-game jelentés</CardTitle>
+          <CardTitle className="font-display uppercase tracking-wide text-primary">Post-game jelentés</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="text-sm text-slate-400 mb-2 block">Mérkőzés</label>
+              <label className="text-sm text-secondary mb-2 block">Mérkőzés</label>
               <Select value={selectedGameId} onValueChange={setSelectedGameId}>
-                <SelectTrigger className="bg-slate-800 border-slate-700 w-full">
+                <SelectTrigger className="w-full">
                   <SelectValue placeholder="Válassz meccset..." className="truncate" />
                 </SelectTrigger>
-                <SelectContent className="bg-slate-800 border-slate-700 text-slate-100 placeholder:text-slate-400">
+                <SelectContent className="">
                   {games.map(game => (
                     <SelectItem key={game.id} value={game.id}>
                       {game.date} • {game.opponent}
@@ -15413,17 +15412,17 @@ export function SeasonComparison({
           </div>
 
           {!selectedGameId && (
-            <div className="text-sm text-slate-300">Válassz meccset a post-game jelentéshez.</div>
+            <div className="text-sm text-secondary">Válassz meccset a post-game jelentéshez.</div>
           )}
 
           {selectedGameId && !postgameReport && (
-            <div className="text-sm text-slate-300">
+            <div className="text-sm text-secondary">
               Nincs elég adat a post-game jelentéshez.
             </div>
           )}
 
           {selectedGameId && isLoadingKosarstatPostgame && (
-            <div className="flex items-center gap-2 text-xs text-slate-400">
+            <div className="flex items-center gap-2 text-xs text-secondary">
               <Loader2 size={14} className="animate-spin" />
               Kosarstat lineup adatok csatolása folyamatban...
             </div>
@@ -15431,15 +15430,15 @@ export function SeasonComparison({
 
           {postgameReport && (
             <div className="space-y-4">
-              <div className="text-sm text-slate-200 leading-relaxed">{postgameReport.summary}</div>
+              <div className="text-sm text-primary leading-relaxed">{postgameReport.summary}</div>
 
               {(postgameReport.reflection.xFactor || postgameReport.reflection.risk) && (
-                <div className="text-xs text-amber-200 space-y-1">
+                <div className="text-xs text-warning space-y-1">
                   {postgameReport.reflection.xFactor && (
                     <div className="font-medium">{postgameReport.reflection.xFactor}</div>
                   )}
                   {postgameReport.reflection.risk && (
-                    <div className="text-slate-400">{postgameReport.reflection.risk}</div>
+                    <div className="text-secondary">{postgameReport.reflection.risk}</div>
                   )}
                 </div>
               )}
@@ -15451,18 +15450,18 @@ export function SeasonComparison({
                   variant={showKosarstatOnlyPostgame ? 'default' : 'outline'}
                   onClick={() => setShowKosarstatOnlyPostgame(prev => !prev)}
                   className={showKosarstatOnlyPostgame
-                    ? 'h-7 bg-sky-500 hover:bg-sky-400 text-slate-950'
-                    : 'h-7 border-slate-700 text-slate-300 hover:bg-slate-800'}
+                    ? 'h-7 bg-cyan hover:bg-cyan/80 text-base'
+                    : 'h-7 border-border-subtle text-secondary hover:bg-surface-2'}
                 >
                   {showKosarstatOnlyPostgame ? 'Kosarstat only: BE' : 'Kosarstat only: KI'}
                 </Button>
-                <span className="text-xs text-slate-500">
+                <span className="text-xs text-muted">
                   Bekapcsolva csak a Kosarstat negyed + team metric insightok látszanak az erősség/probléma/fókusz blokkokban.
                 </span>
               </div>
 
               {postgameReport.dataNotes.length > 0 && (
-                <div className="text-xs text-slate-400">
+                <div className="text-xs text-secondary">
                   {postgameReport.dataNotes.join(' ')}
                 </div>
               )}
@@ -15483,17 +15482,17 @@ export function SeasonComparison({
 
                   {kosarstatPostgameContext.quarterDiffRows.length > 0 && (
                     <div className="space-y-2">
-                      <div className="text-xs text-slate-300">Negyedenkénti pontkülönbség</div>
+                      <div className="text-xs text-secondary">Negyedenkénti pontkülönbség</div>
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                         {kosarstatPostgameContext.quarterDiffRows.map(row => (
-                          <div key={`quarter-flow-${row.quarter}`} className="rounded-md border border-slate-800 bg-slate-900/40 p-2">
-                            <div className="text-xs text-slate-400">Q{row.quarter}</div>
-                            <div className="text-sm text-slate-100 tabular-nums">{row.ownPoints} - {row.oppPoints}</div>
-                            <div className={`text-xs tabular-nums ${row.diff >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
+                          <div key={`quarter-flow-${row.quarter}`} className="rounded-md border border-border-subtle bg-surface-2/40 p-2">
+                            <div className="text-xs text-secondary">Q{row.quarter}</div>
+                            <div className="text-sm text-primary tabular-nums">{row.ownPoints} - {row.oppPoints}</div>
+                            <div className={`text-xs tabular-nums ${row.diff >= 0 ? 'text-positive' : 'text-negative'}`}>
                               Diff: {row.diff > 0 ? '+' : ''}{row.diff}
                             </div>
                             {row.cumulativeDiff !== null && (
-                              <div className={`text-[11px] tabular-nums ${row.cumulativeDiff >= 0 ? 'text-emerald-400/90' : 'text-rose-400/90'}`}>
+                              <div className={`text-[11px] tabular-nums ${row.cumulativeDiff >= 0 ? 'text-positive/90' : 'text-negative/90'}`}>
                                 Cum: {row.cumulativeDiff > 0 ? '+' : ''}{row.cumulativeDiff}
                               </div>
                             )}
@@ -15501,8 +15500,8 @@ export function SeasonComparison({
                         ))}
                       </div>
 
-                      <div className="rounded-md border border-slate-800 bg-slate-900/35 p-2">
-                        <div className="text-[11px] text-slate-400 mb-1">Negyed trend mini chart (pontkülönbség)</div>
+                      <div className="rounded-md border border-border-subtle bg-surface-1/60 p-2">
+                        <div className="text-[11px] text-secondary mb-1">Negyed trend mini chart (pontkülönbség)</div>
                         <ResponsiveContainer width="100%" height={120}>
                           <BarChart data={kosarstatPostgameContext.quarterDiffRows} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
                             <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
@@ -15549,9 +15548,9 @@ export function SeasonComparison({
                       if (!Number.isFinite(ownNum) || !Number.isFinite(oppNum)) return null;
                       const diff = roundValue(ownNum - oppNum, 1);
                       return (
-                        <div key={`metric-diff-${label}`} className="rounded-md border border-slate-800 bg-slate-900/35 px-2 py-1 text-xs">
-                          <span className="text-slate-400">{label}: </span>
-                          <span className={diff >= 0 ? 'text-emerald-300' : 'text-rose-300'}>
+                        <div key={`metric-diff-${label}`} className="rounded-md border border-border-subtle bg-surface-1/60 px-2 py-1 text-xs">
+                          <span className="text-secondary">{label}: </span>
+                          <span className={diff >= 0 ? 'text-positive' : 'text-negative'}>
                             {diff > 0 ? '+' : ''}{diff}{suffix}
                           </span>
                         </div>
@@ -15560,11 +15559,11 @@ export function SeasonComparison({
 
                     return (
                       <div className="space-y-2">
-                        <div className="text-xs text-slate-300">Team advanced mutatók</div>
+                        <div className="text-xs text-secondary">Team advanced mutatók</div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
-                          <div className="rounded-md border border-slate-800 bg-slate-900/35 p-2">
-                            <div className="text-slate-400 mb-1">Saját csapat ({own?.team_name || 'ismeretlen'})</div>
-                            <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-slate-200 tabular-nums">
+                          <div className="rounded-md border border-border-subtle bg-surface-1/60 p-2">
+                            <div className="text-muted mb-1">Saját csapat ({own?.team_name || 'ismeretlen'})</div>
+                            <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-primary tabular-nums">
                               <div>POSS: {fmt(own?.poss)}</div>
                               <div>ORTG: {fmt(own?.ortg)}</div>
                               <div>eFG: {fmt(own?.efg, 1, '%')}</div>
@@ -15573,9 +15572,9 @@ export function SeasonComparison({
                               <div>FTM rate: {fmt(own?.ftm_rate, 3)}</div>
                             </div>
                           </div>
-                          <div className="rounded-md border border-slate-800 bg-slate-900/35 p-2">
-                            <div className="text-slate-400 mb-1">Ellenfél ({opp?.team_name || 'ismeretlen'})</div>
-                            <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-slate-200 tabular-nums">
+                          <div className="rounded-md border border-border-subtle bg-surface-1/60 p-2">
+                            <div className="text-muted mb-1">Ellenfél ({opp?.team_name || 'ismeretlen'})</div>
+                            <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-primary tabular-nums">
                               <div>POSS: {fmt(opp?.poss)}</div>
                               <div>ORTG: {fmt(opp?.ortg)}</div>
                               <div>eFG: {fmt(opp?.efg, 1, '%')}</div>
@@ -15600,18 +15599,18 @@ export function SeasonComparison({
 
                   {(kosarstatPostgameContext.clutch || kosarstatPostgameContext.turnoverTypes.length > 0) && (
                     <div className="space-y-2">
-                      <div className="text-xs text-slate-300">Kosarstat clutch blokk</div>
+                      <div className="text-xs text-secondary">Kosarstat clutch blokk</div>
 
                       {kosarstatPostgameContext.clutch?.available && (
-                        <div className="rounded-md border border-slate-800 bg-slate-900/35 p-2">
-                          <div className="text-slate-400 mb-1 text-xs">Clutch szakasz (Kosarstat clutch stat)</div>
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-x-3 gap-y-1 text-xs tabular-nums text-slate-200">
+                        <div className="rounded-md border border-border-subtle bg-surface-1/60 p-2">
+                          <div className="text-muted mb-1 text-xs">Clutch szakasz (Kosarstat clutch stat)</div>
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-x-3 gap-y-1 text-xs tabular-nums text-primary">
                             <div>
                               Pontok: {kosarstatPostgameContext.clutch.ownPoints}-{kosarstatPostgameContext.clutch.oppPoints}
                             </div>
                             <div>
                               Diff:{' '}
-                              <span className={kosarstatPostgameContext.clutch.diff >= 0 ? 'text-emerald-300' : 'text-rose-300'}>
+                              <span className={kosarstatPostgameContext.clutch.diff >= 0 ? 'text-positive' : 'text-negative'}>
                                 {kosarstatPostgameContext.clutch.diff > 0 ? '+' : ''}{kosarstatPostgameContext.clutch.diff}
                               </span>
                             </div>
@@ -15628,19 +15627,19 @@ export function SeasonComparison({
                       )}
 
                       {kosarstatPostgameContext.clutch && !kosarstatPostgameContext.clutch.available && (
-                        <div className="rounded-md border border-slate-800 bg-slate-900/35 p-2 text-xs text-slate-400">
+                        <div className="rounded-md border border-border-subtle bg-surface-1/60 p-2 text-xs text-secondary">
                           Kosarstat clutch minta rövid vagy nem elérhető ebben a meccsben.
                         </div>
                       )}
 
                       {kosarstatPostgameContext.turnoverTypes.length > 0 && (
-                        <div className="rounded-md border border-slate-800 bg-slate-900/35 p-2">
-                          <div className="text-slate-400 mb-1 text-xs">Labdavesztés típusok (top 5)</div>
+                        <div className="rounded-md border border-border-subtle bg-surface-1/60 p-2">
+                          <div className="text-muted mb-1 text-xs">Labdavesztés típusok (top 5)</div>
                           <div className="flex flex-wrap gap-2">
                             {kosarstatPostgameContext.turnoverTypes.map(item => (
-                              <div key={`to-type-${item.type}`} className="rounded-md border border-slate-700 bg-slate-900/60 px-2 py-1 text-xs text-slate-200 tabular-nums">
-                                <span className="text-slate-400">{item.type}: </span>
-                                <span className="text-rose-300">{item.count}</span>
+                              <div key={`to-type-${item.type}`} className="rounded-md border border-border-subtlebg-surface-1/80 px-2 py-1 text-xs text-primary tabular-nums">
+                                <span className="text-secondary">{item.type}: </span>
+                                <span className="text-negative">{item.count}</span>
                               </div>
                             ))}
                           </div>
@@ -15648,7 +15647,7 @@ export function SeasonComparison({
                       )}
 
                       {kosarstatPostgameContext.clutch && kosarstatPostgameContext.turnoverTypes.length === 0 && (
-                        <div className="rounded-md border border-slate-800 bg-slate-900/35 p-2 text-xs text-slate-400">
+                        <div className="rounded-md border border-border-subtle bg-surface-1/60 p-2 text-xs text-secondary">
                           TO típus bontás: a Kosarstat clutch stat oldal nem ad külön turnover-típus részletezést.
                         </div>
                       )}
@@ -15658,21 +15657,21 @@ export function SeasonComparison({
               )}
 
               {activeKosarstatTeamAnalysis && (
-                <div className="rounded-lg border border-slate-700 bg-slate-900/60 p-4 space-y-4">
+                <div className="rounded-lg border border-border-subtlebg-surface-1/80 p-4 space-y-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="text-sm font-medium text-slate-100">
+                    <div className="text-sm font-medium text-primary">
                       Kosarstat lineup elemzés: {activeKosarstatTeamAnalysis.teamName}
                     </div>
-                    <div className="text-xs text-slate-400">
+                    <div className="text-xs text-secondary">
                       Assist alapú páros/trió adat jelenleg nem érhető el a Kosarstat lineup exportból.
                     </div>
                   </div>
 
                   <div>
-                    <div className="text-xs text-slate-400 mb-2">Kezdő ötös</div>
+                    <div className="text-xs text-secondary mb-2">Kezdő ötös</div>
                     <div className="flex flex-wrap gap-2">
                       {activeKosarstatTeamAnalysis.starters.map(player => (
-                        <Badge key={`starter-${player}`} variant="secondary" className="bg-emerald-900/40 text-emerald-200 border border-emerald-700/50">
+                        <Badge key={`starter-${player}`} variant="secondary" className="badge-positive">
                           {player}
                         </Badge>
                       ))}
@@ -15680,14 +15679,14 @@ export function SeasonComparison({
                   </div>
 
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                    <div className="rounded-md border border-slate-800 bg-slate-950/35 p-3">
-                      <div className="text-sm text-slate-300 font-medium mb-2">Játékpercek és +/-</div>
+                    <div className="rounded-md border border-border-subtle bg-base/60 p-3">
+                      <div className="text-sm text-secondary font-medium mb-2">Játékpercek és +/-</div>
                       <div className="space-y-1 max-h-56 overflow-y-auto pr-1">
                         {activeKosarstatTeamAnalysis.playerMinutes.map(item => (
-                          <div key={`pm-${item.player}`} className="flex items-center justify-between text-xs bg-slate-900/40 rounded px-2 py-1">
-                            <span className="text-slate-200 truncate pr-2">{item.player}</span>
-                            <span className="text-slate-400">{item.minutesLabel}</span>
-                            <span className={item.plusMinus !== null && item.plusMinus >= 0 ? 'text-emerald-300' : 'text-rose-300'}>
+                          <div key={`pm-${item.player}`} className="flex items-center justify-between text-xs bg-surface-1/60 rounded px-2 py-1">
+                            <span className="text-primary truncate pr-2">{item.player}</span>
+                            <span className="text-secondary">{item.minutesLabel}</span>
+                            <span className={item.plusMinus !== null && item.plusMinus >= 0 ? 'text-positive' : 'text-negative'}>
                               {item.plusMinus === null ? '-' : `${item.plusMinus > 0 ? '+' : ''}${item.plusMinus.toFixed(1)}`}
                             </span>
                           </div>
@@ -15695,49 +15694,49 @@ export function SeasonComparison({
                       </div>
                     </div>
 
-                    <div className="rounded-md border border-slate-800 bg-slate-950/35 p-3">
-                      <div className="text-sm text-slate-300 font-medium mb-2">Csere-események (2=be, 3=le)</div>
+                    <div className="rounded-md border border-border-subtle bg-base/60 p-3">
+                      <div className="text-sm text-secondary font-medium mb-2">Csere-események (2=be, 3=le)</div>
                       <div className="space-y-1 max-h-56 overflow-y-auto pr-1">
                         {activeKosarstatTeamAnalysis.substitutions.length === 0 && (
-                          <div className="text-xs text-slate-500">Nincs használható csereesemény.</div>
+                          <div className="text-xs text-muted">Nincs használható csereesemény.</div>
                         )}
                         {activeKosarstatTeamAnalysis.substitutions.slice(0, 40).map((event, idx) => (
-                          <div key={`sub-${idx}-${event.player}-${event.gameSecond}-${event.type}`} className="flex items-center justify-between text-xs bg-slate-900/40 rounded px-2 py-1">
-                            <span className="text-slate-300">{event.clockLabel}</span>
-                            <span className={event.type === 'in' ? 'text-emerald-300' : 'text-amber-300'}>
+                          <div key={`sub-${idx}-${event.player}-${event.gameSecond}-${event.type}`} className="flex items-center justify-between text-xs bg-surface-1/60 rounded px-2 py-1">
+                            <span className="text-secondary">{event.clockLabel}</span>
+                            <span className={event.type === 'in' ? 'text-positive' : 'text-warning'}>
                               {event.type === 'in' ? 'be' : 'le'}
                             </span>
-                            <span className="text-slate-200 truncate pl-2">{event.player}</span>
+                            <span className="text-primary truncate pl-2">{event.player}</span>
                           </div>
                         ))}
                       </div>
                     </div>
                   </div>
 
-                  <div className="rounded-md border border-slate-800 bg-slate-950/35 p-3 space-y-3">
+                  <div className="rounded-md border border-border-subtle bg-base/60 p-3 space-y-3">
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="text-sm text-slate-300 font-medium">Rotáció timeline (1 képre)</div>
-                      <div className="text-xs text-slate-500">Színek alapján: pályánlét és cserepillanatok</div>
+                      <div className="text-sm text-secondary font-medium">Rotáció timeline (1 képre)</div>
+                      <div className="text-xs text-muted">Színek alapján: pályánlét és cserepillanatok</div>
                     </div>
 
-                    <div className="flex flex-wrap gap-3 text-[11px] text-slate-400">
-                      <div className="flex items-center gap-1"><span className="inline-block h-3 w-3 rounded bg-slate-700" />Nincs pályán</div>
-                      <div className="flex items-center gap-1"><span className="inline-block h-3 w-3 rounded bg-emerald-700/80" />Pályán</div>
-                      <div className="flex items-center gap-1"><span className="inline-block h-3 w-3 rounded bg-emerald-400" />Beállás</div>
-                      <div className="flex items-center gap-1"><span className="inline-block h-3 w-3 rounded bg-amber-400" />Lecsere</div>
+                    <div className="flex flex-wrap gap-3 text-[11px] text-secondary">
+                      <div className="flex items-center gap-1"><span className="inline-block h-3 w-3 rounded bg-surface-2" />Nincs pályán</div>
+                      <div className="flex items-center gap-1"><span className="inline-block h-3 w-3 rounded bg-positive/70" />Pályán</div>
+                      <div className="flex items-center gap-1"><span className="inline-block h-3 w-3 rounded bg-positive" />Beállás</div>
+                      <div className="flex items-center gap-1"><span className="inline-block h-3 w-3 rounded bg-warning" />Lecsere</div>
                     </div>
 
                     <div className="overflow-x-auto">
                       <table className="w-full text-[11px] border-collapse table-fixed" style={{ minWidth: 1320 }}>
                         <thead>
-                          <tr className="text-slate-400">
+                          <tr className="text-secondary">
                             <th className="text-left px-2 py-1 w-44">Játékos</th>
                             <th className="text-center px-2 py-1 w-16 tabular-nums">Idő</th>
                             <th className="text-center px-2 py-1 w-12 tabular-nums">+/-</th>
                             {Array.from({ length: 40 }, (_, i) => i + 1).map(minute => (
                               <th
                                 key={`rot-head-${minute}`}
-                                className={`px-1 py-1 text-center border-l border-slate-800/70 w-5 tabular-nums ${minute % 10 === 1 ? 'border-slate-300/80' : ''}`}
+                                className={`px-1 py-1 text-center border-l border-border-subtle/70 w-5 tabular-nums ${minute % 10 === 1 ? 'border-primary/30' : ''}`}
                               >
                                 {minute}
                               </th>
@@ -15748,26 +15747,26 @@ export function SeasonComparison({
                         </thead>
                         <tbody>
                           {activeKosarstatTeamAnalysis.playerTimelines.map(row => (
-                            <tr key={`rot-row-${row.player}`} className="border-t border-slate-800/80">
-                              <td className="px-2 py-1 text-slate-200 whitespace-nowrap truncate">{row.player}</td>
-                              <td className="px-2 py-1 text-slate-300 whitespace-nowrap text-center tabular-nums">{row.minutesLabel}</td>
-                              <td className={`px-2 py-1 whitespace-nowrap text-center tabular-nums ${row.plusMinus !== null && row.plusMinus >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
+                            <tr key={`rot-row-${row.player}`} className="border-t border-border-subtle/80">
+                              <td className="px-2 py-1 text-primary whitespace-nowrap truncate">{row.player}</td>
+                              <td className="px-2 py-1 text-secondary whitespace-nowrap text-center tabular-nums">{row.minutesLabel}</td>
+                              <td className={`px-2 py-1 whitespace-nowrap text-center tabular-nums ${row.plusMinus !== null && row.plusMinus >= 0 ? 'text-positive' : 'text-negative'}`}>
                                 {row.plusMinus === null ? '-' : `${row.plusMinus > 0 ? '+' : ''}${row.plusMinus.toFixed(0)}`}
                               </td>
                               {row.minuteCodes.map((code, idx) => {
                                 const display = code || '0';
                                 const cls =
                                   display === '1'
-                                    ? 'bg-emerald-700/55 text-emerald-100'
+                                    ? 'bg-positive/55 text-base'
                                     : display === '2'
-                                    ? 'bg-emerald-400/70 text-slate-900 font-semibold'
+                                    ? 'bg-positive/80 text-base font-semibold'
                                     : display === '3'
-                                    ? 'bg-amber-400/70 text-slate-900 font-semibold'
-                                    : 'bg-slate-700/45 text-slate-300';
+                                    ? 'bg-warning/70 text-base font-semibold'
+                                    : 'bg-surface-2/45 text-secondary';
                                 return (
                                   <td
                                     key={`rot-cell-${row.player}-${idx}`}
-                                    className={`px-1 py-1 text-center border-l border-slate-800/70 ${cls} ${idx % 10 === 0 ? 'border-slate-300/80' : ''}`}
+                                    className={`px-1 py-1 text-center border-l border-border-subtle/70 ${cls} ${idx % 10 === 0 ? 'border-primary/30' : ''}`}
                                     title={
                                       display === '1'
                                         ? 'Pályán'
@@ -15782,8 +15781,8 @@ export function SeasonComparison({
                                   </td>
                                 );
                               })}
-                              <td className="px-2 py-1 text-slate-300 whitespace-nowrap text-right tabular-nums">{row.subInMinutes.length > 0 ? row.subInMinutes.join(', ') : '-'}</td>
-                              <td className="px-2 py-1 text-slate-300 whitespace-nowrap text-right tabular-nums">{row.subOutMinutes.length > 0 ? row.subOutMinutes.join(', ') : '-'}</td>
+                              <td className="px-2 py-1 text-secondary whitespace-nowrap text-right tabular-nums">{row.subInMinutes.length > 0 ? row.subInMinutes.join(', ') : '-'}</td>
+                              <td className="px-2 py-1 text-secondary whitespace-nowrap text-right tabular-nums">{row.subOutMinutes.length > 0 ? row.subOutMinutes.join(', ') : '-'}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -15791,9 +15790,9 @@ export function SeasonComparison({
                     </div>
                   </div>
 
-                  <div className="rounded-md border border-slate-800 bg-slate-950/35 p-3 space-y-3">
+                  <div className="rounded-md border border-border-subtle bg-base/60 p-3 space-y-3">
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="text-sm text-slate-300 font-medium">5-ös felállások (Kosarstat nézet)</div>
+                      <div className="text-sm text-secondary font-medium">5-ös felállások (Kosarstat nézet)</div>
                       <Button
                         type="button"
                         size="sm"
@@ -15815,48 +15814,48 @@ export function SeasonComparison({
                     <div className="overflow-x-auto">
                       <div className="flex items-center gap-2 min-w-max pb-1">
                         <Select value={lineupAnyPlayerFilter} onValueChange={setLineupAnyPlayerFilter}>
-                          <SelectTrigger className="bg-slate-800 border-slate-700 h-8 text-xs min-w-44"><SelectValue placeholder="Bármely játékos" /></SelectTrigger>
-                          <SelectContent className="bg-slate-800 border-slate-700 text-slate-100">
+                          <SelectTrigger className="h-8 text-xs min-w-44"><SelectValue placeholder="Bármely játékos" /></SelectTrigger>
+                          <SelectContent className="">
                             <SelectItem value={LINEUP_FILTER_ALL}>Bármely játékos</SelectItem>
                             {comboPlayerOptions.map(name => (<SelectItem key={`lineup-any-${name}`} value={name}>{name}</SelectItem>))}
                           </SelectContent>
                         </Select>
 
                         <Select value={lineupPgFilter} onValueChange={setLineupPgFilter}>
-                          <SelectTrigger className="bg-slate-800 border-slate-700 h-8 text-xs min-w-36"><SelectValue placeholder="PG" /></SelectTrigger>
-                          <SelectContent className="bg-slate-800 border-slate-700 text-slate-100">
+                          <SelectTrigger className="h-8 text-xs min-w-36"><SelectValue placeholder="PG" /></SelectTrigger>
+                          <SelectContent className="">
                             <SelectItem value={LINEUP_FILTER_ALL}>PG: mind</SelectItem>
                             {lineupPositionOptions.pg.map(name => (<SelectItem key={`lineup-pg-${name}`} value={name}>{name}</SelectItem>))}
                           </SelectContent>
                         </Select>
 
                         <Select value={lineupSgFilter} onValueChange={setLineupSgFilter}>
-                          <SelectTrigger className="bg-slate-800 border-slate-700 h-8 text-xs min-w-36"><SelectValue placeholder="SG" /></SelectTrigger>
-                          <SelectContent className="bg-slate-800 border-slate-700 text-slate-100">
+                          <SelectTrigger className="h-8 text-xs min-w-36"><SelectValue placeholder="SG" /></SelectTrigger>
+                          <SelectContent className="">
                             <SelectItem value={LINEUP_FILTER_ALL}>SG: mind</SelectItem>
                             {lineupPositionOptions.sg.map(name => (<SelectItem key={`lineup-sg-${name}`} value={name}>{name}</SelectItem>))}
                           </SelectContent>
                         </Select>
 
                         <Select value={lineupSfFilter} onValueChange={setLineupSfFilter}>
-                          <SelectTrigger className="bg-slate-800 border-slate-700 h-8 text-xs min-w-36"><SelectValue placeholder="SF" /></SelectTrigger>
-                          <SelectContent className="bg-slate-800 border-slate-700 text-slate-100">
+                          <SelectTrigger className="h-8 text-xs min-w-36"><SelectValue placeholder="SF" /></SelectTrigger>
+                          <SelectContent className="">
                             <SelectItem value={LINEUP_FILTER_ALL}>SF: mind</SelectItem>
                             {lineupPositionOptions.sf.map(name => (<SelectItem key={`lineup-sf-${name}`} value={name}>{name}</SelectItem>))}
                           </SelectContent>
                         </Select>
 
                         <Select value={lineupPfFilter} onValueChange={setLineupPfFilter}>
-                          <SelectTrigger className="bg-slate-800 border-slate-700 h-8 text-xs min-w-36"><SelectValue placeholder="PF" /></SelectTrigger>
-                          <SelectContent className="bg-slate-800 border-slate-700 text-slate-100">
+                          <SelectTrigger className="h-8 text-xs min-w-36"><SelectValue placeholder="PF" /></SelectTrigger>
+                          <SelectContent className="">
                             <SelectItem value={LINEUP_FILTER_ALL}>PF: mind</SelectItem>
                             {lineupPositionOptions.pf.map(name => (<SelectItem key={`lineup-pf-${name}`} value={name}>{name}</SelectItem>))}
                           </SelectContent>
                         </Select>
 
                         <Select value={lineupCFilter} onValueChange={setLineupCFilter}>
-                          <SelectTrigger className="bg-slate-800 border-slate-700 h-8 text-xs min-w-36"><SelectValue placeholder="C" /></SelectTrigger>
-                          <SelectContent className="bg-slate-800 border-slate-700 text-slate-100">
+                          <SelectTrigger className="h-8 text-xs min-w-36"><SelectValue placeholder="C" /></SelectTrigger>
+                          <SelectContent className="">
                             <SelectItem value={LINEUP_FILTER_ALL}>C: mind</SelectItem>
                             {lineupPositionOptions.c.map(name => (<SelectItem key={`lineup-c-${name}`} value={name}>{name}</SelectItem>))}
                           </SelectContent>
@@ -15864,14 +15863,14 @@ export function SeasonComparison({
                       </div>
                     </div>
 
-                    <div className="text-xs text-slate-500">
-                      Találatok: <span className="text-slate-300 font-medium">{filteredFiveManLineups.length}</span>
+                    <div className="text-xs text-muted">
+                      Találatok: <span className="text-secondary font-medium">{filteredFiveManLineups.length}</span>
                     </div>
 
                     <div className="overflow-x-auto max-h-112">
                       <table className="w-full text-xs border-collapse" style={{ minWidth: 980 }}>
                         <thead>
-                          <tr className="text-slate-400 border-b border-slate-800/80">
+                          <tr className="text-muted border-b border-border-subtle/80">
                             <th className="px-2 py-1 text-left">PG</th>
                             <th className="px-2 py-1 text-left">SG</th>
                             <th className="px-2 py-1 text-left">SF</th>
@@ -15887,26 +15886,26 @@ export function SeasonComparison({
                         <tbody>
                           {filteredFiveManLineups.length === 0 && (
                             <tr>
-                              <td colSpan={10} className="px-2 py-4 text-center text-slate-500">
+                              <td colSpan={10} className="px-2 py-4 text-center text-muted">
                                 Nincs találat a megadott szűrőkkel.
                               </td>
                             </tr>
                           )}
 
                           {filteredFiveManLineups.map((stint, idx) => (
-                            <tr key={`lineup-five-${idx}-${stint.players.join('|')}-${stint.seconds}`} className="border-t border-slate-800/70">
-                              <td className="px-2 py-1 text-slate-200 whitespace-nowrap">{stint.pg || '-'}</td>
-                              <td className="px-2 py-1 text-slate-200 whitespace-nowrap">{stint.sg || '-'}</td>
-                              <td className="px-2 py-1 text-slate-200 whitespace-nowrap">{stint.sf || '-'}</td>
-                              <td className="px-2 py-1 text-slate-200 whitespace-nowrap">{stint.pf || '-'}</td>
-                              <td className="px-2 py-1 text-slate-200 whitespace-nowrap">{stint.c || '-'}</td>
-                              <td className="px-2 py-1 text-slate-300 text-right whitespace-nowrap">{stint.minutesLabel}</td>
-                              <td className="px-2 py-1 text-slate-300 text-right whitespace-nowrap">{stint.teamPts}</td>
-                              <td className="px-2 py-1 text-slate-300 text-right whitespace-nowrap">{stint.oppPts}</td>
-                              <td className={`px-2 py-1 text-right whitespace-nowrap ${stint.plusMinus >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
+                            <tr key={`lineup-five-${idx}-${stint.players.join('|')}-${stint.seconds}`} className="border-t border-border-subtle/70">
+                              <td className="px-2 py-1 text-primary whitespace-nowrap">{stint.pg || '-'}</td>
+                              <td className="px-2 py-1 text-primary whitespace-nowrap">{stint.sg || '-'}</td>
+                              <td className="px-2 py-1 text-primary whitespace-nowrap">{stint.sf || '-'}</td>
+                              <td className="px-2 py-1 text-primary whitespace-nowrap">{stint.pf || '-'}</td>
+                              <td className="px-2 py-1 text-primary whitespace-nowrap">{stint.c || '-'}</td>
+                              <td className="px-2 py-1 text-secondary text-right whitespace-nowrap">{stint.minutesLabel}</td>
+                              <td className="px-2 py-1 text-secondary text-right whitespace-nowrap">{stint.teamPts}</td>
+                              <td className="px-2 py-1 text-secondary text-right whitespace-nowrap">{stint.oppPts}</td>
+                              <td className={`px-2 py-1 text-right whitespace-nowrap ${stint.plusMinus >= 0 ? 'text-positive' : 'text-negative'}`}>
                                 {stint.plusMinus > 0 ? '+' : ''}{stint.plusMinus}
                               </td>
-                              <td className="px-2 py-1 text-slate-300 text-right whitespace-nowrap">
+                              <td className="px-2 py-1 text-secondary text-right whitespace-nowrap">
                                 {stint.on40 === null ? '-' : `${stint.on40 > 0 ? '+' : ''}${stint.on40.toFixed(1)}`}
                               </td>
                             </tr>
@@ -15916,8 +15915,8 @@ export function SeasonComparison({
                     </div>
                   </div>
 
-                  <div className="rounded-md border border-slate-800 bg-slate-950/35 p-3 space-y-3">
-                    <div className="text-sm text-slate-300 font-medium">Páros / hármas együttállás elemző</div>
+                  <div className="rounded-md border border-border-subtle bg-base/60 p-3 space-y-3">
+                    <div className="text-sm text-secondary font-medium">Páros / hármas együttállás elemző</div>
 
                     <div className="flex flex-wrap gap-2">
                       <Button
@@ -15940,23 +15939,23 @@ export function SeasonComparison({
 
                     <div className={`grid gap-2 ${selectedComboSize === 2 ? 'md:grid-cols-2' : 'md:grid-cols-3'}`}>
                       <Select value={selectedComboPlayerA} onValueChange={setSelectedComboPlayerA}>
-                        <SelectTrigger className="bg-slate-800 border-slate-700"><SelectValue placeholder="1. játékos" /></SelectTrigger>
-                        <SelectContent className="bg-slate-800 border-slate-700 text-slate-100">
+                        <SelectTrigger className=""><SelectValue placeholder="1. játékos" /></SelectTrigger>
+                        <SelectContent className="">
                           {comboPlayerOptions.map(name => (<SelectItem key={`combo-a-${name}`} value={name}>{name}</SelectItem>))}
                         </SelectContent>
                       </Select>
 
                       <Select value={selectedComboPlayerB} onValueChange={setSelectedComboPlayerB}>
-                        <SelectTrigger className="bg-slate-800 border-slate-700"><SelectValue placeholder="2. játékos" /></SelectTrigger>
-                        <SelectContent className="bg-slate-800 border-slate-700 text-slate-100">
+                        <SelectTrigger className=""><SelectValue placeholder="2. játékos" /></SelectTrigger>
+                        <SelectContent className="">
                           {comboPlayerOptions.map(name => (<SelectItem key={`combo-b-${name}`} value={name}>{name}</SelectItem>))}
                         </SelectContent>
                       </Select>
 
                       {selectedComboSize === 3 && (
                         <Select value={selectedComboPlayerC} onValueChange={setSelectedComboPlayerC}>
-                          <SelectTrigger className="bg-slate-800 border-slate-700"><SelectValue placeholder="3. játékos" /></SelectTrigger>
-                          <SelectContent className="bg-slate-800 border-slate-700 text-slate-100">
+                          <SelectTrigger className=""><SelectValue placeholder="3. játékos" /></SelectTrigger>
+                          <SelectContent className="">
                             {comboPlayerOptions.map(name => (<SelectItem key={`combo-c-${name}`} value={name}>{name}</SelectItem>))}
                           </SelectContent>
                         </Select>
@@ -15965,40 +15964,40 @@ export function SeasonComparison({
 
                     {selectedComboStat ? (
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2 text-xs">
-                        <div className="rounded bg-slate-900/50 px-2 py-2"><div className="text-slate-400">Együtt töltött idő</div><div className="text-slate-100">{selectedComboStat.minutesLabel}</div></div>
-                        <div className="rounded bg-slate-900/50 px-2 py-2"><div className="text-slate-400">+/-</div><div className={selectedComboStat.plusMinus >= 0 ? 'text-emerald-300' : 'text-rose-300'}>{selectedComboStat.plusMinus > 0 ? '+' : ''}{selectedComboStat.plusMinus.toFixed(1)}</div></div>
-                        <div className="rounded bg-slate-900/50 px-2 py-2"><div className="text-slate-400">Off hatékonyság (40p)</div><div className="text-slate-100">{selectedComboStat.offPer40.toFixed(1)}</div></div>
-                        <div className="rounded bg-slate-900/50 px-2 py-2"><div className="text-slate-400">Def hatékonyság (40p)</div><div className="text-slate-100">{selectedComboStat.defPer40.toFixed(1)}</div></div>
+                        <div className="rounded bg-surface-1/70 px-2 py-2"><div className="text-secondary">Együtt töltött idő</div><div className="text-primary">{selectedComboStat.minutesLabel}</div></div>
+                        <div className="rounded bg-surface-1/70 px-2 py-2"><div className="text-secondary">+/-</div><div className={selectedComboStat.plusMinus >= 0 ? 'text-positive' : 'text-negative'}>{selectedComboStat.plusMinus > 0 ? '+' : ''}{selectedComboStat.plusMinus.toFixed(1)}</div></div>
+                        <div className="rounded bg-surface-1/70 px-2 py-2"><div className="text-secondary">Off hatékonyság (40p)</div><div className="text-primary">{selectedComboStat.offPer40.toFixed(1)}</div></div>
+                        <div className="rounded bg-surface-1/70 px-2 py-2"><div className="text-secondary">Def hatékonyság (40p)</div><div className="text-primary">{selectedComboStat.defPer40.toFixed(1)}</div></div>
                       </div>
                     ) : (
-                      <div className="text-xs text-slate-500">Válassz érvényes {selectedComboSize === 2 ? 'párost' : 'hármast'} az aggregált mutatókhoz.</div>
+                      <div className="text-xs text-muted">Válassz érvényes {selectedComboSize === 2 ? 'párost' : 'hármast'} az aggregált mutatókhoz.</div>
                     )}
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       <div>
-                        <div className="text-xs text-slate-400 mb-1">Leghatékonyabb együttállások (Net/40)</div>
+                        <div className="text-xs text-secondary mb-1">Leghatékonyabb együttállások (Net/40)</div>
                         <div className="space-y-1">
                           {(selectedComboSize === 2 ? activeKosarstatTeamAnalysis.pairStats : activeKosarstatTeamAnalysis.trioStats)
                             .slice(0, 5)
                             .map(item => (
-                              <div key={`best-net-${item.key}`} className="text-xs bg-slate-900/40 rounded px-2 py-1 flex items-center justify-between">
-                                <span className="text-slate-200 truncate pr-2">{item.players.join(' + ')}</span>
-                                <span className={item.netPer40 >= 0 ? 'text-emerald-300' : 'text-rose-300'}>{item.netPer40 > 0 ? '+' : ''}{item.netPer40.toFixed(1)}</span>
+                              <div key={`best-net-${item.key}`} className="text-xs bg-surface-1/60 rounded px-2 py-1 flex items-center justify-between">
+                                <span className="text-primary truncate pr-2">{item.players.join(' + ')}</span>
+                                <span className={item.netPer40 >= 0 ? 'text-positive' : 'text-negative'}>{item.netPer40 > 0 ? '+' : ''}{item.netPer40.toFixed(1)}</span>
                               </div>
                             ))}
                         </div>
                       </div>
 
                       <div>
-                        <div className="text-xs text-slate-400 mb-1">Legjobb védekező együttállások (legalacsonyabb Def/40)</div>
+                        <div className="text-xs text-secondary mb-1">Legjobb védekező együttállások (legalacsonyabb Def/40)</div>
                         <div className="space-y-1">
                           {(selectedComboSize === 2 ? activeKosarstatTeamAnalysis.pairStats : activeKosarstatTeamAnalysis.trioStats)
                             .slice()
                             .sort((a, b) => a.defPer40 - b.defPer40)
                             .slice(0, 5)
                             .map(item => (
-                              <div key={`best-def-${item.key}`} className="text-xs bg-slate-900/40 rounded px-2 py-1 flex items-center justify-between">
-                                <span className="text-slate-200 truncate pr-2">{item.players.join(' + ')}</span>
+                              <div key={`best-def-${item.key}`} className="text-xs bg-surface-1/60 rounded px-2 py-1 flex items-center justify-between">
+                                <span className="text-primary truncate pr-2">{item.players.join(' + ')}</span>
                                 <span className="text-cyan-300">{item.defPer40.toFixed(1)}</span>
                               </div>
                             ))}
@@ -16010,43 +16009,43 @@ export function SeasonComparison({
               )}
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div className="p-3 bg-slate-800/50 rounded-lg">
-                  <div className="text-xs text-slate-400">Pontok</div>
-                  <div className="text-slate-50 text-lg font-medium">
+                <div className="p-3 bg-surface-2/50 rounded-lg">
+                  <div className="text-xs text-secondary">Pontok</div>
+                  <div className="text-primary text-lg font-medium">
                     {postgameReport.metrics.pointsFor} - {postgameReport.metrics.pointsAgainst}
                   </div>
-                  <div className={`text-xs ${postgameReport.metrics.margin >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                  <div className={`text-xs ${postgameReport.metrics.margin >= 0 ? 'text-positive' : 'text-negative'}`}>
                     Margin: {postgameReport.metrics.margin > 0 ? '+' : ''}{postgameReport.metrics.margin.toFixed(1)}
                   </div>
                 </div>
-                <div className="p-3 bg-slate-800/50 rounded-lg">
-                  <div className="text-xs text-slate-400">Tempó (pace)</div>
-                  <div className="text-slate-50 text-lg font-medium">{postgameReport.metrics.pace.toFixed(1)}</div>
-                  <div className="text-xs text-slate-500">Meccs-possessions becslés</div>
+                <div className="p-3 bg-surface-2/50 rounded-lg">
+                  <div className="text-xs text-secondary">Tempó (pace)</div>
+                  <div className="text-primary text-lg font-medium">{postgameReport.metrics.pace.toFixed(1)}</div>
+                  <div className="text-xs text-muted">Meccs-possessions becslés</div>
                 </div>
-                <div className="p-3 bg-slate-800/50 rounded-lg">
-                  <div className="text-xs text-slate-400">eFG%</div>
-                  <div className="text-slate-50 text-lg font-medium">{postgameReport.metrics.efg.toFixed(1)}%</div>
-                  <div className="text-xs text-slate-500">Hatékonyság</div>
+                <div className="p-3 bg-surface-2/50 rounded-lg">
+                  <div className="text-xs text-secondary">eFG%</div>
+                  <div className="text-primary text-lg font-medium">{postgameReport.metrics.efg.toFixed(1)}%</div>
+                  <div className="text-xs text-muted">Hatékonyság</div>
                 </div>
               </div>
 
               <div>
-                <div className="text-sm text-slate-300 font-medium mb-2">Kulcs mutatók (meccs vs. szezon)</div>
+                <div className="text-sm text-secondary font-medium mb-2">Kulcs mutatók (meccs vs. szezon)</div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   {postgameReport.metrics.keyStats.map(item => (
-                    <div key={item.key} className="p-3 bg-slate-800/50 rounded-lg flex items-center justify-between">
+                    <div key={item.key} className="p-3 bg-surface-2/50 rounded-lg flex items-center justify-between">
                       <div>
-                        <div className="text-xs text-slate-400">{item.label}</div>
-                        <div className="text-slate-50 text-lg font-medium">
+                        <div className="text-xs text-secondary">{item.label}</div>
+                        <div className="text-primary text-lg font-medium">
                           {formatPostgameValue(item.game, item.unit)}
                         </div>
-                        <div className="text-xs text-slate-500">
+                        <div className="text-xs text-muted">
                           Szezon: {formatPostgameValue(item.season, item.unit)}
                           {Number.isFinite(item.leagueMedian) ? ` • Liga medián: ${formatPostgameValue(item.leagueMedian ?? 0, item.unit)}` : ''}
                         </div>
                       </div>
-                      <div className={`text-sm font-medium ${item.delta >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                      <div className={`text-sm font-medium ${item.delta >= 0 ? 'text-positive' : 'text-negative'}`}>
                         {formatPostgameDelta(item.delta, item.unit)}
                       </div>
                     </div>
@@ -16055,8 +16054,8 @@ export function SeasonComparison({
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <div className="p-3 bg-slate-800/50 rounded-lg">
-                  <div className="text-sm text-slate-300 font-medium mb-2">Hatékonyság összevetés</div>
+                <div className="p-3 bg-surface-2/50 rounded-lg">
+                  <div className="text-sm text-secondary font-medium mb-2">Hatékonyság összevetés</div>
                   <ResponsiveContainer width="100%" height={240}>
                     <BarChart data={postgameReport.charts.efficiency} margin={{ left: 8, right: 8 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
@@ -16081,8 +16080,8 @@ export function SeasonComparison({
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
-                <div className="p-3 bg-slate-800/50 rounded-lg">
-                  <div className="text-sm text-slate-300 font-medium mb-2">Dobásprofil</div>
+                <div className="p-3 bg-surface-2/50 rounded-lg">
+                  <div className="text-sm text-secondary font-medium mb-2">Dobásprofil</div>
                   <ResponsiveContainer width="100%" height={240}>
                     <BarChart data={postgameReport.charts.shotProfile} margin={{ left: 8, right: 8 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
@@ -16107,39 +16106,39 @@ export function SeasonComparison({
               </div>
 
               {postgameReport.shotMap?.available && postgameReport.shotMap.team && postgameReport.shotMap.comparison && (
-                <div className="rounded-lg border border-slate-800 bg-slate-900/40 p-4 space-y-3">
+                <div className="rounded-lg border border-border-subtle bg-surface-2/40 p-4 space-y-3">
                   <div className="flex items-center justify-between">
-                    <div className="text-sm text-slate-200 font-medium">Dobástérkép kontextus (meccs vs. szezon)</div>
-                    <div className="text-xs text-slate-500">
+                    <div className="text-sm text-primary font-medium">Dobástérkép kontextus (meccs vs. szezon)</div>
+                    <div className="text-xs text-muted">
                       Kísérletek: {postgameReport.shotMap.team.attempts} • FG%: {formatShotPct(postgameReport.shotMap.team.fgPct)}
                     </div>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-                    <div className="p-3 bg-slate-800/50 rounded-lg">
-                      <div className="text-xs text-slate-400">Gyűrű arány</div>
-                      <div className="text-slate-50 text-lg font-medium">{formatShotPct(postgameReport.shotMap.team.rimRate)}</div>
+                    <div className="p-3 bg-surface-2/50 rounded-lg">
+                      <div className="text-xs text-secondary">Gyűrű arány</div>
+                      <div className="text-primary text-lg font-medium">{formatShotPct(postgameReport.shotMap.team.rimRate)}</div>
                       <div className={`text-xs ${shotDeltaTone(postgameReport.shotMap.comparison.rimRateDelta)}`}>
                         Delta: {formatShotDeltaPp(postgameReport.shotMap.comparison.rimRateDelta)}
                       </div>
                     </div>
-                    <div className="p-3 bg-slate-800/50 rounded-lg">
-                      <div className="text-xs text-slate-400">Középtáv arány</div>
-                      <div className="text-slate-50 text-lg font-medium">{formatShotPct(postgameReport.shotMap.team.midRate)}</div>
+                    <div className="p-3 bg-surface-2/50 rounded-lg">
+                      <div className="text-xs text-secondary">Középtáv arány</div>
+                      <div className="text-primary text-lg font-medium">{formatShotPct(postgameReport.shotMap.team.midRate)}</div>
                       <div className={`text-xs ${shotDeltaTone(postgameReport.shotMap.comparison.midRateDelta)}`}>
                         Delta: {formatShotDeltaPp(postgameReport.shotMap.comparison.midRateDelta)}
                       </div>
                     </div>
-                    <div className="p-3 bg-slate-800/50 rounded-lg">
-                      <div className="text-xs text-slate-400">Tripla arány</div>
-                      <div className="text-slate-50 text-lg font-medium">{formatShotPct(postgameReport.shotMap.team.threeRate)}</div>
+                    <div className="p-3 bg-surface-2/50 rounded-lg">
+                      <div className="text-xs text-secondary">Tripla arány</div>
+                      <div className="text-primary text-lg font-medium">{formatShotPct(postgameReport.shotMap.team.threeRate)}</div>
                       <div className={`text-xs ${shotDeltaTone(postgameReport.shotMap.comparison.threeRateDelta)}`}>
                         Delta: {formatShotDeltaPp(postgameReport.shotMap.comparison.threeRateDelta)}
                       </div>
                     </div>
-                    <div className="p-3 bg-slate-800/50 rounded-lg">
-                      <div className="text-xs text-slate-400">Sarok tripla arány</div>
-                      <div className="text-slate-50 text-lg font-medium">{formatShotPct(postgameReport.shotMap.team.corner3Rate)}</div>
+                    <div className="p-3 bg-surface-2/50 rounded-lg">
+                      <div className="text-xs text-secondary">Sarok tripla arány</div>
+                      <div className="text-primary text-lg font-medium">{formatShotPct(postgameReport.shotMap.team.corner3Rate)}</div>
                       <div className={`text-xs ${shotDeltaTone(postgameReport.shotMap.comparison.corner3RateDelta)}`}>
                         Delta: {formatShotDeltaPp(postgameReport.shotMap.comparison.corner3RateDelta)}
                       </div>
@@ -16147,27 +16146,27 @@ export function SeasonComparison({
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    <div className="p-3 bg-slate-800/40 rounded-lg">
-                      <div className="text-xs text-slate-400">Gyűrű FG%</div>
-                      <div className="text-sm text-slate-100">
+                    <div className="p-3 bg-surface-2/40 rounded-lg">
+                      <div className="text-xs text-secondary">Gyűrű FG%</div>
+                      <div className="text-sm text-primary">
                         {formatShotPct(postgameReport.shotMap.team.rimPct)}
                         <span className={`ml-2 ${shotDeltaTone(postgameReport.shotMap.comparison.rimPctDelta)}`}>
                           ({formatShotDeltaPp(postgameReport.shotMap.comparison.rimPctDelta)})
                         </span>
                       </div>
                     </div>
-                    <div className="p-3 bg-slate-800/40 rounded-lg">
-                      <div className="text-xs text-slate-400">Tripla FG%</div>
-                      <div className="text-sm text-slate-100">
+                    <div className="p-3 bg-surface-2/40 rounded-lg">
+                      <div className="text-xs text-secondary">Tripla FG%</div>
+                      <div className="text-sm text-primary">
                         {formatShotPct(postgameReport.shotMap.team.threePct)}
                         <span className={`ml-2 ${shotDeltaTone(postgameReport.shotMap.comparison.threePctDelta)}`}>
                           ({formatShotDeltaPp(postgameReport.shotMap.comparison.threePctDelta)})
                         </span>
                       </div>
                     </div>
-                    <div className="p-3 bg-slate-800/40 rounded-lg">
-                      <div className="text-xs text-slate-400">Shot quality index</div>
-                      <div className="text-sm text-slate-100">
+                    <div className="p-3 bg-surface-2/40 rounded-lg">
+                      <div className="text-xs text-secondary">Shot quality index</div>
+                      <div className="text-sm text-primary">
                         {postgameReport.shotMap.team.shotQualityIndex.toFixed(2)}
                         <span className={`ml-2 ${shotDeltaTone(postgameReport.shotMap.comparison.shotQualityDelta)}`}>
                           ({postgameReport.shotMap.comparison.shotQualityDelta > 0 ? '+' : ''}{postgameReport.shotMap.comparison.shotQualityDelta.toFixed(2)})
@@ -16177,8 +16176,8 @@ export function SeasonComparison({
                   </div>
 
                   {postgameZoneDrilldownRows.length > 0 && (
-                    <div className="space-y-2 rounded-lg border border-slate-800 bg-slate-900/35 p-3">
-                      <div className="text-sm text-slate-300 font-medium">Interaktív zóna drilldown</div>
+                    <div className="space-y-2 rounded-lg border border-border-subtle bg-surface-1/60 p-3">
+                      <div className="text-sm text-secondary font-medium">Interaktív zóna drilldown</div>
                       <div className="flex flex-wrap gap-2">
                         {postgameZoneDrilldownRows.map(zone => (
                           <Button
@@ -16188,8 +16187,8 @@ export function SeasonComparison({
                             variant={selectedPostgameZone === zone.key ? 'default' : 'outline'}
                             onClick={() => setSelectedPostgameZone(zone.key)}
                             className={selectedPostgameZone === zone.key
-                              ? 'bg-cyan-500 hover:bg-cyan-400 text-slate-950'
-                              : 'border-slate-700 text-slate-300 hover:bg-slate-800'}
+                              ? 'bg-cyan hover:bg-cyan/80 text-base'
+                              : 'border-border-subtle text-secondary hover:bg-surface-2'}
                           >
                             {zone.label}
                           </Button>
@@ -16197,27 +16196,27 @@ export function SeasonComparison({
                       </div>
                       {selectedZoneDrilldown && (
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
-                          <div className="rounded-md border border-slate-800 bg-slate-900/50 p-2">
-                            <div className="text-slate-400">Volumen</div>
-                            <div className="text-slate-100 mt-1">Meccs: {selectedZoneDrilldown.gameRate.toFixed(1)}%</div>
-                            <div className="text-slate-400">Szezon: {selectedZoneDrilldown.seasonRate.toFixed(1)}%</div>
-                            <div className={selectedZoneDrilldown.rateDelta >= 0 ? 'text-emerald-300 mt-1' : 'text-rose-300 mt-1'}>
+                          <div className="rounded-md border border-border-subtle bg-surface-2p-2">
+                            <div className="text-secondary">Volumen</div>
+                            <div className="text-primary mt-1">Meccs: {selectedZoneDrilldown.gameRate.toFixed(1)}%</div>
+                            <div className="text-secondary">Szezon: {selectedZoneDrilldown.seasonRate.toFixed(1)}%</div>
+                            <div className={selectedZoneDrilldown.rateDelta >= 0 ? 'text-positive mt-1' : 'text-negative mt-1'}>
                               Delta: {selectedZoneDrilldown.rateDelta >= 0 ? '+' : ''}{selectedZoneDrilldown.rateDelta.toFixed(1)} pp
                             </div>
                           </div>
-                          <div className="rounded-md border border-slate-800 bg-slate-900/50 p-2">
-                            <div className="text-slate-400">Hatékonyság (FG%)</div>
-                            <div className="text-slate-100 mt-1">Meccs: {selectedZoneDrilldown.gamePct.toFixed(1)}%</div>
-                            <div className="text-slate-400">Szezon: {selectedZoneDrilldown.seasonPct.toFixed(1)}%</div>
-                            <div className={selectedZoneDrilldown.pctDelta >= 0 ? 'text-emerald-300 mt-1' : 'text-rose-300 mt-1'}>
+                          <div className="rounded-md border border-border-subtle bg-surface-2p-2">
+                            <div className="text-secondary">Hatékonyság (FG%)</div>
+                            <div className="text-primary mt-1">Meccs: {selectedZoneDrilldown.gamePct.toFixed(1)}%</div>
+                            <div className="text-secondary">Szezon: {selectedZoneDrilldown.seasonPct.toFixed(1)}%</div>
+                            <div className={selectedZoneDrilldown.pctDelta >= 0 ? 'text-positive mt-1' : 'text-negative mt-1'}>
                               Delta: {selectedZoneDrilldown.pctDelta >= 0 ? '+' : ''}{selectedZoneDrilldown.pctDelta.toFixed(1)} pp
                             </div>
                           </div>
-                          <div className="rounded-md border border-slate-800 bg-slate-900/50 p-2 text-slate-300">
-                            <div className="text-slate-400">Kísérlet</div>
+                          <div className="rounded-md border border-border-subtle bg-surface-2p-2 text-secondary">
+                            <div className="text-secondary">Kísérlet</div>
                             <div className="mt-1">Meccs: {selectedZoneDrilldown.gameAttempts}</div>
                             <div>Szezon: {selectedZoneDrilldown.seasonAttempts}</div>
-                            <div className="text-slate-500 mt-1">A zóna részletes összevetése meccs-szezon kontextusban.</div>
+                            <div className="text-muted mt-1">A zóna részletes összevetése meccs-szezon kontextusban.</div>
                           </div>
                         </div>
                       )}
@@ -16273,14 +16272,14 @@ export function SeasonComparison({
                       const compositeDelta = round(pctDelta * 0.65 + rateDelta * 0.35, 1);
 
                       const tone = compositeDelta >= 4
-                        ? 'bg-emerald-900/35 border-emerald-700/60 text-emerald-100'
+                        ? 'bg-positive/20 border-positive/50 text-positive'
                         : compositeDelta >= 1.5
-                          ? 'bg-emerald-950/25 border-emerald-800/50 text-emerald-200'
+                          ? 'bg-positive/10 border-positive/30 text-positive'
                           : compositeDelta <= -4
-                            ? 'bg-rose-900/35 border-rose-700/60 text-rose-100'
+                            ? 'bg-negative/20 border-negative/50 text-negative'
                             : compositeDelta <= -1.5
-                              ? 'bg-rose-950/25 border-rose-800/50 text-rose-200'
-                              : 'bg-slate-900/40 border-slate-700/50 text-slate-200';
+                              ? 'bg-negative/10 border-negative/30 text-negative'
+                              : 'bg-surface-1/60 border-border-subtle text-primary';
 
                       const trendLabel = compositeDelta >= 1.5
                         ? 'Pozitív zóna-trend'
@@ -16313,8 +16312,8 @@ export function SeasonComparison({
                     return (
                       <div className="space-y-4">
                         <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                          <div className="p-3 bg-slate-800/50 rounded-lg">
-                            <div className="text-sm text-slate-300 font-medium mb-2">Zónaeloszlás (%)</div>
+                          <div className="p-3 bg-surface-2/50 rounded-lg">
+                            <div className="text-sm text-secondary font-medium mb-2">Zónaeloszlás (%)</div>
                             <ResponsiveContainer width="100%" height={260}>
                               <BarChart data={zoneRows} margin={{ left: 8, right: 8 }}>
                                 <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
@@ -16337,8 +16336,8 @@ export function SeasonComparison({
                               </BarChart>
                             </ResponsiveContainer>
                           </div>
-                          <div className="p-3 bg-slate-800/50 rounded-lg">
-                            <div className="text-sm text-slate-300 font-medium mb-2">Zónahatékonyság (FG%)</div>
+                          <div className="p-3 bg-surface-2/50 rounded-lg">
+                            <div className="text-sm text-secondary font-medium mb-2">Zónahatékonyság (FG%)</div>
                             <ResponsiveContainer width="100%" height={260}>
                               <LineChart data={zoneRows} margin={{ left: 8, right: 8 }}>
                                 <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
@@ -16363,10 +16362,10 @@ export function SeasonComparison({
                           </div>
                         </div>
 
-                        <div className="p-3 bg-slate-800/50 rounded-lg space-y-3">
-                          <div className="text-sm text-slate-300 font-medium">Zóna delta hőtérkép (meccs vs szezon)</div>
+                        <div className="p-3 bg-surface-2/50 rounded-lg space-y-3">
+                          <div className="text-sm text-secondary font-medium">Zóna delta hőtérkép (meccs vs szezon)</div>
                           <PostgameZoneHeatmapChart cells={zoneHeatCells} />
-                          <div className="text-xs text-slate-400">
+                          <div className="text-xs text-secondary">
                             Erős zónák: {strongZones.length > 0 ? strongZones.join(', ') : 'nincs kiugró pozitív zóna'} •
                             Gyenge zónák: {weakZones.length > 0 ? weakZones.join(', ') : 'nincs kiugró gyenge zóna'}
                           </div>
@@ -16376,17 +16375,17 @@ export function SeasonComparison({
                   })()}
 
                   {postgameShotScatterData.length > 0 && (
-                    <div className="p-3 bg-slate-800/40 rounded-lg">
+                    <div className="p-3 bg-surface-2/40 rounded-lg">
                       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                        <div className="text-sm text-slate-300 font-medium" title="Pontok: konkrét dobások. Heatmap: területi sűrűség vagy FG% hatékonyság réteg.">Dobástérkép kombó nézet (aktuális meccs, félpálya)</div>
+                        <div className="text-sm text-secondary font-medium" title="Pontok: konkrét dobások. Heatmap: területi sűrűség vagy FG% hatékonyság réteg.">Dobástérkép kombó nézet (aktuális meccs, félpálya)</div>
                         <div className="flex items-center gap-2">
                           <Button
                             type="button"
                             size="sm"
                             variant={showPostgameShotPoints ? 'default' : 'outline'}
                             className={showPostgameShotPoints
-                              ? 'h-7 bg-emerald-600 hover:bg-emerald-500 text-white'
-                              : 'h-7 border-slate-700 text-slate-300 hover:bg-slate-800'}
+                              ? 'h-7 bg-positive hover:bg-positive/80 text-base'
+                              : 'h-7 border-border-subtle text-secondary hover:bg-surface-2'}
                             onClick={() => {
                               if (showPostgameShotPoints && !showPostgameShotHeatmap) return;
                               setShowPostgameShotPoints(prev => !prev);
@@ -16399,8 +16398,8 @@ export function SeasonComparison({
                             size="sm"
                             variant={showPostgameShotHeatmap ? 'default' : 'outline'}
                             className={showPostgameShotHeatmap
-                              ? 'h-7 bg-orange-500 hover:bg-orange-400 text-slate-950'
-                              : 'h-7 border-slate-700 text-slate-300 hover:bg-slate-800'}
+                              ? 'h-7 bg-orange hover:bg-orange/80 text-base'
+                              : 'h-7 border-border-subtle text-secondary hover:bg-surface-2'}
                             onClick={() => {
                               if (showPostgameShotHeatmap && !showPostgameShotPoints) return;
                               setShowPostgameShotHeatmap(prev => !prev);
@@ -16409,7 +16408,7 @@ export function SeasonComparison({
                             Heatmap
                           </Button>
                           {showPostgameShotHeatmap && (
-                            <div className="ml-1 flex flex-wrap items-center gap-1 rounded-md border border-slate-700 bg-slate-900/70 p-1">
+                            <div className="ml-1 flex flex-wrap items-center gap-1 rounded-md border border-border-subtle bg-surface-1/70 p-1">
                               <div className="flex items-center gap-1">
                                 {[
                                   { key: 'volume', label: 'Volumen' },
@@ -16421,8 +16420,8 @@ export function SeasonComparison({
                                     size="sm"
                                     variant={postgameHeatmapMode === option.key ? 'default' : 'outline'}
                                     className={postgameHeatmapMode === option.key
-                                      ? 'h-6 px-2 bg-amber-200 text-slate-900 hover:bg-amber-100'
-                                      : 'h-6 px-2 border-slate-700 text-slate-300 hover:bg-slate-800'}
+                                      ? 'h-6 px-2 bg-warning/30 text-primary hover:bg-warning/40'
+                                      : 'h-6 px-2 border-border-subtle text-secondary hover:bg-surface-2'}
                                     onClick={() => setPostgameHeatmapMode(option.key as 'volume' | 'efficiency')}
                                     title={option.key === 'volume' ? 'Dobáskísérlet sűrűség alapján színez' : 'FG% alapján színez, minimum mintaszámmal'}
                                   >
@@ -16430,7 +16429,7 @@ export function SeasonComparison({
                                   </Button>
                                 ))}
                               </div>
-                              <div className="hidden sm:block h-4 w-px bg-slate-700 mx-1" />
+                              <div className="hidden sm:block h-4 w-px bg-border-subtle mx-1" />
                               {[
                                 { key: 'soft', label: 'Lágy' },
                                 { key: 'normal', label: 'Normál' },
@@ -16442,8 +16441,8 @@ export function SeasonComparison({
                                   size="sm"
                                   variant={postgameHeatmapContrast === option.key ? 'default' : 'outline'}
                                   className={postgameHeatmapContrast === option.key
-                                    ? 'h-6 px-2 bg-slate-200 text-slate-900 hover:bg-white'
-                                    : 'h-6 px-2 border-slate-700 text-slate-300 hover:bg-slate-800'}
+                                    ? 'h-6 px-2 bg-surface-3 text-primary hover:bg-border-subtle'
+                                    : 'h-6 px-2 border-border-subtle text-secondary hover:bg-surface-2'}
                                   onClick={() => setPostgameHeatmapContrast(option.key as 'soft' | 'normal' | 'sharp')}
                                 >
                                   {option.label}
@@ -16454,7 +16453,7 @@ export function SeasonComparison({
                         </div>
                       </div>
                       {showPostgameShotHeatmap && filteredPostgameShotScatterData.length < 24 && (
-                        <div className="mb-2 rounded-md border border-amber-700/60 bg-amber-900/20 px-2.5 py-2 text-xs text-amber-200">
+                        <div className="mb-2 rounded-md border border-warning/40 bg-warning/10 px-2.5 py-2 text-xs text-warning">
                           Alacsony mintaszám a heatmaphez ({filteredPostgameShotScatterData.length} dobás). A zónák trendje óvatosan értelmezendő.
                         </div>
                       )}
@@ -16465,30 +16464,30 @@ export function SeasonComparison({
                         heatmapContrast={postgameHeatmapContrast}
                         heatmapMode={postgameHeatmapMode}
                       />
-                      <div className="mt-3 rounded-md border border-slate-700/80 bg-slate-900/50 p-2.5">
+                      <div className="mt-3 rounded-md border border-border-subtle bg-surface-1/70 p-2.5">
                         <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                           <div className="flex items-center gap-2">
-                            <span className="text-xs text-slate-400">Játékos:</span>
+                            <span className="text-xs text-secondary">Játékos:</span>
                             <Select value={selectedPostgameShotPlayerId} onValueChange={setSelectedPostgameShotPlayerId}>
-                              <SelectTrigger className="h-8 w-57.5 border-slate-600 bg-slate-900/80 text-xs text-slate-100">
+                              <SelectTrigger className="h-8 w-57.5 text-xs text-primary">
                                 <SelectValue placeholder="Minden játékos" />
                               </SelectTrigger>
-                              <SelectContent className="border-slate-700 bg-slate-900 text-slate-100">
-                                <SelectItem className="text-slate-100 focus:bg-slate-800 focus:text-slate-100" value="all">Minden játékos</SelectItem>
+                              <SelectContent className="">
+                                <SelectItem className="" value="all">Minden játékos</SelectItem>
                                 {postgameShotPlayerOptions.players.map(player => (
-                                  <SelectItem className="text-slate-100 focus:bg-slate-800 focus:text-slate-100" key={player.id} value={player.id}>{player.name}</SelectItem>
+                                  <SelectItem className="" key={player.id} value={player.id}>{player.name}</SelectItem>
                                 ))}
                                 {postgameShotPlayerOptions.unknownShotCount > 0 && (
-                                  <SelectItem className="text-slate-100 focus:bg-slate-800 focus:text-slate-100" value="__unknown__">Ismeretlen játékos ({postgameShotPlayerOptions.unknownShotCount})</SelectItem>
+                                  <SelectItem className="" value="__unknown__">Ismeretlen játékos ({postgameShotPlayerOptions.unknownShotCount})</SelectItem>
                                 )}
                               </SelectContent>
                             </Select>
                           </div>
-                          <span className="text-xs text-slate-400">Szűrt dobások: {filteredPostgameShotScatterData.length}</span>
+                          <span className="text-xs text-secondary">Szűrt dobások: {filteredPostgameShotScatterData.length}</span>
                         </div>
-                        <div className="mt-2 flex flex-wrap items-center gap-4 text-xs text-slate-500">
-                          {showPostgameShotPoints && <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-full bg-emerald-500" />Bement</span>}
-                          {showPostgameShotPoints && <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-full bg-rose-500" />Kimaradt</span>}
+                        <div className="mt-2 flex flex-wrap items-center gap-4 text-xs text-muted">
+                          {showPostgameShotPoints && <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-full bg-positive" />Bement</span>}
+                          {showPostgameShotPoints && <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-full bg-negative" />Kimaradt</span>}
                           {showPostgameShotHeatmap && <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-sm bg-orange-400/90" />Heatmap ({postgameHeatmapMode === 'volume' ? 'volumen' : 'FG% hatékonyság'})</span>}
                           <span>Kék vonal: hárompontos ív és sarokhatár, fehér vonal: alapvonal/palánk</span>
                         </div>
@@ -16500,15 +16499,15 @@ export function SeasonComparison({
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <div className="text-sm text-slate-300 font-medium mb-2">Döntő tényezők</div>
+                  <div className="text-sm text-secondary font-medium mb-2">Döntő tényezők</div>
                   {decisiveFactorGroups.length > 0 ? (
                     <div className="space-y-3">
                       {decisiveFactorGroups.map(group => (
                         <div
                           key={group.key}
-                          className="rounded-lg border border-slate-800 bg-linear-to-r from-slate-900/60 to-slate-800/30 p-3"
+                          className="rounded-lg border border-border-subtle bg-linear-to-r from-surface-1/80 to-surface-2/30 p-3"
                         >
-                          <div className="flex items-center justify-between text-[11px] uppercase tracking-wide text-slate-400">
+                          <div className="flex items-center justify-between text-[11px] uppercase tracking-wide text-secondary">
                             <span>{group.label}</span>
                             <span className={group.axis === 'offense' ? 'text-orange-300' : 'text-cyan-300'}>
                               {group.axis === 'offense' ? '⚡' : '🛡️'}
@@ -16517,7 +16516,7 @@ export function SeasonComparison({
                           <ul className="mt-2 space-y-1">
                             {group.items.map(label => {
                               const isNegative = isNegativeDecisiveLabel(label, group.axis);
-                              const toneClass = isNegative ? 'text-rose-300' : 'text-emerald-300';
+                              const toneClass = isNegative ? 'text-negative' : 'text-positive';
                               const icon = isNegative ? '🔻' : '▲';
                               const isActive = selectedPostgameFactor === label;
                               return (
@@ -16525,7 +16524,7 @@ export function SeasonComparison({
                                   <button
                                     type="button"
                                     onClick={() => setSelectedPostgameFactor(label)}
-                                    className={`w-full text-left flex items-start gap-2 rounded-md px-2 py-1.5 text-sm transition ${isActive ? 'bg-slate-800/70 ring-1 ring-cyan-500/60 text-slate-50' : 'text-slate-100 hover:bg-slate-800/50'}`}
+                                    className={`w-full text-left flex items-start gap-2 rounded-md px-2 py-1.5 text-sm transition ${isActive ? 'bg-surface-2/70 ring-1 ring-cyan/40 text-primary' : 'text-primary hover:bg-surface-2/50'}`}
                                   >
                                     <span className={`${toneClass} text-xs mt-0.5`}>{icon}</span>
                                     <span>{label}</span>
@@ -16538,12 +16537,12 @@ export function SeasonComparison({
                       ))}
                     </div>
                   ) : (
-                    <div className="text-sm text-slate-400">Nincs kiemelt faktor.</div>
+                    <div className="text-sm text-secondary">Nincs kiemelt faktor.</div>
                   )}
                 </div>
                 <div className="space-y-3">
-                  <div className="rounded-lg border border-slate-800 bg-slate-900/35 p-3">
-                    <div className="text-sm text-slate-300 font-medium mb-2" title="Megmutatja, hogy típusonként hány döntő faktor jelent meg a meccs képében.">Ellenfél-hatás faktoronként</div>
+                  <div className="rounded-lg border border-border-subtle bg-surface-1/60 p-3">
+                    <div className="text-sm text-secondary font-medium mb-2" title="Megmutatja, hogy típusonként hány döntő faktor jelent meg a meccs képében.">Ellenfél-hatás faktoronként</div>
                     {opponentImpactChartData.length > 0 ? (
                       <div className="h-52">
                         <ResponsiveContainer width="100%" height="100%">
@@ -16569,38 +16568,38 @@ export function SeasonComparison({
                         </ResponsiveContainer>
                       </div>
                     ) : (
-                      <div className="text-sm text-slate-500">Nincs elég faktor adat az ellenfél-hatás bontáshoz.</div>
+                      <div className="text-sm text-muted">Nincs elég faktor adat az ellenfél-hatás bontáshoz.</div>
                     )}
                   </div>
 
-                  <div className="rounded-lg border border-slate-800 bg-slate-900/35 p-3">
-                    <div className="text-sm text-slate-300 font-medium mb-1">Kiválasztott faktor részletei</div>
+                  <div className="rounded-lg border border-border-subtle bg-surface-1/60 p-3">
+                    <div className="text-sm text-secondary font-medium mb-1">Kiválasztott faktor részletei</div>
                     {selectedFactorDrilldown ? (
                       <div className="space-y-2 text-sm">
-                        <div className="text-slate-100">{selectedFactorDrilldown.label}</div>
-                        <div className="text-xs text-slate-400">
+                        <div className="text-primary">{selectedFactorDrilldown.label}</div>
+                        <div className="text-xs text-secondary">
                           Tengely: {selectedFactorDrilldown.axis === 'offense' ? 'támadás' : 'védekezés'} • Típus: {selectedFactorDrilldown.type}
                         </div>
                         {selectedFactorDrilldown.relatedStats.length > 0 ? (
                           <div className="space-y-1">
                             {selectedFactorDrilldown.relatedStats.map(stat => (
-                              <div key={`factor-stat-${stat.key}`} className="text-xs text-slate-300 flex items-center justify-between rounded border border-slate-800 bg-slate-900/40 px-2 py-1">
+                              <div key={`factor-stat-${stat.key}`} className="text-xs text-secondary flex items-center justify-between rounded border border-border-subtle bg-surface-2/40 px-2 py-1">
                                 <span>{stat.label}</span>
-                                <span className="text-slate-100">{stat.delta >= 0 ? '+' : ''}{stat.delta.toFixed(1)}{stat.unit === 'pct' ? ' pp' : ''}</span>
+                                <span className="text-primary">{stat.delta >= 0 ? '+' : ''}{stat.delta.toFixed(1)}{stat.unit === 'pct' ? ' pp' : ''}</span>
                               </div>
                             ))}
                           </div>
                         ) : (
-                          <div className="text-xs text-slate-500">Nincs közvetlenül kapcsolt key stat.</div>
+                          <div className="text-xs text-muted">Nincs közvetlenül kapcsolt key stat.</div>
                         )}
                       </div>
                     ) : (
-                      <div className="text-sm text-slate-500">Válassz egy faktort a bal oldali listából.</div>
+                      <div className="text-sm text-muted">Válassz egy faktort a bal oldali listából.</div>
                     )}
                   </div>
 
-                  <div className="rounded-lg border border-slate-800 bg-slate-900/35 p-3">
-                    <div className="text-sm text-slate-300 font-medium mb-1">Ellenfélhez kötött bontás</div>
+                  <div className="rounded-lg border border-border-subtle bg-surface-1/60 p-3">
+                    <div className="text-sm text-secondary font-medium mb-1">Ellenfélhez kötött bontás</div>
                     {opponentLinkedBreakdown.length > 0 ? (
                       <div className="space-y-1.5">
                         {opponentLinkedBreakdown.map((row, index) => (
@@ -16608,31 +16607,31 @@ export function SeasonComparison({
                             key={`linked-breakdown-${index}`}
                             type="button"
                             onClick={() => row.linkedFactor && setSelectedPostgameFactor(row.linkedFactor)}
-                            className="w-full text-left rounded-md border border-slate-800 bg-slate-900/50 px-2 py-1.5 hover:bg-slate-800/60"
+                            className="w-full text-left rounded-md border border-border-subtle bg-surface-2 px-2 py-1.5 hover:bg-surface-3"
                           >
-                            <div className="text-xs text-slate-400">{row.title}</div>
-                            <div className="text-sm text-slate-100">{row.detail}</div>
+                            <div className="text-xs text-secondary">{row.title}</div>
+                            <div className="text-sm text-primary">{row.detail}</div>
                           </button>
                         ))}
                       </div>
                     ) : (
-                      <div className="text-sm text-slate-500">Nincs ellenfélhez kapcsolt extra bontás.</div>
+                      <div className="text-sm text-muted">Nincs ellenfélhez kapcsolt extra bontás.</div>
                     )}
                   </div>
 
                   <div>
-                    <div className="text-sm text-slate-300 font-medium mb-2">Játékos hatás</div>
-                    <div className="text-sm text-slate-200">Pozitív: {postgameReport.playerImpact.positive.join(', ') || '-'}</div>
-                    <div className="text-sm text-slate-200">Negatív: {postgameReport.playerImpact.negative.join(', ') || '-'}</div>
+                    <div className="text-sm text-secondary font-medium mb-2">Játékos hatás</div>
+                    <div className="text-sm text-primary">Pozitív: {postgameReport.playerImpact.positive.join(', ') || '-'}</div>
+                    <div className="text-sm text-primary">Negatív: {postgameReport.playerImpact.negative.join(', ') || '-'}</div>
                   </div>
                 </div>
               </div>
 
               {postgameReport.playerReport && (
-                <div className="space-y-3 rounded-lg border border-slate-800 bg-slate-900/40 p-4">
+                <div className="space-y-3 rounded-lg border border-border-subtle bg-surface-2/40 p-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="text-sm text-slate-300 font-medium">Játékos post-game elemzés</div>
-                    <div className="text-xs text-slate-500">Usage% és TS% perc-normalizált • kattints a sorokra a részletekért</div>
+                    <div className="text-sm text-secondary font-medium">Játékos post-game elemzés</div>
+                    <div className="text-xs text-muted">Usage% és TS% perc-normalizált • kattints a sorokra a részletekért</div>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                     {(() => {
@@ -16641,7 +16640,7 @@ export function SeasonComparison({
                           key: 'mvp',
                           title: 'Meccs motor',
                           player: postgameReport.playerReport.highlights.mvp,
-                          classes: 'bg-emerald-950/30 border border-emerald-800/40',
+                          classes: 'bg-positive/10 border border-positive/30',
                           fallback: 'Nincs kiemelt motor ezen a meccsen.',
                         },
                         {
@@ -16655,21 +16654,21 @@ export function SeasonComparison({
                           key: 'spark',
                           title: 'Padlóról érkező szikra',
                           player: postgameReport.playerReport.highlights.sparkPlugs[0],
-                          classes: 'bg-amber-950/30 border border-amber-800/40',
+                          classes: 'bg-warning/10 border border-warning/30',
                           fallback: 'Nem volt kiugró spark plug.',
                         },
                       ];
                       return highlightCards.map(card => (
-                        <div key={card.key} className={`rounded-lg p-3 text-sm text-slate-200 ${card.classes}`}>
-                          <div className="text-[11px] uppercase tracking-wide text-slate-500">{card.title}</div>
+                        <div key={card.key} className={`rounded-lg p-3 text-sm text-primary ${card.classes}`}>
+                          <div className="text-[11px] uppercase tracking-wide text-muted">{card.title}</div>
                           {card.player ? (
                             <>
-                              <div className="text-base font-semibold text-slate-50">{card.player.name}</div>
-                              <div className="text-xs text-slate-300">{card.player.summaryLine}</div>
-                              <div className="text-[11px] text-slate-400 mt-1">{card.player.impactLabel}</div>
+                              <div className="text-base font-semibold text-primary">{card.player.name}</div>
+                              <div className="text-xs text-secondary">{card.player.summaryLine}</div>
+                              <div className="text-[11px] text-secondary mt-1">{card.player.impactLabel}</div>
                             </>
                           ) : (
-                            <div className="text-xs text-slate-500">{card.fallback}</div>
+                            <div className="text-xs text-muted">{card.fallback}</div>
                           )}
                         </div>
                       ));
@@ -16677,8 +16676,8 @@ export function SeasonComparison({
                   </div>
 
                   <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
-                    <div className="rounded-lg border border-slate-800 bg-slate-900/35 p-3">
-                      <div className="text-sm text-slate-300 font-medium mb-2" title="X: Usage%, Y: TS%, buborékméret: VAL/36.">Usage vs TS% buborék</div>
+                    <div className="rounded-lg border border-border-subtle bg-surface-1/60 p-3">
+                      <div className="text-sm text-secondary font-medium mb-2" title="X: Usage%, Y: TS%, buborékméret: VAL/36.">Usage vs TS% buborék</div>
                       {playerUsageVsTsData.length > 0 ? (
                         <>
                           <div className="h-72">
@@ -16718,21 +16717,21 @@ export function SeasonComparison({
                               </ScatterChart>
                             </ResponsiveContainer>
                           </div>
-                          <div className="mt-1 text-[11px] text-slate-500">Névfelirat: vezetéknév (hosszabb név rövidítve).</div>
+                          <div className="mt-1 text-[11px] text-muted">Névfelirat: vezetéknév (hosszabb név rövidítve).</div>
                         </>
                       ) : (
-                        <div className="text-sm text-slate-500">Nincs játékosadat a buborékdiagramhoz.</div>
+                        <div className="text-sm text-muted">Nincs játékosadat a buborékdiagramhoz.</div>
                       )}
                     </div>
 
-                    <div className="rounded-lg border border-slate-800 bg-slate-900/35 p-3">
+                    <div className="rounded-lg border border-border-subtle bg-surface-1/60 p-3">
                       <div className="flex items-center justify-between gap-2 mb-2">
-                        <div className="text-sm text-slate-300 font-medium" title="Időbeli alakulás az utolsó 8 meccsen: TS%, Usage%, VAL/36.">Játékos trend (utolsó 8 meccs)</div>
+                        <div className="text-sm text-secondary font-medium" title="Időbeli alakulás az utolsó 8 meccsen: TS%, Usage%, VAL/36.">Játékos trend (utolsó 8 meccs)</div>
                         <Select value={selectedTrendPlayerId} onValueChange={setSelectedTrendPlayerId}>
-                          <SelectTrigger className="h-8 w-52 bg-slate-800 border-slate-700 text-slate-100">
+                          <SelectTrigger className="h-8 w-52 text-primary">
                             <SelectValue placeholder="Válassz játékost" />
                           </SelectTrigger>
-                          <SelectContent className="border-slate-700 bg-slate-900 text-slate-100">
+                          <SelectContent className="">
                             {(postgameReport.playerReport?.players ?? []).map(player => (
                               <SelectItem key={`trend-player-${player.playerId}`} value={player.playerId}>
                                 {player.name}
@@ -16767,13 +16766,13 @@ export function SeasonComparison({
                           </ResponsiveContainer>
                         </div>
                       ) : (
-                        <div className="text-sm text-slate-500">Nincs elég meccsadat trendgörbéhez.</div>
+                        <div className="text-sm text-muted">Nincs elég meccsadat trendgörbéhez.</div>
                       )}
                     </div>
                   </div>
 
                   <div className="flex items-center justify-between gap-2">
-                    <div className="text-xs text-slate-500">Kattints egy sorra a részletekért</div>
+                    <div className="text-xs text-muted">Kattints egy sorra a részletekért</div>
                     <Button
                       type="button"
                       size="sm"
@@ -16791,60 +16790,60 @@ export function SeasonComparison({
                       const isExpanded = expandedPlayerImpactId === player.playerId;
                       const narrativeState = playerNarratives[player.playerId];
                       return (
-                        <div key={player.playerId} className="rounded-lg border border-slate-800 bg-slate-900/30">
+                        <div key={player.playerId} className="rounded-lg border border-border-subtle bg-surface-1/60">
                           <button
                             type="button"
                             onClick={() => handleTogglePlayerDetail(player.playerId)}
                             className="w-full px-3 py-2 flex flex-wrap items-center justify-between gap-2 text-left"
                           >
                             <div>
-                              <div className="text-sm text-slate-200 font-medium">{player.name}</div>
-                              <div className="text-xs text-slate-400">{player.summaryLine}</div>
+                              <div className="text-sm text-primary font-medium">{player.name}</div>
+                              <div className="text-xs text-secondary">{player.summaryLine}</div>
                             </div>
                             <div className="flex flex-wrap items-center gap-2 text-xs">
-                              <span className="px-2 py-1 rounded-full bg-slate-800 text-slate-200">{player.impactLabel}</span>
-                              <span className="px-2 py-1 rounded-full bg-slate-800 text-slate-200">{player.usageLabel}</span>
-                              <span className="text-slate-500">TS {player.hasShotAttempts ? `${player.tsPct.toFixed(1)}%` : '–'}</span>
-                              <span className="text-slate-500">VAL {player.val}</span>
-                              <span className="text-slate-500">VAL/36 {player.valPer36.toFixed(1)}</span>
+                              <span className="px-2 py-1 rounded-full bg-surface-2 text-primary">{player.impactLabel}</span>
+                              <span className="px-2 py-1 rounded-full bg-surface-2 text-primary">{player.usageLabel}</span>
+                              <span className="text-muted">TS {player.hasShotAttempts ? `${player.tsPct.toFixed(1)}%` : '–'}</span>
+                              <span className="text-muted">VAL {player.val}</span>
+                              <span className="text-muted">VAL/36 {player.valPer36.toFixed(1)}</span>
                             </div>
                           </button>
                           {isExpanded && (
-                            <div className="border-t border-slate-800 px-3 py-3 space-y-3">
-                              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs text-slate-300">
+                            <div className="border-t border-border-subtle px-3 py-3 space-y-3">
+                              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs text-secondary">
                                 <div>
-                                  <div className="text-[11px] uppercase tracking-wide text-slate-500">Erősségek</div>
+                                  <div className="text-[11px] uppercase tracking-wide text-muted">Erősségek</div>
                                   {player.strengths.length > 0 ? (
                                     player.strengths.map(item => <div key={item}>• {item}</div>)
                                   ) : (
-                                    <div className="text-slate-500">Nincs kiemelt erősség.</div>
+                                    <div className="text-muted">Nincs kiemelt erősség.</div>
                                   )}
                                 </div>
                                 <div>
-                                  <div className="text-[11px] uppercase tracking-wide text-slate-500">Limitációk</div>
+                                  <div className="text-[11px] uppercase tracking-wide text-muted">Limitációk</div>
                                   {player.issues.length > 0 ? (
                                     player.issues.map(item => <div key={item}>• {item}</div>)
                                   ) : (
-                                    <div className="text-slate-500">Stabil végrehajtás.</div>
+                                    <div className="text-muted">Stabil végrehajtás.</div>
                                   )}
                                 </div>
                                 <div>
-                                  <div className="text-[11px] uppercase tracking-wide text-slate-500">Fókusz</div>
+                                  <div className="text-[11px] uppercase tracking-wide text-muted">Fókusz</div>
                                   {player.focus.length > 0 ? (
                                     player.focus.map(item => <div key={item}>• {item}</div>)
                                   ) : (
-                                    <div className="text-slate-500">Fenntartandó teljesítmény.</div>
+                                    <div className="text-muted">Fenntartandó teljesítmény.</div>
                                   )}
                                 </div>
                               </div>
-                              <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
+                              <div className="flex flex-wrap items-center gap-2 text-xs text-secondary">
                                 <Button
                                   type="button"
                                   size="sm"
                                   variant="outline"
                                   onClick={() => handleGeneratePlayerNarrative(player.playerId)}
                                   disabled={narrativeState?.status === 'loading'}
-                                  className="bg-slate-800 text-slate-100 border-slate-700 hover:bg-slate-700"
+                                  className="bg-surface-2 text-primary border-border-subtle hover:bg-surface-3"
                                 >
                                   {narrativeState?.status === 'loading'
                                     ? 'LLM értékelés készül…'
@@ -16854,11 +16853,11 @@ export function SeasonComparison({
                                   <span>Mentve: {formatGeneratedAt(narrativeState.generatedAt) ?? 'friss'}</span>
                                 )}
                                 {narrativeState?.status === 'error' && (
-                                  <span className="text-rose-300">{narrativeState.error}</span>
+                                  <span className="text-negative">{narrativeState.error}</span>
                                 )}
                               </div>
                               {narrativeState?.text && (
-                                <div className="text-sm text-slate-100 whitespace-pre-line bg-slate-900/60 border border-slate-800 rounded-md px-3 py-2">
+                                <div className="text-sm text-primary whitespace-pre-line bg-surface-1/80 border border-border-subtle rounded-md px-3 py-2">
                                   {narrativeState.text}
                                 </div>
                               )}
@@ -16873,29 +16872,29 @@ export function SeasonComparison({
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <div className="text-sm text-slate-300 font-medium mb-2">Erősségek</div>
+                  <div className="text-sm text-secondary font-medium mb-2">Erősségek</div>
                   {displayedPostgameStrengths.length > 0 ? (
-                    displayedPostgameStrengths.map(item => <div key={item} className="text-sm text-slate-200">• {item}</div>)
+                    displayedPostgameStrengths.map(item => <div key={item} className="text-sm text-primary">• {item}</div>)
                   ) : (
-                    <div className="text-sm text-slate-400">Nincs kiemelt erősség.</div>
+                    <div className="text-sm text-secondary">Nincs kiemelt erősség.</div>
                   )}
                 </div>
                 <div>
-                  <div className="text-sm text-slate-300 font-medium mb-2">Problémák</div>
+                  <div className="text-sm text-secondary font-medium mb-2">Problémák</div>
                   {displayedPostgameProblems.length > 0 ? (
-                    displayedPostgameProblems.map(item => <div key={item} className="text-sm text-slate-200">• {item}</div>)
+                    displayedPostgameProblems.map(item => <div key={item} className="text-sm text-primary">• {item}</div>)
                   ) : (
-                    <div className="text-sm text-slate-400">Nincs kiemelt probléma.</div>
+                    <div className="text-sm text-secondary">Nincs kiemelt probléma.</div>
                   )}
                 </div>
               </div>
 
               <div>
-                <div className="text-sm text-slate-300 font-medium mb-2">Következő fókusz (auto ajánlás)</div>
+                <div className="text-sm text-secondary font-medium mb-2">Következő fókusz (auto ajánlás)</div>
                 {displayedPostgameFocus.length > 0 ? (
-                  displayedPostgameFocus.map(item => <div key={item} className="text-sm text-slate-200">• {item}</div>)
+                  displayedPostgameFocus.map(item => <div key={item} className="text-sm text-primary">• {item}</div>)
                 ) : (
-                  <div className="text-sm text-slate-400">Nincs kiemelt fókuszpont.</div>
+                  <div className="text-sm text-secondary">Nincs kiemelt fókuszpont.</div>
                 )}
               </div>
             </div>
@@ -16903,13 +16902,13 @@ export function SeasonComparison({
         </CardContent>
       </Card>}
 
-      {showPostgameSection && <Card className="bg-slate-900 border-slate-800">
+      {showPostgameSection && <Card>
         <CardHeader>
-          <CardTitle className="text-slate-50">Szöveges mérkőzés-elemzés (GPT)</CardTitle>
+          <CardTitle className="font-display uppercase tracking-wide text-primary">Szöveges mérkőzés-elemzés (GPT)</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex flex-wrap items-center gap-3">
-            <div className="flex items-center gap-1 rounded-md border border-slate-700 bg-slate-900/60 p-1">
+            <div className="flex items-center gap-1 rounded-md border border-border-subtlebg-surface-1/80 p-1">
               {[
                 { key: 'fan', label: 'Szurkolóbarát' },
                 { key: 'balanced', label: 'Balanced' },
@@ -16921,8 +16920,8 @@ export function SeasonComparison({
                   size="sm"
                   variant={textReportStyle === option.key ? 'default' : 'outline'}
                   className={textReportStyle === option.key
-                    ? 'h-7 px-2 bg-cyan-300 text-slate-900 hover:bg-cyan-200'
-                    : 'h-7 px-2 border-slate-700 text-slate-300 hover:bg-slate-800'}
+                    ? 'h-7 px-2 bg-cyan text-base hover:bg-cyan/80'
+                    : 'h-7 px-2 border-border-subtle text-secondary hover:bg-surface-2'}
                   onClick={() => setTextReportStyle(option.key as 'fan' | 'balanced' | 'coach')}
                 >
                   {option.label}
@@ -16941,7 +16940,7 @@ export function SeasonComparison({
                   ? 'Elemzés újragenerálása'
                   : 'Szöveges elemzés generálása'}
             </Button>
-            <div className="text-xs text-slate-400">
+            <div className="text-xs text-secondary">
               {(() => {
                 if (!selectedGameId) return 'Válassz mérkőzést a gomb aktiválásához.';
                 if (!pregameReport) return 'A pre-game elemzés szükséges a generáláshoz.';
@@ -16956,29 +16955,29 @@ export function SeasonComparison({
           </div>
 
           {textReportError && (
-            <div className="text-sm text-rose-300 bg-rose-900/30 border border-rose-800 rounded-md px-3 py-2">
+            <div className="text-sm text-negative bg-negative/15 border border-negative/40 rounded-md px-3 py-2">
               {textReportError}
             </div>
           )}
 
           {isLoadingTextReport && !textReport && (
-            <div className="text-sm text-slate-400">Korábbi jelentés betöltése…</div>
+            <div className="text-sm text-secondary">Korábbi jelentés betöltése…</div>
           )}
 
           {textReport && (
             <div className="space-y-2">
-              <div className="text-xs text-slate-400">
+              <div className="text-xs text-secondary">
                 Mentve: {formatGeneratedAt(textReportMeta.generatedAt) ?? 'ismeretlen időpont'} • Forrás:{' '}
                 {textReportMeta.generatedBy ?? 'gpt-automata'}
               </div>
-              <div className="text-sm text-slate-50 whitespace-pre-line bg-slate-800/60 border border-slate-700 rounded-lg px-4 py-3">
+              <div className="text-sm text-primary whitespace-pre-line bg-surface-2/60 border border-border-subtle rounded-lg px-4 py-3">
                 {textReport}
               </div>
               {postgameReport && (
                 <Button
                   variant="outline"
                   size="sm"
-                  className="border-cyan-800 hover:bg-slate-800 text-cyan-400"
+                  className="border-border-subtle hover:bg-surface-2 text-cyan"
                   onClick={() => {
                     const md = postgameReportToMd(postgameReport);
                     const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
@@ -17000,7 +16999,7 @@ export function SeasonComparison({
           )}
 
           {!textReport && !isLoadingTextReport && !textReportError && (
-            <div className="text-sm text-slate-400">
+            <div className="text-sm text-secondary">
               Még nincs elmentett szöveges elemzés ehhez a meccshez.
             </div>
           )}
@@ -17008,50 +17007,50 @@ export function SeasonComparison({
       </Card>}
 
       {showPlayerSection && !selectedPlayer && (
-        <Card className="bg-slate-900 border-slate-800">
-          <CardContent className="p-6 text-sm text-slate-300">
+        <Card>
+          <CardContent className="p-6 text-sm text-secondary">
             Válassz szezont, csapatot és játékost a scouting szintű elemzéshez.
           </CardContent>
         </Card>
       )}
 
       {showPlayerSection && (
-        <details className="rounded-lg border border-slate-800 bg-slate-900 px-4 py-3">
-          <summary className="cursor-pointer text-slate-100 font-medium">Fogalmak (röviden)</summary>
-          <div className="mt-3 space-y-2 text-sm text-slate-300">
-            <div><span className="text-slate-200 font-medium">Pace (tempó):</span> dobáskísérlet + 0.44×büntető + labdaeladás, meccsenként.</div>
-            <div><span className="text-slate-200 font-medium">eFG%:</span> dobáshatékonyság, ahol a tripla 1.5-nek számít.</div>
-            <div><span className="text-slate-200 font-medium">Assist rate:</span> gólpassz / dobáskísérlet arány.</div>
-            <div><span className="text-slate-200 font-medium">TO rate:</span> labdaeladás arány a tempóhoz viszonyítva.</div>
-            <div><span className="text-slate-200 font-medium">3P/FT rate:</span> triplák/büntetők aránya az összes dobáskísérlethez.</div>
-            <div><span className="text-slate-200 font-medium">Usage proxy:</span> FGA + 0.44×FTA + TO – támadó terheltség becslése.</div>
+        <details className="rounded-lg border border-border-subtle bg-surface-1 px-4 py-3">
+          <summary className="cursor-pointer text-primary font-medium">Fogalmak (röviden)</summary>
+          <div className="mt-3 space-y-2 text-sm text-secondary">
+            <div><span className="text-primary font-medium">Pace (tempó):</span> dobáskísérlet + 0.44×büntető + labdaeladás, meccsenként.</div>
+            <div><span className="text-primary font-medium">eFG%:</span> dobáshatékonyság, ahol a tripla 1.5-nek számít.</div>
+            <div><span className="text-primary font-medium">Assist rate:</span> gólpassz / dobáskísérlet arány.</div>
+            <div><span className="text-primary font-medium">TO rate:</span> labdaeladás arány a tempóhoz viszonyítva.</div>
+            <div><span className="text-primary font-medium">3P/FT rate:</span> triplák/büntetők aránya az összes dobáskísérlethez.</div>
+            <div><span className="text-primary font-medium">Usage proxy:</span> FGA + 0.44×FTA + TO – támadó terheltség becslése.</div>
           </div>
         </details>
       )}
 
-      {showPlayerSection && <details className="rounded-lg border border-slate-800 bg-slate-900 px-4 py-3" open>
-        <summary className="cursor-pointer text-slate-100 font-medium">Érkező játékos előzetes elemzése</summary>
+      {showPlayerSection && <details className="rounded-lg border border-border-subtle bg-surface-1 px-4 py-3" open>
+        <summary className="cursor-pointer text-primary font-medium">Érkező játékos előzetes elemzése</summary>
         <div className="mt-3 space-y-4">
           {!benchmarks && (
-            <div className="text-sm text-slate-300">Válassz szezont az előzetes elemzéshez.</div>
+            <div className="text-sm text-secondary">Válassz szezont az előzetes elemzéshez.</div>
           )}
 
           {benchmarks && (
             <div className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div>
-                  <label className="text-xs text-slate-400 mb-1 block">Név</label>
+                  <label className="text-xs text-muted mb-1 block">Név</label>
                   <Input
                     value={incomingPlayer.name}
                     onChange={(e) => setIncomingPlayer(prev => ({ ...prev, name: e.target.value }))}
                     placeholder="Játékos neve"
-                    className="bg-slate-800 border-slate-700 text-slate-100 placeholder:text-slate-400"
+                    className=""
                   />
                   <div className="mt-2 flex items-center gap-2">
                     <Button
                       type="button"
                       variant="secondary"
-                      className="bg-slate-800 text-slate-200 hover:bg-slate-700"
+                      className="bg-surface-2 text-primary hover:bg-surface-3"
                       onClick={() => importIncomingPlayerFromEurobasket()}
                       disabled={isImportingIncomingPlayer || !incomingPlayer.name.trim()}
                     >
@@ -17060,15 +17059,15 @@ export function SeasonComparison({
                   </div>
                 </div>
                 <div>
-                  <label className="text-xs text-slate-400 mb-1 block">Poszt</label>
+                  <label className="text-xs text-muted mb-1 block">Poszt</label>
                   <Select
                     value={incomingPlayer.position}
                     onValueChange={(value) => setIncomingPlayer(prev => ({ ...prev, position: value as Position }))}
                   >
-                    <SelectTrigger className="bg-slate-800 border-slate-700 w-full">
+                    <SelectTrigger className="w-full">
                       <SelectValue placeholder="Válassz posztot" />
                     </SelectTrigger>
-                    <SelectContent className="bg-slate-800 border-slate-700 text-slate-100 placeholder:text-slate-400">
+                    <SelectContent className="">
                       <SelectItem value="PG">Irányító</SelectItem>
                       <SelectItem value="SG">Dobóhátvéd</SelectItem>
                       <SelectItem value="SF">Bedobó</SelectItem>
@@ -17078,7 +17077,7 @@ export function SeasonComparison({
                   </Select>
                 </div>
                 <div>
-                  <label className="text-xs text-slate-400 mb-1 block">Meccsek</label>
+                  <label className="text-xs text-muted mb-1 block">Meccsek</label>
                   <Input
                     type="number"
                     min={0}
@@ -17087,11 +17086,11 @@ export function SeasonComparison({
                     onFocus={() => setFocusedIncomingField('games')}
                     onBlur={() => setFocusedIncomingField(null)}
                     onChange={(e) => handleIncomingNumberChange('games', e.target.value)}
-                    className="bg-slate-800 border-slate-700 text-slate-100 placeholder:text-slate-400"
+                    className=""
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-slate-400 mb-1 block">Perc/meccs</label>
+                  <label className="text-xs text-muted mb-1 block">Perc/meccs</label>
                   <Input
                     type="number"
                     min={0}
@@ -17100,14 +17099,14 @@ export function SeasonComparison({
                     onFocus={() => setFocusedIncomingField('minutesPerGame')}
                     onBlur={() => setFocusedIncomingField(null)}
                     onChange={(e) => handleIncomingNumberChange('minutesPerGame', e.target.value)}
-                    className="bg-slate-800 border-slate-700 text-slate-100 placeholder:text-slate-400"
+                    className=""
                   />
                 </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div>
-                  <label className="text-xs text-slate-400 mb-1 block">Pont/meccs</label>
+                  <label className="text-xs text-muted mb-1 block">Pont/meccs</label>
                   <Input
                     type="number"
                     min={0}
@@ -17116,11 +17115,11 @@ export function SeasonComparison({
                     onFocus={() => setFocusedIncomingField('pointsPerGame')}
                     onBlur={() => setFocusedIncomingField(null)}
                     onChange={(e) => handleIncomingNumberChange('pointsPerGame', e.target.value)}
-                    className="bg-slate-800 border-slate-700 text-slate-100 placeholder:text-slate-400"
+                    className=""
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-slate-400 mb-1 block">Assziszt/meccs</label>
+                  <label className="text-xs text-muted mb-1 block">Assziszt/meccs</label>
                   <Input
                     type="number"
                     min={0}
@@ -17129,11 +17128,11 @@ export function SeasonComparison({
                     onFocus={() => setFocusedIncomingField('assistsPerGame')}
                     onBlur={() => setFocusedIncomingField(null)}
                     onChange={(e) => handleIncomingNumberChange('assistsPerGame', e.target.value)}
-                    className="bg-slate-800 border-slate-700 text-slate-100 placeholder:text-slate-400"
+                    className=""
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-slate-400 mb-1 block">Lepatt./meccs (T)</label>
+                  <label className="text-xs text-muted mb-1 block">Lepatt./meccs (T)</label>
                   <Input
                     type="number"
                     min={0}
@@ -17150,12 +17149,12 @@ export function SeasonComparison({
                       const dreb = total - oreb;
                       setIncomingPlayer(prev => ({ ...prev, orebPerGame: round(oreb, 1), drebPerGame: round(dreb, 1) }));
                     }}
-                    className="bg-slate-800 border-slate-700 text-slate-100 placeholder:text-slate-400"
+                    className=""
                   />
-                  <div className="text-[10px] text-slate-500">OREB/DREB arány automatikusan megtartva.</div>
+                  <div className="text-[10px] text-muted">OREB/DREB arány automatikusan megtartva.</div>
                 </div>
                 <div>
-                  <label className="text-xs text-slate-400 mb-1 block">VAL/meccs</label>
+                  <label className="text-xs text-muted mb-1 block">VAL/meccs</label>
                   <Input
                     type="number"
                     min={0}
@@ -17164,14 +17163,14 @@ export function SeasonComparison({
                     onFocus={() => setFocusedIncomingField('valuationPerGame')}
                     onBlur={() => setFocusedIncomingField(null)}
                     onChange={(e) => handleIncomingNumberChange('valuationPerGame', e.target.value)}
-                    className="bg-slate-800 border-slate-700 text-slate-100 placeholder:text-slate-400"
+                    className=""
                   />
                 </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div>
-                  <label className="text-xs text-slate-400 mb-1 block">2FGP (%), 2FGA/meccs</label>
+                  <label className="text-xs text-muted mb-1 block">2FGP (%), 2FGA/meccs</label>
                   <div className="flex gap-2">
                     <Input
                       type="number"
@@ -17181,7 +17180,7 @@ export function SeasonComparison({
                       onFocus={() => setFocusedIncomingField('twoPct')}
                       onBlur={() => setFocusedIncomingField(null)}
                       onChange={(e) => handleIncomingNumberChange('twoPct', e.target.value)}
-                      className="bg-slate-800 border-slate-700 text-slate-100 placeholder:text-slate-400"
+                      className=""
                     />
                     <Input
                       type="number"
@@ -17191,12 +17190,12 @@ export function SeasonComparison({
                       onFocus={() => setFocusedIncomingField('twoAttemptedPerGame')}
                       onBlur={() => setFocusedIncomingField(null)}
                       onChange={(e) => handleIncomingNumberChange('twoAttemptedPerGame', e.target.value)}
-                      className="bg-slate-800 border-slate-700 text-slate-100 placeholder:text-slate-400"
+                      className=""
                     />
                   </div>
                 </div>
                 <div>
-                  <label className="text-xs text-slate-400 mb-1 block">3FGP (%), 3FGA/meccs</label>
+                  <label className="text-xs text-muted mb-1 block">3FGP (%), 3FGA/meccs</label>
                   <div className="flex gap-2">
                     <Input
                       type="number"
@@ -17206,7 +17205,7 @@ export function SeasonComparison({
                       onFocus={() => setFocusedIncomingField('threePct')}
                       onBlur={() => setFocusedIncomingField(null)}
                       onChange={(e) => handleIncomingNumberChange('threePct', e.target.value)}
-                      className="bg-slate-800 border-slate-700 text-slate-100 placeholder:text-slate-400"
+                      className=""
                     />
                     <Input
                       type="number"
@@ -17216,12 +17215,12 @@ export function SeasonComparison({
                       onFocus={() => setFocusedIncomingField('threeAttemptedPerGame')}
                       onBlur={() => setFocusedIncomingField(null)}
                       onChange={(e) => handleIncomingNumberChange('threeAttemptedPerGame', e.target.value)}
-                      className="bg-slate-800 border-slate-700 text-slate-100 placeholder:text-slate-400"
+                      className=""
                     />
                   </div>
                 </div>
                 <div>
-                  <label className="text-xs text-slate-400 mb-1 block">FT% és FTA/meccs</label>
+                  <label className="text-xs text-muted mb-1 block">FT% és FTA/meccs</label>
                   <div className="flex gap-2">
                     <Input
                       type="number"
@@ -17231,7 +17230,7 @@ export function SeasonComparison({
                       onFocus={() => setFocusedIncomingField('ftPct')}
                       onBlur={() => setFocusedIncomingField(null)}
                       onChange={(e) => handleIncomingNumberChange('ftPct', e.target.value)}
-                      className="bg-slate-800 border-slate-700 text-slate-100 placeholder:text-slate-400"
+                      className=""
                     />
                     <Input
                       type="number"
@@ -17241,7 +17240,7 @@ export function SeasonComparison({
                       onFocus={() => setFocusedIncomingField('ftAttemptedPerGame')}
                       onBlur={() => setFocusedIncomingField(null)}
                       onChange={(e) => handleIncomingNumberChange('ftAttemptedPerGame', e.target.value)}
-                      className="bg-slate-800 border-slate-700 text-slate-100 placeholder:text-slate-400"
+                      className=""
                     />
                   </div>
                 </div>
@@ -17249,7 +17248,7 @@ export function SeasonComparison({
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div>
-                  <label className="text-xs text-slate-400 mb-1 block">Labdaeladás/meccs</label>
+                  <label className="text-xs text-muted mb-1 block">Labdaeladás/meccs</label>
                   <Input
                     type="number"
                     min={0}
@@ -17258,11 +17257,11 @@ export function SeasonComparison({
                     onFocus={() => setFocusedIncomingField('turnoversPerGame')}
                     onBlur={() => setFocusedIncomingField(null)}
                     onChange={(e) => handleIncomingNumberChange('turnoversPerGame', e.target.value)}
-                    className="bg-slate-800 border-slate-700 text-slate-100 placeholder:text-slate-400"
+                    className=""
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-slate-400 mb-1 block">Lopás/meccs</label>
+                  <label className="text-xs text-muted mb-1 block">Lopás/meccs</label>
                   <Input
                     type="number"
                     min={0}
@@ -17271,11 +17270,11 @@ export function SeasonComparison({
                     onFocus={() => setFocusedIncomingField('stealsPerGame')}
                     onBlur={() => setFocusedIncomingField(null)}
                     onChange={(e) => handleIncomingNumberChange('stealsPerGame', e.target.value)}
-                    className="bg-slate-800 border-slate-700 text-slate-100 placeholder:text-slate-400"
+                    className=""
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-slate-400 mb-1 block">Blokk/meccs</label>
+                  <label className="text-xs text-muted mb-1 block">Blokk/meccs</label>
                   <Input
                     type="number"
                     min={0}
@@ -17284,11 +17283,11 @@ export function SeasonComparison({
                     onFocus={() => setFocusedIncomingField('blocksPerGame')}
                     onBlur={() => setFocusedIncomingField(null)}
                     onChange={(e) => handleIncomingNumberChange('blocksPerGame', e.target.value)}
-                    className="bg-slate-800 border-slate-700 text-slate-100 placeholder:text-slate-400"
+                    className=""
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-slate-400 mb-1 block">Faultok (elköv/kap)</label>
+                  <label className="text-xs text-muted mb-1 block">Faultok (elköv/kap)</label>
                   <div className="flex gap-2">
                     <Input
                       type="number"
@@ -17298,7 +17297,7 @@ export function SeasonComparison({
                       onFocus={() => setFocusedIncomingField('foulsCommittedPerGame')}
                       onBlur={() => setFocusedIncomingField(null)}
                       onChange={(e) => handleIncomingNumberChange('foulsCommittedPerGame', e.target.value)}
-                      className="bg-slate-800 border-slate-700 text-slate-100 placeholder:text-slate-400"
+                      className=""
                     />
                     <Input
                       type="number"
@@ -17308,23 +17307,23 @@ export function SeasonComparison({
                       onFocus={() => setFocusedIncomingField('foulsReceivedPerGame')}
                       onBlur={() => setFocusedIncomingField(null)}
                       onChange={(e) => handleIncomingNumberChange('foulsReceivedPerGame', e.target.value)}
-                      className="bg-slate-800 border-slate-700 text-slate-100 placeholder:text-slate-400"
+                      className=""
                     />
                   </div>
                 </div>
               </div>
 
               {incomingImportError && (
-                <div className="text-xs text-rose-300 bg-rose-950/30 border border-rose-800 rounded-md px-3 py-2">
+                <div className="text-xs text-negative bg-negative/15 border border-negative/40 rounded-md px-3 py-2">
                   {incomingImportError}
                 </div>
               )}
 
               {incomingImportInfo && (
-                <div className="text-xs text-emerald-300 bg-emerald-950/30 border border-emerald-800 rounded-md px-3 py-2 space-y-1">
+                <div className="text-xs text-positive bg-positive/10 border border-positive/30 rounded-md px-3 py-2 space-y-1">
                   <div>{incomingImportInfo}</div>
                   {incomingImportCareer && (
-                    <div className="text-emerald-200/90 space-y-1">
+                    <div className="text-positive/90 space-y-1">
                       <div>
                         Jelenlegi: {incomingImportCareer.currentTeam || '-'}
                         {incomingImportCareer.currentCountry ? (
@@ -17368,7 +17367,7 @@ export function SeasonComparison({
                       href={incomingImportSource.url}
                       target="_blank"
                       rel="noreferrer"
-                      className="underline text-emerald-200"
+                      className="underline text-positive"
                     >
                       Forras profil ({incomingImportSource.seasonYear})
                     </a>
@@ -17377,13 +17376,13 @@ export function SeasonComparison({
               )}
 
               {incomingCandidates.length > 1 && (
-                <div className="rounded-md border border-slate-700 bg-slate-950/40 p-3 space-y-3">
-                  <div className="text-xs text-slate-300">Valaszd ki a megfelelo jatekost:</div>
+                <div className="rounded-md border border-border-subtlebg-base/60 p-3 space-y-3">
+                  <div className="text-xs text-secondary">Valaszd ki a megfelelo jatekost:</div>
                   <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
                     {incomingCandidates.map(candidate => (
                       <div
                         key={candidate.profileUrl}
-                        className="rounded-md border border-slate-700 bg-slate-900/70 p-3 space-y-2"
+                        className="rounded-md border border-border-subtle bg-surface-1/70 p-3 space-y-2"
                       >
                         <div className="flex items-start gap-3">
                           <Image
@@ -17391,7 +17390,7 @@ export function SeasonComparison({
                             alt={candidate.name}
                             width={64}
                             height={64}
-                            className="h-16 w-16 rounded object-cover border border-slate-700 bg-slate-800"
+                            className="h-16 w-16 rounded object-cover border border-border-subtlebg-surface-2"
                             loading="lazy"
                             unoptimized
                             onError={() => {
@@ -17401,13 +17400,13 @@ export function SeasonComparison({
                               });
                             }}
                           />
-                          <div className="text-xs text-slate-200 space-y-1">
-                            <div className="font-semibold text-slate-100">{candidate.name}</div>
+                          <div className="text-xs text-primary space-y-1">
+                            <div className="font-semibold text-primary">{candidate.name}</div>
                             <div>{candidate.position || '-'} {candidate.height ? `• ${candidate.height} cm` : ''}</div>
                             <div>Szuletett: {candidate.born || '-'}</div>
-                            <div className="text-slate-300">{candidate.nationality || '-'}</div>
-                            <div className="text-slate-400">Jelenlegi: {candidate.currentTeam || candidate.team || '-'}</div>
-                            <div className="text-slate-400 inline-flex items-center gap-1">
+                            <div className="text-secondary">{candidate.nationality || '-'}</div>
+                            <div className="text-secondary">Jelenlegi: {candidate.currentTeam || candidate.team || '-'}</div>
+                            <div className="text-muted inline-flex items-center gap-1">
                               <span>Orszag:</span>
                               {(candidate.currentCountryFlagUrl || candidate.flagUrl) && (
                                 <Image
@@ -17421,7 +17420,7 @@ export function SeasonComparison({
                               )}
                               <span>{candidate.currentCountry || candidate.nationality || '-'}</span>
                             </div>
-                            <div className="text-slate-500">
+                            <div className="text-muted">
                               Elozo: {candidate.previousTeam || '-'}
                               {candidate.previousCountry ? (
                                 <span className="inline-flex items-center gap-1 ml-1">
@@ -17446,7 +17445,7 @@ export function SeasonComparison({
                             type="button"
                             size="sm"
                             variant="secondary"
-                            className="bg-slate-800 text-slate-200 hover:bg-slate-700"
+                            className="bg-surface-2 text-primary hover:bg-surface-3"
                             onClick={() => importIncomingPlayerFromEurobasket(candidate.profileUrl)}
                             disabled={isImportingIncomingPlayer}
                           >
@@ -17456,7 +17455,7 @@ export function SeasonComparison({
                             href={candidate.profileUrl}
                             target="_blank"
                             rel="noreferrer"
-                            className="text-xs text-slate-300 underline"
+                            className="text-xs text-secondary underline"
                           >
                             Profil
                           </a>
@@ -17468,7 +17467,7 @@ export function SeasonComparison({
               )}
 
               {!incomingEligibility && (
-                <div className="text-xs text-slate-400">
+                <div className="text-xs text-secondary">
                   Az elemzéshez legalább 8 meccs és 15 perc/meccs szükséges.
                 </div>
               )}
@@ -17476,9 +17475,9 @@ export function SeasonComparison({
               {incomingAnalysis && (
                 <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
                   <div className="xl:col-span-2 space-y-4">
-                    <Card className="bg-slate-900 border-slate-800">
+                    <Card>
                       <CardHeader>
-                        <CardTitle className="text-slate-50">
+                        <CardTitle className="font-display uppercase tracking-wide text-primary">
                           {incomingRaw?.name ?? 'Érkező játékos'} • {getPositionLabel(incomingAnalysis.position)}
                         </CardTitle>
                       </CardHeader>
@@ -17490,34 +17489,34 @@ export function SeasonComparison({
                             </Badge>
                           ))}
                           {incomingAnalysis.roles.length === 0 && (
-                            <Badge variant="secondary" className="bg-slate-800 text-slate-200">
+                            <Badge variant="secondary" className="badge-neutral">
                               Nincs egyértelmű szerepkör
                             </Badge>
                           )}
                         </div>
-                        <div className="text-sm text-slate-200 leading-relaxed">{incomingAnalysis.summary}</div>
+                        <div className="text-sm text-primary leading-relaxed">{incomingAnalysis.summary}</div>
                         <div className="flex flex-wrap items-center gap-3 text-xs">
                           <span className={`font-semibold ${getConfidenceTone(incomingAnalysis.confidence)}`}>
                             Bizonyosság: {incomingAnalysis.confidence}
                           </span>
-                          <span className="text-slate-400">Szerep biztonság: {(incomingAnalysis.roleConfidence * 100).toFixed(0)}%</span>
+                          <span className="text-secondary">Szerep biztonság: {(incomingAnalysis.roleConfidence * 100).toFixed(0)}%</span>
                         </div>
                       </CardContent>
                     </Card>
 
-                    <Card className="bg-slate-900 border-slate-800">
+                    <Card>
                       <CardHeader>
-                        <CardTitle className="text-slate-50">Képesség pontszámok</CardTitle>
+                        <CardTitle className="font-display uppercase tracking-wide text-primary">Képesség pontszámok</CardTitle>
                       </CardHeader>
                       <CardContent className="space-y-3">
                         {Object.entries(incomingAnalysis.skillScores).map(([key, value]) => (
                           <div key={key} className="flex items-center justify-between text-sm">
-                            <span className="text-slate-300">{SKILL_LABELS_HU[key] ?? key}</span>
+                            <span className="text-secondary">{SKILL_LABELS_HU[key] ?? key}</span>
                             <div className="flex items-center gap-3">
-                              <div className="h-2 w-32 bg-slate-800 rounded-full overflow-hidden">
-                                <div className="h-full bg-emerald-500/80" style={{ width: `${value}%` }} />
+                              <div className="h-2 w-32 bg-surface-2 rounded-full overflow-hidden">
+                                <div className="h-full bg-positive/80" style={{ width: `${value}%` }} />
                               </div>
-                              <span className="text-slate-200 font-semibold w-10 text-right">{value}</span>
+                              <span className="text-primary font-semibold w-10 text-right">{value}</span>
                             </div>
                           </div>
                         ))}
@@ -17526,11 +17525,11 @@ export function SeasonComparison({
                   </div>
 
                   <div className="space-y-4">
-                    <Card className="bg-slate-900 border-slate-800">
+                    <Card>
                       <CardHeader>
-                        <CardTitle className="text-slate-50">Erősségek</CardTitle>
+                        <CardTitle className="font-display uppercase tracking-wide text-primary">Erősségek</CardTitle>
                       </CardHeader>
-                      <CardContent className="text-sm text-slate-200">
+                      <CardContent className="text-sm text-primary">
                         {incomingAnalysis.strengths.length > 0 ? (
                           <ul className="list-disc list-inside space-y-1 text-pretty leading-relaxed">
                             {incomingAnalysis.strengths.map(item => (
@@ -17538,16 +17537,16 @@ export function SeasonComparison({
                             ))}
                           </ul>
                         ) : (
-                          <div className="text-slate-400">Nincs kiemelt erősség.</div>
+                          <div className="text-secondary">Nincs kiemelt erősség.</div>
                         )}
                       </CardContent>
                     </Card>
 
-                    <Card className="bg-slate-900 border-slate-800">
+                    <Card>
                       <CardHeader>
-                        <CardTitle className="text-slate-50">Limitációk</CardTitle>
+                        <CardTitle className="font-display uppercase tracking-wide text-primary">Limitációk</CardTitle>
                       </CardHeader>
-                      <CardContent className="text-sm text-slate-200">
+                      <CardContent className="text-sm text-primary">
                         {incomingAnalysis.limitations.length > 0 ? (
                           <ul className="list-disc list-inside space-y-1 text-pretty leading-relaxed">
                             {incomingAnalysis.limitations.map(item => (
@@ -17555,16 +17554,16 @@ export function SeasonComparison({
                             ))}
                           </ul>
                         ) : (
-                          <div className="text-slate-400">Nincs kiemelt limitáció.</div>
+                          <div className="text-secondary">Nincs kiemelt limitáció.</div>
                         )}
                       </CardContent>
                     </Card>
 
-                    <Card className="bg-slate-900 border-slate-800">
+                    <Card>
                       <CardHeader>
-                        <CardTitle className="text-slate-50">Javítandó pontok</CardTitle>
+                        <CardTitle className="font-display uppercase tracking-wide text-primary">Javítandó pontok</CardTitle>
                       </CardHeader>
-                      <CardContent className="text-sm text-slate-200">
+                      <CardContent className="text-sm text-primary">
                         {incomingAnalysis.improvements.length > 0 ? (
                           <ul className="list-disc list-inside space-y-1 text-pretty leading-relaxed">
                             {incomingAnalysis.improvements.map(item => (
@@ -17572,7 +17571,7 @@ export function SeasonComparison({
                             ))}
                           </ul>
                         ) : (
-                          <div className="text-slate-400">Nincs kiemelt javítandó pont.</div>
+                          <div className="text-secondary">Nincs kiemelt javítandó pont.</div>
                         )}
                       </CardContent>
                     </Card>
@@ -17585,7 +17584,7 @@ export function SeasonComparison({
       </details>}
 
       <div className="flex justify-end">
-        <Button variant="secondary" className="bg-slate-800 text-slate-200" disabled>
+        <Button variant="secondary" className="badge-neutral" disabled>
           Determinisztikus értékelés · Ligafüggetlen
         </Button>
       </div>

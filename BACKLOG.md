@@ -1,6 +1,6 @@
 # BACKLOG.md – ASEStats Projekt
 
-_Utoljára frissítve: 2026-05-23 (GameLog → DataTable; TeamStatistics → StatCard; GameDetails → StatCard + DataTable + ai-marker)_
+_Utoljára frissítve: 2026-05-24 (Dark Command Center sprint teljes – minden vizuális feladat kész)_
 
 ---
 
@@ -97,11 +97,11 @@ _Utoljára frissítve: 2026-05-23 (GameLog → DataTable; TeamStatistics → Sta
 
 ---
 
-## Aktív sprint – Dark Command Center stílus átállás
+## Lezárt sprint – Dark Command Center stílus átállás ✓ (2026-05-24)
 
-**Scope: kizárólag vizuális stílus.** A komponensek funkcionalitása, a 12 tab-os navigáció, az adatlekérés és az interakciós flow változatlan. Csak az osztályok, design tokenek, betűtípus és a kártya/tábla szintű layout cserélődik. Ha egy feladat funkcionális változtatást igényelne, jelezni kell és külön döntés szükséges.
+**Scope: kizárólag vizuális stílus.** A komponensek funkcionalitása, a 12 tab-os navigáció, az adatlekérés és az interakciós flow változatlan marad. Minden feladat teljesítve.
 
-A design rendszer alapja kész (`app/globals.css`, `app/layout.tsx`, mockupok: `Sidebar_Nav.html`, `Command_Center.html`, `StatCard.html`, `DataTable.html`).
+A design rendszer alapja kész (`app/globals.css`, `app/layout.tsx`). Közös chart theme: `lib/chart-theme.ts`.
 
 - [x] **`components/ui/stat-card.tsx` létrehozása** – Generikus KPI kártya a `StatCard.html` mockup szerint: `label`, `value`, `trend` (up/down/neutral), `trendValue`, `icon`, `accentColor` (cyan/orange/green/purple), `animationDelay` props. A `value` JetBrains Mono `tabular-nums`. Belépéskor `animate-fade-slide-up` + `animate-count-up`. _Függőség: nincs._
 
@@ -121,17 +121,19 @@ A design rendszer alapja kész (`app/globals.css`, `app/layout.tsx`, mockupok: `
 
 - [x] **`GameDetails.tsx` vizuális frissítése** – Fő stat-ok StatCard-ban, játékos statisztikák DataTable-ben, riport kártyák `.ai-marker` osztállyal (lila gradient sáv az AI tartalom jelölésére). A riport megtekintő logika változatlan. _Függőség: StatCard + DataTable._
 
-- [ ] **`PlayerDetails.tsx`, `PlayerComparison.tsx`, `TeamComparison.tsx`, `SeasonComparison.tsx`, `SituationalAnalysis.tsx`, `GamesList.tsx`, `Updates.tsx` vizuális frissítése** – Card / Badge / Button osztályok átállása a Dark Command Center palettára. A meglévő struktúra és funkcionalitás marad. _Függőség: shadcn audit._
+- [x] **MD export gombok szekció tetejére helyezése** – `GameDetails.tsx`, `PlayerDetails.tsx`, `TeamStatistics.tsx`: az "Export MD" gomb átkerült a fejlécből a "Manuális elemzés beillesztése" / "Manuális szezonértékelés" / "Manuális csapatelemzés" card fejlécébe, az AI generálástól teljesen függetlenül. _2026-05-24_
 
-- [ ] **Import felületek (`StandingsImport`, `KosarstatPbpImport`, `FixturesImport`, `RosterImport`, `RoundImport`, `GameQuickImport`, `JsonImport`, `PlayersImport`, `GameManagement`, `PlayersManagement`) vizuális frissítése** – Input / Textarea / Button stílus a Dark Command Center terminal-jellegű mezők szerint (`cmd-input` minta a `globals.css`-ben). Funkció változatlan. _Függőség: shadcn audit._
+- [x] **`PlayerDetails.tsx`, `PlayerComparison.tsx`, `TeamComparison.tsx`, `SeasonComparison.tsx`, `SituationalAnalysis.tsx`, `GamesList.tsx`, `Updates.tsx` vizuális frissítése** – Minden `slate-*` hardcoded szín Dark Command Center tokenekre cserélve (`text-primary/secondary/muted`, `bg-surface-*`, `text-positive/negative/cyan/orange/ai/warning`, `badge-*` variánsok). Recharts tooltip/legend/axis/fill tokenek. Funkció változatlan. _2026-05-24_
 
-- [ ] **`LoginForm.tsx` Dark Command Center stílus** – Centrált card, pont-rács háttér, glow-os submit gomb. Auth flow változatlan. _Függőség: nincs._
+- [x] **Import felületek (`StandingsImport`, `KosarstatPbpImport`, `FixturesImport`, `RosterImport`, `RoundImport`, `GameQuickImport`, `JsonImport`, `PlayersImport`, `GameManagement`, `PlayersManagement`) vizuális frissítése** – Input / Textarea / Button / Select slate override-ok eltávolítva (globals.css kezeli), szöveg/border/háttér tokenek alkalmazva, badge-ek `badge-*` variánsokra cserélve. Funkció változatlan. _2026-05-24_
 
-- [ ] **Lucide ikon stroke-width audit** – Az egész kódbázison átnézni, hogy az ikonok stroke-szélessége a Dark Command Center konvenciót követi-e (1.5–1.8 standard, 2 erős). Inline ikonok mérete `h-4 w-4`, header `h-5/h-6 w-5/w-6`. _Függőség: nincs._
+- [x] **`LoginForm.tsx` Dark Command Center stílus** – Centrált card, glow-os trophy ikon `shadow-glow-orange`, orange CTA gomb `hover:shadow-glow-orange-hot`, display font uppercase, `animate-fade-slide-up`. Auth flow változatlan. _2026-05-24_
 
-- [ ] **Recharts / Chart.js theme objektum** – Közös theme (cyan/orange/positive/negative/ai színek + axis/grid stílus + Barlow Condensed legendák) a `PlayerTrends`, `PostgameShotScatterChart`, `PostgameZoneHeatmapChart` egységes vizuális nyelvéhez. Az adatok és a chart típus változatlan. _Függőség: nincs._
+- [x] **Lucide ikon stroke-width audit** – Az egész kódbázison átnézve. Import/admin komponensek (`FixturesImport`, `GameManagement`, `GameQuickImport`, `GamesList`, `JsonImport`, `KosarstatPbpImport`, `PlayersImport`, `PlayersManagement`, `RosterImport`, `RoundImport`, `Updates`, `PlayerComparison`, `PlayerDetails`) mind megkapták a `strokeWidth={1.6}` (standard) vagy `strokeWidth={1.5}` (nagy/dekoratív) értéket. _2026-05-24_
 
-- [ ] **Tipográfia / numerika audit** – Minden statisztika érték JetBrains Mono `tabular-nums`-szal jelenjen meg (`.stat` osztály vagy `[data-stat]`). Régi komponensekben még lehetnek `font-sans`-ban renderelt számok. _Függőség: nincs._
+- [x] **Recharts / Chart.js theme objektum** – `lib/chart-theme.ts` létrehozva: `CHART_COLORS`, `CHART_GRID`, `CHART_AXIS`, `RECHARTS_TOOLTIP_STYLE`, `RECHARTS_LEGEND_STYLE`, `CHARTJS_TOOLTIP_STYLE`, `CHARTJS_AXIS_TICK_COLOR`, `CHARTJS_GRID_COLOR` konstansok. `PlayerTrends`, `PostgameShotScatterChart`, `PostgameZoneHeatmapChart` átállítva a közös tokenekre. Barlow Condensed legendák, Dark Command Center paletta. _2026-05-24_
+
+- [x] **Tipográfia / numerika audit** – Ellenőrizve: `PlayerDetails`, `PlayerComparison`, `TeamComparison`, `SituationalAnalysis`, `GamesList`, `GameManagement`, `TeamStatistics` numerikus értékei `font-mono tabular-nums`-szal renderelve. DataTable és StatCard komponensek natívan kezelik. _2026-05-24_
 
 ---
 

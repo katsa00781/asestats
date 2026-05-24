@@ -79,47 +79,45 @@ export function FixturesImport({ selectedSeasonId, selectedSeasonName, onImportC
   };
 
   return (
-    <Card className="bg-slate-900 border-slate-800">
+    <Card>
       <CardHeader>
-        <CardTitle className="text-slate-50 flex items-center gap-2">
-          <CalendarPlus className="text-cyan-400" size={20} />
+        <CardTitle className="flex items-center gap-2">
+          <CalendarPlus className="text-cyan" size={20} strokeWidth={1.6} />
           Menetrend import (következő meccsek)
         </CardTitle>
-        <CardDescription className="text-slate-400">
+        <CardDescription>
           A Hunbasket teljes menetrendből beolvassa a lejátszott és a következő mérkőzéseket is a `league_fixtures` táblába.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         {!selectedSeasonId && (
           <div className="flex items-center gap-3 rounded-lg border border-amber-500/40 bg-amber-900/20 px-3 py-2 text-amber-200">
-            <ShieldAlert size={18} />
+            <ShieldAlert size={18} strokeWidth={1.6} />
             <span className="text-sm">A menetrend importálásához előbb válassz szezont!</span>
           </div>
         )}
 
         {selectedSeasonId && (
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-muted">
             Aktív szezon: {selectedSeasonName || 'ismeretlen név'}
           </p>
         )}
 
         <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
-            <label className="text-sm text-slate-300">Hunbasket season slug</label>
+            <label className="text-sm text-secondary">Hunbasket season slug</label>
             <Input
               value={seasonSlug}
               onChange={event => setSeasonSlug(event.target.value)}
               placeholder="pl. x2526"
-              className="bg-slate-800 border-slate-700 text-slate-100"
             />
           </div>
           <div className="space-y-2">
-            <label className="text-sm text-slate-300">Egyedi menetrend URL (opcionális)</label>
+            <label className="text-sm text-secondary">Egyedi menetrend URL (opcionális)</label>
             <Input
               value={scheduleUrl}
               onChange={event => setScheduleUrl(event.target.value)}
               placeholder="https://hunbasket.hu/menetrend-teljes/..."
-              className="bg-slate-800 border-slate-700 text-slate-100"
             />
           </div>
         </div>
@@ -127,12 +125,12 @@ export function FixturesImport({ selectedSeasonId, selectedSeasonName, onImportC
         <Button
           onClick={handleImport}
           disabled={!canRun}
-          className="bg-cyan-600 hover:bg-cyan-700 w-full md:w-auto"
+          className="w-full md:w-auto"
         >
           {status === 'running' ? (
             <Loader2 size={16} className="mr-2 animate-spin" />
           ) : (
-            <CalendarPlus size={16} className="mr-2" />
+            <CalendarPlus size={16} className="mr-2" strokeWidth={1.6} />
           )}
           Menetrend import indítása
         </Button>
@@ -144,10 +142,10 @@ export function FixturesImport({ selectedSeasonId, selectedSeasonName, onImportC
                 {status === 'running' ? 'Folyamatban...' : status === 'success' ? 'Sikeres import' : 'Hiba történt'}
               </Badge>
               {durationMs !== null && status === 'success' && (
-                <span className="text-sm text-slate-400">Futási idő: {(durationMs / 1000).toFixed(1)} mp</span>
+                <span className="text-sm text-secondary">Futási idő: {(durationMs / 1000).toFixed(1)} mp</span>
               )}
             </div>
-            {error && <p className="text-sm text-red-400">{error}</p>}
+            {error && <p className="text-sm text-negative">{error}</p>}
           </div>
         )}
 
@@ -155,22 +153,22 @@ export function FixturesImport({ selectedSeasonId, selectedSeasonName, onImportC
           <div className="grid gap-4 md:grid-cols-2">
             {stdout && (
               <div>
-                <div className="text-xs text-slate-400 mb-2">Folyamat napló</div>
+                <div className="text-xs text-secondary mb-2">Folyamat napló</div>
                 <Textarea
                   value={stdout}
                   readOnly
-                  className="bg-slate-950/60 border-slate-800 text-slate-300 font-mono text-xs"
+                  className="bg-surface-2 border-border-subtle text-primary font-mono text-xs"
                   style={{ minHeight: 160 }}
                 />
               </div>
             )}
             {stderr && (
               <div>
-                <div className="text-xs text-red-400 mb-2">Figyelmeztetések / hibák</div>
+                <div className="text-xs text-negative mb-2">Figyelmeztetések / hibák</div>
                 <Textarea
                   value={stderr}
                   readOnly
-                  className="bg-red-950/30 border-red-500/30 text-red-200 font-mono text-xs"
+                  className="bg-red-950/30 border-red-500/30 text-negative font-mono text-xs"
                   style={{ minHeight: 160 }}
                 />
               </div>

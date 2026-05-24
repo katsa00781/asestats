@@ -413,10 +413,10 @@ export function PlayersImport({
   return (
     <div className="space-y-6">
       {(!targetSeasonId || !targetTeamId) && (
-        <Card className="bg-orange-900/20 border-orange-500/30">
+        <Card className="border-orange-500/30 bg-orange-900/20">
           <CardContent className="p-4">
-            <div className="flex items-center gap-2 text-orange-400">
-              <AlertCircle size={20} />
+            <div className="flex items-center gap-2 text-orange">
+              <AlertCircle size={20} strokeWidth={1.6} />
               <span className="text-sm">
                 Válassz szezont és csapatot a mentéshez!
               </span>
@@ -425,22 +425,22 @@ export function PlayersImport({
         </Card>
       )}
 
-      <Card className="bg-slate-900 border-slate-800">
+      <Card>
         <CardHeader>
-          <CardTitle className="text-slate-50 flex items-center gap-2">
-            <Users className="text-emerald-400" size={20} />
+          <CardTitle className="flex items-center gap-2">
+            <Users className="text-positive" size={20} strokeWidth={1.6} />
             Játékosok Importálása
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="text-sm text-slate-300 block mb-2">Szezon (mentés célja)</label>
+              <label className="text-sm text-secondary block mb-2">Szezon (mentés célja)</label>
               <Select value={targetSeasonId ?? ''} onValueChange={(value) => setTargetSeasonId(value || null)}>
-                <SelectTrigger className="bg-slate-800 border-slate-700 w-full">
+                <SelectTrigger className="w-full">
                   <SelectValue placeholder="Válassz szezont..." className="truncate" />
                 </SelectTrigger>
-                <SelectContent className="bg-slate-800 border-slate-700">
+                <SelectContent>
                   {allSeasons.map(season => (
                     <SelectItem key={season.id} value={season.id}>
                       {season.name}
@@ -450,12 +450,12 @@ export function PlayersImport({
               </Select>
             </div>
             <div>
-              <label className="text-sm text-slate-300 block mb-2">Csapat (mentés célja)</label>
+              <label className="text-sm text-secondary block mb-2">Csapat (mentés célja)</label>
               <Select value={targetTeamId ?? ''} onValueChange={(value) => setTargetTeamId(value || null)}>
-                <SelectTrigger className="bg-slate-800 border-slate-700 w-full">
+                <SelectTrigger className="w-full">
                   <SelectValue placeholder="Válassz csapatot..." className="truncate" />
                 </SelectTrigger>
-                <SelectContent className="bg-slate-800 border-slate-700">
+                <SelectContent>
                   {allTeams.map(team => (
                     <SelectItem key={team.id} value={team.id}>
                       {team.name}
@@ -467,7 +467,7 @@ export function PlayersImport({
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm text-slate-300">
+            <label className="text-sm text-secondary">
               Illeszd be a játékosok táblázatát
             </label>
             <Textarea
@@ -477,7 +477,7 @@ export function PlayersImport({
 0	player avatar DARTHARD Calvashawn Letre	2000	2	193 cm	86 kg
 3	player avatar PALLAI Tamás Ottó	2001	2	195 cm	88 kg
 4	player avatar BARNES Auston Willis	1991	3-4	202 cm	102 kg`}
-              className="bg-slate-800 border-slate-700 text-slate-300 font-mono text-sm"
+              className="font-mono text-sm"
               style={{ minHeight: 200 }}
             />
           </div>
@@ -486,9 +486,9 @@ export function PlayersImport({
             <Button
               onClick={handlePreview}
               disabled={!inputText.trim()}
-              className="bg-blue-600 hover:bg-blue-700"
+              variant="secondary"
             >
-              <Eye size={16} className="mr-2" />
+              <Eye size={16} className="mr-2" strokeWidth={1.6} />
               Előnézet
             </Button>
             {showPreview && parsedPlayers.length > 0 && (
@@ -496,17 +496,16 @@ export function PlayersImport({
                 <Button
                   onClick={handleImport}
                   disabled={importing || deleting}
-                  className="bg-emerald-600 hover:bg-emerald-700"
                 >
-                  <CheckCircle size={16} className="mr-2" />
+                  <CheckCircle size={16} className="mr-2" strokeWidth={1.6} />
                   {importing ? 'Importálás...' : `Import (${parsedPlayers.length} játékos)`}
                 </Button>
                 <Button
                   onClick={handleDelete}
                   disabled={importing || deleting}
-                  className="bg-red-600 hover:bg-red-700"
+                  variant="destructive"
                 >
-                  <Trash2 size={16} className="mr-2" />
+                  <Trash2 size={16} className="mr-2" strokeWidth={1.6} />
                   {deleting ? 'Törlés...' : `Törlés (${parsedPlayers.length} játékos)`}
                 </Button>
               </>
@@ -514,10 +513,10 @@ export function PlayersImport({
           </div>
 
           {message && (
-            <div className={`p-4 rounded-lg ${
-              message.type === 'success' 
-                ? 'bg-emerald-900/20 border border-emerald-500/30 text-emerald-400' 
-                : 'bg-red-900/20 border border-red-500/30 text-red-400'
+            <div className={`p-4 rounded-lg border ${
+              message.type === 'success'
+                ? 'bg-emerald-900/20 border-emerald-500/30 text-positive'
+                : 'bg-red-900/20 border-red-500/30 text-negative'
             }`}>
               {message.text}
             </div>
@@ -527,18 +526,18 @@ export function PlayersImport({
 
       {/* Előnézet */}
       {showPreview && (
-        <Card className="bg-slate-900 border-slate-800">
+        <Card>
           <CardHeader>
             <div className="space-y-2">
-              <CardTitle className="text-slate-50 text-lg">
+              <CardTitle className="text-lg">
                 Előnézet - {parsedPlayers.length} játékos
               </CardTitle>
               {resolvedSeasonName && resolvedTeamName && (
                 <div className="flex items-center gap-2 text-sm">
-                  <Badge variant="outline" className="bg-blue-900/30 border-blue-500/50 text-blue-300">
+                  <Badge className="badge-cyan">
                     {resolvedSeasonName}
                   </Badge>
-                  <Badge variant="outline" className="bg-emerald-900/30 border-emerald-500/50 text-emerald-300">
+                  <Badge className="badge-positive">
                     {resolvedTeamName}
                   </Badge>
                 </div>
@@ -550,28 +549,28 @@ export function PlayersImport({
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead>
-                    <tr className="border-b border-slate-700">
-                      <th className="text-left text-slate-400 text-sm font-medium p-2">#</th>
-                      <th className="text-left text-slate-400 text-sm font-medium p-2">Név</th>
-                      <th className="text-left text-slate-400 text-sm font-medium p-2">Születési év</th>
-                      <th className="text-left text-slate-400 text-sm font-medium p-2">Poszt</th>
-                      <th className="text-left text-slate-400 text-sm font-medium p-2">Magasság</th>
-                      <th className="text-left text-slate-400 text-sm font-medium p-2">Súly</th>
+                    <tr className="border-b border-border-subtle">
+                      <th className="text-left text-secondary text-sm font-medium p-2">#</th>
+                      <th className="text-left text-secondary text-sm font-medium p-2">Név</th>
+                      <th className="text-left text-secondary text-sm font-medium p-2">Születési év</th>
+                      <th className="text-left text-secondary text-sm font-medium p-2">Poszt</th>
+                      <th className="text-left text-secondary text-sm font-medium p-2">Magasság</th>
+                      <th className="text-left text-secondary text-sm font-medium p-2">Súly</th>
                     </tr>
                   </thead>
                   <tbody>
                     {parsedPlayers.map((player, idx) => (
-                      <tr key={idx} className="border-b border-slate-800 hover:bg-slate-800/50">
-                        <td className="p-2 text-slate-300">{player.number}</td>
-                        <td className="p-2 text-slate-100 font-medium">{player.name}</td>
-                        <td className="p-2 text-slate-300">{player.birthYear}</td>
+                      <tr key={idx} className="border-b border-border-subtle hover:bg-surface-2/50">
+                        <td className="p-2 text-secondary">{player.number}</td>
+                        <td className="p-2 text-primary font-medium">{player.name}</td>
+                        <td className="p-2 text-secondary">{player.birthYear}</td>
                         <td className="p-2">
                           <Badge variant="secondary" className="text-xs">
                             {positionLabels[player.position] || player.position}
                           </Badge>
                         </td>
-                        <td className="p-2 text-slate-300">{player.height} cm</td>
-                        <td className="p-2 text-slate-300">{player.weight} kg</td>
+                        <td className="p-2 text-secondary">{player.height} cm</td>
+                        <td className="p-2 text-secondary">{player.weight} kg</td>
                       </tr>
                     ))}
                   </tbody>
@@ -579,9 +578,9 @@ export function PlayersImport({
               </div>
             ) : (
               <div className="text-center py-8">
-                <AlertCircle className="text-orange-400 mx-auto mb-2" size={32} />
-                <p className="text-slate-400">Nem sikerült játékosokat elemezni az adatokból.</p>
-                <p className="text-slate-500 text-sm mt-2">
+                <AlertCircle className="text-orange mx-auto mb-2" size={32} strokeWidth={1.5} />
+                <p className="text-secondary">Nem sikerült játékosokat elemezni az adatokból.</p>
+                <p className="text-muted text-sm mt-2">
                   Ellenőrizd, hogy a táblázat formátuma megfelelő-e (tab-elválasztott).
                 </p>
               </div>

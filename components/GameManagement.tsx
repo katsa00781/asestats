@@ -168,10 +168,10 @@ export function GameManagement({ onDeleteComplete }: { onDeleteComplete?: () => 
 
   return (
     <div className="space-y-6">
-      <Card className="bg-slate-900 border-slate-800">
+      <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-slate-50">
-            <Trash2 className="text-red-400" size={20} />
+          <CardTitle className="flex items-center gap-2">
+            <Trash2 className="text-negative" size={20} strokeWidth={1.6} />
             Meccsek Kezelése
           </CardTitle>
         </CardHeader>
@@ -179,12 +179,12 @@ export function GameManagement({ onDeleteComplete }: { onDeleteComplete?: () => 
           {/* Szűrők */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <label className="text-sm text-slate-400">Szezon</label>
+              <label className="text-sm text-secondary">Szezon</label>
               <Select value={selectedSeasonId} onValueChange={setSelectedSeasonId}>
-                <SelectTrigger className="bg-slate-800 border-slate-700">
+                <SelectTrigger>
                   <SelectValue placeholder="Válassz szezont..." />
                 </SelectTrigger>
-                <SelectContent className="bg-slate-800 border-slate-700">
+                <SelectContent>
                   {seasons.map(season => (
                     <SelectItem key={season.id} value={season.id}>
                       {season.name} {season.is_current && '(Jelenlegi)'}
@@ -195,12 +195,12 @@ export function GameManagement({ onDeleteComplete }: { onDeleteComplete?: () => 
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm text-slate-400">Csapat</label>
+              <label className="text-sm text-secondary">Csapat</label>
               <Select value={selectedTeamId} onValueChange={setSelectedTeamId}>
-                <SelectTrigger className="bg-slate-800 border-slate-700">
+                <SelectTrigger>
                   <SelectValue placeholder="Válassz csapatot..." />
                 </SelectTrigger>
-                <SelectContent className="bg-slate-800 border-slate-700">
+                <SelectContent>
                   {teams.map(team => (
                     <SelectItem key={team.id} value={team.id}>
                       {team.name} {team.is_primary && '⭐'}
@@ -213,44 +213,44 @@ export function GameManagement({ onDeleteComplete }: { onDeleteComplete?: () => 
 
           {/* Meccsek listája */}
           {isLoading ? (
-            <div className="text-center py-8 text-slate-400">Betöltés...</div>
+            <div className="text-center py-8 text-secondary">Betöltés...</div>
           ) : games.length === 0 ? (
-            <div className="text-center py-8 text-slate-400">
+            <div className="text-center py-8 text-secondary">
               Nincs találat a kiválasztott szezonhoz és csapathoz.
             </div>
           ) : (
             <div className="space-y-2">
-              <div className="flex items-center gap-2 text-sm text-amber-500 bg-amber-500/10 p-3 rounded-md">
-                <AlertTriangle size={16} />
+              <div className="flex items-center gap-2 text-sm text-warning bg-amber-500/10 p-3 rounded-md">
+                <AlertTriangle size={16} strokeWidth={1.6} />
                 <span>A meccs törlése visszavonhatatlan! Minden statisztika is törlődik.</span>
               </div>
-              
+
               <div className="space-y-2 max-h-96 overflow-y-auto">
                 {games.map(game => (
                   <div
                     key={game.id}
-                    className="flex items-center justify-between p-4 bg-slate-800 rounded-lg hover:bg-slate-750 transition-colors"
+                    className="flex items-center justify-between p-4 bg-surface-2 rounded-lg hover:bg-surface-3 transition-colors"
                   >
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-1">
-                        <span className="text-slate-300 font-medium">{game.date}</span>
+                        <span className="text-primary font-medium">{game.date}</span>
                         <span className={`px-2 py-0.5 rounded text-xs ${
-                          game.home_away === 'home' 
-                            ? 'bg-blue-500/20 text-blue-400' 
-                            : 'bg-orange-500/20 text-orange-400'
+                          game.home_away === 'home'
+                            ? 'bg-cyan/20 text-cyan'
+                            : 'bg-orange/20 text-orange'
                         }`}>
                           {game.home_away === 'home' ? 'Hazai' : 'Vendég'}
                         </span>
                       </div>
-                      <div className="text-sm text-slate-400">
-                        <span className="font-semibold text-slate-200">
+                      <div className="text-sm text-secondary">
+                        <span className="font-semibold text-primary">
                           {game.our_score} - {game.opp_score}
                         </span>
                         {' vs '}
                         <span>{game.opponent}</span>
                       </div>
-                      <div className="text-xs text-slate-500 mt-1">
-                        {game.stats_count} játékos statisztika
+                      <div className="text-xs text-muted mt-1">
+                        <span className="font-mono tabular-nums">{game.stats_count}</span> játékos statisztika
                       </div>
                     </div>
                     <Button
@@ -258,9 +258,8 @@ export function GameManagement({ onDeleteComplete }: { onDeleteComplete?: () => 
                       disabled={isLoading}
                       variant="destructive"
                       size="sm"
-                      className="bg-red-600 hover:bg-red-700"
                     >
-                      <Trash2 size={16} />
+                      <Trash2 size={16} strokeWidth={1.6} />
                     </Button>
                   </div>
                 ))}

@@ -125,7 +125,7 @@ export function PlayerComparison({
     return selectedPlayers.some(p => `${p.id}-${p.seasonId}` === playerKey);
   };
 
-  const colors = ['#10b981', '#06b6d4', '#8b5cf6'];
+  const colors = ['var(--positive)', 'var(--accent-cyan)', 'var(--accent-ai)'];
 
   // Egyedi label generálása minden kiválasztott játékoshoz (név + szezon)
   const getPlayerLabel = (player: PlayerStats) => {
@@ -285,80 +285,80 @@ export function PlayerComparison({
   return (
     <div className="space-y-4 sm:space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
-        <Button onClick={onBack} variant="ghost" className="text-slate-400 hover:bg-slate-800 w-fit text-sm sm:text-base">
-          <ArrowLeft size={18} className="mr-2" />
+        <Button onClick={onBack} variant="ghost" className="text-secondary hover:bg-surface-2 w-fit text-sm sm:text-base">
+          <ArrowLeft size={18} className="mr-2" strokeWidth={1.6} />
           Vissza
         </Button>
         <div className="flex items-center gap-2">
-          <Users className="text-emerald-400 shrink-0" size={20} />
-          <h2 className="text-lg sm:text-xl text-slate-50">
+          <Users className="text-positive shrink-0" size={20} strokeWidth={1.6} />
+          <h2 className="text-lg sm:text-xl font-display uppercase tracking-wide text-primary">
             Játékosok összehasonlítása ({selectedPlayers.length}/3)
           </h2>
         </div>
       </div>
 
       {/* Szűrők */}
-      <Card className="bg-slate-900 border-slate-800">
+      <Card>
         <CardHeader className="p-4">
-          <CardTitle className="text-slate-50 text-base">Szűrők</CardTitle>
+          <CardTitle className="text-base">Szűrők</CardTitle>
         </CardHeader>
         <CardContent className="p-4 space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             {/* Szezon szűrő */}
             <div className="space-y-2">
-              <label className="text-sm text-slate-300">Szezon</label>
+              <label className="text-sm text-secondary">Szezon</label>
               <select
                 value={filterSeasonId}
                 onChange={(e) => setFilterSeasonId(e.target.value)}
-                className="w-full h-10 px-3 bg-slate-800 border border-slate-700 text-slate-300 rounded-md placeholder:text-slate-400"
+                className="w-full h-10 px-3 bg-surface-2 border border-border-subtle text-primary rounded-md"
               >
-                <option value="all" className="text-slate-300">Összes szezon</option>
+                <option value="all">Összes szezon</option>
                 {allSeasons.map(season => (
-                  <option key={season.id} value={season.id} className="text-slate-300">{season.name}</option>
+                  <option key={season.id} value={season.id}>{season.name}</option>
                 ))}
               </select>
             </div>
 
             {/* Csapat szűrő */}
             <div className="space-y-2">
-              <label className="text-sm text-slate-300">Csapat</label>
+              <label className="text-sm text-secondary">Csapat</label>
               <select
                 value={filterTeamId}
                 onChange={(e) => setFilterTeamId(e.target.value)}
-                className="w-full h-10 px-3 bg-slate-800 border border-slate-700 text-slate-300 rounded-md placeholder:text-slate-400"
+                className="w-full h-10 px-3 bg-surface-2 border border-border-subtle text-primary rounded-md"
               >
-                <option value="all" className="text-slate-300">Összes csapat</option>
+                <option value="all">Összes csapat</option>
                 {allTeams.map(team => (
-                  <option key={team.id} value={team.id} className="text-slate-300">{team.name}</option>
+                  <option key={team.id} value={team.id}>{team.name}</option>
                 ))}
               </select>
             </div>
 
             {/* Pozíció szűrő */}
             <div className="space-y-2">
-              <label className="text-sm text-slate-300">Pozíció</label>
+              <label className="text-sm text-secondary">Pozíció</label>
               <select
                 value={filterPosition}
                 onChange={(e) => setFilterPosition(e.target.value)}
-                className="w-full h-10 px-3 bg-slate-800 border border-slate-700 text-slate-300 rounded-md placeholder:text-slate-400"
+                className="w-full h-10 px-3 bg-surface-2 border border-border-subtle text-primary rounded-md"
               >
                 {positions.map(pos => (
-                  <option key={pos} value={pos} className="text-slate-300">{positionLabels[pos]}</option>
+                  <option key={pos} value={pos}>{positionLabels[pos]}</option>
                 ))}
               </select>
             </div>
           </div>
-          <p className="text-sm text-slate-400">
-            💡 Tipp: Válaszd ki az &quot;Összes csapat&quot; opciót a szezonnal és pozícióval együtt, hogy különböző csapatok ugyanazon poszton játszó játékosait hasonlítsd össze!
+          <p className="text-sm text-secondary">
+            Tipp: Válaszd ki az &quot;Összes csapat&quot; opciót a szezonnal és pozícióval együtt, hogy különböző csapatok ugyanazon poszton játszó játékosait hasonlítsd össze!
           </p>
         </CardContent>
       </Card>
 
       {/* Kiválasztott játékosok */}
       {selectedPlayers.length > 0 && (
-        <Card className="bg-slate-900 border-slate-800">
+        <Card>
           <CardHeader className="p-4 sm:p-6">
-            <CardTitle className="text-slate-50 text-base sm:text-lg">Kiválasztott játékosok</CardTitle>
+            <CardTitle className="text-base sm:text-lg">Kiválasztott játékosok</CardTitle>
           </CardHeader>
           <CardContent className="p-4 sm:p-6">
             <div className="flex flex-wrap gap-2 sm:gap-3">
@@ -371,7 +371,7 @@ export function PlayerComparison({
                   <div className="flex items-center gap-2 w-full">
                     <span className="font-bold">#{player.number} {player.name}</span>
                     <X
-                      size={14}
+                      size={14} strokeWidth={1.6}
                       className="cursor-pointer hover:opacity-70 ml-auto"
                       onClick={() => handleSelectPlayer(player)}
                     />
@@ -396,16 +396,16 @@ export function PlayerComparison({
       {selectedPlayers.length >= 2 && (
         <div className="space-y-4 sm:space-y-6">
           {/* Radar chart */}
-          <Card className="bg-slate-900 border-slate-800">
+          <Card>
             <CardHeader className="p-4 sm:p-6">
-              <CardTitle className="text-slate-50 text-base sm:text-lg">Összehasonlító Profil</CardTitle>
+              <CardTitle className="text-base sm:text-lg">Összehasonlító Profil</CardTitle>
             </CardHeader>
             <CardContent className="p-4 sm:p-6">
               <ResponsiveContainer width="100%" height={300}>
                 <RadarChart data={radarData}>
-                  <PolarGrid stroke="#334155" />
-                  <PolarAngleAxis dataKey="stat" tick={{ fill: '#94a3b8', fontSize: 11 }} />
-                  <PolarRadiusAxis angle={90} domain={[0, 100]} tick={{ fill: '#64748b' }} />
+                  <PolarGrid stroke="var(--border-subtle)" />
+                  <PolarAngleAxis dataKey="stat" tick={{ fill: 'var(--text-secondary)', fontSize: 11 }} />
+                  <PolarRadiusAxis angle={90} domain={[0, 100]} tick={{ fill: 'var(--text-muted)' }} />
                   {selectedPlayers.map((player, idx) => (
                     <Radar
                       key={`${player.id}-${player.seasonId}-${idx}`}
@@ -422,25 +422,25 @@ export function PlayerComparison({
           </Card>
 
           {/* Átlagok összehasonlítása */}
-          <Card className="bg-slate-900 border-slate-800">
+          <Card>
             <CardHeader className="p-4 sm:p-6">
-              <CardTitle className="text-slate-50 text-base sm:text-lg">Meccsenként átlagok</CardTitle>
+              <CardTitle className="text-base sm:text-lg">Meccsenként átlagok</CardTitle>
             </CardHeader>
             <CardContent className="p-4 sm:p-6">
               <ResponsiveContainer width="100%" height={280}>
                 <BarChart data={avgComparisonData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                  <XAxis dataKey="category" stroke="#94a3b8" tick={{ fontSize: 11 }} />
-                  <YAxis stroke="#94a3b8" tick={{ fontSize: 11 }} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" />
+                  <XAxis dataKey="category" stroke="var(--text-secondary)" tick={{ fontSize: 11 }} />
+                  <YAxis stroke="var(--text-secondary)" tick={{ fontSize: 11 }} />
                   <Tooltip
                     contentStyle={{
-                      backgroundColor: '#0f172a',
-                      border: '1px solid #475569',
+                      backgroundColor: 'var(--bg-surface-2)',
+                      border: '1px solid var(--border-subtle)',
                       borderRadius: '8px',
-                      color: '#f1f5f9'
+                      color: 'var(--text-primary)',
                     }}
                   />
-                  <Legend wrapperStyle={{ fontSize: '12px' }} />
+                  <Legend wrapperStyle={{ fontSize: '12px', color: 'var(--text-secondary)' }} />
                   {selectedPlayers.map((player, idx) => (
                     <Bar key={`${player.id}-${player.seasonId}-${idx}`} dataKey={getPlayerLabel(player)} fill={colors[idx]} />
                   ))}
@@ -450,25 +450,25 @@ export function PlayerComparison({
           </Card>
 
           {/* Dobási százalékok */}
-          <Card className="bg-slate-900 border-slate-800">
+          <Card>
             <CardHeader className="p-4 sm:p-6">
-              <CardTitle className="text-slate-50 text-base sm:text-lg">Dobási hatékonyság (%)</CardTitle>
+              <CardTitle className="text-base sm:text-lg">Dobási hatékonyság (%)</CardTitle>
             </CardHeader>
             <CardContent className="p-4 sm:p-6">
               <ResponsiveContainer width="100%" height={280}>
                 <BarChart data={shootingComparisonData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                  <XAxis dataKey="category" stroke="#94a3b8" tick={{ fontSize: 11 }} />
-                  <YAxis stroke="#94a3b8" tick={{ fontSize: 11 }} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" />
+                  <XAxis dataKey="category" stroke="var(--text-secondary)" tick={{ fontSize: 11 }} />
+                  <YAxis stroke="var(--text-secondary)" tick={{ fontSize: 11 }} />
                   <Tooltip
                     contentStyle={{
-                      backgroundColor: '#0f172a',
-                      border: '1px solid #475569',
+                      backgroundColor: 'var(--bg-surface-2)',
+                      border: '1px solid var(--border-subtle)',
                       borderRadius: '8px',
-                      color: '#f1f5f9'
+                      color: 'var(--text-primary)',
                     }}
                   />
-                  <Legend wrapperStyle={{ fontSize: '12px' }} />
+                  <Legend wrapperStyle={{ fontSize: '12px', color: 'var(--text-secondary)' }} />
                   {selectedPlayers.map((player, idx) => (
                     <Bar key={`${player.id}-${player.seasonId}-${idx}`} dataKey={getPlayerLabel(player)} fill={colors[idx]} />
                   ))}
@@ -478,25 +478,25 @@ export function PlayerComparison({
           </Card>
 
           {/* Fejlett statisztikák */}
-          <Card className="bg-slate-900 border-slate-800">
+          <Card>
             <CardHeader className="p-4 sm:p-6">
-              <CardTitle className="text-slate-50 text-base sm:text-lg">Fejlett statisztikák</CardTitle>
+              <CardTitle className="text-base sm:text-lg">Fejlett statisztikák</CardTitle>
             </CardHeader>
             <CardContent className="p-4 sm:p-6">
               <ResponsiveContainer width="100%" height={280}>
                 <BarChart data={advancedStatsData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                  <XAxis dataKey="category" stroke="#94a3b8" tick={{ fontSize: 11 }} />
-                  <YAxis stroke="#94a3b8" tick={{ fontSize: 11 }} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" />
+                  <XAxis dataKey="category" stroke="var(--text-secondary)" tick={{ fontSize: 11 }} />
+                  <YAxis stroke="var(--text-secondary)" tick={{ fontSize: 11 }} />
                   <Tooltip
                     contentStyle={{
-                      backgroundColor: '#0f172a',
-                      border: '1px solid #475569',
+                      backgroundColor: 'var(--bg-surface-2)',
+                      border: '1px solid var(--border-subtle)',
                       borderRadius: '8px',
-                      color: '#f1f5f9'
+                      color: 'var(--text-primary)',
                     }}
                   />
-                  <Legend wrapperStyle={{ fontSize: '12px' }} />
+                  <Legend wrapperStyle={{ fontSize: '12px', color: 'var(--text-secondary)' }} />
                   {selectedPlayers.map((player, idx) => (
                     <Bar key={`${player.id}-${player.seasonId}-${idx}`} dataKey={getPlayerLabel(player)} fill={colors[idx]} />
                   ))}
@@ -506,15 +506,15 @@ export function PlayerComparison({
           </Card>
 
           {/* Összehasonlító táblázat */}
-          <Card className="bg-slate-900 border-slate-800">
+          <Card>
             <CardHeader className="p-4 sm:p-6">
-              <CardTitle className="text-slate-50 text-base sm:text-lg">Részletes összehasonlítás</CardTitle>
+              <CardTitle className="text-base sm:text-lg">Részletes összehasonlítás</CardTitle>
             </CardHeader>
             <CardContent className="p-4 sm:p-6 overflow-x-auto">
               <table className="w-full text-xs sm:text-sm">
                 <thead>
-                  <tr className="border-b border-slate-700">
-                    <th className="text-left py-2 sm:py-3 text-slate-400 font-medium">Statisztika</th>
+                  <tr className="border-b border-border-subtle">
+                    <th className="text-left py-2 sm:py-3 text-secondary font-medium">Statisztika</th>
                     {selectedPlayers.map((player, idx) => (
                       <th key={`${player.id}-${player.number}-${idx}`} className="text-center py-2 sm:py-3 font-medium" style={{ color: colors[idx] }}>
                         #{player.number} {player.name}
@@ -522,81 +522,81 @@ export function PlayerComparison({
                     ))}
                   </tr>
                 </thead>
-                <tbody className="text-slate-300">
-                  <tr className="border-b border-slate-800">
-                    <td className="py-2 sm:py-3 text-slate-400">Poszt</td>
+                <tbody className="text-primary">
+                  <tr className="border-b border-border-subtle">
+                    <td className="py-2 sm:py-3 text-secondary">Poszt</td>
                     {selectedPlayers.map((player, idx) => (
                       <td key={`${player.id}-${idx}`} className="text-center py-2 sm:py-3">{getPositionLabel(player.position)}</td>
                     ))}
                   </tr>
-                  <tr className="border-b border-slate-800 bg-slate-800/30">
-                    <td className="py-2 sm:py-3 text-slate-400">Kor</td>
+                  <tr className="border-b border-border-subtle bg-surface-2/30">
+                    <td className="py-2 sm:py-3 text-secondary">Kor</td>
                     {selectedPlayers.map((player, idx) => (
                       <td key={`${player.id}-${idx}`} className="text-center py-2 sm:py-3">
                         {player.birthYear ? `${2025 - player.birthYear} év` : '-'}
                       </td>
                     ))}
                   </tr>
-                  <tr className="border-b border-slate-800 bg-slate-800/30">
-                    <td className="py-2 sm:py-3 text-slate-400">Magasság</td>
+                  <tr className="border-b border-border-subtle bg-surface-2/30">
+                    <td className="py-2 sm:py-3 text-secondary">Magasság</td>
                     {selectedPlayers.map((player, idx) => (
                       <td key={`${player.id}-${idx}`} className="text-center py-2 sm:py-3">
                         {player.height ? `${player.height} cm` : '-'}
                       </td>
                     ))}
                   </tr>
-                  <tr className="border-b border-slate-800 bg-slate-800/30">
-                    <td className="py-2 sm:py-3 text-slate-400">Súly</td>
+                  <tr className="border-b border-border-subtle bg-surface-2/30">
+                    <td className="py-2 sm:py-3 text-secondary">Súly</td>
                     {selectedPlayers.map((player, idx) => (
                       <td key={`${player.id}-${idx}`} className="text-center py-2 sm:py-3">
                         {player.weight ? `${player.weight} kg` : '-'}
                       </td>
                     ))}
                   </tr>
-                  <tr className="border-b border-slate-800">
-                    <td className="py-2 sm:py-3 text-slate-400">Meccsek</td>
+                  <tr className="border-b border-border-subtle">
+                    <td className="py-2 sm:py-3 text-secondary">Meccsek</td>
                     {selectedPlayers.map((player, idx) => (
                       <td key={`${player.id}-${idx}`} className="text-center py-2 sm:py-3">{player.gamesPlayed}</td>
                     ))}
                   </tr>
-                  <tr className="border-b border-slate-800">
-                    <td className="py-2 sm:py-3 text-slate-400">Pont/Meccs</td>
+                  <tr className="border-b border-border-subtle">
+                    <td className="py-2 sm:py-3 text-secondary">Pont/Meccs</td>
                     {selectedPlayers.map((player, idx) => (
                       <td key={`${player.id}-${idx}`} className="text-center py-2 sm:py-3">{(player.points / player.gamesPlayed).toFixed(1)}</td>
                     ))}
                   </tr>
-                  <tr className="border-b border-slate-800">
-                    <td className="py-2 sm:py-3 text-slate-400">Lepattanó/Meccs</td>
+                  <tr className="border-b border-border-subtle">
+                    <td className="py-2 sm:py-3 text-secondary">Lepattanó/Meccs</td>
                     {selectedPlayers.map((player, idx) => (
                       <td key={`${player.id}-${idx}`} className="text-center py-2 sm:py-3">{(player.rebounds.total / player.gamesPlayed).toFixed(1)}</td>
                     ))}
                   </tr>
-                  <tr className="border-b border-slate-800">
-                    <td className="py-2 sm:py-3 text-slate-400">Gólpassz/Meccs</td>
+                  <tr className="border-b border-border-subtle">
+                    <td className="py-2 sm:py-3 text-secondary">Gólpassz/Meccs</td>
                     {selectedPlayers.map((player, idx) => (
                       <td key={`${player.id}-${idx}`} className="text-center py-2 sm:py-3">{(player.assists / player.gamesPlayed).toFixed(1)}</td>
                     ))}
                   </tr>
-                  <tr className="border-b border-slate-800">
-                    <td className="py-2 sm:py-3 text-slate-400">Labdaszerzés/Meccs</td>
+                  <tr className="border-b border-border-subtle">
+                    <td className="py-2 sm:py-3 text-secondary">Labdaszerzés/Meccs</td>
                     {selectedPlayers.map((player, idx) => (
                       <td key={`${player.id}-${idx}`} className="text-center py-2 sm:py-3">{(player.steals / player.gamesPlayed).toFixed(1)}</td>
                     ))}
                   </tr>
-                  <tr className="border-b border-slate-800">
-                    <td className="py-2 sm:py-3 text-slate-400">Blokk/Meccs</td>
+                  <tr className="border-b border-border-subtle">
+                    <td className="py-2 sm:py-3 text-secondary">Blokk/Meccs</td>
                     {selectedPlayers.map((player, idx) => (
                       <td key={`${player.id}-${idx}`} className="text-center py-2 sm:py-3">{(player.blocks / player.gamesPlayed).toFixed(1)}</td>
                     ))}
                   </tr>
-                  <tr className="border-b border-slate-800">
-                    <td className="py-2 sm:py-3 text-slate-400">Valuation/Meccs</td>
+                  <tr className="border-b border-border-subtle">
+                    <td className="py-2 sm:py-3 text-secondary">Valuation/Meccs</td>
                     {selectedPlayers.map((player, idx) => (
                       <td key={`${player.id}-${idx}`} className="text-center py-2 sm:py-3">{player.valuation.toFixed(1)}</td>
                     ))}
                   </tr>
-                  <tr className="border-b border-slate-800">
-                    <td className="py-2 sm:py-3 text-slate-400">Offensive Rating</td>
+                  <tr className="border-b border-border-subtle">
+                    <td className="py-2 sm:py-3 text-secondary">Offensive Rating</td>
                     {selectedPlayers.map((player, idx) => {
                       const gamesWithORtg = player.gameHistory.filter(g => g.offensiveRating != null);
                       const avgORtg = gamesWithORtg.length > 0
@@ -607,8 +607,8 @@ export function PlayerComparison({
                       );
                     })}
                   </tr>
-                  <tr className="border-b border-slate-800">
-                    <td className="py-2 sm:py-3 text-slate-400">Defensive Rating</td>
+                  <tr className="border-b border-border-subtle">
+                    <td className="py-2 sm:py-3 text-secondary">Defensive Rating</td>
                     {selectedPlayers.map((player, idx) => {
                       const gamesWithDRtg = player.gameHistory.filter(g => g.defensiveRating != null);
                       const avgDRtg = gamesWithDRtg.length > 0
@@ -619,14 +619,14 @@ export function PlayerComparison({
                       );
                     })}
                   </tr>
-                  <tr className="border-b border-slate-800">
-                    <td className="py-2 sm:py-3 text-slate-400">True Shooting %</td>
+                  <tr className="border-b border-border-subtle">
+                    <td className="py-2 sm:py-3 text-secondary">True Shooting %</td>
                     {selectedPlayers.map((player, idx) => (
                       <td key={`${player.id}-${idx}`} className="text-center py-2 sm:py-3">{player.trueShootingPct.toFixed(1)}%</td>
                     ))}
                   </tr>
-                  <tr className="border-b border-slate-800">
-                    <td className="py-2 sm:py-3 text-slate-400">Effective FG %</td>
+                  <tr className="border-b border-border-subtle">
+                    <td className="py-2 sm:py-3 text-secondary">Effective FG %</td>
                     {selectedPlayers.map((player, idx) => (
                       <td key={`${player.id}-${idx}`} className="text-center py-2 sm:py-3">{player.effectiveShootingPct.toFixed(1)}%</td>
                     ))}
@@ -639,9 +639,9 @@ export function PlayerComparison({
       )}
 
       {/* Játékosok listája */}
-      <Card className="bg-slate-900 border-slate-800">
+      <Card>
         <CardHeader className="p-4 sm:p-6">
-          <CardTitle className="text-slate-50 text-base sm:text-lg">Válassz játékosokat (max. 3)</CardTitle>
+          <CardTitle className="text-base sm:text-lg">Válassz játékosokat (max. 3)</CardTitle>
         </CardHeader>
         <CardContent className="p-4 sm:p-6">
           {/* Poszt szerinti szűrő */}
@@ -652,7 +652,7 @@ export function PlayerComparison({
                 size="sm"
                 variant={filterPosition === pos ? "default" : "outline"}
                 onClick={() => setFilterPosition(pos)}
-                className="text-xs sm:text-sm"
+                className={`text-xs sm:text-sm ${filterPosition !== pos ? 'border-border-subtle hover:bg-surface-2 text-secondary' : ''}`}
               >
                 {positionLabels[pos]}
               </Button>
@@ -667,32 +667,32 @@ export function PlayerComparison({
                 onClick={() => handleSelectPlayer(player)}
                 className={`p-3 sm:p-4 rounded-lg border-2 cursor-pointer transition-all ${
                   isSelected(player)
-                    ? 'border-emerald-500 bg-emerald-500/10'
-                    : 'border-slate-700 bg-slate-800/50 hover:border-slate-600'
+                    ? 'border-cyan bg-cyan/10'
+                    : 'border-border-subtle bg-surface-2/50 hover:border-border-active'
                 } ${selectedPlayers.length >= 3 && !isSelected(player) ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
-                    <Badge variant="secondary" className="text-xs sm:text-sm">
+                    <Badge className="badge-neutral text-xs sm:text-sm">
                       #{player.number}
                     </Badge>
-                    <span className="text-slate-50 font-medium text-sm sm:text-base">{player.name}</span>
+                    <span className="text-primary font-medium text-sm sm:text-base">{player.name}</span>
                   </div>
                   {isSelected(player) && (
-                    <Badge className="bg-emerald-500 text-xs">✓</Badge>
+                    <Badge className="badge-cyan text-xs">✓</Badge>
                   )}
                 </div>
-                <div className="text-xs text-slate-400 mb-1">
+                <div className="text-xs text-secondary mb-1">
                   {player.seasonName} • {player.teamName}
                 </div>
-                <div className="flex flex-wrap gap-2 text-xs text-slate-400">
+                <div className="flex flex-wrap gap-2 text-xs text-secondary">
                   <span>{getPositionLabel(player.position)}</span>
                   <span>•</span>
-                  <span>{(player.points / player.gamesPlayed).toFixed(1)} ppg</span>
+                  <span className="font-mono tabular-nums">{(player.points / player.gamesPlayed).toFixed(1)} ppg</span>
                   <span>•</span>
-                  <span>{(player.rebounds.total / player.gamesPlayed).toFixed(1)} rpg</span>
+                  <span className="font-mono tabular-nums">{(player.rebounds.total / player.gamesPlayed).toFixed(1)} rpg</span>
                   <span>•</span>
-                  <span>{(player.assists / player.gamesPlayed).toFixed(1)} apg</span>
+                  <span className="font-mono tabular-nums">{(player.assists / player.gamesPlayed).toFixed(1)} apg</span>
                 </div>
               </div>
             ))}

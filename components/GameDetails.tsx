@@ -646,10 +646,6 @@ export function GameDetails({ gameId, onBack }: GameDetailsProps) {
             {new Date(gameComparison.date).toLocaleDateString('hu-HU')} · {gameComparison.season_name}
           </p>
         </div>
-        <Button onClick={exportGameMd} variant="outline" size="sm" className="text-cyan">
-          <Download className="w-4 h-4 mr-2" strokeWidth={1.6} />
-          Export MD
-        </Button>
         <span className={`ml-auto sm:ml-0 font-mono tabular-nums ${gameComparison.result === 'win' ? 'badge-positive' : 'badge-negative'}`}>
           {gameComparison.our_score} – {gameComparison.opp_score}
         </span>
@@ -834,10 +830,16 @@ export function GameDetails({ gameId, onBack }: GameDetailsProps) {
       {/* Manuális elemzés beillesztése */}
       <Card className="shadow-panel">
         <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2 text-base">
-            <ClipboardList className="h-4 w-4 text-cyan" strokeWidth={1.6} />
-            Manuális elemzés beillesztése
-          </CardTitle>
+          <div className="flex items-center justify-between gap-3">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <ClipboardList className="h-4 w-4 text-cyan" strokeWidth={1.6} />
+              Manuális elemzés beillesztése
+            </CardTitle>
+            <Button onClick={exportGameMd} variant="outline" size="sm" className="text-cyan shrink-0">
+              <Download className="w-4 h-4 mr-2" strokeWidth={1.6} />
+              Export MD
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="space-y-3">
           <p className="text-xs text-secondary">

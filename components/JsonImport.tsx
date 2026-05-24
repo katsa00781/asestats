@@ -980,31 +980,31 @@ export function JsonImport({ onImportComplete, lastImportedGame, selectedSeasonI
   return (
     <div>
       <div className="mb-6">
-        <h2 className="text-slate-50 mb-2 flex items-center gap-2">
-          <FileJson size={24} />
+        <h2 className="text-primary mb-2 flex items-center gap-2">
+          <FileJson size={24} strokeWidth={1.5} />
           Gyors Adatfelvitel Táblázatból
         </h2>
-        <p className="text-slate-400">Másold be a statisztikai táblázatot és importáld az adatbázisba</p>
+        <p className="text-secondary">Másold be a statisztikai táblázatot és importáld az adatbázisba</p>
       </div>
 
       <form onSubmit={handleImport} className="space-y-6">
         {/* Meccs információk */}
-        <Card className="bg-slate-900 border-slate-800">
+        <Card>
           <CardHeader>
-            <CardTitle className="text-slate-50">Meccs információk</CardTitle>
+            <CardTitle>Meccs információk</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             {/* Választás: Létező meccs vagy új */}
             <div className="space-y-2">
-              <Label className="text-slate-300">Meccs típusa</Label>
+              <Label>Meccs típusa</Label>
               <div className="flex gap-4">
                 <button
                   type="button"
                   onClick={() => setUseExistingGame(false)}
                   className={`flex-1 py-3 px-4 rounded-lg border-2 transition-all ${
                     !useExistingGame
-                      ? 'bg-emerald-600 border-emerald-500 text-white'
-                      : 'bg-slate-800 border-slate-700 text-slate-300 hover:border-slate-600'
+                      ? 'bg-cyan border-cyan text-base'
+                      : 'bg-surface-2 border-border-subtle text-secondary hover:border-border-active'
                   }`}
                 >
                   <div className="font-semibold">Új meccs</div>
@@ -1015,8 +1015,8 @@ export function JsonImport({ onImportComplete, lastImportedGame, selectedSeasonI
                   onClick={() => setUseExistingGame(true)}
                   className={`flex-1 py-3 px-4 rounded-lg border-2 transition-all ${
                     useExistingGame
-                      ? 'bg-emerald-600 border-emerald-500 text-white'
-                      : 'bg-slate-800 border-slate-700 text-slate-300 hover:border-slate-600'
+                      ? 'bg-cyan border-cyan text-base'
+                      : 'bg-surface-2 border-border-subtle text-secondary hover:border-border-active'
                   }`}
                 >
                   <div className="font-semibold">Létező meccs</div>
@@ -1027,19 +1027,18 @@ export function JsonImport({ onImportComplete, lastImportedGame, selectedSeasonI
 
             {/* Szezon kiválasztása mindig */}
             <div className="space-y-2">
-              <Label htmlFor="season" className="text-slate-300">
+              <Label htmlFor="season">
                 Szezon *
               </Label>
               <Select value={selectedSeasonId || ''} onValueChange={setSelectedSeasonId}>
-                <SelectTrigger className="bg-slate-800 border-slate-700">
+                <SelectTrigger>
                   <SelectValue placeholder="Válassz szezont..." />
                 </SelectTrigger>
-                <SelectContent className="bg-slate-800 border-slate-700">
+                <SelectContent>
                   {seasons.map(season => (
-                    <SelectItem 
-                      key={season.id} 
+                    <SelectItem
+                      key={season.id}
                       value={season.id}
-                      className="text-slate-200 focus:bg-slate-700"
                     >
                       {season.name} {season.is_current && '(Jelenlegi)'}
                     </SelectItem>
@@ -1051,19 +1050,18 @@ export function JsonImport({ onImportComplete, lastImportedGame, selectedSeasonI
             {/* Létező meccs kiválasztása */}
             {useExistingGame && (
               <div className="space-y-2">
-                <Label htmlFor="existingGame" className="text-slate-300">
+                <Label htmlFor="existingGame">
                   Válassz meccset *
                 </Label>
                 <Select value={selectedGameId || ''} onValueChange={handleSelectExistingGame}>
-                  <SelectTrigger className="bg-slate-800 border-slate-700">
+                  <SelectTrigger>
                     <SelectValue placeholder="Válassz meccset..." />
                   </SelectTrigger>
-                  <SelectContent className="bg-slate-800 border-slate-700">
+                  <SelectContent>
                     {existingGames.map(game => (
-                      <SelectItem 
-                        key={game.id} 
+                      <SelectItem
+                        key={game.id}
                         value={game.id}
-                        className="text-slate-200 focus:bg-slate-700"
                       >
                         {game.date} - {game.opponent} ({game.our_score}:{game.opp_score}) {game.round ? `- ${game.round}. forduló` : ''}
                       </SelectItem>
@@ -1079,7 +1077,7 @@ export function JsonImport({ onImportComplete, lastImportedGame, selectedSeasonI
             {/* Első sor: Dátum és Forduló */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="space-y-2 sm:col-span-2">
-                <Label htmlFor="date" className="text-slate-300">
+                <Label htmlFor="date">
                   Dátum *
                 </Label>
                 <Input
@@ -1088,11 +1086,10 @@ export function JsonImport({ onImportComplete, lastImportedGame, selectedSeasonI
                   value={gameDate}
                   onChange={(e) => setGameDate(e.target.value)}
                   required={!useExistingGame}
-                  className="bg-slate-800 border-slate-700 text-slate-100"
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="round" className="text-slate-300">
+                <Label htmlFor="round">
                   Forduló
                 </Label>
                 <Input
@@ -1101,7 +1098,6 @@ export function JsonImport({ onImportComplete, lastImportedGame, selectedSeasonI
                   value={round}
                   onChange={(e) => setRound(e.target.value)}
                   placeholder="pl. 5"
-                  className="bg-slate-800 border-slate-700 text-slate-100"
                 />
               </div>
             </div>
@@ -1109,17 +1105,17 @@ export function JsonImport({ onImportComplete, lastImportedGame, selectedSeasonI
             {/* Második sor: Hazai csapat */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="homeTeam" className="text-slate-300">
+                <Label htmlFor="homeTeam">
                   Hazai csapat *
                 </Label>
                 <Select value={homeTeamId || ''} onValueChange={setHomeTeamId}>
-                  <SelectTrigger className="bg-slate-800 border-slate-700">
+                  <SelectTrigger>
                     <SelectValue placeholder="Válassz hazai csapatot..." />
                   </SelectTrigger>
-                  <SelectContent className="bg-slate-800 border-slate-700">
+                  <SelectContent>
                     {teams.map(team => (
-                      <SelectItem 
-                        key={team.id} 
+                      <SelectItem
+                        key={team.id}
                         value={team.id}
                       >
                         {team.name} {team.is_primary && '⭐'}
@@ -1130,7 +1126,7 @@ export function JsonImport({ onImportComplete, lastImportedGame, selectedSeasonI
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="homeScore" className="text-slate-300">
+                <Label htmlFor="homeScore">
                   Hazai pont *
                 </Label>
                 <Input
@@ -1140,7 +1136,6 @@ export function JsonImport({ onImportComplete, lastImportedGame, selectedSeasonI
                   onChange={(e) => setHomeScore(e.target.value)}
                   required={!useExistingGame}
                   placeholder="pl. 85"
-                  className="bg-slate-800 border-slate-700 text-slate-100"
                 />
               </div>
             </div>
@@ -1148,17 +1143,17 @@ export function JsonImport({ onImportComplete, lastImportedGame, selectedSeasonI
             {/* Harmadik sor: Vendég csapat */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="awayTeam" className="text-slate-300">
+                <Label htmlFor="awayTeam">
                   Vendég csapat *
                 </Label>
                 <Select value={awayTeamId || ''} onValueChange={setAwayTeamId}>
-                  <SelectTrigger className="bg-slate-800 border-slate-700">
+                  <SelectTrigger>
                     <SelectValue placeholder="Válassz vendég csapatot..." />
                   </SelectTrigger>
-                  <SelectContent className="bg-slate-800 border-slate-700">
+                  <SelectContent>
                     {teams.map(team => (
-                      <SelectItem 
-                        key={team.id} 
+                      <SelectItem
+                        key={team.id}
                         value={team.id}
                       >
                         {team.name} {team.is_primary && '⭐'}
@@ -1169,7 +1164,7 @@ export function JsonImport({ onImportComplete, lastImportedGame, selectedSeasonI
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="awayScore" className="text-slate-300">
+                <Label htmlFor="awayScore">
                   Vendég pont *
                 </Label>
                 <Input
@@ -1179,7 +1174,6 @@ export function JsonImport({ onImportComplete, lastImportedGame, selectedSeasonI
                   onChange={(e) => setAwayScore(e.target.value)}
                   required={!useExistingGame}
                   placeholder="pl. 78"
-                  className="bg-slate-800 border-slate-700 text-slate-100"
                 />
               </div>
             </div>
@@ -1188,7 +1182,7 @@ export function JsonImport({ onImportComplete, lastImportedGame, selectedSeasonI
 
             {/* Negyedik sor: Melyik csapat adatait importáljuk */}
             <div className="space-y-2">
-              <Label className="text-slate-300">
+              <Label>
                 Melyik csapat játékosait importálod most? *
               </Label>
               <div className="flex gap-4">
@@ -1197,8 +1191,8 @@ export function JsonImport({ onImportComplete, lastImportedGame, selectedSeasonI
                   onClick={() => setCurrentImportTeam('home')}
                   className={`flex-1 py-3 px-4 rounded-lg border-2 transition-all ${
                     currentImportTeam === 'home'
-                      ? 'bg-blue-600 border-blue-500 text-white'
-                      : 'bg-slate-800 border-slate-700 text-slate-300 hover:border-slate-600'
+                      ? 'bg-cyan border-cyan text-base'
+                      : 'bg-surface-2 border-border-subtle text-secondary hover:border-border-active'
                   }`}
                 >
                   <div className="font-semibold">Hazai csapat</div>
@@ -1211,8 +1205,8 @@ export function JsonImport({ onImportComplete, lastImportedGame, selectedSeasonI
                   onClick={() => setCurrentImportTeam('away')}
                   className={`flex-1 py-3 px-4 rounded-lg border-2 transition-all ${
                     currentImportTeam === 'away'
-                      ? 'bg-blue-600 border-blue-500 text-white'
-                      : 'bg-slate-800 border-slate-700 text-slate-300 hover:border-slate-600'
+                      ? 'bg-cyan border-cyan text-base'
+                      : 'bg-surface-2 border-border-subtle text-secondary hover:border-border-active'
                   }`}
                 >
                   <div className="font-semibold">Vendég csapat</div>
@@ -1221,20 +1215,20 @@ export function JsonImport({ onImportComplete, lastImportedGame, selectedSeasonI
                   </div>
                 </button>
               </div>
-              <p className="text-sm text-slate-400 mt-2">
-                💡 Tipp: Importáld először az egyik csapat adatait, majd válts át a másikra és importáld azokat is!
+              <p className="text-sm text-secondary mt-2">
+                Tipp: Importáld először az egyik csapat adatait, majd válts át a másikra és importáld azokat is!
               </p>
             </div>
           </CardContent>
         </Card>
 
         {/* Táblázat bemásolása */}
-        <Card className="bg-slate-900 border-slate-800">
+        <Card>
           <CardHeader>
             <div className="flex items-start justify-between">
               <div>
-                <CardTitle className="text-slate-50">Statisztikai táblázat</CardTitle>
-                <p className="text-slate-400 text-sm mt-2">
+                <CardTitle>Statisztikai táblázat</CardTitle>
+                <p className="text-secondary text-sm mt-2">
                   Másold be a teljes táblázatot (a fejléccel együtt vagy anélkül). A formátum lehet tab vagy space elválasztott.
                 </p>
               </div>
@@ -1242,16 +1236,15 @@ export function JsonImport({ onImportComplete, lastImportedGame, selectedSeasonI
                 type="button"
                 onClick={() => setShowPreview(!showPreview)}
                 variant="outline"
-                className="bg-slate-800 border-slate-700 hover:bg-slate-700"
               >
                 {showPreview ? (
                   <>
-                    <EyeOff className="mr-2" size={16} />
+                    <EyeOff className="mr-2" size={16} strokeWidth={1.6} />
                     Előnézet elrejtése
                   </>
                 ) : (
                   <>
-                    <Eye className="mr-2" size={16} />
+                    <Eye className="mr-2" size={16} strokeWidth={1.6} />
                     Előnézet mutatása
                   </>
                 )}
@@ -1265,63 +1258,63 @@ export function JsonImport({ onImportComplete, lastImportedGame, selectedSeasonI
               required
               rows={15}
               placeholder="Példa formátum:&#10;2  Bluiett Trevon Nykee  16  44  1  3  33.3  0  2  0  3  9  33.3  5  7  71.4  3  1  4  2  1  3  4  2  0  0  15  99.2  100.6  50  39.3&#10;7  Eilingsfeld János  10  43  2  3  66.7  0  1  0  1  5  20  3  4  75  4  1  5  1  1  2  4  2  0  1  14  80.5  101.7  45.5  38.9&#10;..."
-              className="bg-slate-800 border-slate-700 text-slate-100 font-mono text-xs"
+              className="font-mono text-xs"
             />
           </CardContent>
         </Card>
 
         {/* Preview táblázat */}
         {showPreview && previewData.length > 0 && (
-          <Card className="bg-slate-900 border-slate-800">
+          <Card>
             <CardHeader>
-              <CardTitle className="text-slate-50">Import előnézet ({previewData.length} játékos)</CardTitle>
-              <p className="text-slate-400 text-sm mt-2">
-                Ellenőrizd az adatokat importálás előtt! Különösen figyelj a <strong className="text-amber-400">gólpasszokra (GP)</strong>.
+              <CardTitle>Import előnézet ({previewData.length} játékos)</CardTitle>
+              <p className="text-secondary text-sm mt-2">
+                Ellenőrizd az adatokat importálás előtt! Különösen figyelj a <strong className="text-warning">gólpasszokra (GP)</strong>.
               </p>
             </CardHeader>
             <CardContent>
               <div className="overflow-x-auto">
                 <table className="w-full text-xs">
                   <thead>
-                    <tr className="border-b border-slate-700">
-                      <th className="text-left p-2 text-slate-400 sticky left-0 bg-slate-900 z-10" rowSpan={2}>#</th>
-                      <th className="text-left p-2 text-slate-400 sticky left-8 bg-slate-900 z-10" rowSpan={2}>Név</th>
-                      <th className="text-right p-2 text-slate-400 bg-slate-800" rowSpan={2}>Pont</th>
-                      <th className="text-right p-2 text-slate-400 bg-slate-800" rowSpan={2}>Perc</th>
-                      <th className="text-center p-2 text-slate-400 border-l border-slate-700" colSpan={2}>Közeli</th>
-                      <th className="text-center p-2 text-slate-400" colSpan={2}>Közepes</th>
-                      <th className="text-center p-2 text-slate-400" colSpan={2}>Hármas</th>
-                      <th className="text-center p-2 text-slate-400 border-r border-slate-700" colSpan={2}>Büntető</th>
-                      <th className="text-center p-2 text-slate-400 border-l border-slate-700" colSpan={3}>Lepattanó</th>
-                      <th className="text-center p-2 text-slate-400 bg-green-900/10 border-l border-slate-700" colSpan={2}>Labda</th>
-                      <th className="text-center p-2 text-slate-400 border-l border-slate-700" colSpan={2}>Fault</th>
-                      <th className="text-right p-2 text-slate-400 bg-amber-900/30 border-l border-slate-700" rowSpan={2}>GP</th>
-                      <th className="text-center p-2 text-slate-400 border-l border-slate-700" colSpan={2}>Blokk</th>
-                      <th className="text-right p-2 text-slate-400 bg-purple-900/20 border-l border-slate-700" rowSpan={2}>VAL</th>
-                      <th className="text-center p-2 text-slate-400 bg-blue-900/10 border-l border-slate-700" colSpan={4}>Fejlett stat</th>
+                    <tr className="border-b border-border-subtle">
+                      <th className="text-left p-2 text-secondary sticky left-0 bg-surface-1 z-10" rowSpan={2}>#</th>
+                      <th className="text-left p-2 text-secondary sticky left-8 bg-surface-1 z-10" rowSpan={2}>Név</th>
+                      <th className="text-right p-2 text-secondary bg-surface-2" rowSpan={2}>Pont</th>
+                      <th className="text-right p-2 text-secondary bg-surface-2" rowSpan={2}>Perc</th>
+                      <th className="text-center p-2 text-secondary border-l border-border-subtle" colSpan={2}>Közeli</th>
+                      <th className="text-center p-2 text-secondary" colSpan={2}>Közepes</th>
+                      <th className="text-center p-2 text-secondary" colSpan={2}>Hármas</th>
+                      <th className="text-center p-2 text-secondary border-r border-border-subtle" colSpan={2}>Büntető</th>
+                      <th className="text-center p-2 text-secondary border-l border-border-subtle" colSpan={3}>Lepattanó</th>
+                      <th className="text-center p-2 text-secondary bg-green-900/10 border-l border-border-subtle" colSpan={2}>Labda</th>
+                      <th className="text-center p-2 text-secondary border-l border-border-subtle" colSpan={2}>Fault</th>
+                      <th className="text-right p-2 text-secondary bg-amber-900/30 border-l border-border-subtle" rowSpan={2}>GP</th>
+                      <th className="text-center p-2 text-secondary border-l border-border-subtle" colSpan={2}>Blokk</th>
+                      <th className="text-right p-2 text-secondary bg-purple-900/20 border-l border-border-subtle" rowSpan={2}>VAL</th>
+                      <th className="text-center p-2 text-secondary bg-blue-900/10 border-l border-border-subtle" colSpan={4}>Fejlett stat</th>
                     </tr>
-                    <tr className="border-b border-slate-700">
-                      <th className="text-right p-1 text-slate-500 text-[10px]">S/K</th>
-                      <th className="text-right p-1 text-slate-500 text-[10px]">%</th>
-                      <th className="text-right p-1 text-slate-500 text-[10px]">S/K</th>
-                      <th className="text-right p-1 text-slate-500 text-[10px]">%</th>
-                      <th className="text-right p-1 text-slate-500 text-[10px]">S/K</th>
-                      <th className="text-right p-1 text-slate-500 text-[10px]">%</th>
-                      <th className="text-right p-1 text-slate-500 text-[10px]">S/K</th>
-                      <th className="text-right p-1 text-slate-500 text-[10px]">%</th>
-                      <th className="text-right p-1 text-slate-500 text-[10px]">V</th>
-                      <th className="text-right p-1 text-slate-500 text-[10px]">T</th>
-                      <th className="text-right p-1 text-slate-500 text-[10px]">Ö</th>
-                      <th className="text-right p-1 text-slate-500 text-[10px] bg-green-900/20">SZ</th>
-                      <th className="text-right p-1 text-slate-500 text-[10px] bg-red-900/20">EL</th>
-                      <th className="text-right p-1 text-slate-500 text-[10px]">SA</th>
-                      <th className="text-right p-1 text-slate-500 text-[10px]">KI</th>
-                      <th className="text-right p-1 text-slate-500 text-[10px]">SA</th>
-                      <th className="text-right p-1 text-slate-500 text-[10px]">KA</th>
-                      <th className="text-right p-1 text-slate-500 text-[10px] bg-emerald-900/20">ORtg</th>
-                      <th className="text-right p-1 text-slate-500 text-[10px] bg-sky-900/20">DRtg</th>
-                      <th className="text-right p-1 text-slate-500 text-[10px] bg-violet-900/20">TS%</th>
-                      <th className="text-right p-1 text-slate-500 text-[10px] bg-orange-900/20">eFG%</th>
+                    <tr className="border-b border-border-subtle">
+                      <th className="text-right p-1 text-muted text-[10px]">S/K</th>
+                      <th className="text-right p-1 text-muted text-[10px]">%</th>
+                      <th className="text-right p-1 text-muted text-[10px]">S/K</th>
+                      <th className="text-right p-1 text-muted text-[10px]">%</th>
+                      <th className="text-right p-1 text-muted text-[10px]">S/K</th>
+                      <th className="text-right p-1 text-muted text-[10px]">%</th>
+                      <th className="text-right p-1 text-muted text-[10px]">S/K</th>
+                      <th className="text-right p-1 text-muted text-[10px]">%</th>
+                      <th className="text-right p-1 text-muted text-[10px]">V</th>
+                      <th className="text-right p-1 text-muted text-[10px]">T</th>
+                      <th className="text-right p-1 text-muted text-[10px]">Ö</th>
+                      <th className="text-right p-1 text-muted text-[10px] bg-green-900/20">SZ</th>
+                      <th className="text-right p-1 text-muted text-[10px] bg-red-900/20">EL</th>
+                      <th className="text-right p-1 text-muted text-[10px]">SA</th>
+                      <th className="text-right p-1 text-muted text-[10px]">KI</th>
+                      <th className="text-right p-1 text-muted text-[10px]">SA</th>
+                      <th className="text-right p-1 text-muted text-[10px]">KA</th>
+                      <th className="text-right p-1 text-muted text-[10px] bg-emerald-900/20">ORtg</th>
+                      <th className="text-right p-1 text-muted text-[10px] bg-sky-900/20">DRtg</th>
+                      <th className="text-right p-1 text-muted text-[10px] bg-violet-900/20">TS%</th>
+                      <th className="text-right p-1 text-muted text-[10px] bg-orange-900/20">eFG%</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1333,34 +1326,34 @@ export function JsonImport({ onImportComplete, lastImportedGame, selectedSeasonI
                       const isTotal = player.number > 99; // Összesített sor
                       
                       return (
-                        <tr key={idx} className={`border-b border-slate-800 ${isTotal ? 'bg-slate-700/50 font-semibold' : 'hover:bg-slate-800/50'}`}>
-                          <td className="p-2 text-slate-300 sticky left-0 bg-slate-900">{isTotal ? '-' : player.number}</td>
-                          <td className="p-2 text-slate-100 sticky left-8 bg-slate-900 min-w-30">{isTotal ? 'ÖSSZESÍTETT' : player.name}</td>
-                          <td className="text-right p-2 text-slate-100 font-semibold bg-slate-800">{player.points}</td>
-                          <td className="text-right p-2 text-slate-300 bg-slate-800">{player.minutes}</td>
-                          <td className="text-right p-2 text-slate-400 border-l border-slate-800">{player.closeMade}/{player.closeAttempted}</td>
-                          <td className="text-right p-2 text-slate-400">{closePerc}%</td>
-                          <td className="text-right p-2 text-slate-400">{player.midMade}/{player.midAttempted}</td>
-                          <td className="text-right p-2 text-slate-400">{midPerc}%</td>
-                          <td className="text-right p-2 text-slate-400">{player.threeMade}/{player.threeAttempted}</td>
-                          <td className="text-right p-2 text-slate-400">{threePerc}%</td>
-                          <td className="text-right p-2 text-slate-400">{player.ftMade}/{player.ftAttempted}</td>
-                          <td className="text-right p-2 text-slate-400 border-r border-slate-800">{ftPerc}%</td>
-                          <td className="text-right p-2 text-slate-300 border-l border-slate-800">{player.defensiveRebounds}</td>
-                          <td className="text-right p-2 text-slate-300">{player.offensiveRebounds}</td>
-                          <td className="text-right p-2 text-slate-300 font-semibold">{player.totalRebounds}</td>
-                          <td className="text-right p-2 text-green-400 bg-green-900/20 border-l border-slate-800 font-semibold">{player.steals}</td>
-                          <td className="text-right p-2 text-red-400 bg-red-900/20 font-semibold">{player.turnovers}</td>
-                          <td className="text-right p-2 text-slate-400">{player.foulsDrawn}</td>
-                          <td className="text-right p-2 text-slate-300">{player.fouls}</td>
-                          <td className="text-right p-2 text-amber-400 font-bold bg-amber-900/30 text-base border-l border-slate-800">{player.assists}</td>
-                          <td className="text-right p-2 text-slate-400 border-l border-slate-800">{player.blocksSuffered}</td>
-                          <td className="text-right p-2 text-slate-400">{player.blocksGiven}</td>
-                          <td className="text-right p-2 text-purple-400 font-bold bg-purple-900/20 text-base border-l border-slate-800">{player.valuation}</td>
-                          <td className="text-right p-2 text-emerald-400 bg-emerald-900/20 border-l border-slate-800">{player.offensiveRating.toFixed(1)}</td>
-                          <td className="text-right p-2 text-sky-400 bg-sky-900/20">{player.defensiveRating.toFixed(1)}</td>
-                          <td className="text-right p-2 text-violet-400 bg-violet-900/20">{player.trueShootingPct.toFixed(1)}%</td>
-                          <td className="text-right p-2 text-orange-400 bg-orange-900/20">{player.effectiveFGPct.toFixed(1)}%</td>
+                        <tr key={idx} className={`border-b border-border-subtle ${isTotal ? 'bg-surface-3 font-semibold' : 'hover:bg-surface-2/50'}`}>
+                          <td className="p-2 text-secondary sticky left-0 bg-surface-1">{isTotal ? '-' : player.number}</td>
+                          <td className="p-2 text-primary sticky left-8 bg-surface-1 min-w-30">{isTotal ? 'ÖSSZESÍTETT' : player.name}</td>
+                          <td className="text-right p-2 text-primary font-semibold bg-surface-2">{player.points}</td>
+                          <td className="text-right p-2 text-secondary bg-surface-2">{player.minutes}</td>
+                          <td className="text-right p-2 text-secondary border-l border-border-subtle">{player.closeMade}/{player.closeAttempted}</td>
+                          <td className="text-right p-2 text-secondary">{closePerc}%</td>
+                          <td className="text-right p-2 text-secondary">{player.midMade}/{player.midAttempted}</td>
+                          <td className="text-right p-2 text-secondary">{midPerc}%</td>
+                          <td className="text-right p-2 text-secondary">{player.threeMade}/{player.threeAttempted}</td>
+                          <td className="text-right p-2 text-secondary">{threePerc}%</td>
+                          <td className="text-right p-2 text-secondary">{player.ftMade}/{player.ftAttempted}</td>
+                          <td className="text-right p-2 text-secondary border-r border-border-subtle">{ftPerc}%</td>
+                          <td className="text-right p-2 text-primary border-l border-border-subtle">{player.defensiveRebounds}</td>
+                          <td className="text-right p-2 text-primary">{player.offensiveRebounds}</td>
+                          <td className="text-right p-2 text-primary font-semibold">{player.totalRebounds}</td>
+                          <td className="text-right p-2 text-positive bg-green-900/20 border-l border-border-subtle font-semibold">{player.steals}</td>
+                          <td className="text-right p-2 text-negative bg-red-900/20 font-semibold">{player.turnovers}</td>
+                          <td className="text-right p-2 text-secondary">{player.foulsDrawn}</td>
+                          <td className="text-right p-2 text-primary">{player.fouls}</td>
+                          <td className="text-right p-2 text-warning font-bold bg-amber-900/30 text-base border-l border-border-subtle">{player.assists}</td>
+                          <td className="text-right p-2 text-secondary border-l border-border-subtle">{player.blocksSuffered}</td>
+                          <td className="text-right p-2 text-secondary">{player.blocksGiven}</td>
+                          <td className="text-right p-2 text-ai font-bold bg-purple-900/20 text-base border-l border-border-subtle">{player.valuation}</td>
+                          <td className="text-right p-2 text-positive bg-emerald-900/20 border-l border-border-subtle">{player.offensiveRating.toFixed(1)}</td>
+                          <td className="text-right p-2 text-cyan bg-sky-900/20">{player.defensiveRating.toFixed(1)}</td>
+                          <td className="text-right p-2 text-ai bg-violet-900/20">{player.trueShootingPct.toFixed(1)}%</td>
+                          <td className="text-right p-2 text-orange bg-orange-900/20">{player.effectiveFGPct.toFixed(1)}%</td>
                         </tr>
                       );
                     })}
@@ -1368,45 +1361,45 @@ export function JsonImport({ onImportComplete, lastImportedGame, selectedSeasonI
                 </table>
               </div>
               <div className="mt-4 space-y-3">
-                <div className="p-3 bg-blue-900/20 border border-blue-700/50 rounded-lg">
-                  <p className="text-sm text-blue-200 font-semibold mb-2">
-                    📊 Importált oszlopok:
+                <div className="p-3 bg-surface-2 border border-border-subtle rounded-lg">
+                  <p className="text-sm text-primary font-semibold mb-2">
+                    Importált oszlopok:
                   </p>
-                  <div className="grid grid-cols-2 gap-2 text-xs text-blue-100">
-                    <div>✅ Pont, Perc</div>
-                    <div>✅ Dobások (Köz, Kö, 3P, BÜ)</div>
-                    <div>✅ Lepattanók (V, T, Ö)</div>
-                    <div>✅ Labda SZ, EL</div>
-                    <div>✅ Fault SA (szerzett), KI (kiosztott)</div>
-                    <div className="text-amber-300 font-semibold">✅ GP (Gólpassz)</div>
-                    <div>✅ Blokk SA (kapott), KA (kiosztott)</div>
-                    <div className="text-purple-300 font-semibold">✅ VAL (Értékelés)</div>
-                    <div>✅ Fejlett stat (ORtg, DRtg, TS%, eFG%)</div>
+                  <div className="grid grid-cols-2 gap-2 text-xs text-secondary">
+                    <div>Pont, Perc</div>
+                    <div>Dobások (Köz, Kö, 3P, BÜ)</div>
+                    <div>Lepattanók (V, T, Ö)</div>
+                    <div>Labda SZ, EL</div>
+                    <div>Fault SA (szerzett), KI (kiosztott)</div>
+                    <div className="text-warning font-semibold">GP (Gólpassz)</div>
+                    <div>Blokk SA (kapott), KA (kiosztott)</div>
+                    <div className="text-ai font-semibold">VAL (Értékelés)</div>
+                    <div>Fejlett stat (ORtg, DRtg, TS%, eFG%)</div>
                   </div>
                 </div>
-                
-                <div className="p-3 bg-slate-800/50 border border-slate-700 rounded-lg">
-                  <p className="text-sm text-slate-300 font-semibold mb-2">
-                    ⚠️ NEM importált oszlopok:
+
+                <div className="p-3 bg-surface-2 border border-border-subtle rounded-lg">
+                  <p className="text-sm text-primary font-semibold mb-2">
+                    NEM importált oszlopok:
                   </p>
-                  <div className="grid grid-cols-2 gap-2 text-xs text-slate-400">
-                    <div>❌ +/- (nincs a táblázatban)</div>
-                    <div>❌ Összesített sor (automatikusan kihagyva)</div>
+                  <div className="grid grid-cols-2 gap-2 text-xs text-secondary">
+                    <div>+/- (nincs a táblázatban)</div>
+                    <div>Összesített sor (automatikusan kihagyva)</div>
                   </div>
-                  <p className="text-xs text-slate-500 mt-2">
-                    💡 Az összesített sor (94 200...) megjelenik az előnézetben &quot;ÖSSZESÍTETT&quot; névvel, de nem kerül az adatbázisba.
+                  <p className="text-xs text-muted mt-2">
+                    Az összesített sor (94 200...) megjelenik az előnézetben &quot;ÖSSZESÍTETT&quot; névvel, de nem kerül az adatbázisba.
                   </p>
                 </div>
 
                 <div className="p-3 bg-amber-900/20 border border-amber-700/50 rounded-lg">
-                  <p className="text-sm text-amber-200 font-semibold mb-2">
-                    ✓ Ellenőrzési pontok importálás előtt:
+                  <p className="text-sm text-warning font-semibold mb-2">
+                    Ellenőrzési pontok importálás előtt:
                   </p>
-                  <ul className="list-disc list-inside text-xs text-amber-200 space-y-1">
-                    <li><strong className="text-purple-400">VAL (lila):</strong> 5-30 között? (Ha 100+, rossz az oszlopsorrend!)</li>
-                    <li><strong className="text-amber-400">GP (sárga):</strong> 0-15? Irányítóknál magasabb?</li>
-                    <li><strong className="text-green-400">SZ (zöld, Labda alatt):</strong> 0-5 tartomány?</li>
-                    <li><strong className="text-red-400">EL (piros, Labda alatt):</strong> Összhangban a percekkel?</li>
+                  <ul className="list-disc list-inside text-xs text-warning space-y-1">
+                    <li><strong className="text-ai">VAL (lila):</strong> 5-30 között? (Ha 100+, rossz az oszlopsorrend!)</li>
+                    <li><strong className="text-warning">GP (sárga):</strong> 0-15? Irányítóknál magasabb?</li>
+                    <li><strong className="text-positive">SZ (zöld, Labda alatt):</strong> 0-5 tartomány?</li>
+                    <li><strong className="text-negative">EL (piros, Labda alatt):</strong> Összhangban a percekkel?</li>
                     <li><strong>Fault SA:</strong> Szerzett faultok (ritkább, 0-5)</li>
                     <li><strong>Blokk SA/KA:</strong> Most már importálva (0-3 tartomány)</li>
                     <li><strong>ORtg, DRtg:</strong> 70-150 között?</li>
@@ -1423,7 +1416,7 @@ export function JsonImport({ onImportComplete, lastImportedGame, selectedSeasonI
           <Button
             type="submit"
             disabled={isLoading}
-            className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white disabled:opacity-50"
+            className="flex-1"
           >
             {isLoading ? (
               <>
@@ -1432,7 +1425,7 @@ export function JsonImport({ onImportComplete, lastImportedGame, selectedSeasonI
               </>
             ) : (
               <>
-                <Upload className="mr-2" size={20} />
+                <Upload className="mr-2" size={20} strokeWidth={1.6} />
                 Adatok importálása
               </>
             )}

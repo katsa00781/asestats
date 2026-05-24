@@ -15,6 +15,13 @@ import {
   Legend,
 } from 'recharts';
 import type { GamePerformance } from '@/lib/dashboard-types';
+import {
+  CHART_COLORS,
+  CHART_GRID,
+  CHART_AXIS,
+  RECHARTS_TOOLTIP_STYLE,
+  RECHARTS_LEGEND_STYLE,
+} from '@/lib/chart-theme';
 
 type PlayerTrendsProps = {
   gameHistory: GamePerformance[];
@@ -57,12 +64,17 @@ export function PlayerTrends({ gameHistory }: PlayerTrendsProps) {
     setEndDate('');
   };
 
+  const labelFormatter = (label: string) => {
+    const game = chartData.find(g => g.date === label);
+    return game ? `${game.fullDate} vs ${game.opponent}` : label;
+  };
+
   if (gameHistory.length === 0) {
     return (
-      <Card className="bg-slate-900 border-slate-800">
+      <Card>
         <CardContent className="py-12">
-          <div className="text-center text-slate-400">
-            <TrendingUp size={48} className="mx-auto mb-4 opacity-50" />
+          <div className="text-center text-secondary">
+            <TrendingUp size={48} className="mx-auto mb-4 opacity-40" strokeWidth={1.5} />
             <p>Még nincsenek meccs adatok ehhez a játékoshoz</p>
           </div>
         </CardContent>
@@ -73,229 +85,108 @@ export function PlayerTrends({ gameHistory }: PlayerTrendsProps) {
   return (
     <div className="space-y-6">
       {/* Szűrők */}
-      <Card className="bg-slate-900 border-slate-800">
+      <Card>
         <CardHeader>
-          <CardTitle className="text-slate-50 flex items-center gap-2">
-            <Calendar size={20} />
+          <CardTitle className="flex items-center gap-2 font-display uppercase tracking-wide text-sm text-secondary">
+            <Calendar size={16} strokeWidth={1.6} />
             Időszak szűrés
           </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="flex flex-wrap items-end gap-4">
-            <div className="flex-1 min-w-[200px] space-y-2">
-              <Label htmlFor="startDate" className="text-slate-300">
+            <div className="flex-1 min-w-[200px] space-y-1.5">
+              <Label htmlFor="startDate" className="font-display text-xs uppercase tracking-widest text-secondary">
                 Kezdő dátum
               </Label>
-              <Input
-                id="startDate"
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="bg-slate-800 border-slate-700 text-slate-100"
-              />
+              <Input id="startDate" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
             </div>
-
-            <div className="flex-1 min-w-[200px] space-y-2">
-              <Label htmlFor="endDate" className="text-slate-300">
+            <div className="flex-1 min-w-[200px] space-y-1.5">
+              <Label htmlFor="endDate" className="font-display text-xs uppercase tracking-widest text-secondary">
                 Záró dátum
               </Label>
-              <Input
-                id="endDate"
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                className="bg-slate-800 border-slate-700 text-slate-100"
-              />
+              <Input id="endDate" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
             </div>
-
-            <Button
-              variant="outline"
-              onClick={clearFilters}
-              className="border-slate-700 text-slate-300 hover:bg-slate-800"
-            >
+            <Button variant="outline" onClick={clearFilters}>
               Szűrők törlése
             </Button>
           </div>
-
-          <div className="mt-4 text-slate-400 text-sm">
+          <div className="mt-4 text-secondary text-sm">
             {filteredGames.length} meccs megjelenítve ({gameHistory.length} összesen)
           </div>
         </CardContent>
       </Card>
 
       {/* Pontok trendje */}
-      <Card className="bg-slate-900 border-slate-800">
+      <Card>
         <CardHeader>
-          <CardTitle className="text-slate-50">Pontok meccsenként</CardTitle>
+          <CardTitle className="font-display uppercase tracking-wide text-sm text-primary">Pontok meccsenként</CardTitle>
         </CardHeader>
         <CardContent>
-          <ResponsiveContainer width="100%" height={300}>
+          <ResponsiveContainer width="100%" height={280}>
             <LineChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-              <XAxis
-                dataKey="date"
-                stroke="#94a3b8"
-                style={{ fontSize: '12px' }}
-              />
-              <YAxis stroke="#94a3b8" style={{ fontSize: '12px' }} />
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: '#1e293b',
-                  border: '1px solid #334155',
-                  borderRadius: '8px',
-                  color: '#f1f5f9',
-                }}
-                labelFormatter={(label) => {
-                  const game = chartData.find(g => g.date === label);
-                  return game ? `${game.fullDate} vs ${game.opponent}` : label;
-                }}
-              />
-              <Line
-                type="monotone"
-                dataKey="points"
-                stroke="#10b981"
-                strokeWidth={3}
-                dot={{ fill: '#10b981', r: 5 }}
-                name="Pontok"
-              />
+              <CartesianGrid strokeDasharray={CHART_GRID.strokeDashed} stroke={CHART_GRID.stroke} />
+              <XAxis dataKey="date" stroke={CHART_AXIS.stroke} tick={{ fontSize: CHART_AXIS.fontSize, fontFamily: CHART_AXIS.fontFamily }} tickLine={false} axisLine={false} />
+              <YAxis stroke={CHART_AXIS.stroke} tick={{ fontSize: CHART_AXIS.fontSize, fontFamily: CHART_AXIS.fontFamily }} tickLine={false} axisLine={false} />
+              <Tooltip contentStyle={RECHARTS_TOOLTIP_STYLE} labelFormatter={labelFormatter} />
+              <Line type="monotone" dataKey="points" stroke={CHART_COLORS.positive} strokeWidth={2.5} dot={{ fill: CHART_COLORS.positive, r: 4, strokeWidth: 0 }} activeDot={{ r: 6 }} name="Pontok" />
             </LineChart>
           </ResponsiveContainer>
         </CardContent>
       </Card>
 
       {/* Lepattanók és gólpasszok */}
-      <Card className="bg-slate-900 border-slate-800">
+      <Card>
         <CardHeader>
-          <CardTitle className="text-slate-50">Lepattanók és gólpasszok</CardTitle>
+          <CardTitle className="font-display uppercase tracking-wide text-sm text-primary">Lepattanók és gólpasszok</CardTitle>
         </CardHeader>
         <CardContent>
-          <ResponsiveContainer width="100%" height={300}>
+          <ResponsiveContainer width="100%" height={280}>
             <LineChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-              <XAxis
-                dataKey="date"
-                stroke="#94a3b8"
-                style={{ fontSize: '12px' }}
-              />
-              <YAxis stroke="#94a3b8" style={{ fontSize: '12px' }} />
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: '#1e293b',
-                  border: '1px solid #334155',
-                  borderRadius: '8px',
-                  color: '#f1f5f9',
-                }}
-                labelFormatter={(label) => {
-                  const game = chartData.find(g => g.date === label);
-                  return game ? `${game.fullDate} vs ${game.opponent}` : label;
-                }}
-              />
-              <Legend />
-              <Line
-                type="monotone"
-                dataKey="rebounds"
-                stroke="#3b82f6"
-                strokeWidth={2}
-                dot={{ fill: '#3b82f6', r: 4 }}
-                name="Lepattanók"
-              />
-              <Line
-                type="monotone"
-                dataKey="assists"
-                stroke="#f59e0b"
-                strokeWidth={2}
-                dot={{ fill: '#f59e0b', r: 4 }}
-                name="Gólpasszok"
-              />
+              <CartesianGrid strokeDasharray={CHART_GRID.strokeDashed} stroke={CHART_GRID.stroke} />
+              <XAxis dataKey="date" stroke={CHART_AXIS.stroke} tick={{ fontSize: CHART_AXIS.fontSize, fontFamily: CHART_AXIS.fontFamily }} tickLine={false} axisLine={false} />
+              <YAxis stroke={CHART_AXIS.stroke} tick={{ fontSize: CHART_AXIS.fontSize, fontFamily: CHART_AXIS.fontFamily }} tickLine={false} axisLine={false} />
+              <Tooltip contentStyle={RECHARTS_TOOLTIP_STYLE} labelFormatter={labelFormatter} />
+              <Legend wrapperStyle={RECHARTS_LEGEND_STYLE} />
+              <Line type="monotone" dataKey="rebounds" stroke={CHART_COLORS.cyan} strokeWidth={2} dot={{ fill: CHART_COLORS.cyan, r: 3.5, strokeWidth: 0 }} activeDot={{ r: 5 }} name="Lepattanók" />
+              <Line type="monotone" dataKey="assists" stroke={CHART_COLORS.orange} strokeWidth={2} dot={{ fill: CHART_COLORS.orange, r: 3.5, strokeWidth: 0 }} activeDot={{ r: 5 }} name="Gólpasszok" />
             </LineChart>
           </ResponsiveContainer>
         </CardContent>
       </Card>
 
       {/* Védekező teljesítmény */}
-      <Card className="bg-slate-900 border-slate-800">
+      <Card>
         <CardHeader>
-          <CardTitle className="text-slate-50">Védekező teljesítmény</CardTitle>
+          <CardTitle className="font-display uppercase tracking-wide text-sm text-primary">Védekező teljesítmény</CardTitle>
         </CardHeader>
         <CardContent>
-          <ResponsiveContainer width="100%" height={300}>
+          <ResponsiveContainer width="100%" height={280}>
             <LineChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-              <XAxis
-                dataKey="date"
-                stroke="#94a3b8"
-                style={{ fontSize: '12px' }}
-              />
-              <YAxis stroke="#94a3b8" style={{ fontSize: '12px' }} />
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: '#1e293b',
-                  border: '1px solid #334155',
-                  borderRadius: '8px',
-                  color: '#f1f5f9',
-                }}
-                labelFormatter={(label) => {
-                  const game = chartData.find(g => g.date === label);
-                  return game ? `${game.fullDate} vs ${game.opponent}` : label;
-                }}
-              />
-              <Legend />
-              <Line
-                type="monotone"
-                dataKey="steals"
-                stroke="#8b5cf6"
-                strokeWidth={2}
-                dot={{ fill: '#8b5cf6', r: 4 }}
-                name="Labdaszerzések"
-              />
-              <Line
-                type="monotone"
-                dataKey="blocks"
-                stroke="#ec4899"
-                strokeWidth={2}
-                dot={{ fill: '#ec4899', r: 4 }}
-                name="Blokkok"
-              />
+              <CartesianGrid strokeDasharray={CHART_GRID.strokeDashed} stroke={CHART_GRID.stroke} />
+              <XAxis dataKey="date" stroke={CHART_AXIS.stroke} tick={{ fontSize: CHART_AXIS.fontSize, fontFamily: CHART_AXIS.fontFamily }} tickLine={false} axisLine={false} />
+              <YAxis stroke={CHART_AXIS.stroke} tick={{ fontSize: CHART_AXIS.fontSize, fontFamily: CHART_AXIS.fontFamily }} tickLine={false} axisLine={false} />
+              <Tooltip contentStyle={RECHARTS_TOOLTIP_STYLE} labelFormatter={labelFormatter} />
+              <Legend wrapperStyle={RECHARTS_LEGEND_STYLE} />
+              <Line type="monotone" dataKey="steals" stroke={CHART_COLORS.ai} strokeWidth={2} dot={{ fill: CHART_COLORS.ai, r: 3.5, strokeWidth: 0 }} activeDot={{ r: 5 }} name="Labdaszerzések" />
+              <Line type="monotone" dataKey="blocks" stroke={CHART_COLORS.warning} strokeWidth={2} dot={{ fill: CHART_COLORS.warning, r: 3.5, strokeWidth: 0 }} activeDot={{ r: 5 }} name="Blokkok" />
             </LineChart>
           </ResponsiveContainer>
         </CardContent>
       </Card>
 
       {/* Hatékonyság (VAL) */}
-      <Card className="bg-slate-900 border-slate-800">
+      <Card>
         <CardHeader>
-          <CardTitle className="text-slate-50">Hatékonyság (VAL)</CardTitle>
+          <CardTitle className="font-display uppercase tracking-wide text-sm text-primary">Hatékonyság (VAL)</CardTitle>
         </CardHeader>
         <CardContent>
-          <ResponsiveContainer width="100%" height={300}>
+          <ResponsiveContainer width="100%" height={280}>
             <LineChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-              <XAxis
-                dataKey="date"
-                stroke="#94a3b8"
-                style={{ fontSize: '12px' }}
-              />
-              <YAxis stroke="#94a3b8" style={{ fontSize: '12px' }} />
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: '#1e293b',
-                  border: '1px solid #334155',
-                  borderRadius: '8px',
-                  color: '#f1f5f9',
-                }}
-                labelFormatter={(label) => {
-                  const game = chartData.find(g => g.date === label);
-                  return game ? `${game.fullDate} vs ${game.opponent}` : label;
-                }}
-              />
-              <Line
-                type="monotone"
-                dataKey="valuation"
-                stroke="#06b6d4"
-                strokeWidth={3}
-                dot={{ fill: '#06b6d4', r: 5 }}
-                name="VAL"
-              />
+              <CartesianGrid strokeDasharray={CHART_GRID.strokeDashed} stroke={CHART_GRID.stroke} />
+              <XAxis dataKey="date" stroke={CHART_AXIS.stroke} tick={{ fontSize: CHART_AXIS.fontSize, fontFamily: CHART_AXIS.fontFamily }} tickLine={false} axisLine={false} />
+              <YAxis stroke={CHART_AXIS.stroke} tick={{ fontSize: CHART_AXIS.fontSize, fontFamily: CHART_AXIS.fontFamily }} tickLine={false} axisLine={false} />
+              <Tooltip contentStyle={RECHARTS_TOOLTIP_STYLE} labelFormatter={labelFormatter} />
+              <Line type="monotone" dataKey="valuation" stroke={CHART_COLORS.cyan} strokeWidth={2.5} dot={{ fill: CHART_COLORS.cyan, r: 4, strokeWidth: 0 }} activeDot={{ r: 6 }} name="VAL" />
             </LineChart>
           </ResponsiveContainer>
         </CardContent>
