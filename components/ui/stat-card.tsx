@@ -112,7 +112,7 @@ export function StatCard({
     <div
       className={cn(
         "group relative overflow-hidden rounded-[10px]",
-        "bg-surface-1 border border-border-subtle",
+        "bg-surface-1 border border-border-subtle text-primary",
         "min-h-35 pl-6 pr-5 py-4.5",
         "flex flex-col justify-between gap-5",
         "animate-fade-slide-up",

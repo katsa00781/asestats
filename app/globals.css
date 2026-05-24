@@ -102,6 +102,10 @@
   --color-border-active: var(--border-active);
   --color-border-strong: var(--border-strong);
 
+  /* shadcn popover → bg-popover (Select, Tooltip, Dropdown legördülő háttér) */
+  --color-popover:            var(--bg-surface-2);
+  --color-popover-foreground: var(--text-primary);
+
   /* Font utility-k → font-display, font-sans (body), font-mono */
   --font-display: var(--font-display);
   --font-sans:    var(--font-body);
@@ -284,6 +288,27 @@
   background: var(--bg-surface-2);
   color: var(--text-primary);
 }
+[data-slot="button"][data-variant="outline"] {
+  background: transparent;
+  color: var(--text-primary);
+  border: 1px solid var(--border-active);
+}
+[data-slot="button"][data-variant="outline"]:hover {
+  background: var(--bg-surface-2);
+  border-color: var(--accent-cyan-dim);
+}
+[data-slot="button"][data-variant="destructive"] {
+  background: color-mix(in oklab, var(--negative) 18%, transparent);
+  color: var(--negative);
+  border: 1px solid color-mix(in oklab, var(--negative) 35%, transparent);
+}
+[data-slot="button"][data-variant="destructive"]:hover {
+  background: color-mix(in oklab, var(--negative) 28%, transparent);
+}
+[data-slot="button"][data-variant="link"] {
+  background: transparent;
+  color: var(--accent-cyan);
+}
 
 /* Badge */
 [data-slot="badge"] {
@@ -300,25 +325,31 @@
   border: 1px solid transparent;
 }
 
-/* Input + Select */
+/* Input + Select + Textarea */
 [data-slot="input"],
-[data-slot="select-trigger"] {
+[data-slot="select-trigger"],
+[data-slot="textarea"] {
   background: var(--bg-surface-1);
   border: 1px solid var(--border-active);
   color: var(--text-primary);
-  font-family: var(--font-mono);
   border-radius: var(--radius-sm);
   transition: border-color 160ms var(--ease-snap),
               box-shadow 160ms var(--ease-snap),
               background 160ms var(--ease-snap);
 }
+[data-slot="input"],
+[data-slot="select-trigger"] {
+  font-family: var(--font-mono);
+}
 [data-slot="input"]:focus,
-[data-slot="select-trigger"]:focus {
+[data-slot="select-trigger"]:focus,
+[data-slot="textarea"]:focus {
   outline: none;
   border-color: var(--accent-cyan);
   box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent-cyan) 18%, transparent);
 }
-[data-slot="input"]::placeholder {
+[data-slot="input"]::placeholder,
+[data-slot="textarea"]::placeholder {
   color: var(--text-muted);
 }
 
