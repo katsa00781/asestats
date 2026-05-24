@@ -529,6 +529,45 @@ function PlayerDetails( { player, onBack }: PlayerDetailProps) {
         </CardContent>
       </Card>
 
+      {/* Manuális szezonértékelés beillesztése */}
+      <Card className="shadow-panel">
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between gap-3">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <ClipboardList className="h-4 w-4 text-cyan" strokeWidth={1.6} />
+              Manuális szezonértékelés beillesztése
+            </CardTitle>
+            <Button onClick={exportPlayerMd} variant="outline" size="sm" className="text-cyan shrink-0">
+              <Download className="w-4 h-4 mr-2" strokeWidth={1.6} />
+              Export MD
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-xs text-secondary">
+            Exportáld a statokat MD-be, add át Claude-nak, majd illeszd be az elemzés szövegét és mentsd el.
+          </p>
+          <Textarea
+            placeholder="Illeszd be a Claude-szezonértékelés szövegét..."
+            value={manualText}
+            onChange={(e) => setManualText(e.target.value)}
+            className="min-h-25"
+          />
+          <Button
+            onClick={saveManualReport}
+            disabled={!manualText.trim() || savingManual}
+            size="sm"
+          >
+            {savingManual ? (
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            ) : (
+              <Save className="w-4 h-4 mr-2" strokeWidth={1.6} />
+            )}
+            {savingManual ? 'Mentés...' : 'Mentés'}
+          </Button>
+        </CardContent>
+      </Card>
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-4 sm:mb-6">
         {/* Fejlett statisztikák (szezon átlagok) */}
         <Card>
@@ -895,44 +934,6 @@ function PlayerDetails( { player, onBack }: PlayerDetailProps) {
         </CardContent>
       </Card>
 
-      {/* Manuális elemzés beillesztése */}
-      <Card className="mt-6 shadow-panel">
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between gap-3">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <ClipboardList className="h-4 w-4 text-cyan" strokeWidth={1.6} />
-              Manuális szezonértékelés beillesztése
-            </CardTitle>
-            <Button onClick={exportPlayerMd} variant="outline" size="sm" className="text-cyan shrink-0">
-              <Download className="w-4 h-4 mr-2" strokeWidth={1.6} />
-              Export MD
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <p className="text-xs text-secondary">
-            Exportáld a statokat MD-be, add át Claude-nak, majd illeszd be az elemzés szövegét és mentsd el.
-          </p>
-          <Textarea
-            placeholder="Illeszd be a Claude-szezonértékelés szövegét..."
-            value={manualText}
-            onChange={(e) => setManualText(e.target.value)}
-            className="min-h-25"
-          />
-          <Button
-            onClick={saveManualReport}
-            disabled={!manualText.trim() || savingManual}
-            size="sm"
-          >
-            {savingManual ? (
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-            ) : (
-              <Save className="w-4 h-4 mr-2" strokeWidth={1.6} />
-            )}
-            {savingManual ? 'Mentés...' : 'Mentés'}
-          </Button>
-        </CardContent>
-      </Card>
     </div>
   )
 }

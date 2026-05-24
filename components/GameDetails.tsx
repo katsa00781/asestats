@@ -651,6 +651,77 @@ export function GameDetails({ gameId, onBack }: GameDetailsProps) {
         </span>
       </div>
 
+      {/* AI szöveges riportok */}
+      {textReports.length > 0 && (
+        <div className="space-y-4">
+          {textReports.map((report) => {
+            const typeLabel =
+              report.report_type === 'pregame' ? 'Pregame scouting' :
+              report.report_type === 'postgame' ? 'Postgame elemzés' :
+              report.report_type === 'manual' ? 'Manuális elemzés' :
+              'Összesített riport';
+            const generatedAt = new Date(report.generated_at).toLocaleDateString('hu-HU', {
+              year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit',
+            });
+            return (
+              <Card key={report.id} className="shadow-panel ai-marker">
+                <CardHeader className="pb-3">
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <FileText className="h-4 w-4 text-ai" strokeWidth={1.6} />
+                    {typeLabel}
+                    <span className="ml-auto text-xs text-muted font-normal">{generatedAt}</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-sm text-secondary whitespace-pre-wrap leading-relaxed">
+                    {report.narrative}
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Manuális elemzés beillesztése */}
+      <Card className="shadow-panel">
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between gap-3">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <ClipboardList className="h-4 w-4 text-cyan" strokeWidth={1.6} />
+              Manuális elemzés beillesztése
+            </CardTitle>
+            <Button onClick={exportGameMd} variant="outline" size="sm" className="text-cyan shrink-0">
+              <Download className="w-4 h-4 mr-2" strokeWidth={1.6} />
+              Export MD
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-xs text-secondary">
+            Exportáld a statokat MD-be, add át Claude-nak, majd illeszd be az elemzés szövegét és mentsd el.
+          </p>
+          <Textarea
+            placeholder="Illeszd be a Claude-elemzés szövegét..."
+            value={manualText}
+            onChange={(e) => setManualText(e.target.value)}
+            className="min-h-25"
+          />
+          <Button
+            onClick={saveManualReport}
+            disabled={!manualText.trim() || savingManual}
+            size="sm"
+          >
+            {savingManual ? (
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            ) : (
+              <Save className="w-4 h-4 mr-2" strokeWidth={1.6} />
+            )}
+            {savingManual ? 'Mentés...' : 'Mentés'}
+          </Button>
+        </CardContent>
+      </Card>
+
       {/* Dobás Statisztikák */}
       <Card className="shadow-panel">
         <CardHeader>
@@ -827,76 +898,6 @@ export function GameDetails({ gameId, onBack }: GameDetailsProps) {
         opponent={gameComparison.opponent}
       />
 
-      {/* Manuális elemzés beillesztése */}
-      <Card className="shadow-panel">
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between gap-3">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <ClipboardList className="h-4 w-4 text-cyan" strokeWidth={1.6} />
-              Manuális elemzés beillesztése
-            </CardTitle>
-            <Button onClick={exportGameMd} variant="outline" size="sm" className="text-cyan shrink-0">
-              <Download className="w-4 h-4 mr-2" strokeWidth={1.6} />
-              Export MD
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <p className="text-xs text-secondary">
-            Exportáld a statokat MD-be, add át Claude-nak, majd illeszd be az elemzés szövegét és mentsd el.
-          </p>
-          <Textarea
-            placeholder="Illeszd be a Claude-elemzés szövegét..."
-            value={manualText}
-            onChange={(e) => setManualText(e.target.value)}
-            className="min-h-25"
-          />
-          <Button
-            onClick={saveManualReport}
-            disabled={!manualText.trim() || savingManual}
-            size="sm"
-          >
-            {savingManual ? (
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-            ) : (
-              <Save className="w-4 h-4 mr-2" strokeWidth={1.6} />
-            )}
-            {savingManual ? 'Mentés...' : 'Mentés'}
-          </Button>
-        </CardContent>
-      </Card>
-
-      {/* AI szöveges riportok */}
-      {textReports.length > 0 && (
-        <div className="space-y-4">
-          {textReports.map((report) => {
-            const typeLabel =
-              report.report_type === 'pregame' ? 'Pregame scouting' :
-              report.report_type === 'postgame' ? 'Postgame elemzés' :
-              report.report_type === 'manual' ? 'Manuális elemzés' :
-              'Összesített riport';
-            const generatedAt = new Date(report.generated_at).toLocaleDateString('hu-HU', {
-              year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit',
-            });
-            return (
-              <Card key={report.id} className="shadow-panel ai-marker">
-                <CardHeader className="pb-3">
-                  <CardTitle className="flex items-center gap-2 text-base">
-                    <FileText className="h-4 w-4 text-ai" strokeWidth={1.6} />
-                    {typeLabel}
-                    <span className="ml-auto text-xs text-muted font-normal">{generatedAt}</span>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-sm text-secondary whitespace-pre-wrap leading-relaxed">
-                    {report.narrative}
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
-      )}
     </div>
   );
 }

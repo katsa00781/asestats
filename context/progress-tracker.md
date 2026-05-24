@@ -44,6 +44,11 @@ Update this file after every meaningful implementation change.
 
 ## Completed (legutóbbi)
 
+- **MD export szekció felülre mozgatva** (2026-05-24):
+  - `components/GameDetails.tsx`: AI riportok + Manuális elemzés beillesztése → fejléc alá, statisztikák elé
+  - `components/PlayerDetails.tsx`: Manuális szezonértékelés beillesztése → játékos kártya alá, statisztikák elé
+  - `components/TeamStatistics.tsx`: Manuális csapatelemzés beillesztése → cím alá, KPI kártyák elé
+
 - **MD export + manuális elemzés mentése** (2026-05-22):
   - `lib/export-to-md.ts`: `gameStatsToMd`, `playerSeasonToMd`, `teamStatsToMd` – MD generálás statokból
   - `migrations/add-manual-report-type.sql`: 'manual' report_type hozzáadva – **kézzel kell futtatni Supabase SQL Editorban**
@@ -95,5 +100,5 @@ Update this file after every meaningful implementation change.
 ## Session Notes
 
 - A kontextus fájlok 2026-05-11-én készültek el a meglévő CLAUDE.md és projekt vizsgálata alapján
-- A projekt repository: https://github.com/katsa00781/asestats (privát)
+- A projekt repository: <https://github.com/katsa00781/asestats> (privát)
 - Folytatáshoz: olvasd el az összes kontextus fájlt sorban, majd kérdezd meg a felhasználót, mi a következő fejlesztési egység
