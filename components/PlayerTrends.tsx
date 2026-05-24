@@ -64,9 +64,9 @@ export function PlayerTrends({ gameHistory }: PlayerTrendsProps) {
     setEndDate('');
   };
 
-  const labelFormatter = (label: string) => {
+  const labelFormatter = (label: unknown) => {
     const game = chartData.find(g => g.date === label);
-    return game ? `${game.fullDate} vs ${game.opponent}` : label;
+    return game ? `${game.fullDate} vs ${game.opponent}` : String(label);
   };
 
   if (gameHistory.length === 0) {
