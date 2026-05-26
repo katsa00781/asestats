@@ -1,6 +1,7 @@
 import type { PlayerStats, TeamGame, GameAggregate } from './dashboard-types';
 import type { ScoutingReport } from './pregame-scouting';
 import type { PostGameReport } from './postgame-report';
+import type { KosarstatGameClutch } from './kosarstat-clutch-parse';
 
 function fmtPct(made: number, attempted: number): string {
   return attempted > 0 ? `${((made / attempted) * 100).toFixed(1)}%` : '-';
@@ -46,6 +47,7 @@ export type PlayerBreakdownExport = {
   playerId: string;
   name: string;
   position: string;
+  isStarter?: boolean;
   impactLabel: string;
   summaryLine: string;
   val: number;
@@ -69,6 +71,8 @@ export type GameExtraData = {
   teamShortName?: string;
   playerBreakdowns?: PlayerBreakdownExport[];
   playerTexts?: Record<string, string>;
+  lineupInfo?: { starters: string[]; bench: string[] };
+  clutchInfo?: KosarstatGameClutch;
 };
 
 export type PlayerGameStatExport = {
@@ -157,6 +161,30 @@ export function gameStatsToMd(
     lines.push(``);
   }
 
+  // --- Lineup / kezdő ötös ---
+  const hasLineup = extra?.lineupInfo && extra.lineupInfo.starters.length > 0;
+  const hasBreakdownLineup = extra?.playerBreakdowns && extra.playerBreakdowns.some(b => b.isStarter !== undefined);
+  if (hasBreakdownLineup && extra?.playerBreakdowns) {
+    const starters = extra.playerBreakdowns.filter(b => b.isStarter);
+    const bench = extra.playerBreakdowns.filter(b => !b.isStarter);
+    lines.push(`## Kezdő ötös és rotáció`, ``);
+    lines.push(`| Játékos | Poz | Perc | Pont | Lep | Gp | VAL | Szerep |`);
+    lines.push(`|---------|-----|------|------|-----|----|-----|--------|`);
+    for (const b of starters) {
+      lines.push(`| ${b.name} | ${b.position} | ${b.minutes} | ${b.points} | ${b.rebounds} | ${b.assists} | ${b.val.toFixed(1)} | Kezdő |`);
+    }
+    for (const b of bench) {
+      lines.push(`| ${b.name} | ${b.position} | ${b.minutes} | ${b.points} | ${b.rebounds} | ${b.assists} | ${b.val.toFixed(1)} | Csere |`);
+    }
+    lines.push(``);
+  } else if (hasLineup) {
+    const { starters, bench } = extra!.lineupInfo!;
+    lines.push(`## Kezdő ötös`, ``);
+    lines.push(`**Kezdők:** ${starters.join(' · ')}`);
+    if (bench.length > 0) lines.push(`**Csere:** ${bench.join(' · ')}`);
+    lines.push(``);
+  }
+
   // --- Fejlett csapatmutatók ---
   lines.push(
     `## Fejlett csapatmutatók`,
@@ -201,6 +229,32 @@ export function gameStatsToMd(
     `| Valuation | ${game.valuation} |`,
     ``
   );
+
+  // --- Clutch adatok ---
+  if (extra?.clutchInfo && extra.clutchInfo.available) {
+    const c = extra.clutchInfo;
+    const diffStr = c.diff > 0 ? `+${c.diff}` : `${c.diff}`;
+    const n = (v: number | null, suffix = '') => v !== null && Number.isFinite(v) ? `${v.toFixed(1)}${suffix}` : '–';
+    const n2 = (v: number | null) => v !== null && Number.isFinite(v) ? v.toFixed(2) : '–';
+    lines.push(`## Clutch helyzetek (±5 pont, utolsó 5 perc)`, ``);
+    lines.push(`**Minta:** ${c.sampleLabel} | **Pontszám:** ${c.ownPoints}–${c.oppPoints} (${diffStr})`, ``);
+    lines.push(`| Mutató | Érték |`);
+    lines.push(`|--------|-------|`);
+    lines.push(`| Saját ORtg | ${n(c.ortg)} |`);
+    lines.push(`| Ellenfél ORtg (DRtg) | ${n(c.drtg)} |`);
+    lines.push(`| Net rating | ${c.net !== null ? (c.net >= 0 ? `+${c.net.toFixed(1)}` : `${c.net.toFixed(1)}`) : '–'} |`);
+    lines.push(`| TOV% | ${n(c.tovPct, '%')} |`);
+    lines.push(`| OREB% | ${n(c.rebPct, '%')} |`);
+    lines.push(`| FT arány (ftm/fga) | ${n2(c.ftRate)} |`);
+    lines.push(`| Assziszt/LV | ${n2(c.assistToTurnover)} |`);
+    lines.push(`| Saját LV | ${c.ownTurnovers} |`);
+    lines.push(`| Ellenfél LV | ${c.oppTurnovers} |`);
+    if (c.topUsageClosers.length > 0) {
+      const closers = c.topUsageClosers.map(p => `${p.player} (${(p.usageShare * 100).toFixed(0)}%)`).join(', ');
+      lines.push(``, `**Top closers:** ${closers}`);
+    }
+    lines.push(``);
+  }
 
   // --- Játékos alapstatisztikák ---
   lines.push(

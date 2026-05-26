@@ -1,5 +1,6 @@
-import { useState, useMemo, useCallback, type ReactNode } from 'react';
+import { useState, useMemo, useCallback, useEffect, type ReactNode } from 'react';
 import type { PlayerStats } from '@/lib/dashboard-types';
+import { supabase } from '@/lib/supabase';
 
 import {
   Card,
@@ -32,6 +33,7 @@ import {
   Save,
   ClipboardList,
   Loader2,
+  FileText,
 } from "lucide-react";
 import { toast } from 'sonner';
 import { playerSeasonToMd } from '@/lib/export-to-md';
@@ -57,10 +59,31 @@ type PlayerDetailProps = {
   onBack?: () => void;
 };
 
+type PlayerTextReport = {
+  id: string;
+  report_type: string;
+  narrative: string;
+  generated_at: string;
+};
+
 function PlayerDetails( { player, onBack }: PlayerDetailProps) {
   const [lastNGames, setLastNGames] = useState<number | null>(null);
   const [manualText, setManualText] = useState('');
   const [savingManual, setSavingManual] = useState(false);
+  const [textReports, setTextReports] = useState<PlayerTextReport[]>([]);
+
+  useEffect(() => {
+    if (!player?.id || !player?.seasonId) return;
+    supabase
+      .from('player_text_reports' as never)
+      .select('id, report_type, narrative, generated_at')
+      .eq('player_id', player.id)
+      .eq('season_id', player.seasonId)
+      .order('generated_at', { ascending: false })
+      .then(({ data }) => {
+        if (data) setTextReports(data as unknown as PlayerTextReport[]);
+      });
+  }, [player?.id, player?.seasonId]);
 
   const exportPlayerMd = useCallback(() => {
     if (!player) return;
@@ -100,6 +123,16 @@ function PlayerDetails( { player, onBack }: PlayerDetailProps) {
       const json = (await resp.json()) as { ok: boolean; error?: string };
       if (!json.ok) throw new Error(json.error ?? 'Mentési hiba');
       toast.success('Elemzés elmentve');
+      const newReport: PlayerTextReport = {
+        id: Date.now().toString(),
+        report_type: 'manual',
+        narrative: manualText.trim(),
+        generated_at: new Date().toISOString(),
+      };
+      setTextReports(prev => {
+        const filtered = prev.filter(r => r.report_type !== 'manual');
+        return [newReport, ...filtered];
+      });
       setManualText('');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Mentési hiba');
@@ -325,10 +358,14 @@ function PlayerDetails( { player, onBack }: PlayerDetailProps) {
   ];
   return (
     <div>
-        <div className="flex items-center gap-2 mb-4 sm:mb-6">
+        <div className="flex items-center justify-between gap-2 mb-4 sm:mb-6">
           <Button onClick={onBack} variant="ghost" className="text-secondary hover:bg-surface-2 text-sm sm:text-base">
             <ArrowLeft size={18} className="mr-2" strokeWidth={1.6} />
             Vissza a játékosokhoz
+          </Button>
+          <Button onClick={exportPlayerMd} variant="outline" size="sm" className="text-cyan shrink-0">
+            <Download className="w-4 h-4 mr-2" strokeWidth={1.6} />
+            Export MD
           </Button>
         </div>
 
@@ -529,19 +566,44 @@ function PlayerDetails( { player, onBack }: PlayerDetailProps) {
         </CardContent>
       </Card>
 
+      {/* Mentett / AI szöveges riportok */}
+      {textReports.length > 0 && (
+        <div className="space-y-4">
+          {textReports.map((report) => {
+            const typeLabel =
+              report.report_type === 'season' ? 'Szezonértékelés (AI)' :
+              report.report_type === 'manual' ? 'Manuális értékelés' :
+              'Riport';
+            const generatedAt = new Date(report.generated_at).toLocaleDateString('hu-HU', {
+              year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit',
+            });
+            return (
+              <Card key={report.id} className="shadow-panel ai-marker">
+                <CardHeader className="pb-3">
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <FileText className="h-4 w-4 text-ai" strokeWidth={1.6} />
+                    {typeLabel}
+                    <span className="ml-auto text-xs text-muted font-normal">{generatedAt}</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-sm text-secondary whitespace-pre-wrap leading-relaxed">
+                    {report.narrative}
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+
       {/* Manuális szezonértékelés beillesztése */}
       <Card className="shadow-panel">
         <CardHeader className="pb-3">
-          <div className="flex items-center justify-between gap-3">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <ClipboardList className="h-4 w-4 text-cyan" strokeWidth={1.6} />
-              Manuális szezonértékelés beillesztése
-            </CardTitle>
-            <Button onClick={exportPlayerMd} variant="outline" size="sm" className="text-cyan shrink-0">
-              <Download className="w-4 h-4 mr-2" strokeWidth={1.6} />
-              Export MD
-            </Button>
-          </div>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <ClipboardList className="h-4 w-4 text-cyan" strokeWidth={1.6} />
+            Manuális szezonértékelés beillesztése
+          </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           <p className="text-xs text-secondary">

@@ -11,6 +11,8 @@ import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { gameStatsToMd } from '@/lib/export-to-md';
 import type { PlayerBreakdownExport, QuarterScoreExport } from '@/lib/export-to-md';
+import { parseGameClutch } from '@/lib/kosarstat-clutch-parse';
+import type { KosarstatGameClutch } from '@/lib/kosarstat-clutch-parse';
 import { GamePbpCharts } from './GamePbpCharts';
 import { buildPlayerPostGameReport } from '@/lib/player-postgame';
 import type { PlayerPostGameBreakdown } from '@/lib/player-postgame';
@@ -89,6 +91,7 @@ type PlayerGameStat = {
   player_name: string;
   player_number: number;
   player_position: string | null;
+  is_starter: boolean;
   minutes: number;
   points: number;
   close_made: number;
@@ -118,6 +121,7 @@ type GameDetailsProps = {
 
 type PlayerGameStatsRow = {
   player_id: string;
+  is_starter: boolean | null;
   minutes: number | null;
   points: number | null;
   close_made: number | null;
@@ -287,6 +291,7 @@ export function GameDetails({ gameId, onBack }: GameDetailsProps) {
   const [generatingPlayerTexts, setGeneratingPlayerTexts] = useState(false);
   const [manualText, setManualText] = useState('');
   const [savingManual, setSavingManual] = useState(false);
+  const [clutchData, setClutchData] = useState<KosarstatGameClutch | null>(null);
 
   const loadGameDetails = useCallback(async () => {
     setLoading(true);
@@ -304,6 +309,7 @@ export function GameDetails({ gameId, onBack }: GameDetailsProps) {
         .from('player_game_stats')
         .select(`
           player_id,
+          is_starter,
           minutes,
           points,
           close_made,
@@ -344,6 +350,7 @@ export function GameDetails({ gameId, onBack }: GameDetailsProps) {
             player_name: playerInfo?.name ?? 'Ismeretlen játékos',
             player_number: playerInfo?.number ?? 0,
             player_position: playerInfo?.position ?? null,
+            is_starter: stat.is_starter ?? false,
             minutes: stat.minutes ?? 0,
             points: stat.points ?? 0,
             close_made: stat.close_made ?? 0,
@@ -415,6 +422,53 @@ export function GameDetails({ gameId, onBack }: GameDetailsProps) {
 
         setQuarterStats((qData ?? []) as QuarterStatRow[]);
         setOurSide(gameRow.home_away as 'home' | 'away');
+
+        // Load Kosarstat clutch data
+        const { data: clutchRawRows } = await supabase
+          .from('kosarstat_game_pages_raw' as never)
+          .select('id, home_team_name, away_team_name')
+          .eq('kosarstat_game_id', gameRow.kosarstat_game_id)
+          .eq('season_id', gameRow.season_id)
+          .eq('page_type', 'game_clutch')
+          .order('imported_at', { ascending: false })
+          .limit(3);
+
+        const rawRows = (clutchRawRows ?? []) as Array<{ id: string; home_team_name: string | null; away_team_name: string | null }>;
+        if (rawRows.length > 0) {
+          const rawIds = rawRows.map(r => r.id).filter(Boolean);
+          const { data: clutchTablesData } = await supabase
+            .from('kosarstat_game_page_tables' as never)
+            .select('page_raw_id, table_index, rows, headers, source_table_dom_id')
+            .in('page_raw_id', rawIds)
+            .order('table_index', { ascending: true });
+
+          const tablesByRawId = new Map<string, Array<{ headers: string[]; rows: unknown[][]; sourceTableDomId: string | null }>>();
+          ((clutchTablesData ?? []) as Array<{ page_raw_id?: string; headers?: unknown; rows?: unknown; source_table_dom_id?: unknown }>).forEach(row => {
+            const rawId = String(row.page_raw_id || '');
+            if (!rawId) return;
+            if (!tablesByRawId.has(rawId)) tablesByRawId.set(rawId, []);
+            tablesByRawId.get(rawId)!.push({
+              headers: Array.isArray(row.headers) ? (row.headers as unknown[]).map(h => String(h ?? '').trim()) : [],
+              rows: Array.isArray(row.rows) ? (row.rows as unknown[]).filter(Array.isArray) as unknown[][] : [],
+              sourceTableDomId: typeof row.source_table_dom_id === 'string' ? row.source_table_dom_id : null,
+            });
+          });
+
+          for (const rawRow of rawRows) {
+            const tables = tablesByRawId.get(rawRow.id) ?? [];
+            if (tables.length === 0) continue;
+            const parsed = parseGameClutch(
+              tables,
+              { homeTeamName: rawRow.home_team_name, awayTeamName: rawRow.away_team_name },
+              (gameRow.home_away as 'home' | 'away') ?? 'home',
+              comparisonData?.team_name ?? undefined
+            );
+            if (parsed) {
+              setClutchData(parsed);
+              break;
+            }
+          }
+        }
       }
     } catch (error) {
       console.error('Hiba a meccs részletek betöltésekor:', error);
@@ -512,33 +566,42 @@ export function GameDetails({ gameId, onBack }: GameDetailsProps) {
       };
     });
 
-    const breakdownExport: PlayerBreakdownExport[] = playerBreakdowns.map(b => ({
-      playerId: b.playerId,
-      name: b.name,
-      position: b.position,
-      impactLabel: b.impactLabel,
-      summaryLine: b.summaryLine,
-      val: b.val,
-      valPer36: b.valPer36,
-      tsPct: b.tsPct,
-      usageShare: b.usageShare,
-      minutes: b.minutes,
-      points: b.points,
-      rebounds: b.rebounds,
-      assists: b.assists,
-      turnovers: b.turnovers,
-      stocks: b.stocks,
-      strengths: b.strengths,
-      issues: b.issues,
-      focus: b.focus,
-      roles: b.roles,
-    }));
+    const starterNames = playerStats.filter(p => p.is_starter).map(p => p.player_name);
+    const benchNames = playerStats.filter(p => !p.is_starter && p.minutes > 0).map(p => p.player_name);
+
+    const breakdownExport: PlayerBreakdownExport[] = playerBreakdowns.map(b => {
+      const statRow = playerStats.find(p => p.player_id === b.playerId);
+      return {
+        playerId: b.playerId,
+        name: b.name,
+        position: b.position,
+        isStarter: statRow?.is_starter,
+        impactLabel: b.impactLabel,
+        summaryLine: b.summaryLine,
+        val: b.val,
+        valPer36: b.valPer36,
+        tsPct: b.tsPct,
+        usageShare: b.usageShare,
+        minutes: b.minutes,
+        points: b.points,
+        rebounds: b.rebounds,
+        assists: b.assists,
+        turnovers: b.turnovers,
+        stocks: b.stocks,
+        strengths: b.strengths,
+        issues: b.issues,
+        focus: b.focus,
+        roles: b.roles,
+      };
+    });
 
     const md = gameStatsToMd(gameComparison, playerStats, {
       quarterStats: quarterExport.length > 0 ? quarterExport : undefined,
       teamShortName: gameComparison.team_short_name,
       playerBreakdowns: breakdownExport.length > 0 ? breakdownExport : undefined,
       playerTexts: Object.keys(playerTexts).length > 0 ? playerTexts : undefined,
+      lineupInfo: starterNames.length > 0 ? { starters: starterNames, bench: benchNames } : undefined,
+      clutchInfo: clutchData ?? undefined,
     });
 
     const filename = `meccs-${gameComparison.date}-${gameComparison.opponent.replace(/\s+/g, '-')}.md`;
@@ -551,7 +614,7 @@ export function GameDetails({ gameId, onBack }: GameDetailsProps) {
     URL.revokeObjectURL(url);
     navigator.clipboard.writeText(md).catch(() => null);
     toast.success('MD exportálva – vágólapra másolva és letöltve');
-  }, [gameComparison, playerStats, quarterStats, ourSide, playerBreakdowns, playerTexts]);
+  }, [gameComparison, playerStats, quarterStats, ourSide, playerBreakdowns, playerTexts, clutchData]);
 
   const saveManualReport = useCallback(async () => {
     if (!gameComparison || !manualText.trim()) return;
@@ -646,9 +709,15 @@ export function GameDetails({ gameId, onBack }: GameDetailsProps) {
             {new Date(gameComparison.date).toLocaleDateString('hu-HU')} · {gameComparison.season_name}
           </p>
         </div>
-        <span className={`ml-auto sm:ml-0 font-mono tabular-nums ${gameComparison.result === 'win' ? 'badge-positive' : 'badge-negative'}`}>
-          {gameComparison.our_score} – {gameComparison.opp_score}
-        </span>
+        <div className="flex items-center gap-3 ml-auto sm:ml-0">
+          <Button onClick={exportGameMd} variant="outline" size="sm" className="text-cyan shrink-0">
+            <Download className="w-4 h-4 mr-2" strokeWidth={1.6} />
+            Export MD
+          </Button>
+          <span className={`font-mono tabular-nums ${gameComparison.result === 'win' ? 'badge-positive' : 'badge-negative'}`}>
+            {gameComparison.our_score} – {gameComparison.opp_score}
+          </span>
+        </div>
       </div>
 
       {/* AI szöveges riportok */}
@@ -686,16 +755,10 @@ export function GameDetails({ gameId, onBack }: GameDetailsProps) {
       {/* Manuális elemzés beillesztése */}
       <Card className="shadow-panel">
         <CardHeader className="pb-3">
-          <div className="flex items-center justify-between gap-3">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <ClipboardList className="h-4 w-4 text-cyan" strokeWidth={1.6} />
-              Manuális elemzés beillesztése
-            </CardTitle>
-            <Button onClick={exportGameMd} variant="outline" size="sm" className="text-cyan shrink-0">
-              <Download className="w-4 h-4 mr-2" strokeWidth={1.6} />
-              Export MD
-            </Button>
-          </div>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <ClipboardList className="h-4 w-4 text-cyan" strokeWidth={1.6} />
+            Manuális elemzés beillesztése
+          </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           <p className="text-xs text-secondary">
