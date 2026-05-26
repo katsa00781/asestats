@@ -2,7 +2,7 @@
 
 import { TerminologyGlossary } from './TerminologyGlossary';
 import Image from 'next/image';
-import { Loader2, Download } from 'lucide-react';
+import { Loader2, Download, ClipboardList, Save } from 'lucide-react';
 import { toast } from 'sonner';
 import { playerSeasonToMd, teamStatsToMd, pregameReportToMd, postgameReportToMd } from '@/lib/export-to-md';
 import { useEffect, useMemo, useState } from 'react';
@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Tooltip as UiTooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { PostgameShotScatterChart } from '@/components/PostgameShotScatterChart';
 import { PostgameZoneHeatmapChart } from '@/components/PostgameZoneHeatmapChart';
@@ -2783,6 +2784,119 @@ export function SeasonComparison({
   const [selectedProjectionTeamKey, setSelectedProjectionTeamKey] = useState<string>('');
   const [fixtureWinnerOverrides, setFixtureWinnerOverrides] = useState<Partial<Record<string, 'home' | 'away'>>>({});
   const [playoffSeriesWinnerOverrides, setPlayoffSeriesWinnerOverrides] = useState<Partial<Record<string, 'home' | 'away'>>>({});
+  const [manualPlayerText, setManualPlayerText] = useState('');
+  const [savingManualPlayer, setSavingManualPlayer] = useState(false);
+  const [savedManualPlayer, setSavedManualPlayer] = useState<{ text: string; savedAt: string } | null>(null);
+  const [manualTeamText, setManualTeamText] = useState('');
+  const [savingManualTeam, setSavingManualTeam] = useState(false);
+  const [savedManualTeam, setSavedManualTeam] = useState<{ text: string; savedAt: string } | null>(null);
+  const [manualPregameText, setManualPregameText] = useState('');
+  const [savingManualPregame, setSavingManualPregame] = useState(false);
+  const [savedManualPregame, setSavedManualPregame] = useState<{ text: string; savedAt: string } | null>(null);
+  const [manualPostgameText, setManualPostgameText] = useState('');
+  const [savingManualPostgame, setSavingManualPostgame] = useState(false);
+  const [savedManualPostgame, setSavedManualPostgame] = useState<{ text: string; savedAt: string } | null>(null);
+  const handleSaveManualPlayer = async () => {
+    if (!selectedPlayer || !resolvedSeasonId || !manualPlayerText.trim()) return;
+    setSavingManualPlayer(true);
+    try {
+      const resp = await fetch('/api/save-manual-report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          reportTarget: 'player_season',
+          playerId: selectedPlayer.id,
+          playerName: selectedPlayer.name,
+          seasonId: resolvedSeasonId,
+          teamId: resolvedTeamId !== 'all' ? resolvedTeamId : null,
+          narrative: manualPlayerText.trim(),
+        }),
+      });
+      const json = (await resp.json()) as { ok: boolean; error?: string };
+      if (!json.ok) throw new Error(json.error ?? 'Mentési hiba');
+      toast.success('Elemzés elmentve');
+      setSavedManualPlayer({ text: manualPlayerText.trim(), savedAt: new Date().toISOString() });
+      setManualPlayerText('');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Mentési hiba');
+    } finally {
+      setSavingManualPlayer(false);
+    }
+  };
+  const handleSaveManualTeam = async () => {
+    if (!resolvedSeasonId || !resolvedTeamId || resolvedTeamId === 'all' || !manualTeamText.trim()) return;
+    setSavingManualTeam(true);
+    try {
+      const resp = await fetch('/api/save-manual-report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          reportTarget: 'team_season',
+          seasonId: resolvedSeasonId,
+          teamId: resolvedTeamId,
+          narrative: manualTeamText.trim(),
+        }),
+      });
+      const json = (await resp.json()) as { ok: boolean; error?: string };
+      if (!json.ok) throw new Error(json.error ?? 'Mentési hiba');
+      toast.success('Elemzés elmentve');
+      setSavedManualTeam({ text: manualTeamText.trim(), savedAt: new Date().toISOString() });
+      setManualTeamText('');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Mentési hiba');
+    } finally {
+      setSavingManualTeam(false);
+    }
+  };
+  const handleSaveManualPregame = async () => {
+    if (!selectedGameId || !manualPregameText.trim()) return;
+    setSavingManualPregame(true);
+    try {
+      const resp = await fetch('/api/save-manual-report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          reportTarget: 'game',
+          reportType: 'pregame_manual',
+          gameId: selectedGameId,
+          narrative: manualPregameText.trim(),
+        }),
+      });
+      const json = (await resp.json()) as { ok: boolean; error?: string };
+      if (!json.ok) throw new Error(json.error ?? 'Mentési hiba');
+      toast.success('Pregame elemzés elmentve');
+      setSavedManualPregame({ text: manualPregameText.trim(), savedAt: new Date().toISOString() });
+      setManualPregameText('');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Mentési hiba');
+    } finally {
+      setSavingManualPregame(false);
+    }
+  };
+  const handleSaveManualPostgame = async () => {
+    if (!selectedGameId || !manualPostgameText.trim()) return;
+    setSavingManualPostgame(true);
+    try {
+      const resp = await fetch('/api/save-manual-report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          reportTarget: 'game',
+          gameId: selectedGameId,
+          narrative: manualPostgameText.trim(),
+        }),
+      });
+      const json = (await resp.json()) as { ok: boolean; error?: string };
+      if (!json.ok) throw new Error(json.error ?? 'Mentési hiba');
+      toast.success('Postgame elemzés elmentve');
+      setSavedManualPostgame({ text: manualPostgameText.trim(), savedAt: new Date().toISOString() });
+      setManualPostgameText('');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Mentési hiba');
+    } finally {
+      setSavingManualPostgame(false);
+    }
+  };
   const handleToggleOwnInjury = (playerId: string) => {
     setPregameOwnInjuries(prev => (prev.includes(playerId) ? prev.filter(id => id !== playerId) : [...prev, playerId]));
   };
@@ -4677,6 +4791,24 @@ export function SeasonComparison({
     };
   }, [resolvedSeasonId, selectedPlayerId]);
 
+  useEffect(() => {
+    if (!resolvedSeasonId || !selectedPlayerId) { setSavedManualPlayer(null); return; }
+    supabase
+      .from('player_text_reports' as never)
+      .select('narrative, generated_at')
+      .eq('player_id', selectedPlayerId)
+      .eq('season_id', resolvedSeasonId)
+      .eq('report_type', 'manual')
+      .order('generated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+      .then(({ data }) => {
+        const row = data as { narrative: string | null; generated_at: string | null } | null;
+        if (row?.narrative) setSavedManualPlayer({ text: row.narrative, savedAt: row.generated_at ?? new Date().toISOString() });
+        else setSavedManualPlayer(null);
+      });
+  }, [resolvedSeasonId, selectedPlayerId]);
+
   const postgameShotScatterData = useMemo(() => {
     if (!postgameShotContext?.gameShots?.length) {
       return [] as Array<{ x: number; y: number; result: string; player: string; playerId: string | null }>;
@@ -5811,6 +5943,23 @@ export function SeasonComparison({
       cancelled = true;
     };
   }, [resolvedSeasonId, resolvedTeamId, teamNarrativeReportType]);
+
+  useEffect(() => {
+    if (!resolvedSeasonId || !resolvedTeamId || resolvedTeamId === 'all') { setSavedManualTeam(null); return; }
+    supabase
+      .from('team_text_reports')
+      .select('narrative, generated_at')
+      .eq('season_id', resolvedSeasonId)
+      .eq('team_id', resolvedTeamId)
+      .eq('report_type', 'manual')
+      .order('generated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data?.narrative) setSavedManualTeam({ text: data.narrative, savedAt: (data.generated_at as string | null) ?? new Date().toISOString() });
+        else setSavedManualTeam(null);
+      });
+  }, [resolvedSeasonId, resolvedTeamId]);
 
   const projectionScenarioSettings = useMemo(() => {
     if (projectionScenario === 'form') {
@@ -10294,6 +10443,25 @@ export function SeasonComparison({
     };
   }, [selectedGameId]);
 
+  useEffect(() => {
+    if (!selectedGameId) { setSavedManualPregame(null); setSavedManualPostgame(null); return; }
+    supabase
+      .from('game_text_reports')
+      .select('report_type, narrative, generated_at')
+      .eq('game_id', selectedGameId)
+      .in('report_type', ['manual', 'pregame_manual'])
+      .then(({ data }) => {
+        setSavedManualPregame(null);
+        setSavedManualPostgame(null);
+        for (const row of (data ?? []) as Array<{ report_type: string; narrative: string | null; generated_at: string | null }>) {
+          if (row.report_type === 'pregame_manual' && row.narrative)
+            setSavedManualPregame({ text: row.narrative, savedAt: row.generated_at ?? new Date().toISOString() });
+          else if (row.report_type === 'manual' && row.narrative)
+            setSavedManualPostgame({ text: row.narrative, savedAt: row.generated_at ?? new Date().toISOString() });
+        }
+      });
+  }, [selectedGameId]);
+
   const canGenerateTextReport = Boolean(selectedGame && pregameReport && postgameReport);
 
   const canGeneratePregameText = Boolean(pregameReport);
@@ -11579,9 +11747,31 @@ export function SeasonComparison({
           <div className="xl:col-span-2 space-y-6">
             <Card>
               <CardHeader>
-                <CardTitle className="font-display uppercase tracking-wide text-primary">
-                  {selectedPlayer.name} • {getPositionLabel(analysis.position)}
-                </CardTitle>
+                <div className="flex items-center justify-between gap-4">
+                  <CardTitle className="font-display uppercase tracking-wide text-primary">
+                    {selectedPlayer.name} • {getPositionLabel(analysis.position)}
+                  </CardTitle>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="border-border-subtle hover:bg-surface-2 text-cyan shrink-0"
+                    onClick={() => {
+                      const md = playerSeasonToMd(selectedPlayer);
+                      const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = `jatekos-${selectedPlayer.name.replace(/\s+/g, '-')}.md`;
+                      a.click();
+                      URL.revokeObjectURL(url);
+                      navigator.clipboard.writeText(md).catch(() => null);
+                      toast.success('MD exportálva – vágólapra másolva és letöltve');
+                    }}
+                  >
+                    <Download className="w-4 h-4 mr-2" />
+                    Export MD
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex flex-wrap items-center gap-2">
@@ -11653,26 +11843,6 @@ export function SeasonComparison({
                       <div className="text-sm text-primary whitespace-pre-line leading-relaxed">
                         {playerNarratives[selectedPlayer.id]?.text}
                       </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="border-border-subtle hover:bg-surface-2 text-cyan"
-                        onClick={() => {
-                          const md = playerSeasonToMd(selectedPlayer);
-                          const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
-                          const url = URL.createObjectURL(blob);
-                          const a = document.createElement('a');
-                          a.href = url;
-                          a.download = `jatekos-${selectedPlayer.name.replace(/\s+/g, '-')}.md`;
-                          a.click();
-                          URL.revokeObjectURL(url);
-                          navigator.clipboard.writeText(md).catch(() => null);
-                          toast.success('MD exportálva – vágólapra másolva és letöltve');
-                        }}
-                      >
-                        <Download className="w-3 h-3 mr-1.5" />
-                        Export MD
-                      </Button>
                     </>
                   )}
                 </div>
@@ -11683,6 +11853,64 @@ export function SeasonComparison({
                   </span>
                   <span className="text-secondary">Szerep biztonság: {(analysis.roleConfidence * 100).toFixed(0)}%</span>
                 </div>
+              </CardContent>
+            </Card>
+
+            <Card className="shadow-panel">
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <ClipboardList className="h-4 w-4 text-cyan" strokeWidth={1.6} />
+                  Manuális szezonértékelés beillesztése
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="border-border-subtle hover:bg-surface-2 text-cyan shrink-0 ml-auto"
+                    onClick={() => {
+                      const md = playerSeasonToMd(selectedPlayer);
+                      const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = `jatekos-${selectedPlayer.name.replace(/\s+/g, '-')}.md`;
+                      a.click();
+                      URL.revokeObjectURL(url);
+                      navigator.clipboard.writeText(md).catch(() => null);
+                      toast.success('MD exportálva – vágólapra másolva és letöltve');
+                    }}
+                  >
+                    <Download className="w-4 h-4 mr-2" strokeWidth={1.6} />
+                    Export MD
+                  </Button>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <p className="text-xs text-secondary">
+                  Exportáld a statokat MD-be, add át Claude-nak, majd illeszd be az elemzés szövegét és mentsd el.
+                </p>
+                {savedManualPlayer && (
+                  <div className="ai-marker border border-border-subtle rounded-lg p-3 space-y-1">
+                    <div className="text-xs text-muted">Manuális értékelés • Mentve: {formatGeneratedAt(savedManualPlayer.savedAt) ?? 'ismeretlen'}</div>
+                    <div className="text-sm text-secondary whitespace-pre-wrap leading-relaxed">{savedManualPlayer.text}</div>
+                  </div>
+                )}
+                <Textarea
+                  placeholder="Illeszd be a Claude-elemzés szövegét..."
+                  value={manualPlayerText}
+                  onChange={(e) => setManualPlayerText(e.target.value)}
+                  className="min-h-[100px]"
+                />
+                <Button
+                  onClick={handleSaveManualPlayer}
+                  disabled={!manualPlayerText.trim() || savingManualPlayer}
+                  size="sm"
+                >
+                  {savingManualPlayer ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Save className="w-4 h-4 mr-2" strokeWidth={1.6} />
+                  )}
+                  {savingManualPlayer ? 'Mentés...' : 'Mentés'}
+                </Button>
               </CardContent>
             </Card>
 
@@ -13125,6 +13353,78 @@ export function SeasonComparison({
         </CardContent>
       </Card>}
 
+      {showTeamSection && resolvedTeamId && resolvedTeamId !== 'all' && <Card className="shadow-panel">
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <ClipboardList className="h-4 w-4 text-cyan" strokeWidth={1.6} />
+            Manuális csapatelemzés beillesztése
+            <Button
+              variant="outline"
+              size="sm"
+              className="border-border-subtle hover:bg-surface-2 text-cyan shrink-0 ml-auto"
+              onClick={() => {
+                const teamPlayers = activeSeasonPlayers.filter(p => String(p.teamId ?? '') === String(resolvedTeamId));
+                const n = Math.max(games.length, 1);
+                const agg: GameAggregate = {
+                  totalGames: games.length,
+                  avgPoints: games.reduce((s, g) => s + g.ourScore, 0) / n,
+                  avgRebounds: games.reduce((s, g) => s + g.players.reduce((ps, p) => ps + p.rebounds.total, 0), 0) / n,
+                  avgAssists: games.reduce((s, g) => s + g.players.reduce((ps, p) => ps + p.assists, 0), 0) / n,
+                  avgSteals: games.reduce((s, g) => s + g.players.reduce((ps, p) => ps + p.steals, 0), 0) / n,
+                  avgBlocks: games.reduce((s, g) => s + g.players.reduce((ps, p) => ps + p.blocks, 0), 0) / n,
+                  avgTurnovers: games.reduce((s, g) => s + g.players.reduce((ps, p) => ps + p.turnovers, 0), 0) / n,
+                  avgValuation: games.reduce((s, g) => s + g.players.reduce((ps, p) => ps + p.valuation, 0), 0) / n,
+                };
+                const tName = allTeams.find(t => t.id === resolvedTeamId)?.name;
+                const sName = allSeasons.find(s => s.id === resolvedSeasonId)?.name;
+                const md = teamStatsToMd(teamPlayers, games, agg, tName, sName);
+                const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `csapat-${(tName ?? 'statisztika').replace(/\s+/g, '-')}.md`;
+                a.click();
+                URL.revokeObjectURL(url);
+                navigator.clipboard.writeText(md).catch(() => null);
+                toast.success('MD exportálva – vágólapra másolva és letöltve');
+              }}
+            >
+              <Download className="w-4 h-4 mr-2" strokeWidth={1.6} />
+              Export MD
+            </Button>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-xs text-secondary">
+            Exportáld a statokat MD-be, add át Claude-nak, majd illeszd be az elemzés szövegét és mentsd el.
+          </p>
+          {savedManualTeam && (
+            <div className="ai-marker border border-border-subtle rounded-lg p-3 space-y-1">
+              <div className="text-xs text-muted">Manuális csapatelemzés • Mentve: {formatGeneratedAt(savedManualTeam.savedAt) ?? 'ismeretlen'}</div>
+              <div className="text-sm text-secondary whitespace-pre-wrap leading-relaxed">{savedManualTeam.text}</div>
+            </div>
+          )}
+          <Textarea
+            placeholder="Illeszd be a Claude-elemzés szövegét..."
+            value={manualTeamText}
+            onChange={(e) => setManualTeamText(e.target.value)}
+            className="min-h-[100px]"
+          />
+          <Button
+            onClick={handleSaveManualTeam}
+            disabled={!manualTeamText.trim() || savingManualTeam}
+            size="sm"
+          >
+            {savingManualTeam ? (
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            ) : (
+              <Save className="w-4 h-4 mr-2" strokeWidth={1.6} />
+            )}
+            {savingManualTeam ? 'Mentés...' : 'Mentés'}
+          </Button>
+        </CardContent>
+      </Card>}
+
       {showProjectionSection && <Card>
         <CardHeader>
           <CardTitle className="font-display uppercase tracking-wide text-primary">Várható alapszakasz végeredmény (modell)</CardTitle>
@@ -13579,7 +13879,31 @@ export function SeasonComparison({
 
       {showPregameSection && <Card>
         <CardHeader>
-          <CardTitle className="font-display uppercase tracking-wide text-primary">Pre-game elemzés</CardTitle>
+          <div className="flex items-center justify-between gap-4">
+            <CardTitle className="font-display uppercase tracking-wide text-primary">Pre-game elemzés</CardTitle>
+            {pregameReport && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-border-subtle hover:bg-surface-2 text-cyan shrink-0"
+                onClick={() => {
+                  const md = pregameReportToMd(pregameReport);
+                  const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = `pregame-${pregameReport.ownTeamName.replace(/\s+/g, '-')}-vs-${pregameReport.opponentTeamName.replace(/\s+/g, '-')}.md`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                  navigator.clipboard.writeText(md).catch(() => null);
+                  toast.success('MD exportálva – vágólapra másolva és letöltve');
+                }}
+              >
+                <Download className="w-4 h-4 mr-2" />
+                Export MD
+              </Button>
+            )}
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -15360,37 +15684,106 @@ export function SeasonComparison({
                 <div className="text-sm text-primary whitespace-pre-line bg-surface-2/60 border border-border-subtle rounded-lg px-4 py-3">
                   {pregameText}
                 </div>
-                {pregameReport && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="border-border-subtle hover:bg-surface-2 text-cyan"
-                    onClick={() => {
-                      const md = pregameReportToMd(pregameReport);
-                      const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
-                      const url = URL.createObjectURL(blob);
-                      const a = document.createElement('a');
-                      a.href = url;
-                      a.download = `pregame-${pregameReport.ownTeamName.replace(/\s+/g, '-')}-vs-${pregameReport.opponentTeamName.replace(/\s+/g, '-')}.md`;
-                      a.click();
-                      URL.revokeObjectURL(url);
-                      navigator.clipboard.writeText(md).catch(() => null);
-                      toast.success('MD exportálva – vágólapra másolva és letöltve');
-                    }}
-                  >
-                    <Download className="w-3 h-3 mr-1.5" />
-                    Export MD
-                  </Button>
-                )}
               </div>
             )}
           </div>
         </CardContent>
       </Card>}
 
+      {showPregameSection && <Card className="shadow-panel">
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <ClipboardList className="h-4 w-4 text-cyan" strokeWidth={1.6} />
+            Manuális pregame elemzés beillesztése
+            {pregameReport && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-border-subtle hover:bg-surface-2 text-cyan shrink-0 ml-auto"
+                onClick={() => {
+                  const md = pregameReportToMd(pregameReport);
+                  const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = `pregame-${(pregameReport.opponentTeamName ?? 'ellenfél').replace(/\s+/g, '-')}.md`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                  navigator.clipboard.writeText(md).catch(() => null);
+                  toast.success('MD exportálva – vágólapra másolva és letöltve');
+                }}
+              >
+                <Download className="w-4 h-4 mr-2" strokeWidth={1.6} />
+                Export MD
+              </Button>
+            )}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {!selectedGameId && (
+            <p className="text-xs text-secondary">Válassz meccset a mentéshez (a pregame szekció Game selectorából).</p>
+          )}
+          {selectedGameId && (
+            <>
+              <p className="text-xs text-secondary">
+                Exportáld a statokat MD-be, add át Claude-nak, majd illeszd be az elemzés szövegét és mentsd el.
+              </p>
+              {savedManualPregame && (
+                <div className="ai-marker border border-border-subtle rounded-lg p-3 space-y-1">
+                  <div className="text-xs text-muted">Manuális pregame • Mentve: {formatGeneratedAt(savedManualPregame.savedAt) ?? 'ismeretlen'}</div>
+                  <div className="text-sm text-secondary whitespace-pre-wrap leading-relaxed">{savedManualPregame.text}</div>
+                </div>
+              )}
+              <Textarea
+                placeholder="Illeszd be a Claude pregame elemzés szövegét..."
+                value={manualPregameText}
+                onChange={(e) => setManualPregameText(e.target.value)}
+                className="min-h-[100px]"
+              />
+              <Button
+                onClick={handleSaveManualPregame}
+                disabled={!manualPregameText.trim() || savingManualPregame}
+                size="sm"
+              >
+                {savingManualPregame ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Save className="w-4 h-4 mr-2" strokeWidth={1.6} />
+                )}
+                {savingManualPregame ? 'Mentés...' : 'Mentés'}
+              </Button>
+            </>
+          )}
+        </CardContent>
+      </Card>}
+
       {showPostgameSection && <Card>
         <CardHeader>
-          <CardTitle className="font-display uppercase tracking-wide text-primary">Post-game jelentés</CardTitle>
+          <div className="flex items-center justify-between gap-4">
+            <CardTitle className="font-display uppercase tracking-wide text-primary">Post-game jelentés</CardTitle>
+            {postgameReport && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-border-subtle hover:bg-surface-2 text-cyan shrink-0"
+                onClick={() => {
+                  const md = postgameReportToMd(postgameReport);
+                  const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = `postgame-${postgameReport.teamName.replace(/\s+/g, '-')}-vs-${postgameReport.opponentName.replace(/\s+/g, '-')}.md`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                  navigator.clipboard.writeText(md).catch(() => null);
+                  toast.success('MD exportálva – vágólapra másolva és letöltve');
+                }}
+              >
+                <Download className="w-4 h-4 mr-2" />
+                Export MD
+              </Button>
+            )}
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -16973,28 +17366,6 @@ export function SeasonComparison({
               <div className="text-sm text-primary whitespace-pre-line bg-surface-2/60 border border-border-subtle rounded-lg px-4 py-3">
                 {textReport}
               </div>
-              {postgameReport && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="border-border-subtle hover:bg-surface-2 text-cyan"
-                  onClick={() => {
-                    const md = postgameReportToMd(postgameReport);
-                    const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `postgame-${postgameReport.teamName.replace(/\s+/g, '-')}-vs-${postgameReport.opponentName.replace(/\s+/g, '-')}.md`;
-                    a.click();
-                    URL.revokeObjectURL(url);
-                    navigator.clipboard.writeText(md).catch(() => null);
-                    toast.success('MD exportálva – vágólapra másolva és letöltve');
-                  }}
-                >
-                  <Download className="w-3 h-3 mr-1.5" />
-                  Export MD
-                </Button>
-              )}
             </div>
           )}
 
@@ -17002,6 +17373,73 @@ export function SeasonComparison({
             <div className="text-sm text-secondary">
               Még nincs elmentett szöveges elemzés ehhez a meccshez.
             </div>
+          )}
+        </CardContent>
+      </Card>}
+
+      {showPostgameSection && <Card className="shadow-panel">
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <ClipboardList className="h-4 w-4 text-cyan" strokeWidth={1.6} />
+            Manuális postgame elemzés beillesztése
+            {postgameReport && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-border-subtle hover:bg-surface-2 text-cyan shrink-0 ml-auto"
+                onClick={() => {
+                  const md = postgameReportToMd(postgameReport);
+                  const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = `postgame-${postgameReport.teamName.replace(/\s+/g, '-')}-vs-${postgameReport.opponentName.replace(/\s+/g, '-')}.md`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                  navigator.clipboard.writeText(md).catch(() => null);
+                  toast.success('MD exportálva – vágólapra másolva és letöltve');
+                }}
+              >
+                <Download className="w-4 h-4 mr-2" strokeWidth={1.6} />
+                Export MD
+              </Button>
+            )}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {!selectedGameId && (
+            <p className="text-xs text-secondary">Válassz meccset a mentéshez.</p>
+          )}
+          {selectedGameId && (
+            <>
+              <p className="text-xs text-secondary">
+                Exportáld a statokat MD-be, add át Claude-nak, majd illeszd be az elemzés szövegét és mentsd el.
+              </p>
+              {savedManualPostgame && (
+                <div className="ai-marker border border-border-subtle rounded-lg p-3 space-y-1">
+                  <div className="text-xs text-muted">Manuális postgame • Mentve: {formatGeneratedAt(savedManualPostgame.savedAt) ?? 'ismeretlen'}</div>
+                  <div className="text-sm text-secondary whitespace-pre-wrap leading-relaxed">{savedManualPostgame.text}</div>
+                </div>
+              )}
+              <Textarea
+                placeholder="Illeszd be a Claude postgame elemzés szövegét..."
+                value={manualPostgameText}
+                onChange={(e) => setManualPostgameText(e.target.value)}
+                className="min-h-[100px]"
+              />
+              <Button
+                onClick={handleSaveManualPostgame}
+                disabled={!manualPostgameText.trim() || savingManualPostgame}
+                size="sm"
+              >
+                {savingManualPostgame ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Save className="w-4 h-4 mr-2" strokeWidth={1.6} />
+                )}
+                {savingManualPostgame ? 'Mentés...' : 'Mentés'}
+              </Button>
+            </>
           )}
         </CardContent>
       </Card>}

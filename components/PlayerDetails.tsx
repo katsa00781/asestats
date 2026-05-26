@@ -363,10 +363,6 @@ function PlayerDetails( { player, onBack }: PlayerDetailProps) {
             <ArrowLeft size={18} className="mr-2" strokeWidth={1.6} />
             Vissza a játékosokhoz
           </Button>
-          <Button onClick={exportPlayerMd} variant="outline" size="sm" className="text-cyan shrink-0">
-            <Download className="w-4 h-4 mr-2" strokeWidth={1.6} />
-            Export MD
-          </Button>
         </div>
 
       {/* Utolsó N meccs szűrő */}
@@ -583,7 +579,15 @@ function PlayerDetails( { player, onBack }: PlayerDetailProps) {
                   <CardTitle className="flex items-center gap-2 text-base">
                     <FileText className="h-4 w-4 text-ai" strokeWidth={1.6} />
                     {typeLabel}
-                    <span className="ml-auto text-xs text-muted font-normal">{generatedAt}</span>
+                    <div className="ml-auto flex items-center gap-3">
+                      {report.report_type === 'season' && (
+                        <Button onClick={exportPlayerMd} variant="outline" size="sm" className="text-cyan shrink-0">
+                          <Download className="w-4 h-4 mr-2" strokeWidth={1.6} />
+                          Export MD
+                        </Button>
+                      )}
+                      <span className="text-xs text-muted font-normal">{generatedAt}</span>
+                    </div>
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -603,6 +607,10 @@ function PlayerDetails( { player, onBack }: PlayerDetailProps) {
           <CardTitle className="flex items-center gap-2 text-base">
             <ClipboardList className="h-4 w-4 text-cyan" strokeWidth={1.6} />
             Manuális szezonértékelés beillesztése
+            <Button onClick={exportPlayerMd} variant="outline" size="sm" className="text-cyan shrink-0 ml-auto">
+              <Download className="w-4 h-4 mr-2" strokeWidth={1.6} />
+              Export MD
+            </Button>
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">

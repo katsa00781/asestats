@@ -709,15 +709,9 @@ export function GameDetails({ gameId, onBack }: GameDetailsProps) {
             {new Date(gameComparison.date).toLocaleDateString('hu-HU')} · {gameComparison.season_name}
           </p>
         </div>
-        <div className="flex items-center gap-3 ml-auto sm:ml-0">
-          <Button onClick={exportGameMd} variant="outline" size="sm" className="text-cyan shrink-0">
-            <Download className="w-4 h-4 mr-2" strokeWidth={1.6} />
-            Export MD
-          </Button>
-          <span className={`font-mono tabular-nums ${gameComparison.result === 'win' ? 'badge-positive' : 'badge-negative'}`}>
-            {gameComparison.our_score} – {gameComparison.opp_score}
-          </span>
-        </div>
+        <span className={`font-mono tabular-nums ml-auto sm:ml-0 ${gameComparison.result === 'win' ? 'badge-positive' : 'badge-negative'}`}>
+          {gameComparison.our_score} – {gameComparison.opp_score}
+        </span>
       </div>
 
       {/* AI szöveges riportok */}
@@ -738,7 +732,15 @@ export function GameDetails({ gameId, onBack }: GameDetailsProps) {
                   <CardTitle className="flex items-center gap-2 text-base">
                     <FileText className="h-4 w-4 text-ai" strokeWidth={1.6} />
                     {typeLabel}
-                    <span className="ml-auto text-xs text-muted font-normal">{generatedAt}</span>
+                    <div className="ml-auto flex items-center gap-3">
+                      {(report.report_type === 'pregame' || report.report_type === 'postgame') && (
+                        <Button onClick={exportGameMd} variant="outline" size="sm" className="text-cyan shrink-0">
+                          <Download className="w-4 h-4 mr-2" strokeWidth={1.6} />
+                          Export MD
+                        </Button>
+                      )}
+                      <span className="text-xs text-muted font-normal">{generatedAt}</span>
+                    </div>
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -758,6 +760,10 @@ export function GameDetails({ gameId, onBack }: GameDetailsProps) {
           <CardTitle className="flex items-center gap-2 text-base">
             <ClipboardList className="h-4 w-4 text-cyan" strokeWidth={1.6} />
             Manuális elemzés beillesztése
+            <Button onClick={exportGameMd} variant="outline" size="sm" className="text-cyan shrink-0 ml-auto">
+              <Download className="w-4 h-4 mr-2" strokeWidth={1.6} />
+              Export MD
+            </Button>
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">

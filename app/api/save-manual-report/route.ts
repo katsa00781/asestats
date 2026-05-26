@@ -14,6 +14,7 @@ const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
 
 type SaveManualPayload = {
   reportTarget: 'game' | 'player_season' | 'team_season';
+  reportType?: string | null;
   narrative: string;
   // game report
   gameId?: string | null;
@@ -43,13 +44,14 @@ export async function POST(request: Request) {
       if (!payload.gameId) {
         return NextResponse.json({ ok: false, error: 'Hiányzik a gameId.' }, { status: 400 });
       }
+      const gameReportType = payload.reportType ?? 'manual';
       const { data, error } = await supabaseAdmin
         .from('game_text_reports')
         .upsert(
           {
             game_id: payload.gameId,
             team_pair_key: null,
-            report_type: 'manual',
+            report_type: gameReportType,
             narrative: payload.narrative.trim(),
             own_team_id: payload.ownTeamId ?? null,
             own_team_name: payload.ownTeamName ?? null,
