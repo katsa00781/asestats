@@ -1,16 +1,11 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { requireAuth } from '@/lib/api-auth';
+import { getSupabaseAdmin } from '@/lib/supabase-admin';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-if (!supabaseUrl) throw new Error('NEXT_PUBLIC_SUPABASE_URL hiányzik.');
-if (!serviceRoleKey) throw new Error('SUPABASE_SERVICE_ROLE_KEY hiányzik.');
-
-const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
+const supabaseAdmin = getSupabaseAdmin();
 
 type SaveManualPayload = {
   reportTarget: 'game' | 'player_season' | 'team_season';
@@ -31,6 +26,9 @@ type SaveManualPayload = {
 };
 
 export async function POST(request: Request) {
+  const auth = await requireAuth(request);
+  if (!auth.ok) return auth.response;
+
   const payload = (await request.json().catch(() => null)) as SaveManualPayload | null;
 
   if (!payload?.narrative?.trim()) {

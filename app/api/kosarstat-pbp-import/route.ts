@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { requireAuth } from '@/lib/api-auth';
 import { spawn } from 'child_process';
 
 export const dynamic = 'force-dynamic';
@@ -77,7 +78,10 @@ let liveState: LiveImportState = {
   seasonCode: null,
 };
 
-export async function DELETE() {
+export async function DELETE(request: Request) {
+  const auth = await requireAuth(request);
+  if (!auth.ok) return auth.response;
+
   if (!isRunning && !liveState.pid) {
     return NextResponse.json({ ok: false, error: 'Nincs futo Kosarstat import folyamat.' }, { status: 409 });
   }
@@ -122,6 +126,9 @@ export async function DELETE() {
 }
 
 export async function GET(request: Request) {
+  const auth = await requireAuth(request);
+  if (!auth.ok) return auth.response;
+
   const url = new URL(request.url);
   const rawTail = Number.parseInt(url.searchParams.get('tail') || '12000', 10);
   const tailSize = Number.isFinite(rawTail) ? Math.min(Math.max(rawTail, 1000), 200000) : 12000;
@@ -159,6 +166,9 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const auth = await requireAuth(request);
+  if (!auth.ok) return auth.response;
+
   if (isRunning) {
     return NextResponse.json(
       { ok: false, error: 'Mar fut egy Kosarstat import folyamat. Varj, amig befejezodik.' },

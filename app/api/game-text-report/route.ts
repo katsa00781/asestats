@@ -1,23 +1,14 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { requireAuth } from '@/lib/api-auth';
 import type { ScoutingReport } from '@/lib/pregame-scouting';
 import type { PostGameReport } from '@/lib/postgame-report';
+import { getSupabaseAdmin } from '@/lib/supabase-admin';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-if (!supabaseUrl) {
-  throw new Error('Hiányzik a NEXT_PUBLIC_SUPABASE_URL környezeti változó.');
-}
-if (!serviceRoleKey) {
-  throw new Error('Hiányzik a SUPABASE_SERVICE_ROLE_KEY környezeti változó.');
-}
-
-const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
+const supabaseAdmin = getSupabaseAdmin();
 
 type SaveTextReportPayload = {
   gameId: string;
@@ -33,6 +24,9 @@ type SaveTextReportPayload = {
 };
 
 export async function POST(request: Request) {
+  const auth = await requireAuth(request);
+  if (!auth.ok) return auth.response;
+
   const payload = (await request.json().catch(() => null)) as SaveTextReportPayload | null;
 
   if (!payload) {

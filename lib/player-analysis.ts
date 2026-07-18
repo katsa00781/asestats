@@ -1,4 +1,5 @@
 import { parsePositionBuckets, type Position } from './positions';
+import { trueShootingPct, effectiveFgPct } from './stat-formulas';
 export type { Position };
 
 export type RawPlayerSeasonStat = {
@@ -352,9 +353,8 @@ export const normalizePlayerStats = (raw: RawPlayerSeasonStat): NormalizedStats 
   const fgm = raw.close.made + raw.mid.made + raw.three.made;
   const threePct = raw.three.attempted > 0 ? (raw.three.made / raw.three.attempted) * 100 : 0;
   const ftPct = raw.ft.attempted > 0 ? (raw.ft.made / raw.ft.attempted) * 100 : 0;
-  const efg = fga > 0 ? ((fgm + 0.5 * raw.three.made) / fga) * 100 : 0;
-  const tsPctDenom = 2 * (fga + 0.44 * fta);
-  const tsPct = tsPctDenom > 0 ? (raw.points / tsPctDenom) * 100 : 0;
+  const efg = effectiveFgPct(fgm, raw.three.made, fga);
+  const tsPct = trueShootingPct(raw.points, fga, fta);
 
   const ptsPer36 = normalizePer36(raw.points, raw.minutes);
   const rebPer36 = normalizePer36(totalRebounds, raw.minutes);

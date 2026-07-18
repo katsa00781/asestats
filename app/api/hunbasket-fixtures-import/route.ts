@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { spawn } from 'child_process';
+import { requireAuth } from '@/lib/api-auth';
+import { runScript, type ScriptResult, type ScriptError } from '@/lib/run-script';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -13,16 +14,12 @@ type FixturesImportPayload = {
   headless?: boolean;
 };
 
-type ImportResult = {
-  stdout: string;
-  stderr: string;
-  exitCode: number;
-};
-
-const NPX_COMMAND = process.platform === 'win32' ? 'npx.cmd' : 'npx';
 let isRunning = false;
 
 export async function POST(request: Request) {
+  const auth = await requireAuth(request);
+  if (!auth.ok) return auth.response;
+
   if (isRunning) {
     return NextResponse.json(
       { ok: false, error: 'Már fut egy menetrend import. Várj, amíg befejeződik!' },
@@ -61,7 +58,7 @@ export async function POST(request: Request) {
       stderr: result.stderr,
     });
   } catch (error) {
-    const details = error as Error & Partial<ImportResult>;
+    const details = error as ScriptError;
     return NextResponse.json(
       {
         ok: false,
@@ -85,81 +82,19 @@ type ImportOptions = {
   signal?: AbortSignal;
 };
 
-const runImporter = ({ seasonId, seasonName, seasonSlug, scheduleUrl, headless = true, signal }: ImportOptions) =>
-  new Promise<ImportResult>((resolve, reject) => {
-    let settled = false;
-    const safeResolve = (value: ImportResult) => {
-      if (settled) return;
-      settled = true;
-      resolve(value);
-    };
-    const safeReject = (error: Error & Partial<ImportResult>) => {
-      if (settled) return;
-      settled = true;
-      reject(error);
-    };
+const runImporter = ({ seasonId, seasonName, seasonSlug, scheduleUrl, headless = true, signal }: ImportOptions): Promise<ScriptResult> => {
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    HUNBASKET_SEASON_ID: seasonId,
+    HUNBASKET_HEADLESS: headless === false ? 'false' : 'true',
+  };
 
-    const env: NodeJS.ProcessEnv = {
-      ...process.env,
-      HUNBASKET_SEASON_ID: seasonId,
-      HUNBASKET_HEADLESS: headless === false ? 'false' : 'true',
-    };
+  if (seasonName) env.HUNBASKET_SEASON_NAME = seasonName;
+  if (seasonSlug) env.HUNBASKET_SEASON_SLUG = seasonSlug;
+  if (scheduleUrl) env.HUNBASKET_SCHEDULE_URL = scheduleUrl;
 
-    if (seasonName) env.HUNBASKET_SEASON_NAME = seasonName;
-    if (seasonSlug) env.HUNBASKET_SEASON_SLUG = seasonSlug;
-    if (scheduleUrl) env.HUNBASKET_SCHEDULE_URL = scheduleUrl;
-
-    const child = spawn(NPX_COMMAND, ['tsx', 'scrape-hunbasket-fixtures.ts'], {
-      cwd: process.cwd(),
-      env,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
-
-    let stdout = '';
-    let stderr = '';
-
-    const handleAbort = () => {
-      child.kill('SIGTERM');
-      safeReject(Object.assign(new Error('A menetrend import megszakadt.'), { stdout, stderr }));
-    };
-
-    if (signal) {
-      if (signal.aborted) {
-        handleAbort();
-        return;
-      }
-      signal.addEventListener('abort', handleAbort, { once: true });
-    }
-
-    child.stdout.on('data', chunk => {
-      stdout += chunk.toString();
-    });
-
-    child.stderr.on('data', chunk => {
-      stderr += chunk.toString();
-    });
-
-    child.on('error', error => {
-      safeReject(Object.assign(error, { stdout, stderr }));
-    });
-
-    child.on('close', code => {
-      if (signal) {
-        signal.removeEventListener('abort', handleAbort);
-      }
-
-      if (code === 0) {
-        safeResolve({ stdout, stderr, exitCode: 0 });
-      } else {
-        const execError = Object.assign(new Error(`A menetrend import folyamat ${code ?? 1} kóddal állt le.`), {
-          stdout,
-          stderr,
-          exitCode: code ?? 1,
-        });
-        safeReject(execError);
-      }
-    });
-  });
+  return runScript('scrape-hunbasket-fixtures.ts', env, signal);
+};
 
 const sanitizeScheduleUrl = (value?: string | null) => {
   if (!value) return undefined;

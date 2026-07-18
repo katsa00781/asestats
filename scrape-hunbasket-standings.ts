@@ -1,20 +1,10 @@
 import { chromium, type Page } from 'playwright';
-import { createClient } from '@supabase/supabase-js';
 import * as dotenv from 'dotenv';
+import { createScriptClient } from './scrape-utils';
 
 dotenv.config({ path: '.env.local' });
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-
-if (!SUPABASE_URL || (!SUPABASE_ANON_KEY && !SUPABASE_SERVICE_ROLE_KEY)) {
-  console.error('❌ HIBA: Hiányzó Supabase környezeti változók!');
-  process.exit(1);
-}
-
-const SUPABASE_KEY = SUPABASE_SERVICE_ROLE_KEY || SUPABASE_ANON_KEY;
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: false } });
+const supabase = createScriptClient();
 
 function parseOptionalInt(value?: string) {
   if (!value) return null;

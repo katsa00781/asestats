@@ -13,6 +13,7 @@ import {
 } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { BarChart2 } from 'lucide-react';
+import { CHART_COLORS, CHART_GRID, CHART_AXIS, RECHARTS_TOOLTIP_STYLE } from '@/lib/chart-theme';
 
 type QuarterRow = {
   team_side: 'home' | 'away' | 'unknown';
@@ -63,39 +64,35 @@ export function GamePbpCharts({ quarterStats, playerStats, ourSide, teamShortNam
   return (
     <div className="space-y-6">
       {quarterChartData.length > 0 && (
-        <Card className="bg-slate-900 border-slate-800">
+        <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-slate-50">
-              <BarChart2 className="h-5 w-5 text-emerald-400" />
+            <CardTitle className="flex items-center gap-2 text-primary">
+              <BarChart2 className="h-5 w-5 text-positive" />
               Negyedenkénti Bontás
             </CardTitle>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={220}>
               <BarChart data={quarterChartData} barCategoryGap="30%" barGap={4}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
-                <XAxis dataKey="quarter" tick={{ fill: '#94a3b8', fontSize: 13 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fill: '#64748b', fontSize: 12 }} axisLine={false} tickLine={false} width={28} />
-                <Tooltip
-                  contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8 }}
-                  labelStyle={{ color: '#f1f5f9', fontWeight: 600 }}
-                  itemStyle={{ color: '#94a3b8' }}
-                />
-                <Bar dataKey="ase" name={teamShortName} fill="#10b981" radius={[3, 3, 0, 0]}>
-                  <LabelList dataKey="ase" position="top" style={{ fill: '#10b981', fontSize: 12, fontWeight: 600 }} />
+                <CartesianGrid strokeDasharray={CHART_GRID.strokeDashed} stroke={CHART_GRID.stroke} vertical={false} />
+                <XAxis dataKey="quarter" tick={{ fill: CHART_AXIS.stroke, fontSize: 13, fontFamily: CHART_AXIS.fontFamily }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fill: CHART_AXIS.stroke, fontSize: 12, fontFamily: CHART_AXIS.fontFamily }} axisLine={false} tickLine={false} width={28} />
+                <Tooltip contentStyle={RECHARTS_TOOLTIP_STYLE} />
+                <Bar dataKey="ase" name={teamShortName} fill={CHART_COLORS.positive} radius={[3, 3, 0, 0]}>
+                  <LabelList dataKey="ase" position="top" style={{ fill: CHART_COLORS.positive, fontSize: 12, fontWeight: 600 }} />
                 </Bar>
-                <Bar dataKey="opp" name={opponent} fill="#475569" radius={[3, 3, 0, 0]}>
-                  <LabelList dataKey="opp" position="top" style={{ fill: '#94a3b8', fontSize: 12, fontWeight: 600 }} />
+                <Bar dataKey="opp" name={opponent} fill={CHART_COLORS.muted} radius={[3, 3, 0, 0]}>
+                  <LabelList dataKey="opp" position="top" style={{ fill: CHART_COLORS.secondary, fontSize: 12, fontWeight: 600 }} />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
-            <div className="flex gap-4 mt-2 justify-center text-xs text-slate-400">
+            <div className="flex gap-4 mt-2 justify-center text-xs text-secondary">
               <span className="flex items-center gap-1.5">
-                <span className="inline-block w-3 h-3 rounded-sm bg-emerald-500" />
+                <span className="inline-block w-3 h-3 rounded-sm bg-positive" />
                 {teamShortName}
               </span>
               <span className="flex items-center gap-1.5">
-                <span className="inline-block w-3 h-3 rounded-sm bg-slate-600" />
+                <span className="inline-block w-3 h-3 rounded-sm bg-muted" />
                 {opponent}
               </span>
             </div>
@@ -104,10 +101,10 @@ export function GamePbpCharts({ quarterStats, playerStats, ourSide, teamShortNam
       )}
 
       {minuteData.length > 0 && (
-        <Card className="bg-slate-900 border-slate-800">
+        <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-slate-50">
-              <BarChart2 className="h-5 w-5 text-violet-400" />
+            <CardTitle className="flex items-center gap-2 text-primary">
+              <BarChart2 className="h-5 w-5 text-ai" />
               Játékos Percbontás
             </CardTitle>
           </CardHeader>
@@ -119,27 +116,25 @@ export function GamePbpCharts({ quarterStats, playerStats, ourSide, teamShortNam
                 margin={{ left: 8, right: 32, top: 4, bottom: 4 }}
                 barCategoryGap="20%"
               >
-                <CartesianGrid strokeDasharray="3 3" stroke="#334155" horizontal={false} />
+                <CartesianGrid strokeDasharray={CHART_GRID.strokeDashed} stroke={CHART_GRID.stroke} horizontal={false} />
                 <XAxis
                   type="number"
                   domain={[0, 40]}
-                  tick={{ fill: '#64748b', fontSize: 11 }}
+                  tick={{ fill: CHART_AXIS.stroke, fontSize: 11, fontFamily: CHART_AXIS.fontFamily }}
                   axisLine={false}
                   tickLine={false}
                 />
                 <YAxis
                   type="category"
                   dataKey="player_name"
-                  tick={{ fill: '#94a3b8', fontSize: 12 }}
+                  tick={{ fill: CHART_AXIS.stroke, fontSize: 12, fontFamily: CHART_AXIS.fontFamily }}
                   axisLine={false}
                   tickLine={false}
                   width={110}
                   tickFormatter={(name: string, i: number) => `#${minuteData[i]?.player_number ?? ''} ${name}`}
                 />
                 <Tooltip
-                  contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8 }}
-                  labelStyle={{ color: '#f1f5f9', fontWeight: 600 }}
-                  itemStyle={{ color: '#94a3b8' }}
+                  contentStyle={RECHARTS_TOOLTIP_STYLE}
                   formatter={(value: number | undefined, name: string | undefined) =>
                     name === 'minutes' ? [`${value ?? 0} perc`, 'Játékidő'] : [`${value ?? 0} pont`, 'Pontok']
                   }
@@ -148,29 +143,29 @@ export function GamePbpCharts({ quarterStats, playerStats, ourSide, teamShortNam
                   {minuteData.map((entry, i) => (
                     <Cell
                       key={i}
-                      fill={entry.points >= 15 ? '#10b981' : entry.points >= 8 ? '#3b82f6' : '#475569'}
+                      fill={entry.points >= 15 ? CHART_COLORS.positive : entry.points >= 8 ? CHART_COLORS.cyan : CHART_COLORS.muted}
                     />
                   ))}
                   <LabelList
                     dataKey="minutes"
                     position="right"
-                    style={{ fill: '#cbd5e1', fontSize: 11 }}
+                    style={{ fill: CHART_COLORS.primary, fontSize: 11 }}
                     formatter={(v: boolean | string | number | null | undefined) => `${v ?? 0}'`}
                   />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
-            <div className="flex gap-4 mt-2 justify-center text-xs text-slate-400">
+            <div className="flex gap-4 mt-2 justify-center text-xs text-secondary">
               <span className="flex items-center gap-1.5">
-                <span className="inline-block w-3 h-3 rounded-sm bg-emerald-500" />
+                <span className="inline-block w-3 h-3 rounded-sm bg-positive" />
                 15+ pont
               </span>
               <span className="flex items-center gap-1.5">
-                <span className="inline-block w-3 h-3 rounded-sm bg-blue-500" />
+                <span className="inline-block w-3 h-3 rounded-sm bg-cyan" />
                 8–14 pont
               </span>
               <span className="flex items-center gap-1.5">
-                <span className="inline-block w-3 h-3 rounded-sm bg-slate-600" />
+                <span className="inline-block w-3 h-3 rounded-sm bg-muted" />
                 0–7 pont
               </span>
             </div>

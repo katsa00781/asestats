@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback, useEffect, type ReactNode } from 'react';
+import { authFetch } from '@/lib/api-fetch';
 import type { PlayerStats } from '@/lib/dashboard-types';
 import { supabase } from '@/lib/supabase';
 
@@ -108,7 +109,7 @@ function PlayerDetails( { player, onBack }: PlayerDetailProps) {
     }
     setSavingManual(true);
     try {
-      const resp = await fetch('/api/save-manual-report', {
+      const resp = await authFetch('/api/save-manual-report', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

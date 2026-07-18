@@ -237,10 +237,16 @@ export function buildSituationalData(
         if (ownM) {
           if (ownM.ortg > 0) {
             ortgAll.push(ownM.ortg)
-            if (game.home_away === 'home') { ortgHome.push(ownM.ortg); efgHome.push(ownM.efg) }
-            else { ortgAway.push(ownM.ortg); efgAway.push(ownM.efg) }
+            if (game.home_away === 'home') ortgHome.push(ownM.ortg)
+            else ortgAway.push(ownM.ortg)
           }
-          if (ownM.efg > 0) efgAll.push(ownM.efg)
+          // Az eFG hazai/vendég bontás ugyanazzal a szűréssel kerül be, mint az
+          // összesített, különben 0 értékek torzítanák a splitet.
+          if (ownM.efg > 0) {
+            efgAll.push(ownM.efg)
+            if (game.home_away === 'home') efgHome.push(ownM.efg)
+            else efgAway.push(ownM.efg)
+          }
           if (ownM.tov_pct > 0) tovAll.push(ownM.tov_pct)
           if (ownM.orb_pct > 0) orbAll.push(ownM.orb_pct)
           if (ownM.ftm_rate > 0) ftmAll.push(ownM.ftm_rate)

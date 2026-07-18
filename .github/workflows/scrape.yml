@@ -1,0 +1,65 @@
+# Ütemezett Hunbasket + Kosarstat adatimport.
+#
+# A CLI scrape szkripteket futtatja (nem az API route-okat), ezért serverless
+# korlátok nélkül működik. A 2.1–2.2 unit óta az importok idempotensek
+# (games upsert onConflict season_id,our_team_id,date), így az ismételt futás
+# nem termel duplikátumot.
+#
+# Szükséges repo secretek (Settings → Secrets and variables → Actions):
+#   - NEXT_PUBLIC_SUPABASE_URL
+#   - SUPABASE_SERVICE_ROLE_KEY
+#
+# Opcionális repo variables (Settings → Secrets and variables → Actions → Variables):
+#   - HUNBASKET_SEASON_SLUG (default: x2526)
+#   - HUNBASKET_SEASON_NAME (default: 2025/2026)
+#   - KOSARSTAT_SEASON_NAME (ha eltér)
+
+name: Adatimport (Hunbasket + Kosarstat)
+
+on:
+  schedule:
+    # Szombat és vasárnap 22:00 UTC (23:00/24:00 magyar idő) – meccsnapok után.
+    - cron: '0 22 * * 6,0'
+  workflow_dispatch:
+    inputs:
+      round_filter:
+        description: 'HUNBASKET_ROUND_FILTER (pl. "15" vagy "14-16") – üresen teljes szezon'
+        required: false
+        default: ''
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      HUNBASKET_SEASON_SLUG: ${{ vars.HUNBASKET_SEASON_SLUG }}
+      HUNBASKET_SEASON_NAME: ${{ vars.HUNBASKET_SEASON_NAME }}
+      HUNBASKET_ROUND_FILTER: ${{ inputs.round_filter }}
+      HUNBASKET_HEADLESS: 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Függőségek telepítése
+        run: npm ci
+
+      - name: Playwright Chromium telepítése
+        run: npx playwright install --with-deps chromium
+
+      - name: Menetrend import (fixtures)
+        run: npm run hunbasket:fixtures
+
+      - name: Tabella import (standings)
+        run: npm run hunbasket:standings
+
+      - name: Meccs- és statisztika import (box score)
+        run: npm run hunbasket:import
+
+      - name: Kosarstat play-by-play import
+        run: npm run kosarstat:pbp

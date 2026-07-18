@@ -1,4 +1,5 @@
 'use client';
+import { authFetch } from '@/lib/api-fetch';
 
 import { useState, useCallback } from 'react';
 import type { PlayerStats, TeamGame, GameAggregate } from '@/lib/dashboard-types';
@@ -47,7 +48,7 @@ export function TeamStatistics({ players, games, gameStats, teamName, seasonId, 
     }
     setSavingManual(true);
     try {
-      const resp = await fetch('/api/save-manual-report', {
+      const resp = await authFetch('/api/save-manual-report', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

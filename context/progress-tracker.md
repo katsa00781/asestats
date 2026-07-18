@@ -40,9 +40,39 @@ Update this file after every meaningful implementation change.
 
 ## In Progress
 
-- (Nincs aktív fejlesztési egység)
+- (Nincs aktív fejlesztési egység – a javítási sprint kódmunkája kész; a 3 új migráció kézi futtatására és a GitHub Actions secretek beállítására vár)
+
+## Manuális teendők (a sprint lezárásához)
+
+1. **Supabase SQL Editorban futtatandó (ebben a sorrendben!):**
+   - `migrations/add-player-game-stats-2026-2027.sql` (2026/27 szezon tábla – a többi migráció hivatkozik rá; 2026-07-18-án javítva: érvénytelen `ADD CONSTRAINT IF NOT EXISTS` szintaxis → DO blokk, policy-k idempotensek)
+   - `migrations/add-games-unique-constraint.sql` (games dedup + unique index)
+   - `migrations/add-players-unique-index.sql` (players dedup + unique index)
+   - `migrations/fix-season-view-games-played.sql` (view: DNP + átigazolás fix – felülírja az előző lépésben létrejött view-definíciót, ez szándékos)
+   - A fájlok végén ellenőrző SELECT-ek vannak.
+2. **FONTOS**: a games-írók (scraper, GameQuickImport) már `onConflict: 'season_id,our_team_id,date'` upsertet használnak – az első migráció futtatásáig az importok hibát dobnak (szándékos: kikényszeríti a migrációt).
+3. **GitHub Actions**: repo Settings → Secrets: `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`; utána a `scrape.yml` workflow_dispatch-csel tesztelhető.
+4. **Egyszeri backfill**: `npm run kosarstat:backfill-links` – a meglévő kosarstat meccsek games-linkjeinek pótlása.
 
 ## Completed (legutóbbi)
+
+- **Javítási sprint Fázis 2–5** (2026-07-18):
+  - **Adat-dedup**: 3 új migráció (games unique, players unique, szezon-view fix); mindhárom games-író közös kulcsra upsertel; JsonImport `.single()` hibája javítva; kosarstat scraper írja a `games.kosarstat_game_id`-t (+ backfill script); ensureTeam névdrift-védelem (`HUNBASKET_ALLOW_NEW_TEAMS=1` kapcsoló)
+  - **Kód-dedup**: `lib/supabase-admin.ts` (9 route admin-bootstrapje), `lib/player-stat-mapping.ts` (a 2 hook 85 soros duplikált mappingje – a useFilterData hibás TS/eFG súlyozása is javítva: összegzett dobásokból számol), `lib/stat-formulas.ts` (TS%/eFG%/VAL 6 másolat helyett + egységes formatPercent 1 tizedessel), `scrape-utils.ts` (4× duplikált normalizeName/findTeamInCache/kliens-bootstrap), `lib/run-script.ts` (spawn wrapper 3 route-ból)
+  - **Auth**: `lib/api-auth.ts` requireAuth guard mind a 14 API route-on; `lib/api-fetch.ts` authFetch a 23 kliens-hívási helyen; kijelentkezve minden import/cleanup/generate endpoint 401-et ad
+  - **Automatizálás**: `.github/workflows/scrape.yml` – hétvége esti cron + workflow_dispatch, a CLI szkripteket futtatja (fixtures → standings → import → kosarstat:pbp)
+  - **npm scriptek**: deprecated `hunbasket:pbp` stub archive-ba; új `hunbasket:standings` és `kosarstat:backfill-links`
+  - **Dokumentáció**: CLAUDE.md (valós táblanevek, lib lista, scraping/auth/automatizálás), context/architecture.md (dedup kulcsok, koordináta-konvenció, auth, új invariánsok), BACKLOG.md
+  - Verifikáció minden unit után: `npm run build` + `tsc --noEmit` + `lint` zöld (7 korábbról meglévő lint warning, 0 error)
+
+- **Javítási sprint Fázis 1 – statisztikát torzító hibák** (2026-07-18):
+  - `lib/fetch-all-rows.ts`: lapozó helper a PostgREST 1000 soros limit ellen
+  - `hooks/useFilterData.ts`: minden nagy lekérdezés lapozva + determinisztikus rendezés (a PlayerComparison liga-átlagai eddig 1000 sorra csonkolt adatból számolódtak)
+  - `components/SeasonComparison.tsx`: 6 shot-event lekérdezés lapozva; fordított corner-3 zóna-besorolás javítva; koordináta-konvenció dokumentálva (kosár x≈6, 0–100 skála)
+  - `components/PostgameShotScatterChart.tsx`: pályán kívüli dobások clampelve az eldobás helyett
+  - `components/PlayersList.tsx`: forma-sparkline a legutóbbi 5 meccs (volt: legrégebbi 5), időrendi sorrendben
+  - `lib/situational-analysis.ts`: eFG hazai/vendég split szűrés-konzisztencia; `lib/team-analysis.ts`: netRtg guard birtoklás-alapú
+  - Verifikáció: `npm run build` + `tsc --noEmit` + `lint` zöld (7 korábbról meglévő lint warning, 0 error)
 
 - **MD export szekció felülre mozgatva** (2026-05-24):
   - `components/GameDetails.tsx`: AI riportok + Manuális elemzés beillesztése → fejléc alá, statisztikák elé

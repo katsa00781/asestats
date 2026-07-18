@@ -515,8 +515,8 @@ export function PlayersImport({
           {message && (
             <div className={`p-4 rounded-lg border ${
               message.type === 'success'
-                ? 'bg-emerald-900/20 border-emerald-500/30 text-positive'
-                : 'bg-red-900/20 border-red-500/30 text-negative'
+                ? 'bg-positive/15 border-positive/30 text-positive'
+                : 'bg-negative/15 border-negative/30 text-negative'
             }`}>
               {message.text}
             </div>

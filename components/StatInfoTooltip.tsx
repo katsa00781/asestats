@@ -109,20 +109,20 @@ export function StatInfoTooltip({ stat, children }: StatInfoTooltipProps) {
         <TooltipTrigger asChild>
           <span className="inline-flex items-center gap-1 cursor-help">
             {children}
-            <Info className="h-3 w-3 text-slate-400 hover:text-slate-300 transition-colors" />
+            <Info className="h-3 w-3 text-secondary hover:text-primary transition-colors" />
           </span>
         </TooltipTrigger>
         <TooltipContent className="max-w-xs sm:max-w-sm md:max-w-md p-3" side="top">
           <div className="space-y-2">
-            <div className="font-semibold text-orange-400">{info.name}</div>
-            <p className="text-xs text-slate-300">{info.description}</p>
+            <div className="font-semibold text-orange">{info.name}</div>
+            <p className="text-xs text-secondary">{info.description}</p>
             {info.formula && (
-              <div className="text-xs bg-slate-900 p-2 rounded font-mono text-orange-300">
+              <div className="text-xs bg-surface-1 p-2 rounded font-mono text-orange">
                 {info.formula}
               </div>
             )}
-            <div className="text-xs text-slate-400 border-t border-slate-700 pt-2">
-              <span className="font-semibold text-slate-300">Értelmezés: </span>
+            <div className="text-xs text-secondary border-t border-border-subtle pt-2">
+              <span className="font-semibold text-primary">Értelmezés: </span>
               {info.interpretation}
             </div>
           </div>

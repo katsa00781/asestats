@@ -1782,6 +1782,98 @@ const mergePageTables = async (pageRawId: string, tables: ExtractedTable[]): Pro
   };
 };
 
+// A games.kosarstat_game_id linkage-t eddig külön kézi backfill töltötte;
+// mostantól az import maga beírja, amikor a page metadata (dátum + csapatnevek)
+// alapján egyértelműen párosítható a games sorral. Hiányzó párosításnál hangos
+// warning megy a logba (nem néma kihagyás).
+const linkedKosarstatGameIds = new Set<string>();
+let linkTeamNameCache: Map<string, { name: string; shortName: string | null }> | null = null;
+
+const getLinkTeamNames = async () => {
+  if (linkTeamNameCache) return linkTeamNameCache;
+  const { data, error } = await supabase.from('teams').select('id, name, short_name');
+  if (error) {
+    throw new Error(`Teams lookup failed (kosarstat link): ${formatSupabaseError(error)}`);
+  }
+  linkTeamNameCache = new Map(
+    (data || []).map(row => [
+      String(row.id),
+      { name: String(row.name || ''), shortName: row.short_name ? String(row.short_name) : null },
+    ])
+  );
+  return linkTeamNameCache;
+};
+
+const namesLooselyMatch = (a: string, b: string) => {
+  if (!a || !b) return false;
+  return a === b || a.includes(b) || b.includes(a);
+};
+
+const linkGamesToKosarstatId = async (seasonId: string, gameId: string, metadata: RawPageMetadata) => {
+  if (linkedKosarstatGameIds.has(gameId)) return;
+  if (!metadata.matchDate || !metadata.homeTeamName || !metadata.awayTeamName) return;
+
+  const { data: candidates, error } = await supabase
+    .from('games')
+    .select('id, our_team_id, opponent, kosarstat_game_id')
+    .eq('season_id', seasonId)
+    .eq('date', metadata.matchDate);
+
+  if (error) {
+    console.warn(`Kosarstat link lookup failed (${gameId}): ${formatSupabaseError(error)}`);
+    return;
+  }
+
+  const teamNames = await getLinkTeamNames();
+  const home = normalizeText(metadata.homeTeamName);
+  const away = normalizeText(metadata.awayTeamName);
+
+  const matched = (candidates || []).filter(candidate => {
+    const teamEntry = teamNames.get(String(candidate.our_team_id || ''));
+    if (!teamEntry) return false;
+    const ourName = normalizeText(teamEntry.name);
+    const ourShort = normalizeText(teamEntry.shortName || '');
+    const oppName = normalizeText(String(candidate.opponent || ''));
+    const ourMatchesHome = namesLooselyMatch(ourName, home) || namesLooselyMatch(ourShort, home);
+    const ourMatchesAway = namesLooselyMatch(ourName, away) || namesLooselyMatch(ourShort, away);
+    return (
+      (ourMatchesHome && namesLooselyMatch(oppName, away)) ||
+      (ourMatchesAway && namesLooselyMatch(oppName, home))
+    );
+  });
+
+  if (matched.length === 0) {
+    console.warn(
+      `⚠️ Kosarstat link: nincs párosítható games sor (${gameId}, ${metadata.matchDate}, ${metadata.homeTeamName} vs ${metadata.awayTeamName}) – a round-mapping fallbackre szorulhat.`
+    );
+    return;
+  }
+
+  for (const candidate of matched) {
+    const existing = String(candidate.kosarstat_game_id || '').trim();
+    if (existing && existing !== gameId) {
+      console.warn(
+        `⚠️ Kosarstat link ütközés: games.id=${candidate.id} már ${existing}-hez kötött, nem írom felül (${gameId}).`
+      );
+      continue;
+    }
+    if (existing === gameId) continue;
+
+    const { error: updateError } = await supabase
+      .from('games')
+      .update({ kosarstat_game_id: gameId })
+      .eq('id', candidate.id);
+
+    if (updateError) {
+      console.warn(`Kosarstat link update failed (games.id=${candidate.id}): ${formatSupabaseError(updateError)}`);
+    } else {
+      console.log(`🔗 games.kosarstat_game_id beállítva (${metadata.matchDate}, games.id=${candidate.id} → ${gameId})`);
+    }
+  }
+
+  linkedKosarstatGameIds.add(gameId);
+};
+
 const importOneGamePage = async (
   page: Page,
   seasonId: string,
@@ -1801,6 +1893,7 @@ const importOneGamePage = async (
   const pageRawId = await upsertRawPage(seasonId, gameId, pageType, url, rawText, metadata, {
     preserveExisting: options?.preserveExistingRaw === true,
   });
+  await linkGamesToKosarstatId(seasonId, gameId, metadata);
   const mergeResult = await mergePageTables(pageRawId, tables);
 
   let quarterStatRows = 0;

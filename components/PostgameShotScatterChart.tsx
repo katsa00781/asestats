@@ -199,8 +199,17 @@ export function PostgameShotScatterChart({ shots, showPoints, showHeatmap, heatm
   const heatmapProfile = HEATMAP_PROFILE[heatmapContrast];
   const chartRenderKey = `${heatmapContrast}-${heatmapMode}-${showHeatmap ? 'heat-on' : 'heat-off'}-${showPoints ? 'pts-on' : 'pts-off'}`;
 
+  // A bemenet teljes pályás, normalizált mélység (0–100, kosár x≈6-nál); a chart
+  // csak a támadó félpályát rajzolja (0–36). A kieső (ritka, nagyon távoli) dobásokat
+  // a pálya szélére szorítjuk, hogy ne vesszenek el némán a scatterből/heatmapből.
   const halfCourtShots = useMemo(
-    () => shots.filter(shot => shot.x >= COURT.depthMin && shot.x <= COURT.depthMax && shot.y >= COURT.sideMin && shot.y <= COURT.sideMax),
+    () => shots
+      .filter(shot => Number.isFinite(shot.x) && Number.isFinite(shot.y))
+      .map(shot => ({
+        ...shot,
+        x: clamp(shot.x, COURT.depthMin, COURT.depthMax),
+        y: clamp(shot.y, COURT.sideMin, COURT.sideMax),
+      })),
     [shots]
   );
 

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import { formatPercent as formatPercentShared } from '@/lib/stat-formulas';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -180,10 +181,7 @@ const formatNumber = (value: number, digits = 1) => {
 	return value.toFixed(digits);
 };
 
-const formatPercent = (value: number) => {
-	if (!Number.isFinite(value)) return '-';
-	return `${(value * 100).toFixed(1)}%`;
-};
+const formatPercent = (value: number) => formatPercentShared(value * 100);
 
 const normalizeName = (value?: string | null) => (value || '').trim().toLowerCase();
 
@@ -703,7 +701,7 @@ export function TeamComparison({ allSeasons, allTeams, currentSeasonId, currentT
 			</Card>
 
 			{error && (
-				<div className="rounded border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+				<div className="rounded border border-negative/40 bg-negative/10 px-4 py-3 text-sm text-negative">
 					{error}
 				</div>
 			)}

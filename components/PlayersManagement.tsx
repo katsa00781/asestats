@@ -670,7 +670,7 @@ export function PlayersManagement({ onPlayersChanged }: PlayersManagementProps) 
       ) : (
         <>
           {/* Figyelmeztetés */}
-          <Card className="bg-amber-900/20 border-amber-700/50">
+          <Card className="bg-warning/15 border-warning/40">
             <CardContent className="py-4">
               <div className="flex items-start gap-3">
                 <AlertTriangle className="text-warning mt-0.5" size={20} strokeWidth={1.6} />
@@ -801,7 +801,7 @@ export function PlayersManagement({ onPlayersChanged }: PlayersManagementProps) 
                               size="sm"
                               onClick={() => togglePlayerActive(player.id, !player.is_active)}
                               disabled={isDeleting}
-                              className={player.is_active ? 'border-warning/50 text-warning hover:bg-amber-900/20' : 'border-positive/50 text-positive hover:bg-emerald-900/20'}
+                              className={player.is_active ? 'border-warning/50 text-warning hover:bg-warning/15' : 'border-positive/50 text-positive hover:bg-positive/15'}
                             >
                               {player.is_active ? 'Inaktiválás' : 'Aktiválás'}
                             </Button>
@@ -840,7 +840,7 @@ export function PlayersManagement({ onPlayersChanged }: PlayersManagementProps) 
           variant="outline"
           onClick={cleanupInvalidPlayers}
           disabled={loading}
-          className="border-warning/50 text-warning hover:bg-amber-900/20"
+          className="border-warning/50 text-warning hover:bg-warning/15"
         >
           {loading ? (
             <>

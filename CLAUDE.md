@@ -105,17 +105,28 @@ asestats/
 │   ├── project-overview.md
 │   └── ui-context.md           # Dark Command Center design rendszer leírása
 ├── lib/                        # Megosztott logika, típusok, segédfüggvények
+│   ├── ai-client.ts            # Közös OpenAI/Claude hívás (callAi, AI_GENERATED_BY)
+│   ├── api-auth.ts             # requireAuth() guard az API route-okhoz
+│   ├── api-fetch.ts            # authFetch() – Supabase token az API hívásokhoz
 │   ├── auth-context.tsx
+│   ├── chart-theme.ts
 │   ├── dashboard-types.ts      # Publikus dashboard típusok (kiszervezve page.tsx-ből)
+│   ├── export-to-md.ts
+│   ├── fetch-all-rows.ts       # Lapozó helper a PostgREST 1000 soros limit ellen
+│   ├── kosarstat-clutch-parse.ts
 │   ├── player-analysis.ts
 │   ├── player-postgame.ts
+│   ├── player-stat-mapping.ts  # SupabasePlayerStat típus + PlayerStats mapping (egyetlen példány)
 │   ├── positions.ts
 │   ├── postgame-report.ts
 │   ├── pregame-scouting.ts
+│   ├── run-script.ts           # Közös spawn wrapper a scraping route-okhoz
 │   ├── season-tables.ts
 │   ├── situational-analysis.ts
+│   ├── stat-formulas.ts        # Kanonikus TS%/eFG%/valuation + formatPercent
 │   ├── style-vocabulary.ts
 │   ├── supabase.ts
+│   ├── supabase-admin.ts       # getSupabaseAdmin() – service role kliens factory
 │   ├── team-analysis.ts
 │   ├── terminology.ts
 │   └── utils.ts                # cn() utility (clsx + tailwind-merge)
@@ -185,13 +196,17 @@ A komponensek **funkcionalitása változatlan**, csak a vizuális réteg (osztá
 | `player_game_stats` | UNION view visszafelé kompatibilitáshoz (INSTEAD OF triggerekkel) |
 | `seasons` | Szezonok (id, név, start/end dátum) |
 | `teams` | Csapatok (id, név, rövid név, is_primary) |
-| `league_fixtures` | Bajnokság mérkőzésnaptár |
+| `league_fixtures` | Bajnokság mérkőzésnaptár (UNIQUE: season_id, game_date, home/away team) |
 | `standings` | Tabella adatok (RLS engedélyezve) |
-| `play_by_play_events` | Play-by-play eseményadatok |
-| `shotchart_events` | Shot chart pozíció adatok |
+| `hunbasket_shotchart_raw` + `hunbasket_shot_events` | Hunbasket shot chart nyers oldalak + dobás-események |
+| `kosarstat_game_pages_raw` + `kosarstat_game_page_tables` + `kosarstat_game_quarter_stats` + `kosarstat_game_team_metrics` | Kosarstat play-by-play nyers oldalak és kinyert statisztikák |
 | `game_text_reports` | AI generált pregame/postgame riportok (RLS engedélyezve) |
 | `team_text_reports` | AI generált csapat szezon riportok (RLS engedélyezve) |
 | `player_season_stats_by_season` | **VIEW**: aggregált szezon statisztikák |
+
+**Dedup kulcsok (DB-szinten kikényszerítve):**
+- `games`: UNIQUE `(season_id, our_team_id, date)` – `migrations/add-games-unique-constraint.sql`; minden games-író erre a kulcsra upsertel
+- `players`: partial unique index `(season_id, team_id, lower(trim(name)))` – `migrations/add-players-unique-index.sql`; a mezszám NEM része a kulcsnak
 
 **Új szezon hozzáadásához**: bővíteni kell `lib/season-tables.ts` `SEASON_STATS_TABLES` mappinget ÉS egy SQL migrációt kell írni a `migrations/` mappába. Részletes lépéssor: `HOWTO-uj-szezon.md`.
 
@@ -400,18 +415,26 @@ Nincs külső state manager. React 19 beépített hookok:
 
 CLI szkriptek a gyökérszinten (tsx-szel futtatva):
 ```bash
-npm run hunbasket:import    # Teljes szezon import
-npm run hunbasket:rosters   # Csapatnévsor
-npm run hunbasket:fixtures  # Mérkőzésnaptár
-npm run hunbasket:shotchart # Shot chart
-npm run hunbasket:pbp       # Play-by-play
-npm run kosarstat:pbp       # Kosarstat PBP
+npm run hunbasket:import           # Teljes szezon import (box score)
+npm run hunbasket:rosters          # Csapatnévsor
+npm run hunbasket:fixtures         # Mérkőzésnaptár
+npm run hunbasket:standings        # Tabella
+npm run hunbasket:shotchart        # Shot chart
+npm run hunbasket:shotchart:assign # Shot események játékoshoz rendelése
+npm run kosarstat:pbp              # Kosarstat PBP (a games.kosarstat_game_id linkeket is írja)
+npm run kosarstat:backfill-links   # Egyszeri kosarstat_game_id backfill régi adatokra
 ```
 
 Konvenciók:
 - `browser.close()` mindig `finally` blokkban
 - `dotenv` a `.env.local` betöltéséhez
+- Közös segédfüggvények: `scrape-utils.ts` (normalizeName, cleanTeamName, findTeamByName*, createScriptClient) – ne duplikáld őket a szkriptekben
 - Minden szkript naplózza a progresszt (`console.log`) és a hibákat (`console.error`)
+- A box-score import (`scrape-hunbasket.ts`) alapból NEM hoz létre új teams sort (névdrift-védelem) – új csapathoz `HUNBASKET_ALLOW_NEW_TEAMS=1`
+
+**Automatizálás**: `.github/workflows/scrape.yml` – ütemezett (hétvége esti) + kézzel indítható (workflow_dispatch) GitHub Actions futás, amely a CLI szkripteket hajtja végre. Szükséges repo secretek: `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`.
+
+**API auth**: minden `app/api/*` route a `lib/api-auth.ts` `requireAuth()` guardot futtatja (Supabase access token a `Authorization: Bearer` fejlécben); kliens oldalon a `lib/api-fetch.ts` `authFetch()` helyettesíti a nyers `fetch`-et.
 
 ---
 

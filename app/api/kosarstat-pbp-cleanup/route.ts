@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { requireAuth } from '@/lib/api-auth';
+import { getSupabaseAdmin } from '@/lib/supabase-admin';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -11,6 +12,9 @@ type CleanupPayload = {
 };
 
 export async function POST(request: Request) {
+  const auth = await requireAuth(request);
+  if (!auth.ok) return auth.response;
+
   const payload = (await request.json().catch(() => null)) as CleanupPayload | null;
   const seasonId = payload?.seasonId?.trim();
   const seasonCode = payload?.seasonCode?.trim();
@@ -22,17 +26,15 @@ export async function POST(request: Request) {
     );
   }
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  if (!supabaseUrl || !supabaseKey) {
+  let supabase;
+  try {
+    supabase = getSupabaseAdmin();
+  } catch (err) {
     return NextResponse.json(
-      { ok: false, error: 'Hianyzik a Supabase konfiguracio az API route futtatasahoz.' },
+      { ok: false, error: `Hianyzik a Supabase konfiguracio az API route futtatasahoz: ${err instanceof Error ? err.message : ''}` },
       { status: 500 }
     );
   }
-
-  const supabase = createClient(supabaseUrl, supabaseKey, { auth: { persistSession: false } });
 
   let query = supabase.from('kosarstat_game_pages_raw').delete();
 

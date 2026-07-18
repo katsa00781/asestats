@@ -63,22 +63,21 @@ export function SeasonSelector({ selectedSeasonId, onSeasonChange }: SeasonSelec
 
   if (loading) {
     return (
-      <div className="w-full md:w-64 h-10 bg-slate-800 animate-pulse rounded-md" />
+      <div className="w-full md:w-64 h-10 bg-surface-2 animate-pulse rounded-md" />
     );
   }
 
   return (
     <div className="w-full md:w-64">
       <Select value={selectedSeasonId || undefined} onValueChange={onSeasonChange}>
-        <SelectTrigger className="bg-slate-800 border-slate-700">
+        <SelectTrigger className="w-full">
           <SelectValue placeholder="Válassz szezont..." />
         </SelectTrigger>
-        <SelectContent className="bg-slate-800 border-slate-700">
+        <SelectContent>
           {seasons.map(season => (
-            <SelectItem 
-              key={season.id} 
+            <SelectItem
+              key={season.id}
               value={season.id}
-              className="text-slate-200 focus:bg-slate-700"
             >
               {season.name} {season.is_current && '(Jelenlegi)'}
             </SelectItem>

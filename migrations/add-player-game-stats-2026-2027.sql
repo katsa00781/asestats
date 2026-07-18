@@ -19,12 +19,23 @@ CREATE TABLE IF NOT EXISTS player_game_stats_2026_2027 (
   LIKE player_game_stats_2025_2026 INCLUDING ALL
 );
 
--- FK-kat a LIKE nem örököl, explicit kell
-ALTER TABLE player_game_stats_2026_2027
-  ADD CONSTRAINT IF NOT EXISTS fk_2026_2027_game
-    FOREIGN KEY (game_id) REFERENCES games(id) ON DELETE CASCADE,
-  ADD CONSTRAINT IF NOT EXISTS fk_2026_2027_player
-    FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE CASCADE;
+-- FK-kat a LIKE nem örököl, explicit kell.
+-- (Az ALTER TABLE ... ADD CONSTRAINT IF NOT EXISTS nem létezik Postgresben,
+-- ezért DO blokkos guard védi az újrafuttathatóságot.)
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_2026_2027_game') THEN
+    ALTER TABLE player_game_stats_2026_2027
+      ADD CONSTRAINT fk_2026_2027_game
+        FOREIGN KEY (game_id) REFERENCES games(id) ON DELETE CASCADE;
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_2026_2027_player') THEN
+    ALTER TABLE player_game_stats_2026_2027
+      ADD CONSTRAINT fk_2026_2027_player
+        FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE CASCADE;
+  END IF;
+END $$;
 
 CREATE INDEX IF NOT EXISTS idx_pgs_2026_2027_game_id   ON player_game_stats_2026_2027(game_id);
 CREATE INDEX IF NOT EXISTS idx_pgs_2026_2027_player_id ON player_game_stats_2026_2027(player_id);
@@ -35,15 +46,19 @@ CREATE INDEX IF NOT EXISTS idx_pgs_2026_2027_player_id ON player_game_stats_2026
 
 ALTER TABLE player_game_stats_2026_2027 ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Enable read access for all users" ON player_game_stats_2026_2027;
 CREATE POLICY "Enable read access for all users"
   ON player_game_stats_2026_2027 FOR SELECT USING (true);
 
+DROP POLICY IF EXISTS "Enable insert for authenticated users" ON player_game_stats_2026_2027;
 CREATE POLICY "Enable insert for authenticated users"
   ON player_game_stats_2026_2027 FOR INSERT WITH CHECK (true);
 
+DROP POLICY IF EXISTS "Enable update for authenticated users" ON player_game_stats_2026_2027;
 CREATE POLICY "Enable update for authenticated users"
   ON player_game_stats_2026_2027 FOR UPDATE USING (true);
 
+DROP POLICY IF EXISTS "Enable delete for authenticated users" ON player_game_stats_2026_2027;
 CREATE POLICY "Enable delete for authenticated users"
   ON player_game_stats_2026_2027 FOR DELETE USING (true);
 

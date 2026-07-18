@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Save, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
+import { trueShootingPct, effectiveFgPct, simpleValuation } from '@/lib/stat-formulas';
 
 type GameInputProps = {
   players: PlayerStats[];
@@ -57,14 +58,9 @@ const calculateAdvancedStats = (stats: PlayerGameStats) => {
   const totalFGAttempted = stats.closeAttempted + stats.midAttempted + stats.threeAttempted;
   const totalRebounds = stats.offensiveRebounds + stats.defensiveRebounds;
 
-  // True Shooting % - HELYES
-  const tsAttempts = totalFGAttempted + (0.44 * stats.ftAttempted);
-  const trueShootingPct = tsAttempts > 0 ? (stats.points / (2 * tsAttempts)) * 100 : 0;
-
-  // Effective FG% - HELYES
-  const effectiveFGPct = totalFGAttempted > 0 
-    ? ((totalFGMade + (0.5 * stats.threeMade)) / totalFGAttempted) * 100 
-    : 0;
+  // TS% és eFG% – kanonikus képletek a lib/stat-formulas.ts-ből
+  const tsValue = trueShootingPct(stats.points, totalFGAttempted, stats.ftAttempted);
+  const efgValue = effectiveFgPct(totalFGMade, stats.threeMade, totalFGAttempted);
 
   // Offensive Rating - Javított képlet
   // Points Produced figyelembe veszi az asszisztokat és támadó lepattanókat
@@ -82,15 +78,24 @@ const calculateAdvancedStats = (stats: PlayerGameStats) => {
     ? Math.max(80, Math.min(120, 100 - (defensiveContribution * 2))) 
     : 100;
 
-  // Valuation (FIBA formula) - HELYES
-  const valuation = stats.points + totalRebounds + stats.assists + stats.steals + stats.blocks
-    - (totalFGAttempted - totalFGMade) - (stats.ftAttempted - stats.ftMade) - stats.turnovers;
+  const valuation = simpleValuation({
+    points: stats.points,
+    rebounds: totalRebounds,
+    assists: stats.assists,
+    steals: stats.steals,
+    blocks: stats.blocks,
+    fgMade: totalFGMade,
+    fgAttempted: totalFGAttempted,
+    ftMade: stats.ftMade,
+    ftAttempted: stats.ftAttempted,
+    turnovers: stats.turnovers,
+  });
 
   return {
     offensiveRating: Math.round(offensiveRating * 10) / 10,
     defensiveRating: Math.round(defensiveRating * 10) / 10,
-    trueShootingPct: Math.round(trueShootingPct * 10) / 10,
-    effectiveFGPct: Math.round(effectiveFGPct * 10) / 10,
+    trueShootingPct: Math.round(tsValue * 10) / 10,
+    effectiveFGPct: Math.round(efgValue * 10) / 10,
     valuation,
   };
 };

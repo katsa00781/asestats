@@ -67,7 +67,9 @@ function playerInitials(name: string): string {
 }
 
 function Sparkline({ history }: { history: GamePerformance[] }) {
-  const last5 = history.slice(-5);
+  // A gameHistory dátum szerint csökkenő sorrendű, ezért az utolsó 5 meccs az
+  // eleje; megfordítva balról jobbra időrendben rajzoljuk.
+  const last5 = history.slice(0, 5).reverse();
   if (last5.length === 0) return <span className="text-muted text-xs">–</span>;
   const max = Math.max(...last5.map((g) => g.points), 1);
   const BAR_W = 7, GAP = 2, H = 20;

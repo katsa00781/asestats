@@ -17,21 +17,15 @@
  */
 
 import { chromium, type Locator, type Page } from 'playwright';
-import { createClient } from '@supabase/supabase-js';
 import * as dotenv from 'dotenv';
+import {
+  normalizeName,
+  cleanTeamName,
+  findTeamByNameFuzzy,
+  createScriptClient,
+} from './scrape-utils';
 
 dotenv.config({ path: '.env.local' });
-
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-
-if (!SUPABASE_URL || (!SUPABASE_ANON_KEY && !SUPABASE_SERVICE_ROLE_KEY)) {
-  console.error('❌ HIBA: Hiányzó Supabase környezeti változók! Kell NEXT_PUBLIC_SUPABASE_URL és legalább az anon vagy a service role kulcs.');
-  process.exit(1);
-}
-
-const SUPABASE_KEY = SUPABASE_SERVICE_ROLE_KEY || SUPABASE_ANON_KEY;
 
 const HUNBASKET_SEASON_SLUG = process.env.HUNBASKET_SEASON_SLUG || 'x2526';
 const HUNBASKET_SEASON_NAME = process.env.HUNBASKET_SEASON_NAME || '2025/2026';
@@ -92,9 +86,7 @@ const HUNBASKET_DATE_FROM = process.env.HUNBASKET_DATE_FROM || '';
 const HUNBASKET_DATE_TO = process.env.HUNBASKET_DATE_TO || '';
 const HEADLESS = process.env.HUNBASKET_HEADLESS === 'false' ? false : true;
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
-  auth: { persistSession: false },
-});
+const supabase = createScriptClient();
 
 type ShotSplit = { made: number; attempted: number };
 
@@ -185,32 +177,6 @@ type TeamRecord = {
   short_name?: string | null;
   is_primary?: boolean | null;
 };
-
-const normalizeName = (value: string) =>
-  value
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/\p{Diacritic}/gu, '')
-    .replace(/[^a-z0-9\s-]/g, '')
-    .trim();
-
-const buildAbbreviation = (value: string) =>
-  value
-    .split(/[\s-]+/)
-    .filter(Boolean)
-    .map(token => (token.length <= 2 ? token : token[0]))
-    .join('');
-
-const tokenizeTeamName = (value: string) =>
-  normalizeName(value)
-    .split(/[\s-]+/)
-    .filter(token => token.length >= 2);
-
-const cleanTeamName = (value: string) =>
-  value
-    .replace(/first teams logo|second teams logo|logo/gi, '')
-    .replace(/\s+/g, ' ')
-    .trim();
 
 const cleanPlayerName = (value: string) =>
   value
@@ -313,38 +279,26 @@ const refreshTeamCache = async () => {
   cachedTeams = data || [];
 };
 
-const findTeamInCache = (name: string) => {
-  const normalizedTarget = normalizeName(name);
-  if (!normalizedTarget) return undefined;
+const findTeamInCache = (name: string) => findTeamByNameFuzzy(cachedTeams, name);
 
-  const targetTokens = tokenizeTeamName(name);
-
-  return (
-    cachedTeams.find(team => normalizeName(team.name) === normalizedTarget) ||
-    cachedTeams.find(team => team.short_name && normalizeName(team.short_name) === normalizedTarget) ||
-    cachedTeams.find(team => {
-      const normalizedTeamName = normalizeName(team.name);
-      return normalizedTeamName.includes(normalizedTarget) || normalizedTarget.includes(normalizedTeamName);
-    }) ||
-    cachedTeams.find(team => {
-      if (targetTokens.length === 0) return false;
-      const teamTokens = tokenizeTeamName(team.name);
-      if (teamTokens.length === 0) return false;
-      const overlap = targetTokens.filter(token => teamTokens.includes(token)).length;
-      return overlap >= Math.min(2, targetTokens.length);
-    }) ||
-    cachedTeams.find(team => {
-      const teamAbbr = buildAbbreviation(normalizeName(team.name));
-      const targetAbbr = buildAbbreviation(normalizedTarget);
-      return Boolean(teamAbbr) && teamAbbr === targetAbbr;
-    })
-  );
-};
+// Névdrift-védelem: a scrapelt csapatnév-változatok korábban duplikált teams
+// sorokat termeltek. Alapértelmezetten a box-score import NEM hoz létre új
+// csapatot – a fixtures/rosters import már felvette a szezon csapatait.
+// Valóban új csapathoz: HUNBASKET_ALLOW_NEW_TEAMS=1 környezeti változó.
+const ALLOW_NEW_TEAMS = process.env.HUNBASKET_ALLOW_NEW_TEAMS === '1';
 
 const ensureTeam = async (name: string): Promise<TeamRecord> => {
   const cleanedName = cleanTeamName(name);
   const existing = findTeamInCache(cleanedName);
   if (existing) return existing;
+
+  if (!ALLOW_NEW_TEAMS) {
+    const knownNames = cachedTeams.map(team => team.name).join(', ');
+    throw new Error(
+      `Ismeretlen csapatnév: "${cleanedName}" – névdrift-védelem miatt nem hozok létre új csapatot. ` +
+        `Ha tényleg új csapat, futtasd HUNBASKET_ALLOW_NEW_TEAMS=1 mellett. Ismert csapatok: ${knownNames}`
+    );
+  }
 
   const shortName = cleanedName.split(' ')[0] || cleanedName;
   const { data, error } = await supabase
@@ -903,6 +857,20 @@ const ensurePlayerRecord = async (player: PlayerStats, teamId: string, seasonId:
     .single();
 
   if (insertError || !inserted) {
+    // Unique index ütközés (players_season_team_name_unique): a játékos már
+    // létezik kis/nagybetű- vagy whitespace-eltéréssel – használjuk azt.
+    if (insertError?.code === '23505') {
+      const { data: conflicting } = await supabase
+        .from('players')
+        .select('id')
+        .eq('season_id', seasonId)
+        .eq('team_id', teamId)
+        .ilike('name', playerName)
+        .maybeSingle();
+      if (conflicting) {
+        return conflicting.id;
+      }
+    }
     throw new Error(`Játékos létrehozási hiba (${playerName}): ${insertError?.message}`);
   }
 
@@ -969,76 +937,35 @@ const importGame = async (date: string, seasonId: string, teamGame: TeamGameImpo
   const team = await ensureTeam(teamGame.teamName);
   const opponent = await ensureTeam(teamGame.opponentName);
 
-  const { data: existingGame, error: existingError } = await supabase
+  // Egységes dedup-kulcs: (season_id, our_team_id, date) – a games táblán
+  // DB-szintű unique index védi (migrations/add-games-unique-constraint.sql).
+  // Az opponent szándékosan nem része a kulcsnak: a névváltozatok korábban
+  // duplikált meccseket termeltek.
+  const { data: upsertedGame, error: upsertError } = await supabase
     .from('games')
-    .select('id, home_away, our_score, opp_score, result, opponent, round')
-    .eq('date', date)
-    .eq('season_id', seasonId)
-    .eq('our_team_id', team.id)
-    .eq('opponent', opponent.name)
-    .maybeSingle();
-
-  if (existingError) {
-    throw new Error(`Meccs lekérdezési hiba: ${existingError.message}`);
-  }
-
-  if (existingGame) {
-    const needsUpdate =
-      existingGame.home_away !== teamGame.homeAway ||
-      existingGame.our_score !== teamGame.ourScore ||
-      existingGame.opp_score !== teamGame.oppScore ||
-      existingGame.result !== teamGame.result ||
-      existingGame.opponent !== opponent.name ||
-      existingGame.round !== teamGame.round;
-
-    if (needsUpdate) {
-      const { error: updateError } = await supabase
-        .from('games')
-        .update({
-          home_away: teamGame.homeAway,
-          our_score: teamGame.ourScore,
-          opp_score: teamGame.oppScore,
-          result: teamGame.result,
-          opponent: opponent.name,
-          round: teamGame.round,
-        })
-        .eq('id', existingGame.id);
-
-      if (updateError) {
-        throw new Error(`Meccs frissítési hiba: ${updateError.message}`);
-      }
-
-      console.log(`    🔁 ${team.name} meccs frissítve (hazai/vendég korrekció)`);
-    } else {
-      console.log(`    ↺ ${team.name} vs ${opponent.name} (${date}) változatlan`);
-    }
-
-    await syncPlayerStats(existingGame.id, team.id, seasonId, teamGame.players);
-    return;
-  }
-
-  const { data: insertedGame, error: insertError } = await supabase
-    .from('games')
-    .insert({
-      date,
-      season_id: seasonId,
-      our_team_id: team.id,
-      opponent: opponent.name,
-      home_away: teamGame.homeAway,
-      our_score: teamGame.ourScore,
-      opp_score: teamGame.oppScore,
-      result: teamGame.result,
-      round: teamGame.round,
-    })
+    .upsert(
+      {
+        date,
+        season_id: seasonId,
+        our_team_id: team.id,
+        opponent: opponent.name,
+        home_away: teamGame.homeAway,
+        our_score: teamGame.ourScore,
+        opp_score: teamGame.oppScore,
+        result: teamGame.result,
+        round: teamGame.round,
+      },
+      { onConflict: 'season_id,our_team_id,date' }
+    )
     .select('id')
     .single();
 
-  if (insertError || !insertedGame) {
-    throw new Error(`Meccs létrehozási hiba: ${insertError?.message}`);
+  if (upsertError || !upsertedGame) {
+    throw new Error(`Meccs mentési hiba: ${upsertError?.message}`);
   }
 
-  console.log(`    ✅ ${team.name} meccs mentve (${teamGame.players.length} játékos)`);
-  await syncPlayerStats(insertedGame.id, team.id, seasonId, teamGame.players);
+  console.log(`    ✅ ${team.name} vs ${opponent.name} (${date}) mentve/frissítve (${teamGame.players.length} játékos)`);
+  await syncPlayerStats(upsertedGame.id, team.id, seasonId, teamGame.players);
 };
 
 const main = async () => {

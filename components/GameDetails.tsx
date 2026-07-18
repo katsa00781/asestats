@@ -1,4 +1,5 @@
 'use client';
+import { authFetch } from '@/lib/api-fetch';
 
 import { useCallback, useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
@@ -519,7 +520,7 @@ export function GameDetails({ gameId, onBack }: GameDetailsProps) {
       await Promise.all(
         report.players.map(async (breakdown) => {
           try {
-            const resp = await fetch('/api/generate-player-postgame-text', {
+            const resp = await authFetch('/api/generate-player-postgame-text', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -620,7 +621,7 @@ export function GameDetails({ gameId, onBack }: GameDetailsProps) {
     if (!gameComparison || !manualText.trim()) return;
     setSavingManual(true);
     try {
-      const resp = await fetch('/api/save-manual-report', {
+      const resp = await authFetch('/api/save-manual-report', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

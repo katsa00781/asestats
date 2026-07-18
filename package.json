@@ -12,8 +12,9 @@
     "hunbasket:fixtures": "tsx scrape-hunbasket-fixtures.ts",
     "hunbasket:shotchart": "tsx scrape-hunbasket-shotchart.ts",
     "hunbasket:shotchart:assign": "tsx process-hunbasket-shotchart-events.ts",
-    "hunbasket:pbp": "tsx scrape-hunbasket-playbyplay.ts",
-    "kosarstat:pbp": "tsx scrape-kosarstat-playbyplay.ts"
+    "hunbasket:standings": "tsx scrape-hunbasket-standings.ts",
+    "kosarstat:pbp": "tsx scrape-kosarstat-playbyplay.ts",
+    "kosarstat:backfill-links": "tsx scripts/backfill-kosarstat-game-links.ts"
   },
   "dependencies": {
     "@radix-ui/react-label": "^2.1.8",

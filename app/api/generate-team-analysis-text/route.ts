@@ -1,22 +1,13 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { requireAuth } from '@/lib/api-auth';
 import { callAi, AI_GENERATED_BY } from '@/lib/ai-client';
+import { getSupabaseAdmin } from '@/lib/supabase-admin';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-if (!supabaseUrl) {
-  throw new Error('NEXT_PUBLIC_SUPABASE_URL hiányzik a környezeti változók közül.');
-}
-if (!serviceRoleKey) {
-  throw new Error('SUPABASE_SERVICE_ROLE_KEY hiányzik a környezeti változók közül.');
-}
-
-const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
+const supabaseAdmin = getSupabaseAdmin();
 
 const SYSTEM_PROMPT = `Te egy magyar kosárlabda-elemző vagy.
 Feladat: adatalapú, taktikai fókuszú csapatértékelést írni, különösen a gyenge pontokra és azok matchup-következményeire.
@@ -183,6 +174,9 @@ const callAiForTeam = (prompt: string) =>
   callAi(SYSTEM_PROMPT, prompt, 0.3);
 
 export async function POST(request: Request) {
+  const auth = await requireAuth(request);
+  if (!auth.ok) return auth.response;
+
   const payload = (await request.json().catch(() => null)) as TeamNarrativePayload | null;
 
   if (!payload) {
@@ -233,7 +227,7 @@ export async function POST(request: Request) {
       ok: true,
       narrative,
       generatedAt,
-      generatedBy: payload.generatedBy ?? 'gpt-automata',
+      generatedBy: payload.generatedBy ?? AI_GENERATED_BY,
       report,
     });
   } catch (error) {

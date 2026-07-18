@@ -1,16 +1,22 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { requireAuth } from '@/lib/api-auth';
 import type { PlayerPostGameBreakdown } from '@/lib/player-postgame';
 import { callAi } from '@/lib/ai-client';
+import { getSupabaseAdmin } from '@/lib/supabase-admin';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const supabaseAdmin =
-  supabaseUrl && serviceRoleKey ? createClient(supabaseUrl, serviceRoleKey) : null;
+// Ebben a route-ban az admin kliens hiánya nem fatális (a mentés opcionális),
+// ezért a factory hibáját null-ra fordítjuk – a viselkedés változatlan.
+const supabaseAdmin = (() => {
+  try {
+    return getSupabaseAdmin();
+  } catch {
+    return null;
+  }
+})();
 
 type PlayerPostGameTextPayload = {
   gameId?: string | null;
@@ -60,6 +66,9 @@ const callAiForPlayer = (prompt: string) =>
   callAi(SYSTEM_PROMPT, prompt, 0.25);
 
 export async function POST(request: Request) {
+  const auth = await requireAuth(request);
+  if (!auth.ok) return auth.response;
+
   const payload = (await request.json().catch(() => null)) as PlayerPostGameTextPayload | null;
   if (!payload) {
     return NextResponse.json({ ok: false, error: 'Hiányzik a kérés törzse.' }, { status: 400 });

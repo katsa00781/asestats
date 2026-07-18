@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { spawn } from 'child_process';
+import { requireAuth } from '@/lib/api-auth';
+import { runScript } from '@/lib/run-script';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -41,15 +42,12 @@ type ImportResult = {
   exitCode: number;
 };
 
-type ScriptResult = {
-  stdout: string;
-  stderr: string;
-};
-
-const NPX_COMMAND = process.platform === 'win32' ? 'npx.cmd' : 'npx';
 let isRunning = false;
 
 export async function POST(request: Request) {
+  const auth = await requireAuth(request);
+  if (!auth.ok) return auth.response;
+
   if (isRunning) {
     return NextResponse.json({ ok: false, error: 'Már fut egy import folyamat. Várj, amíg befejeződik!' }, { status: 409 });
   }
@@ -204,75 +202,6 @@ const runImporter = ({
     }).finally(() => {
       if (signal) {
         signal.removeEventListener('abort', handleAbort);
-      }
-    });
-  });
-
-const runScript = (scriptName: string, env: NodeJS.ProcessEnv, signal?: AbortSignal) =>
-  new Promise<ScriptResult>((resolve, reject) => {
-    let settled = false;
-
-    const child = spawn(NPX_COMMAND, ['tsx', scriptName], {
-      cwd: process.cwd(),
-      env,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
-
-    let stdout = '';
-    let stderr = '';
-
-    const safeResolve = (value: ScriptResult) => {
-      if (settled) return;
-      settled = true;
-      resolve(value);
-    };
-
-    const safeReject = (error: Error & Partial<ImportResult>) => {
-      if (settled) return;
-      settled = true;
-      reject(error);
-    };
-
-    const handleAbort = () => {
-      child.kill('SIGTERM');
-      safeReject(Object.assign(new Error(`Az import folyamat megszakadt (${scriptName}).`), { stdout, stderr, exitCode: 1 }));
-    };
-
-    if (signal) {
-      if (signal.aborted) {
-        handleAbort();
-        return;
-      }
-      signal.addEventListener('abort', handleAbort, { once: true });
-    }
-
-    child.stdout.on('data', chunk => {
-      stdout += chunk.toString();
-    });
-
-    child.stderr.on('data', chunk => {
-      stderr += chunk.toString();
-    });
-
-    child.on('error', error => {
-      safeReject(Object.assign(error, { stdout, stderr, exitCode: 1 }));
-    });
-
-    child.on('close', code => {
-      if (signal) {
-        signal.removeEventListener('abort', handleAbort);
-      }
-
-      if (code === 0) {
-        safeResolve({ stdout, stderr });
-      } else {
-        safeReject(
-          Object.assign(new Error(`Az importáló script (${scriptName}) ${code ?? 1} kóddal állt le.`), {
-            stdout,
-            stderr,
-            exitCode: code ?? 1,
-          })
-        );
       }
     });
   });

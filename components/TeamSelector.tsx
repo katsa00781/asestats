@@ -118,12 +118,12 @@ export function TeamSelector({ selectedTeamId, onTeamChange }: TeamSelectorProps
   }, []);
 
   if (loading) {
-    return <div className="w-full md:w-64 h-10 bg-slate-800 animate-pulse rounded-md" />;
+    return <div className="w-full md:w-64 h-10 bg-surface-2 animate-pulse rounded-md" />;
   }
 
   if (teams.length === 0) {
     return (
-      <div className="w-full md:w-64 rounded-md border border-dashed border-slate-700 px-3 py-2 text-xs text-slate-400">
+      <div className="w-full md:w-64 rounded-md border border-dashed border-border-subtle px-3 py-2 text-xs text-secondary">
         Nincs elérhető csapat.
       </div>
     );
@@ -132,12 +132,12 @@ export function TeamSelector({ selectedTeamId, onTeamChange }: TeamSelectorProps
   return (
     <div className="w-full md:w-64">
       <Select value={selectedTeamId || undefined} onValueChange={onTeamChange}>
-        <SelectTrigger className="w-full bg-slate-800 border-slate-700 text-slate-300">
+        <SelectTrigger className="w-full">
           <SelectValue placeholder="Válassz csapatot" />
         </SelectTrigger>
-        <SelectContent className="bg-slate-800 border-slate-700">
+        <SelectContent>
           {teams.map(team => (
-            <SelectItem key={team.id} value={team.id} className="text-slate-300">
+            <SelectItem key={team.id} value={team.id}>
               {team.name}
               {team.is_primary && ' ⭐'}
             </SelectItem>

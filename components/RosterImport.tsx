@@ -1,4 +1,5 @@
 'use client';
+import { authFetch } from '@/lib/api-fetch';
 
 import { useState } from 'react';
 import { Users, Loader2, ShieldAlert, WandSparkles } from 'lucide-react';
@@ -57,7 +58,7 @@ export function RosterImport({ selectedSeasonId, selectedSeasonName, onImportCom
     };
 
     try {
-      const response = await fetch('/api/hunbasket-roster-import', {
+      const response = await authFetch('/api/hunbasket-roster-import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -121,7 +122,7 @@ export function RosterImport({ selectedSeasonId, selectedSeasonName, onImportCom
       </CardHeader>
       <CardContent className="space-y-4">
         {!selectedSeasonId && (
-          <div className="flex items-center gap-3 rounded-lg border border-amber-500/40 bg-amber-900/20 px-3 py-2 text-amber-200">
+          <div className="flex items-center gap-3 rounded-lg border border-warning/40 bg-warning/15 px-3 py-2 text-warning">
             <ShieldAlert size={18} strokeWidth={1.6} />
             <span className="text-sm">A keret frissítéséhez előbb válassz szezont!</span>
           </div>
@@ -195,7 +196,7 @@ export function RosterImport({ selectedSeasonId, selectedSeasonName, onImportCom
                 <Textarea
                   value={stderr}
                   readOnly
-                  className="bg-red-950/30 border-red-500/30 text-negative font-mono text-xs"
+                  className="bg-negative/15 border-negative/40 text-negative font-mono text-xs"
                   style={{ minHeight: 160 }}
                 />
               </div>

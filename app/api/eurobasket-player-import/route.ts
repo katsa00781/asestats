@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { requireAuth } from '@/lib/api-auth';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -601,6 +602,9 @@ const buildImportResult = (
 };
 
 export async function POST(request: Request) {
+  const auth = await requireAuth(request);
+  if (!auth.ok) return auth.response;
+
   try {
     const payload = (await request.json().catch(() => null)) as ImportPayload | null;
     const mode = payload?.mode || 'import';

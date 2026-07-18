@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { formatPercent } from '@/lib/stat-formulas';
 import {
   buildSituationalData,
   type GameRow,
@@ -30,8 +31,9 @@ const TOOLTIP_STYLE = {
   fontSize: '13px',
 }
 
+// Egységes százalék-formázás (1 tizedes) – lib/stat-formulas.ts formatPercent
 function pct(value: number) {
-  return `${Math.round(value * 100)}%`
+  return formatPercent(value * 100)
 }
 
 function round1(v: number) {

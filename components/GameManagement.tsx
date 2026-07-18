@@ -220,7 +220,7 @@ export function GameManagement({ onDeleteComplete }: { onDeleteComplete?: () => 
             </div>
           ) : (
             <div className="space-y-2">
-              <div className="flex items-center gap-2 text-sm text-warning bg-amber-500/10 p-3 rounded-md">
+              <div className="flex items-center gap-2 text-sm text-warning bg-warning/15 p-3 rounded-md">
                 <AlertTriangle size={16} strokeWidth={1.6} />
                 <span>A meccs törlése visszavonhatatlan! Minden statisztika is törlődik.</span>
               </div>

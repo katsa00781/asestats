@@ -286,17 +286,6 @@ export function GameQuickImport({ onImportComplete, selectedSeasonId }: GameQuic
         const oppScore = ourTeamIsHome ? parsedData.awayScore : parsedData.homeScore;
         const result = ourScore > oppScore ? 'win' : 'loss';
 
-        const { data: duplicateGame, error: duplicateError } = await supabase
-          .from('games')
-          .select('id')
-          .eq('season_id', selectedSeasonId)
-          .eq('our_team_id', teamOp.teamId)
-          .eq('date', parsedData.date)
-          .eq('opponent', opponentName)
-          .maybeSingle();
-
-        if (duplicateError) throw duplicateError;
-
         const gameData = {
           date: parsedData.date,
           opponent: opponentName,
@@ -309,17 +298,13 @@ export function GameQuickImport({ onImportComplete, selectedSeasonId }: GameQuic
           our_team_id: teamOp.teamId,
         };
 
-        if (duplicateGame) {
-          const { error: updateError } = await supabase
-            .from('games')
-            .update(gameData)
-            .eq('id', duplicateGame.id);
+        // Egységes dedup-kulcs: (season_id, our_team_id, date) – DB-szintű
+        // unique index védi (migrations/add-games-unique-constraint.sql).
+        const { error: upsertError } = await supabase
+          .from('games')
+          .upsert(gameData, { onConflict: 'season_id,our_team_id,date' });
 
-          if (updateError) throw updateError;
-        } else {
-          const { error } = await supabase.from('games').insert([gameData]);
-          if (error) throw error;
-        }
+        if (upsertError) throw upsertError;
       }
 
       setMessage({ type: 'success', text: 'A meccs mindkét csapathoz rögzítve/aktualizálva lett!' });
@@ -415,8 +400,8 @@ Endo Plus Service-Honvéd`}
           {message && (
             <div className={`p-4 rounded-lg border ${
               message.type === 'success'
-                ? 'bg-emerald-900/20 border-emerald-500/30 text-positive'
-                : 'bg-red-900/20 border-red-500/30 text-negative'
+                ? 'bg-positive/15 border-positive/30 text-positive'
+                : 'bg-negative/15 border-negative/30 text-negative'
             }`}>
               {message.text}
             </div>

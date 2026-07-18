@@ -2,45 +2,8 @@
 import { useState, useCallback, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { getSeasonStatsTable } from '@/lib/season-tables';
+import { mapSupabaseStatToPlayerStats, type SupabasePlayerStat } from '@/lib/player-stat-mapping';
 import type { PlayerStats, TeamGame, GameAggregate, UpcomingFixture, GamePerformance } from '@/lib/dashboard-types';
-
-type SupabasePlayerStat = {
-  player_id: string;
-  name: string;
-  number: number;
-  position: string;
-  season_id: string;
-  season_name: string;
-  is_active?: boolean;
-  birth_year?: number;
-  height?: number;
-  weight?: number;
-  team_id: string;
-  team_name: string;
-  team_short_name: string;
-  games_played: number;
-  total_points: number;
-  total_minutes: number;
-  total_close_made: number;
-  total_close_attempted: number;
-  total_mid_made: number;
-  total_mid_attempted: number;
-  total_three_made: number;
-  total_three_attempted: number;
-  total_free_throw_made: number;
-  total_free_throw_attempted: number;
-  total_offensive_rebounds: number;
-  total_defensive_rebounds: number;
-  total_rebounds: number;
-  total_assists: number;
-  total_steals: number;
-  total_blocks: number;
-  total_turnovers: number;
-  total_fouls_committed: number;
-  total_fouls_drawn: number;
-  total_valuation: number;
-  avg_valuation: number;
-};
 
 type SupabaseGame = {
   id: string;
@@ -308,16 +271,9 @@ export function useGameData(
             }))
             .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
-          const totalFGMade = (ps.total_close_made || 0) + (ps.total_mid_made || 0) + (ps.total_three_made || 0);
+          // Figyelem: az itteni offensiveRating/defensiveRating NEM NBA metrika,
+          // hanem ponthatékonyság és védekezési index (lásd StatInfoTooltip).
           const totalFGAttempted = (ps.total_close_attempted || 0) + (ps.total_mid_attempted || 0) + (ps.total_three_attempted || 0);
-
-          const tsAttempts = totalFGAttempted + (0.44 * (ps.total_free_throw_attempted || 0));
-          const trueShootingPct = tsAttempts > 0 ? ((ps.total_points || 0) / (2 * tsAttempts)) * 100 : 0;
-
-          const effectiveShootingPct = totalFGAttempted > 0
-            ? ((totalFGMade + (0.5 * (ps.total_three_made || 0))) / totalFGAttempted) * 100
-            : 0;
-
           const scoringAttempts = totalFGAttempted + (0.5 * (ps.total_free_throw_attempted || 0));
           const scoringEfficiency = scoringAttempts > 0
             ? ((ps.total_points || 0) / scoringAttempts)
@@ -328,46 +284,12 @@ export function useGameData(
             ? totalDefensiveActions / (ps.games_played || 1)
             : 0;
 
-          return {
-            id: ps.player_id,
-            name: ps.name,
-            number: ps.number,
-            position: ps.position,
-            isActive: playerStatusMap.get(ps.player_id) ?? ps.is_active ?? true,
-            seasonId: ps.season_id,
-            seasonName: ps.season_name,
-            teamId: ps.team_id,
-            teamName: ps.team_name,
-            birthYear: ps.birth_year,
-            height: ps.height,
-            weight: ps.weight,
-            gamesPlayed: ps.games_played || 0,
-            points: ps.total_points || 0,
-            minutes: ps.total_minutes || 0,
-            shooting: {
-              close: { made: ps.total_close_made || 0, attempted: ps.total_close_attempted || 0 },
-              mid: { made: ps.total_mid_made || 0, attempted: ps.total_mid_attempted || 0 },
-              three: { made: ps.total_three_made || 0, attempted: ps.total_three_attempted || 0 },
-              freeThrow: { made: ps.total_free_throw_made || 0, attempted: ps.total_free_throw_attempted || 0 },
-            },
-            rebounds: {
-              offensive: ps.total_offensive_rebounds || 0,
-              defensive: ps.total_defensive_rebounds || 0,
-              total: ps.total_rebounds || 0,
-            },
-            assists: ps.total_assists || 0,
-            steals: ps.total_steals || 0,
-            turnovers: ps.total_turnovers || 0,
-            foulsCommitted: ps.total_fouls_committed || 0,
-            foulsDrawn: ps.total_fouls_drawn ?? 0,
-            blocks: ps.total_blocks || 0,
-            valuation: ps.avg_valuation || 0,
+          return mapSupabaseStatToPlayerStats(ps, {
+            isActiveOverride: playerStatusMap.get(ps.player_id),
+            gameHistory,
             offensiveRating: Math.round(scoringEfficiency * 100) / 100,
             defensiveRating: Math.round(defensiveIndex * 10) / 10,
-            trueShootingPct: Math.round(trueShootingPct * 10) / 10,
-            effectiveShootingPct: Math.round(effectiveShootingPct * 10) / 10,
-            gameHistory,
-          };
+          });
         });
 
       const gamesConverted: TeamGame[] = (gamesData || []).map((g: SupabaseGame) => {

@@ -1,4 +1,5 @@
 'use client';
+import { authFetch } from '@/lib/api-fetch';
 
 import { useState } from 'react';
 import { PlayCircle, Loader2, ShieldAlert } from 'lucide-react';
@@ -56,7 +57,7 @@ export function RoundImport({ selectedSeasonId, selectedSeasonName, onImportComp
     setDurationMs(null);
 
     try {
-      const response = await fetch('/api/hunbasket-round-import', {
+      const response = await authFetch('/api/hunbasket-round-import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -131,7 +132,7 @@ export function RoundImport({ selectedSeasonId, selectedSeasonName, onImportComp
       </CardHeader>
       <CardContent className="space-y-4">
         {!selectedSeasonId && (
-          <div className="flex items-center gap-3 rounded-lg border border-amber-500/40 bg-amber-900/20 px-3 py-2 text-amber-200">
+          <div className="flex items-center gap-3 rounded-lg border border-warning/40 bg-warning/15 px-3 py-2 text-warning">
             <ShieldAlert size={18} strokeWidth={1.6} />
             <span className="text-sm">A forduló importálásához előbb válassz szezont!</span>
           </div>
@@ -238,7 +239,7 @@ export function RoundImport({ selectedSeasonId, selectedSeasonName, onImportComp
                 <Textarea
                   value={stderr}
                   readOnly
-                  className="bg-red-950/30 border-red-500/30 text-negative font-mono text-xs"
+                  className="bg-negative/15 border-negative/40 text-negative font-mono text-xs"
                   style={{ minHeight: 160 }}
                 />
               </div>

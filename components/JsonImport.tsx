@@ -674,13 +674,14 @@ export function JsonImport({ onImportComplete, lastImportedGame, selectedSeasonI
         const oppScoreNum = importingTeamIsHome ? awayScoreNum : homeScoreNum;
         const result = ourScoreNum > oppScoreNum ? 'win' : 'loss';
 
+        // Egységes dedup-kulcs: (season_id, our_team_id, date) – az opponent
+        // névváltozatai miatt szándékosan nem része a keresésnek.
         const { data: targetGame, error: targetGameError } = await supabase
           .from('games')
           .select('id')
           .eq('date', gameData.date)
           .eq('season_id', gameData.season_id)
           .eq('our_team_id', importingTeamId)
-          .eq('opponent', opponentTeamName)
           .maybeSingle();
 
         if (targetGameError) {
@@ -756,14 +757,21 @@ export function JsonImport({ onImportComplete, lastImportedGame, selectedSeasonI
         const result = ourScoreNum > oppScoreNum ? 'win' : 'loss';
         const opponentTeamName = teams.find(t => t.id === (importingTeamIsHome ? awayTeamId : homeTeamId))?.name || 'Ismeretlen';
 
-        // 2. Ellenőrizzük, létezik-e már ilyen meccs erre a csapatra ezen a dátumon
-        const { data: existingGame } = await supabase
+        // 2. Ellenőrizzük, létezik-e már ilyen meccs erre a csapatra ezen a dátumon.
+        // maybeSingle: a korábbi .single() hibára futott, ha nem volt találat.
+        const { data: existingGame, error: existingGameError } = await supabase
           .from('games')
           .select('id')
           .eq('date', gameDate)
           .eq('season_id', selectedSeasonId)
           .eq('our_team_id', importingTeamId)
-          .single();
+          .maybeSingle();
+
+        if (existingGameError) {
+          toast.error(`Hiba a meglévő meccs ellenőrzésekor: ${existingGameError.message}`);
+          setIsLoading(false);
+          return;
+        }
 
         if (existingGame) {
           // Ellenőrizzük, van-e már statisztika ehhez a meccshez
@@ -897,11 +905,33 @@ export function JsonImport({ onImportComplete, lastImportedGame, selectedSeasonI
             .single();
 
           if (playerError) {
-            console.error(`Hiba a játékos beszúrásakor (${player.name}):`, playerError);
-            continue;
-          }
+            // Unique index ütközés (players_season_team_name_unique): a játékos
+            // már létezik kis/nagybetű-eltéréssel – használjuk a meglévő sort.
+            let resolvedId: string | null = null;
+            if (playerError.code === '23505') {
+              const { data: conflicting } = await supabase
+                .from('players')
+                .select('id')
+                .eq('season_id', selectedSeasonId)
+                .eq('team_id', importingTeamId)
+                .ilike('name', player.name)
+                .maybeSingle();
 
-          playerId = newPlayer.id;
+              if (conflicting) {
+                resolvedId = conflicting.id;
+                console.log(`Játékos név-ütközés feloldva: ${player.name} → meglévő rekord`);
+              }
+            }
+
+            if (!resolvedId) {
+              console.error(`Hiba a játékos beszúrásakor (${player.name}):`, playerError);
+              continue;
+            }
+
+            playerId = resolvedId;
+          } else {
+            playerId = newPlayer.id;
+          }
         }
 
         // Ellenőrizzük, hogy már létezik-e ugyanez a játékos ugyanebben a meccsen
@@ -1286,12 +1316,12 @@ export function JsonImport({ onImportComplete, lastImportedGame, selectedSeasonI
                       <th className="text-center p-2 text-secondary" colSpan={2}>Hármas</th>
                       <th className="text-center p-2 text-secondary border-r border-border-subtle" colSpan={2}>Büntető</th>
                       <th className="text-center p-2 text-secondary border-l border-border-subtle" colSpan={3}>Lepattanó</th>
-                      <th className="text-center p-2 text-secondary bg-green-900/10 border-l border-border-subtle" colSpan={2}>Labda</th>
+                      <th className="text-center p-2 text-secondary bg-positive/10 border-l border-border-subtle" colSpan={2}>Labda</th>
                       <th className="text-center p-2 text-secondary border-l border-border-subtle" colSpan={2}>Fault</th>
-                      <th className="text-right p-2 text-secondary bg-amber-900/30 border-l border-border-subtle" rowSpan={2}>GP</th>
+                      <th className="text-right p-2 text-secondary bg-warning/15 border-l border-border-subtle" rowSpan={2}>GP</th>
                       <th className="text-center p-2 text-secondary border-l border-border-subtle" colSpan={2}>Blokk</th>
-                      <th className="text-right p-2 text-secondary bg-purple-900/20 border-l border-border-subtle" rowSpan={2}>VAL</th>
-                      <th className="text-center p-2 text-secondary bg-blue-900/10 border-l border-border-subtle" colSpan={4}>Fejlett stat</th>
+                      <th className="text-right p-2 text-secondary bg-ai/15 border-l border-border-subtle" rowSpan={2}>VAL</th>
+                      <th className="text-center p-2 text-secondary bg-cyan/10 border-l border-border-subtle" colSpan={4}>Fejlett stat</th>
                     </tr>
                     <tr className="border-b border-border-subtle">
                       <th className="text-right p-1 text-muted text-[10px]">S/K</th>
@@ -1305,16 +1335,16 @@ export function JsonImport({ onImportComplete, lastImportedGame, selectedSeasonI
                       <th className="text-right p-1 text-muted text-[10px]">V</th>
                       <th className="text-right p-1 text-muted text-[10px]">T</th>
                       <th className="text-right p-1 text-muted text-[10px]">Ö</th>
-                      <th className="text-right p-1 text-muted text-[10px] bg-green-900/20">SZ</th>
-                      <th className="text-right p-1 text-muted text-[10px] bg-red-900/20">EL</th>
+                      <th className="text-right p-1 text-muted text-[10px] bg-positive/15">SZ</th>
+                      <th className="text-right p-1 text-muted text-[10px] bg-negative/15">EL</th>
                       <th className="text-right p-1 text-muted text-[10px]">SA</th>
                       <th className="text-right p-1 text-muted text-[10px]">KI</th>
                       <th className="text-right p-1 text-muted text-[10px]">SA</th>
                       <th className="text-right p-1 text-muted text-[10px]">KA</th>
-                      <th className="text-right p-1 text-muted text-[10px] bg-emerald-900/20">ORtg</th>
-                      <th className="text-right p-1 text-muted text-[10px] bg-sky-900/20">DRtg</th>
-                      <th className="text-right p-1 text-muted text-[10px] bg-violet-900/20">TS%</th>
-                      <th className="text-right p-1 text-muted text-[10px] bg-orange-900/20">eFG%</th>
+                      <th className="text-right p-1 text-muted text-[10px] bg-positive/15">ORtg</th>
+                      <th className="text-right p-1 text-muted text-[10px] bg-cyan/15">DRtg</th>
+                      <th className="text-right p-1 text-muted text-[10px] bg-ai/15">TS%</th>
+                      <th className="text-right p-1 text-muted text-[10px] bg-orange/15">eFG%</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1342,18 +1372,18 @@ export function JsonImport({ onImportComplete, lastImportedGame, selectedSeasonI
                           <td className="text-right p-2 text-primary border-l border-border-subtle">{player.defensiveRebounds}</td>
                           <td className="text-right p-2 text-primary">{player.offensiveRebounds}</td>
                           <td className="text-right p-2 text-primary font-semibold">{player.totalRebounds}</td>
-                          <td className="text-right p-2 text-positive bg-green-900/20 border-l border-border-subtle font-semibold">{player.steals}</td>
-                          <td className="text-right p-2 text-negative bg-red-900/20 font-semibold">{player.turnovers}</td>
+                          <td className="text-right p-2 text-positive bg-positive/15 border-l border-border-subtle font-semibold">{player.steals}</td>
+                          <td className="text-right p-2 text-negative bg-negative/15 font-semibold">{player.turnovers}</td>
                           <td className="text-right p-2 text-secondary">{player.foulsDrawn}</td>
                           <td className="text-right p-2 text-primary">{player.fouls}</td>
-                          <td className="text-right p-2 text-warning font-bold bg-amber-900/30 text-base border-l border-border-subtle">{player.assists}</td>
+                          <td className="text-right p-2 text-warning font-bold bg-warning/15 text-base border-l border-border-subtle">{player.assists}</td>
                           <td className="text-right p-2 text-secondary border-l border-border-subtle">{player.blocksSuffered}</td>
                           <td className="text-right p-2 text-secondary">{player.blocksGiven}</td>
-                          <td className="text-right p-2 text-ai font-bold bg-purple-900/20 text-base border-l border-border-subtle">{player.valuation}</td>
-                          <td className="text-right p-2 text-positive bg-emerald-900/20 border-l border-border-subtle">{player.offensiveRating.toFixed(1)}</td>
-                          <td className="text-right p-2 text-cyan bg-sky-900/20">{player.defensiveRating.toFixed(1)}</td>
-                          <td className="text-right p-2 text-ai bg-violet-900/20">{player.trueShootingPct.toFixed(1)}%</td>
-                          <td className="text-right p-2 text-orange bg-orange-900/20">{player.effectiveFGPct.toFixed(1)}%</td>
+                          <td className="text-right p-2 text-ai font-bold bg-ai/15 text-base border-l border-border-subtle">{player.valuation}</td>
+                          <td className="text-right p-2 text-positive bg-positive/15 border-l border-border-subtle">{player.offensiveRating.toFixed(1)}</td>
+                          <td className="text-right p-2 text-cyan bg-cyan/15">{player.defensiveRating.toFixed(1)}</td>
+                          <td className="text-right p-2 text-ai bg-ai/15">{player.trueShootingPct.toFixed(1)}%</td>
+                          <td className="text-right p-2 text-orange bg-orange/15">{player.effectiveFGPct.toFixed(1)}%</td>
                         </tr>
                       );
                     })}
@@ -1391,7 +1421,7 @@ export function JsonImport({ onImportComplete, lastImportedGame, selectedSeasonI
                   </p>
                 </div>
 
-                <div className="p-3 bg-amber-900/20 border border-amber-700/50 rounded-lg">
+                <div className="p-3 bg-warning/15 border border-warning/40 rounded-lg">
                   <p className="text-sm text-warning font-semibold mb-2">
                     Ellenőrzési pontok importálás előtt:
                   </p>

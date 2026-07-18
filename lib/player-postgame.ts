@@ -1,4 +1,5 @@
 import type { PlayerGameStat, Position } from './postgame-report';
+import { trueShootingPct } from './stat-formulas';
 
 export type PlayerMinutesBucket = 'micro' | 'rotation' | 'heavy';
 export type PlayerUsageTier = 'low' | 'balanced' | 'high';
@@ -286,12 +287,8 @@ const classifyImpact = (
   return 'struggling';
 };
 
-const computeTrueShooting = (player: PlayerGameStat) => {
-  const fga = player.fga2 + player.fga3;
-  const denom = fga + 0.44 * player.fta;
-  if (denom <= 0) return 0;
-  return (player.points / (2 * denom)) * 100;
-};
+const computeTrueShooting = (player: PlayerGameStat) =>
+  trueShootingPct(player.points, player.fga2 + player.fga3, player.fta);
 
 const buildSummaryLine = (player: PlayerGameStat, context: DerivedPlayerContext, usageShare: number) => {
   const rebounds = player.oreb + player.dreb;

@@ -734,7 +734,9 @@ export const normalizeTeamStats = (raw: TeamSeasonStat): NormalizedTeamStats => 
   const turnoverRate = teamPossessionsPerGame > 0 ? (raw.tov / games) / teamPossessionsPerGame : 0;
   const ortg = teamPossessions > 0 ? (raw.pointsFor / teamPossessions) * 100 : 0;
   const drtg = opponentPossessions > 0 ? (raw.pointsAgainst / opponentPossessions) * 100 : 0;
-  const netRtg = ortg > 0 && drtg > 0 ? ortg - drtg : 0;
+  // A netRtg akkor számolható, ha mindkét oldal birtoklásszáma ismert – egy
+  // legitim 0 értékű rating nem nullázhatja ki a különbséget.
+  const netRtg = teamPossessions > 0 && opponentPossessions > 0 ? ortg - drtg : 0;
   const orebDenominator = raw.oreb + raw.opponent.dreb;
   const orebRate = orebDenominator > 0 ? raw.oreb / orebDenominator : 0;
   const twoRate = fga > 0 ? raw.fga2 / fga : 0;

@@ -1,19 +1,8 @@
 import { chromium, type Page } from 'playwright';
-import { createClient } from '@supabase/supabase-js';
 import * as dotenv from 'dotenv';
+import { normalizeName, cleanTeamName, findTeamByNameStrict, createScriptClient } from './scrape-utils';
 
 dotenv.config({ path: '.env.local' });
-
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-
-if (!SUPABASE_URL || (!SUPABASE_ANON_KEY && !SUPABASE_SERVICE_ROLE_KEY)) {
-  console.error('❌ HIBA: Hiányzó Supabase környezeti változók!');
-  process.exit(1);
-}
-
-const SUPABASE_KEY = SUPABASE_SERVICE_ROLE_KEY || SUPABASE_ANON_KEY;
 
 const HUNBASKET_SEASON_SLUG = process.env.HUNBASKET_SEASON_SLUG || 'x2526';
 const HUNBASKET_SEASON_NAME = process.env.HUNBASKET_SEASON_NAME || '2025/2026';
@@ -28,9 +17,7 @@ const TEAM_FILTER = (process.env.HUNBASKET_TEAM_FILTER || '')
   .map(value => value.trim())
   .filter(Boolean);
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
-  auth: { persistSession: false },
-});
+const supabase = createScriptClient();
 
 const POSITION_LABELS: Record<string, string> = {
   '1': 'Irányító',
@@ -79,27 +66,6 @@ type SyncSummary = {
   deactivated: number;
 };
 
-const normalizeName = (value: string) =>
-  value
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/\p{Diacritic}/gu, '')
-    .replace(/[^a-z0-9\s-]/g, '')
-    .trim();
-
-const buildAbbreviation = (value: string) =>
-  value
-    .split(/[\s-]+/)
-    .filter(Boolean)
-    .map(token => (token.length <= 2 ? token : token[0]))
-    .join('');
-
-const cleanTeamName = (value: string) =>
-  value
-    .replace(/first teams logo|second teams logo|logo/gi, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-
 const cleanPlayerName = (value: string) =>
   value
     .replace(/player avatar/gi, '')
@@ -130,20 +96,7 @@ const refreshTeamCache = async () => {
   cachedTeams = data || [];
 };
 
-const findTeamInCache = (name: string) => {
-  const normalizedTarget = normalizeName(name);
-  if (!normalizedTarget) return undefined;
-
-  return (
-    cachedTeams.find(team => normalizeName(team.name) === normalizedTarget)
-    || cachedTeams.find(team => team.short_name && normalizeName(team.short_name) === normalizedTarget)
-    || cachedTeams.find(team => {
-      const teamAbbr = buildAbbreviation(normalizeName(team.name));
-      const targetAbbr = buildAbbreviation(normalizedTarget);
-      return Boolean(teamAbbr) && teamAbbr === targetAbbr;
-    })
-  );
-};
+const findTeamInCache = (name: string) => findTeamByNameStrict(cachedTeams, name);
 
 const ensureTeam = async (name: string): Promise<TeamRecord> => {
   const cleanedName = cleanTeamName(name);

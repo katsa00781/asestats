@@ -1,4 +1,5 @@
 'use client';
+import { authFetch } from '@/lib/api-fetch';
 
 import { TerminologyGlossary } from './TerminologyGlossary';
 import Image from 'next/image';
@@ -18,6 +19,7 @@ import { Tooltip as UiTooltip, TooltipContent, TooltipProvider, TooltipTrigger }
 import { PostgameShotScatterChart } from '@/components/PostgameShotScatterChart';
 import { PostgameZoneHeatmapChart } from '@/components/PostgameZoneHeatmapChart';
 import { supabase, type Database } from '@/lib/supabase';
+import { fetchAllRows } from '@/lib/fetch-all-rows';
 import { buildPositionMetadata } from '@/lib/positions';
 import type { PlayerStats, TeamGame, GameAggregate } from '@/lib/dashboard-types';
 import {
@@ -2213,6 +2215,10 @@ const shotDeltaTone = (value: number) => {
 
 const normalizeShotX = (point: ShotPoint) => (point.shotSide === 'away' ? 100 - point.x : point.x);
 
+// Koordináta-konvenció: normalizálás után minden dobás a bal palánk felé támad,
+// a kosár a (x≈6, y=50) pontban van a 0–100-as pályahossz/pályaszélesség skálán.
+// A sarok-hármas ezért az alapvonal KÖZELÉBEN (kis x) és az oldalvonalaknál
+// (szélső y) van – nem nagy x-nél.
 const classifyShotZone = (point: ShotPoint): ShotZoneKey => {
   const x = normalizeShotX(point);
   const y = point.y;
@@ -2223,7 +2229,7 @@ const classifyShotZone = (point: ShotPoint): ShotZoneKey => {
   if (distance <= 9) return 'rim';
   if (distance <= 18) return 'paint';
 
-  const isCorner3 = x >= 25 && (y <= 14 || y >= 86);
+  const isCorner3 = x <= 14 && (y <= 14 || y >= 86);
   if (isCorner3) return 'corner3';
 
   if (distance >= 29) return 'aboveBreak3';
@@ -2281,6 +2287,10 @@ const buildShotProfileSummary = (points: ShotPoint[]): ShotProfileSummary => {
   };
 };
 
+// Egyszerűsített PIR-közelítés, KIZÁRÓLAG fallbackként, ha nincs DB-ben tárolt
+// valuation. A hivatalos hunbasket VAL tartalmazza a kiharcolt/elkövetett
+// faultokat is, de a fouls_drawn adat jelenleg megbízhatatlan (mindig 0),
+// ezért itt szándékosan kimarad – a tárolt érték az elsődleges forrás.
 const computeTotalValuation = (player: PlayerStats) => {
   const fga2 = (player.shooting?.close?.attempted || 0) + (player.shooting?.mid?.attempted || 0);
   const fgm2 = (player.shooting?.close?.made || 0) + (player.shooting?.mid?.made || 0);
@@ -2800,7 +2810,7 @@ export function SeasonComparison({
     if (!selectedPlayer || !resolvedSeasonId || !manualPlayerText.trim()) return;
     setSavingManualPlayer(true);
     try {
-      const resp = await fetch('/api/save-manual-report', {
+      const resp = await authFetch('/api/save-manual-report', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -2827,7 +2837,7 @@ export function SeasonComparison({
     if (!resolvedSeasonId || !resolvedTeamId || resolvedTeamId === 'all' || !manualTeamText.trim()) return;
     setSavingManualTeam(true);
     try {
-      const resp = await fetch('/api/save-manual-report', {
+      const resp = await authFetch('/api/save-manual-report', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -2852,7 +2862,7 @@ export function SeasonComparison({
     if (!selectedGameId || !manualPregameText.trim()) return;
     setSavingManualPregame(true);
     try {
-      const resp = await fetch('/api/save-manual-report', {
+      const resp = await authFetch('/api/save-manual-report', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -2877,7 +2887,7 @@ export function SeasonComparison({
     if (!selectedGameId || !manualPostgameText.trim()) return;
     setSavingManualPostgame(true);
     try {
-      const resp = await fetch('/api/save-manual-report', {
+      const resp = await authFetch('/api/save-manual-report', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -2965,19 +2975,19 @@ export function SeasonComparison({
       }
 
       try {
-        const { data, error } = await supabase
-          .from('hunbasket_shot_events' as never)
-          .select('player_id, x, y, is_successful, shot_side')
-          .eq('season_id', resolvedSeasonId)
-          .eq('team_id', resolvedTeamId);
-
-        if (error || !Array.isArray(data)) {
-          if (!cancelled) setTeamSeasonShotRows([]);
-          return;
-        }
+        // Lapozva, mert egy csapat szezonja 1000 dobás fölé nő (PostgREST limit).
+        const data = await fetchAllRows<ShotEventRow>((from, to) =>
+          supabase
+            .from('hunbasket_shot_events' as never)
+            .select('player_id, x, y, is_successful, shot_side')
+            .eq('season_id', resolvedSeasonId)
+            .eq('team_id', resolvedTeamId)
+            .order('id')
+            .range(from, to)
+        );
 
         if (!cancelled) {
-          setTeamSeasonShotRows(data as ShotEventRow[]);
+          setTeamSeasonShotRows(data);
         }
       } catch {
         if (!cancelled) setTeamSeasonShotRows([]);
@@ -3001,19 +3011,18 @@ export function SeasonComparison({
       }
 
       try {
-        const { data, error } = await supabase
-          .from('hunbasket_shot_events' as never)
-          .select('player_id, x, y, is_successful, shot_side')
-          .eq('season_id', resolvedSeasonId)
-          .eq('team_id', selectedOpponentTeamId);
-
-        if (error || !Array.isArray(data)) {
-          if (!cancelled) setOpponentSeasonShotRows([]);
-          return;
-        }
+        const data = await fetchAllRows<ShotEventRow>((from, to) =>
+          supabase
+            .from('hunbasket_shot_events' as never)
+            .select('player_id, x, y, is_successful, shot_side')
+            .eq('season_id', resolvedSeasonId)
+            .eq('team_id', selectedOpponentTeamId)
+            .order('id')
+            .range(from, to)
+        );
 
         if (!cancelled) {
-          setOpponentSeasonShotRows(data as ShotEventRow[]);
+          setOpponentSeasonShotRows(data);
         }
       } catch {
         if (!cancelled) setOpponentSeasonShotRows([]);
@@ -3060,19 +3069,18 @@ export function SeasonComparison({
           return;
         }
 
-        const { data: shotData, error: shotError } = await supabase
-          .from('hunbasket_shot_events' as never)
-          .select('raw_game_id, team_id, player_id, x, y, is_successful, shot_side')
-          .in('raw_game_id', rawIds)
-          .neq('team_id', teamId);
-
-        if (shotError || !Array.isArray(shotData)) {
-          if (!cancelled) setter([]);
-          return;
-        }
+        const shotData = await fetchAllRows<ShotEventRow>((from, to) =>
+          supabase
+            .from('hunbasket_shot_events' as never)
+            .select('raw_game_id, team_id, player_id, x, y, is_successful, shot_side')
+            .in('raw_game_id', rawIds)
+            .neq('team_id', teamId)
+            .order('id')
+            .range(from, to)
+        );
 
         if (!cancelled) {
-          setter(shotData as ShotEventRow[]);
+          setter(shotData);
         }
       } catch {
         if (!cancelled) setter([]);
@@ -4327,18 +4335,18 @@ export function SeasonComparison({
       }
 
       try {
-        const { data, error } = await supabase
-          .from('hunbasket_shot_events' as never)
-          .select('player_id, x, y, is_successful, shot_side')
-          .eq('season_id', resolvedSeasonId);
-
-        if (error || !Array.isArray(data)) {
-          if (!cancelled) setLeagueSeasonShotRows([]);
-          return;
-        }
+        // Liga-szintű szezon: több tízezer dobás – lapozás nélkül a PostgREST 1000-nél csonkolna.
+        const data = await fetchAllRows<ShotEventRow>((from, to) =>
+          supabase
+            .from('hunbasket_shot_events' as never)
+            .select('player_id, x, y, is_successful, shot_side')
+            .eq('season_id', resolvedSeasonId)
+            .order('id')
+            .range(from, to)
+        );
 
         if (!cancelled) {
-          setLeagueSeasonShotRows(data as ShotEventRow[]);
+          setLeagueSeasonShotRows(data);
         }
       } catch {
         if (!cancelled) setLeagueSeasonShotRows([]);
@@ -4533,19 +4541,18 @@ export function SeasonComparison({
       }
 
       try {
-        const { data, error } = await supabase
-          .from('hunbasket_shot_events' as never)
-          .select('player_id, x, y, is_successful, shot_side')
-          .eq('season_id', resolvedSeasonId)
-          .eq('player_id', selectedPlayerId);
-
-        if (error || !Array.isArray(data)) {
-          if (!cancelled) setPlayerSeasonShotRows([]);
-          return;
-        }
+        const data = await fetchAllRows<ShotEventRow>((from, to) =>
+          supabase
+            .from('hunbasket_shot_events' as never)
+            .select('player_id, x, y, is_successful, shot_side')
+            .eq('season_id', resolvedSeasonId)
+            .eq('player_id', selectedPlayerId)
+            .order('id')
+            .range(from, to)
+        );
 
         if (!cancelled) {
-          setPlayerSeasonShotRows(data as ShotEventRow[]);
+          setPlayerSeasonShotRows(data);
         }
       } catch {
         if (!cancelled) setPlayerSeasonShotRows([]);
@@ -5062,7 +5069,7 @@ export function SeasonComparison({
       let selectedProfileUrl = forcedProfileUrl;
 
       if (!selectedProfileUrl) {
-        const searchResponse = await fetch('/api/eurobasket-player-import', {
+        const searchResponse = await authFetch('/api/eurobasket-player-import', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ mode: 'search', playerName: name, maxCandidates: 12 }),
@@ -5091,7 +5098,7 @@ export function SeasonComparison({
         selectedProfileUrl = searchPayload.candidates[0].profileUrl;
       }
 
-      const response = await fetch('/api/eurobasket-player-import', {
+      const response = await authFetch('/api/eurobasket-player-import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ mode: 'import', playerName: name, profileUrl: selectedProfileUrl }),
@@ -5382,17 +5389,21 @@ export function SeasonComparison({
           return;
         }
 
-        const [{ data: gameEventsData }, { data: seasonEventsData }] = await Promise.all([
+        const [{ data: gameEventsData }, seasonEventsData] = await Promise.all([
           supabase
             .from('hunbasket_shot_events' as never)
             .select('player_id, x, y, is_successful, shot_side')
             .eq('raw_game_id', selectedRaw.id)
             .eq('team_id', resolvedTeamId),
-          supabase
-            .from('hunbasket_shot_events' as never)
-            .select('player_id, x, y, is_successful, shot_side')
-            .eq('season_id', resolvedSeasonId)
-            .eq('team_id', resolvedTeamId),
+          fetchAllRows<ShotEventRow>((from, to) =>
+            supabase
+              .from('hunbasket_shot_events' as never)
+              .select('player_id, x, y, is_successful, shot_side')
+              .eq('season_id', resolvedSeasonId)
+              .eq('team_id', resolvedTeamId)
+              .order('id')
+              .range(from, to)
+          ),
         ]);
 
         if (cancelled) return;
@@ -10501,7 +10512,7 @@ export function SeasonComparison({
       const opponentTeamNamePayload =
         pregameOpponentTeam?.teamName ?? pregameReport.opponentTeamName;
 
-      const response = await fetch('/api/generate-pregame-text', {
+      const response = await authFetch('/api/generate-pregame-text', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -10584,7 +10595,7 @@ export function SeasonComparison({
     setIsGeneratingTextReport(true);
     setTextReportError(null);
     try {
-      const response = await fetch('/api/generate-game-text-report', {
+      const response = await authFetch('/api/generate-game-text-report', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -10629,7 +10640,7 @@ export function SeasonComparison({
     setTeamNarrative({ status: 'loading' });
 
     try {
-      const response = await fetch('/api/generate-team-analysis-text', {
+      const response = await authFetch('/api/generate-team-analysis-text', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -10693,7 +10704,7 @@ export function SeasonComparison({
     }));
 
     try {
-      const response = await fetch('/api/generate-player-season-text', {
+      const response = await authFetch('/api/generate-player-season-text', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -10771,7 +10782,7 @@ export function SeasonComparison({
     setPlayerSeasonSaveStatus(null);
 
     try {
-      const response = await fetch('/api/player-text-report', {
+      const response = await authFetch('/api/player-text-report', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -10847,7 +10858,7 @@ export function SeasonComparison({
     }));
 
     try {
-      const response = await fetch('/api/generate-player-postgame-text', {
+      const response = await authFetch('/api/generate-player-postgame-text', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

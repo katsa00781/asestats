@@ -2,6 +2,7 @@ import type { PlayerStats, TeamGame, GameAggregate } from './dashboard-types';
 import type { ScoutingReport } from './pregame-scouting';
 import type { PostGameReport } from './postgame-report';
 import type { KosarstatGameClutch } from './kosarstat-clutch-parse';
+import { trueShootingPct, effectiveFgPct } from './stat-formulas';
 
 function fmtPct(made: number, attempted: number): string {
   return attempted > 0 ? `${((made / attempted) * 100).toFixed(1)}%` : '-';
@@ -108,10 +109,8 @@ export function gameStatsToMd(
   const fgm = fgm2 + fgm3;
   const fta = game.free_throw_attempted;
 
-  const efg = fga > 0 ? ((fgm + 0.5 * fgm3) / fga) * 100 : 0;
-  const ts = fga > 0 || fta > 0
-    ? (game.total_points / (2 * (fga + 0.44 * fta))) * 100
-    : 0;
+  const efg = effectiveFgPct(fgm, fgm3, fga);
+  const ts = trueShootingPct(game.total_points, fga, fta);
   const possEst = fga + 0.44 * fta + game.turnovers - game.offensive_rebounds;
   const toRate = possEst > 0 ? (game.turnovers / possEst) * 100 : 0;
   const assistRate = fgm > 0 ? (game.assists / fgm) * 100 : 0;
@@ -129,10 +128,8 @@ export function gameStatsToMd(
   const avgFga = avgFga2 + avgFga3;
   const avgFgm = avgFgm2 + avgFgm3;
   const avgFta = game.avg_free_throw_attempted;
-  const avgEfg = avgFga > 0 ? ((avgFgm + 0.5 * avgFgm3) / avgFga) * 100 : 0;
-  const avgTs = avgFga > 0 || avgFta > 0
-    ? (game.avg_total_points / (2 * (avgFga + 0.44 * avgFta))) * 100
-    : 0;
+  const avgEfg = effectiveFgPct(avgFgm, avgFgm3, avgFga);
+  const avgTs = trueShootingPct(game.avg_total_points, avgFga, avgFta);
   const avgFtRate = avgFga > 0 ? (avgFta / avgFga) * 100 : 0;
 
   const lines: string[] = [
@@ -439,8 +436,8 @@ export function teamStatsToMd(
   const fgm  = fgm2 + fgm3;
   const fta  = aggFtAttempted;
 
-  const teamEfg       = fga > 0 ? (fgm + 0.5 * fgm3) / fga * 100 : 0;
-  const teamTs        = (fga + 0.44 * fta) > 0 ? totalPoints / (2 * (fga + 0.44 * fta)) * 100 : 0;
+  const teamEfg       = effectiveFgPct(fgm, fgm3, fga);
+  const teamTs        = trueShootingPct(totalPoints, fga, fta);
   const teamAssistRate = fgm > 0 ? totalAst / fgm * 100 : 0;
   const teamPossEst   = fga + 0.44 * fta + totalTov - totalOreb;
   const teamToRate    = teamPossEst > 0 ? totalTov / teamPossEst * 100 : 0;
