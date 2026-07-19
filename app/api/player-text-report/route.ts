@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { requireAuth } from '@/lib/api-auth';
+import { requireAdmin } from '@/lib/api-auth';
 import { getSupabaseAdmin } from '@/lib/supabase-admin';
 
 export const runtime = 'nodejs';
@@ -19,7 +19,7 @@ type SavePlayerTextPayload = {
 };
 
 export async function POST(request: Request) {
-  const auth = await requireAuth(request);
+  const auth = await requireAdmin(request);
   if (!auth.ok) return auth.response;
 
   const payload = (await request.json().catch(() => null)) as SavePlayerTextPayload | null;

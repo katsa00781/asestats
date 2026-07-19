@@ -11,6 +11,7 @@ import { Trophy, Target, TrendingUp, Users, Award, Activity, Download, Save, Cli
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { toast } from 'sonner';
 import { teamStatsToMd } from '@/lib/export-to-md';
+import { CHART_COLORS, CHART_GRID, CHART_AXIS, RECHARTS_TOOLTIP_STYLE, RECHARTS_LEGEND_STYLE } from '@/lib/chart-theme';
 
 type TeamStatisticsProps = {
   players: PlayerStats[];
@@ -118,7 +119,7 @@ export function TeamStatistics({ players, games, gameStats, teamName, seasonId, 
     return acc;
   }, [] as PositionData[]);
 
-  const COLORS = ['#10b981', '#06b6d4', '#8b5cf6', '#f59e0b', '#ec4899'];
+  const COLORS = [CHART_COLORS.positive, CHART_COLORS.cyan, CHART_COLORS.ai, CHART_COLORS.orange, CHART_COLORS.warning];
 
   const totalShooting = players.reduce(
     (acc, player) => {
@@ -318,15 +319,15 @@ export function TeamStatistics({ players, games, gameStats, teamName, seasonId, 
           <CardContent>
             <ResponsiveContainer width="100%" height={250} className="text-xs sm:text-sm">
               <BarChart data={shootingStats}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                <XAxis dataKey="category" stroke="#94a3b8" fontSize={12} />
-                <YAxis stroke="#94a3b8" fontSize={12} />
+                <CartesianGrid strokeDasharray={CHART_GRID.strokeDashed} stroke={CHART_GRID.stroke} />
+                <XAxis dataKey="category" stroke={CHART_AXIS.stroke} fontSize={12} />
+                <YAxis stroke={CHART_AXIS.stroke} fontSize={12} />
                 <Tooltip
-                  contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px', fontSize: '12px' }}
-                  labelStyle={{ color: '#e2e8f0' }}
+                  contentStyle={RECHARTS_TOOLTIP_STYLE}
+                  labelStyle={{ color: CHART_COLORS.primary }}
                 />
-                <Legend wrapperStyle={{ color: '#94a3b8', fontSize: '12px' }} />
-                <Bar dataKey="percentage" fill="#10b981" name="Százalék %" radius={[8, 8, 0, 0]} />
+                <Legend wrapperStyle={RECHARTS_LEGEND_STYLE} />
+                <Bar dataKey="percentage" fill={CHART_COLORS.positive} name="Százalék %" radius={[8, 8, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-4">
@@ -359,7 +360,7 @@ export function TeamStatistics({ players, games, gameStats, teamName, seasonId, 
                   labelLine={false}
                   label={({ name, percent }) => name && percent ? `${name} ${(percent * 100).toFixed(0)}%` : ''}
                   outerRadius={100}
-                  fill="#8884d8"
+                  fill={CHART_COLORS.ai}
                   dataKey="points"
                   nameKey="position"
                 >
@@ -368,7 +369,7 @@ export function TeamStatistics({ players, games, gameStats, teamName, seasonId, 
                   ))}
                 </Pie>
                 <Tooltip
-                  contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }}
+                  contentStyle={RECHARTS_TOOLTIP_STYLE}
                 />
               </PieChart>
             </ResponsiveContainer>
@@ -386,17 +387,17 @@ export function TeamStatistics({ players, games, gameStats, teamName, seasonId, 
         <CardContent>
           <ResponsiveContainer width="100%" height={300} className="text-xs sm:text-sm">
             <BarChart data={playerComparison}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-              <XAxis dataKey="name" stroke="#94a3b8" fontSize={10} angle={-45} textAnchor="end" height={80} />
-              <YAxis stroke="#94a3b8" fontSize={12} />
+              <CartesianGrid strokeDasharray={CHART_GRID.strokeDashed} stroke={CHART_GRID.stroke} />
+              <XAxis dataKey="name" stroke={CHART_AXIS.stroke} fontSize={10} angle={-45} textAnchor="end" height={80} />
+              <YAxis stroke={CHART_AXIS.stroke} fontSize={12} />
               <Tooltip
-                contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px', fontSize: '12px' }}
-                labelStyle={{ color: '#e2e8f0' }}
+                contentStyle={RECHARTS_TOOLTIP_STYLE}
+                labelStyle={{ color: CHART_COLORS.primary }}
               />
-              <Legend wrapperStyle={{ color: '#94a3b8', fontSize: '12px' }} />
-              <Bar dataKey="Pontok" fill="#10b981" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="Lepattanók" fill="#06b6d4" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="Gólpasszok" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
+              <Legend wrapperStyle={RECHARTS_LEGEND_STYLE} />
+              <Bar dataKey="Pontok" fill={CHART_COLORS.positive} radius={[4, 4, 0, 0]} />
+              <Bar dataKey="Lepattanók" fill={CHART_COLORS.cyan} radius={[4, 4, 0, 0]} />
+              <Bar dataKey="Gólpasszok" fill={CHART_COLORS.ai} radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </CardContent>

@@ -1,50 +1,30 @@
 # HOWTO: Új szezon hozzáadása
 
-Minden bajnoki szezon elején el kell végezni az alábbi lépéseket. A folyamat két részből áll: SQL migráció és kód módosítás.
+Minden bajnoki szezon előtt/elején el kell végezni az alábbi lépéseket. A folyamat egy nagy SQL migrációból és egy apró kód-ellenőrzésből áll.
+
+**A 2026/2027 szezonra ez már elkészült**: `migrations/add-player-game-stats-2026-2027.sql` és a `lib/season-tables.ts` mapping létezik – csak a migráció futtatása és a szezonkezdési checklist van hátra (lásd alul).
 
 ---
 
-## 1. SQL migráció – új szezonspecifikus tábla
+## 1. SQL migráció – egy fájl, minden lépés
 
-Hozz létre egy új fájlt `migrations/` mappában, pl. `add-player-game-stats-2026-2027.sql`:
+Egy új szezon SQL-oldali bevezetése **egyetlen migrációs fájlban** történik (ld. `migrations/add-player-game-stats-2026-2027.sql` mintaként), mert a `player_game_stats` UNION view és a hozzá tartozó INSTEAD OF triggerek minden szezontáblát ismerniük kell újradefiniáláskor. A fájl az alábbi 7 lépést tartalmazza, egymás után, egy futtatásban:
 
-```sql
--- Új szezonspecifikus statisztikatábla: 2026/2027
-CREATE TABLE IF NOT EXISTS player_game_stats_2026_2027 (
-  LIKE player_game_stats_2025_2026 INCLUDING ALL
-);
+1. **Új szezonspecifikus tábla** – `CREATE TABLE IF NOT EXISTS player_game_stats_YYYY_YYYY (LIKE player_game_stats_<előző_szezon> INCLUDING ALL)`, majd az FK-k (`fk_game`, `fk_player`) explicit újralétrehozása `DO $$ ... $$` guard mögött (a `LIKE` nem örökli az FK-kat), és a két index (`game_id`, `player_id`).
+2. **RLS** – `ENABLE ROW LEVEL SECURITY` + SELECT/INSERT/UPDATE/DELETE policyk az új táblára, `GRANT` `anon`/`authenticated`-nek. (Ha az `extend-rbac-standings-teams.sql`/`add-rbac-rls.sql` admin-only RLS már be van vezetve, ez a lépés is admin-only policykra frissítendő – lásd 2. lábjegyzet alul.)
+3. **`player_game_stats` UNION view újradefiniálása** – `CREATE OR REPLACE VIEW`, hozzáadva az új `UNION ALL SELECT * FROM player_game_stats_YYYY_YYYY` ágat.
+4. **3 INSTEAD OF trigger újradefiniálása** (`route_pgs_insert`, `route_pgs_update`, `route_pgs_delete`) – ezek a view-ra írt INSERT/UPDATE/DELETE-et irányítják a megfelelő szezontáblára `season_id` alapján; az új szezon `season_id`-ját is fel kell venni az elágazásba.
+5. **`player_season_stats_by_season` + `player_season_stats` view-k újradefiniálása** – az aggregált szezon-statisztika view-k, amik minden szezontáblát UNION-olnak.
+6. **Új sor a `seasons` táblában** – `INSERT ... ON CONFLICT (name) DO NOTHING`, **`is_current = false`** (lásd a szezonkezdési checklistet alul, mielőtt igazra állítanád).
+7. **Ellenőrző SELECT** a `seasons` táblából.
 
-ALTER TABLE player_game_stats_2026_2027
-  ADD CONSTRAINT fk_game FOREIGN KEY (game_id) REFERENCES games(id) ON DELETE CASCADE,
-  ADD CONSTRAINT fk_player FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE CASCADE;
+**Futtasd le teljes egészében** a Supabase SQL Editorban – a fájl idempotens (`IF NOT EXISTS`/`DROP POLICY IF EXISTS`/`ON CONFLICT` mintákkal), újrafuttatható hiba esetén.
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON player_game_stats_2026_2027 TO authenticated;
-GRANT SELECT ON player_game_stats_2026_2027 TO anon;
-```
-
-> **Megjegyzés:** A legegyszerűbb a `LIKE ... INCLUDING ALL` forma, ami minden oszlopot, indexet és megszorítást lemásol az előző szezon táblájából. Az FK-kat explicit újra kell adni, mert azokat a `LIKE` nem örökíti.
-
-**Futtasd le** a Supabase SQL Editorban (nem a kódból!).
+> **FONTOS**: amíg a migráció nincs lefuttatva, de a `lib/season-tables.ts` mapping már tartalmazza az új szezont, a `hooks/useFilterData.ts` minden `ALL_SEASON_STATS_TABLES` táblát lekérdez – ha egy tábla hiányzik, a szűrő-betöltés hibázik. A kód-lépés (2. pont) csak a migráció UTÁN kerüljön be, vagy a migrációt azonnal futtasd le a kód-módosítással egy időben.
 
 ---
 
-## 2. A UNION view frissítése
-
-A meglévő `player_game_stats` UNION view-t is bővíteni kell az új táblával. Fűzd hozzá a `migrations/split-player-game-stats-by-season.sql` mintájára az UNION ágat:
-
-```sql
--- A player_game_stats view-ban add hozzá:
-UNION ALL
-SELECT * FROM player_game_stats_2026_2027
-```
-
-Ezt szintén a Supabase SQL Editorban kell futtatni, mert a view-t újra kell definiálni `CREATE OR REPLACE VIEW` formában.
-
----
-
-## 3. `lib/season-tables.ts` – mapping bővítése
-
-Nyisd meg [lib/season-tables.ts](lib/season-tables.ts) és add hozzá az új szezont:
+## 2. `lib/season-tables.ts` – mapping bővítése
 
 ```ts
 export const SEASON_STATS_TABLES: Record<string, string> = {
@@ -55,19 +35,22 @@ export const SEASON_STATS_TABLES: Record<string, string> = {
 } as const;
 ```
 
+Az `ALL_SEASON_STATS_TABLES` és a `getSeasonStatsTable()` automatikusan a bővített mappingből dolgozik – nincs más kód-hely, amit módosítani kellene (a `getSeasonStatsTable()`-t mindenhol hívni kell, sehol nem szabad új hardcoded táblanevet írni – lásd a `components/Updates.tsx` 2026-07-19-es javítását, ahol egy hardcoded `player_game_stats_2025_2026` hivatkozás lecserélődött erre a mintára).
+
 ---
 
-## 4. Új szezon felvétele a `seasons` táblába
+## 3. RBAC – ha az admin-only írásvédelem már be van vezetve
 
-A Supabase SQL Editorban vagy az adminfelületen add hozzá a szezont:
+Ha a `migrations/add-rbac-rls.sql` már le van futtatva (admin-only INSERT/UPDATE/DELETE a szezontáblákon), az 1. lépés RLS-policyi helyett ugyanezt az admin-only mintát kell alkalmazni az új szezontáblára is – az `add-rbac-rls.sql` fájl már tartalmaz egy `DO $$ IF EXISTS (... 'player_game_stats_2026_2027') ... $$` blokkot erre, ami újrafuttatható, ha az új tábla már létezik.
 
-```sql
-INSERT INTO seasons (name, start_date, end_date, is_current)
-VALUES ('2026/2027', '2026-09-01', '2027-06-30', true);
+---
 
--- Az előző szezont állítsd inaktívra:
-UPDATE seasons SET is_current = false WHERE name = '2025/2026';
-```
+## 4. Szezonkezdési checklist (amikor a bajnokság ténylegesen elindul)
+
+- [ ] `UPDATE seasons SET is_current = false WHERE name = '<előző szezon>';`
+- [ ] `UPDATE seasons SET is_current = true WHERE name = '<új szezon>';`
+- [ ] GitHub Actions repo variables átállítása: `HUNBASKET_SEASON_SLUG`, `HUNBASKET_SEASON_NAME`, `KOSARSTAT_SEASON_NAME` (`.github/workflows/scrape.yml`)
+- [ ] Első kör import: `npm run hunbasket:fixtures`, majd `npm run hunbasket:import`
 
 ---
 
@@ -75,15 +58,14 @@ UPDATE seasons SET is_current = false WHERE name = '2025/2026';
 
 - Indítsd el a dev szervert: `npm run dev`
 - Nyisd meg a dashboardot, válaszd ki az új szezont a SeasonSelector-ban
-- Ellenőrizd, hogy a játékosnézetek helyesen töltődnek be (üres lista az elvárt – még nincsenek meccsek)
+- Ellenőrizd, hogy a nézetek helyesen töltődnek be (üres lista az elvárt – még nincsenek meccsek)
 - Futtasd az első kör importját: `npm run hunbasket:import`
 
 ---
 
-## Összefoglaló checklist
+## Összefoglaló checklist – új szezon SQL-előkészítése
 
-- [ ] SQL: `player_game_stats_2026_2027` tábla létrehozva (Supabase SQL Editor)
-- [ ] SQL: `player_game_stats` UNION view frissítve (Supabase SQL Editor)
-- [ ] SQL: új sor a `seasons` táblában, előző szezon `is_current = false`
+- [ ] SQL migráció (`migrations/add-player-game-stats-YYYY-YYYY.sql`) megírva és lefuttatva: tábla + RLS + UNION view + 3 trigger + aggregált view-k + `seasons` sor (`is_current=false`)
 - [ ] Kód: `lib/season-tables.ts` bővítve
-- [ ] Teszt: dev szerver és SeasonSelector ellenőrzés
+- [ ] Teszt: dev szerver és SeasonSelector ellenőrzés (üres, de hibamentes nézetek)
+- [ ] Amikor a szezon ténylegesen indul: lásd a fenti "Szezonkezdési checklist"-et

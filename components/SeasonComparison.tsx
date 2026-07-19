@@ -9,6 +9,7 @@ import { playerSeasonToMd, teamStatsToMd, pregameReportToMd, postgameReportToMd 
 import { useEffect, useMemo, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, Cell, LabelList, Legend, Line, LineChart, ResponsiveContainer, Scatter, ScatterChart, Tooltip, XAxis, YAxis, ZAxis } from 'recharts';
 import type { Props as RechartsLabelProps } from 'recharts/types/component/Label';
+import { CHART_COLORS, CHART_GRID, CHART_AXIS, RECHARTS_TOOLTIP_STYLE } from '@/lib/chart-theme';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
@@ -2920,6 +2921,25 @@ export function SeasonComparison({
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return value;
     return new Intl.DateTimeFormat('hu-HU', { dateStyle: 'medium', timeStyle: 'short' }).format(date);
+  };
+
+  // A szezon legutóbbi meccsének dátuma – ha ennél régebbi egy riport generálási
+  // időpontja, a riport már nem tükrözi a legfrissebb adatokat (ELAVULT jelzés).
+  const latestGameDate = useMemo(() => {
+    if (games.length === 0) return null;
+    return games.reduce<string | null>((latest, game) => {
+      if (!game.date) return latest;
+      if (!latest || new Date(game.date) > new Date(latest)) return game.date;
+      return latest;
+    }, null);
+  }, [games]);
+
+  const isReportStale = (generatedAt?: string | null) => {
+    if (!generatedAt || !latestGameDate) return false;
+    const generated = new Date(generatedAt).getTime();
+    const latest = new Date(latestGameDate).getTime();
+    if (Number.isNaN(generated) || Number.isNaN(latest)) return false;
+    return latest > generated;
   };
 
   const MIN_PREGAME_GAMES = 4;
@@ -11613,7 +11633,7 @@ export function SeasonComparison({
           i
         </span>
       </TooltipTrigger>
-      <TooltipContent side="top" className="max-w-xs whitespace-pre-line text-xs leading-relaxed">
+      <TooltipContent side="top" className="max-w-xs whitespace-pre-line break-words text-xs leading-relaxed">
         {content}
       </TooltipContent>
     </UiTooltip>
@@ -11846,12 +11866,17 @@ export function SeasonComparison({
 
                   {playerNarratives[selectedPlayer.id]?.status === 'success' && playerNarratives[selectedPlayer.id]?.text && (
                     <>
-                      <div className="text-xs text-muted">
-                        {playerNarratives[selectedPlayer.id]?.generatedAt
-                          ? `Mentve: ${formatGeneratedAt(playerNarratives[selectedPlayer.id]?.generatedAt) ?? 'ismeretlen'}${playerNarratives[selectedPlayer.id]?.generatedBy ? ` • Forrás: ${playerNarratives[selectedPlayer.id]?.generatedBy}` : ''}`
-                          : 'Mentett játékos szezonértékelés'}
+                      <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
+                        <span>
+                          {playerNarratives[selectedPlayer.id]?.generatedAt
+                            ? `Mentve: ${formatGeneratedAt(playerNarratives[selectedPlayer.id]?.generatedAt) ?? 'ismeretlen'}${playerNarratives[selectedPlayer.id]?.generatedBy ? ` • Forrás: ${playerNarratives[selectedPlayer.id]?.generatedBy}` : ''}`
+                            : 'Mentett játékos szezonértékelés'}
+                        </span>
+                        {isReportStale(playerNarratives[selectedPlayer.id]?.generatedAt) && (
+                          <Badge className="badge-warning">Elavult</Badge>
+                        )}
                       </div>
-                      <div className="text-sm text-primary whitespace-pre-line leading-relaxed">
+                      <div className="text-sm text-primary whitespace-pre-line break-words leading-relaxed">
                         {playerNarratives[selectedPlayer.id]?.text}
                       </div>
                     </>
@@ -11901,7 +11926,7 @@ export function SeasonComparison({
                 {savedManualPlayer && (
                   <div className="ai-marker border border-border-subtle rounded-lg p-3 space-y-1">
                     <div className="text-xs text-muted">Manuális értékelés • Mentve: {formatGeneratedAt(savedManualPlayer.savedAt) ?? 'ismeretlen'}</div>
-                    <div className="text-sm text-secondary whitespace-pre-wrap leading-relaxed">{savedManualPlayer.text}</div>
+                    <div className="text-sm text-secondary whitespace-pre-wrap break-words leading-relaxed">{savedManualPlayer.text}</div>
                   </div>
                 )}
                 <Textarea
@@ -12636,11 +12661,16 @@ export function SeasonComparison({
                 )}
                 {teamNarrative.status === 'success' && teamNarrative.text && (
                   <div className="space-y-1">
-                    <div className="text-[11px] text-muted">
-                      Generálva: {formatGeneratedAt(teamNarrative.generatedAt) ?? 'ismeretlen'}
-                      {teamNarrative.generatedBy ? ` • Forrás: ${teamNarrative.generatedBy}` : ''}
+                    <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted">
+                      <span>
+                        Generálva: {formatGeneratedAt(teamNarrative.generatedAt) ?? 'ismeretlen'}
+                        {teamNarrative.generatedBy ? ` • Forrás: ${teamNarrative.generatedBy}` : ''}
+                      </span>
+                      {isReportStale(teamNarrative.generatedAt) && (
+                        <Badge className="badge-warning">Elavult</Badge>
+                      )}
                     </div>
-                    <div className="rounded-md border border-border-subtle bg-surface-2/40 px-3 py-2 text-sm text-primary whitespace-pre-line">
+                    <div className="rounded-md border border-border-subtle bg-surface-2/40 px-3 py-2 text-sm text-primary whitespace-pre-line break-words">
                       {teamNarrative.text}
                     </div>
                   </div>
@@ -12699,13 +12729,13 @@ export function SeasonComparison({
                       {teamFormChartData.length > 0 ? (
                         <ResponsiveContainer width="100%" height="100%">
                           <LineChart data={teamFormChartData} margin={{ left: 8, right: 16 }}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
-                            <XAxis dataKey="label" stroke="#94a3b8" tick={{ fontSize: 11 }} />
-                            <YAxis yAxisId="margin" stroke="#f97316" tick={{ fontSize: 11 }} width={48} />
+                            <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID.stroke} />
+                            <XAxis dataKey="label" stroke={CHART_AXIS.stroke} tick={{ fontSize: 11 }} />
+                            <YAxis yAxisId="margin" stroke={CHART_COLORS.orange} tick={{ fontSize: 11 }} width={48} />
                             <YAxis
                               yAxisId="efg"
                               orientation="right"
-                              stroke="#22d3ee"
+                              stroke={CHART_COLORS.cyan}
                               tickFormatter={value => `${value}%`}
                               tick={{ fontSize: 11 }}
                               width={56}
@@ -12752,7 +12782,7 @@ export function SeasonComparison({
                               yAxisId="margin"
                               type="monotone"
                               dataKey="margin"
-                              stroke="#f97316"
+                              stroke={CHART_COLORS.orange}
                               strokeWidth={2}
                               dot={{ r: 3 }}
                               name="Pontkülönbség"
@@ -12761,7 +12791,7 @@ export function SeasonComparison({
                               yAxisId="efg"
                               type="monotone"
                               dataKey="efg"
-                              stroke="#22d3ee"
+                              stroke={CHART_COLORS.cyan}
                               strokeWidth={2}
                               dot={{ r: 3 }}
                               name="eFG%"
@@ -12771,7 +12801,7 @@ export function SeasonComparison({
                               yAxisId="efg"
                               type="monotone"
                               dataKey="tsPct"
-                              stroke="#a78bfa"
+                              stroke={CHART_COLORS.ai}
                               strokeWidth={2}
                               dot={{ r: 3 }}
                               name="TS%"
@@ -12781,7 +12811,7 @@ export function SeasonComparison({
                               yAxisId="efg"
                               type="monotone"
                               dataKey="turnoverPct"
-                              stroke="#f43f5e"
+                              stroke={CHART_COLORS.negative}
                               strokeWidth={2}
                               dot={{ r: 3 }}
                               name="TO%"
@@ -12821,10 +12851,10 @@ export function SeasonComparison({
                     <div className="h-56 rounded-lg border border-border-subtle bg-surface-1/60 p-3">
                       <ResponsiveContainer width="100%" height="100%">
                         <LineChart data={teamFormVolatilityData} margin={{ left: 8, right: 16 }}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
-                          <XAxis dataKey="label" stroke="#94a3b8" tick={{ fontSize: 11 }} />
-                          <YAxis yAxisId="eff" stroke="#22d3ee" tick={{ fontSize: 11 }} width={52} domain={[35, 75]} />
-                          <YAxis yAxisId="to" orientation="right" stroke="#f43f5e" tick={{ fontSize: 11 }} width={52} domain={[5, 25]} />
+                          <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID.stroke} />
+                          <XAxis dataKey="label" stroke={CHART_AXIS.stroke} tick={{ fontSize: 11 }} />
+                          <YAxis yAxisId="eff" stroke={CHART_COLORS.cyan} tick={{ fontSize: 11 }} width={52} domain={[35, 75]} />
+                          <YAxis yAxisId="to" orientation="right" stroke={CHART_COLORS.negative} tick={{ fontSize: 11 }} width={52} domain={[5, 25]} />
                           <Tooltip
                             content={({ active, payload }) => {
                               if (!active || !payload || payload.length === 0) return null;
@@ -12848,18 +12878,18 @@ export function SeasonComparison({
                               );
                             }}
                           />
-                          <Line yAxisId="eff" type="monotone" dataKey="rollEfg" stroke="#22d3ee" strokeWidth={2} dot={{ r: 2 }} name="Rolling eFG%" connectNulls />
-                          <Line yAxisId="eff" type="monotone" dataKey="rollTs" stroke="#a78bfa" strokeWidth={2} dot={{ r: 2 }} name="Rolling TS%" connectNulls />
-                          <Line yAxisId="to" type="monotone" dataKey="rollTo" stroke="#f43f5e" strokeWidth={2} dot={{ r: 2 }} name="Rolling TO%" connectNulls />
+                          <Line yAxisId="eff" type="monotone" dataKey="rollEfg" stroke={CHART_COLORS.cyan} strokeWidth={2} dot={{ r: 2 }} name="Rolling eFG%" connectNulls />
+                          <Line yAxisId="eff" type="monotone" dataKey="rollTs" stroke={CHART_COLORS.ai} strokeWidth={2} dot={{ r: 2 }} name="Rolling TS%" connectNulls />
+                          <Line yAxisId="to" type="monotone" dataKey="rollTo" stroke={CHART_COLORS.negative} strokeWidth={2} dot={{ r: 2 }} name="Rolling TO%" connectNulls />
                         </LineChart>
                       </ResponsiveContainer>
                     </div>
                     <div className="h-44 rounded-lg border border-border-subtle bg-surface-1/60 p-3">
                       <ResponsiveContainer width="100%" height="100%">
                         <LineChart data={teamFormVolatilityData} margin={{ left: 8, right: 16 }}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
-                          <XAxis dataKey="label" stroke="#94a3b8" tick={{ fontSize: 11 }} />
-                          <YAxis stroke="#f59e0b" tick={{ fontSize: 11 }} width={52} />
+                          <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID.stroke} />
+                          <XAxis dataKey="label" stroke={CHART_AXIS.stroke} tick={{ fontSize: 11 }} />
+                          <YAxis stroke={CHART_COLORS.warning} tick={{ fontSize: 11 }} width={52} />
                           <Tooltip
                             formatter={(value: number | string | undefined, name?: string) => {
                               const numeric = Number(value ?? 0);
@@ -12867,12 +12897,12 @@ export function SeasonComparison({
                               if (label.includes('PPP')) return [numeric.toFixed(3), label];
                               return [numeric.toFixed(1), label];
                             }}
-                            contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #475569', borderRadius: '8px', color: '#f1f5f9' }}
+                            contentStyle={{ backgroundColor: RECHARTS_TOOLTIP_STYLE.backgroundColor, border: `1px solid ${CHART_GRID.stroke}`, borderRadius: '8px', color: CHART_COLORS.primary }}
                           />
-                          <Legend wrapperStyle={{ color: '#94a3b8' }} verticalAlign="top" height={24} />
-                          <Line type="monotone" dataKey="stdEfg" stroke="#f59e0b" strokeWidth={2} dot={{ r: 2 }} name="eFG szórás" connectNulls />
-                          <Line type="monotone" dataKey="stdTs" stroke="#fb7185" strokeWidth={2} dot={{ r: 2 }} name="TS szórás" connectNulls />
-                          <Line type="monotone" dataKey="stdPpp" stroke="#60a5fa" strokeWidth={2} dot={{ r: 2 }} name="PPP szórás" connectNulls />
+                          <Legend wrapperStyle={{ color: CHART_AXIS.stroke }} verticalAlign="top" height={24} />
+                          <Line type="monotone" dataKey="stdEfg" stroke={CHART_COLORS.warning} strokeWidth={2} dot={{ r: 2 }} name="eFG szórás" connectNulls />
+                          <Line type="monotone" dataKey="stdTs" stroke={CHART_COLORS.negative} strokeWidth={2} dot={{ r: 2 }} name="TS szórás" connectNulls />
+                          <Line type="monotone" dataKey="stdPpp" stroke={CHART_COLORS.cyan} strokeWidth={2} dot={{ r: 2 }} name="PPP szórás" connectNulls />
                         </LineChart>
                       </ResponsiveContainer>
                     </div>
@@ -12904,22 +12934,22 @@ export function SeasonComparison({
                         <div className="text-sm text-secondary font-medium mb-2">Zónaeloszlás (%)</div>
                         <ResponsiveContainer width="100%" height={280}>
                           <BarChart data={teamSeasonShotZoneRows} margin={{ left: 8, right: 8 }}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                            <XAxis dataKey="label" stroke="#94a3b8" tick={{ fontSize: 10 }} />
-                            <YAxis stroke="#94a3b8" tick={{ fontSize: 10 }} domain={[0, 60]} />
+                            <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID.stroke} />
+                            <XAxis dataKey="label" stroke={CHART_AXIS.stroke} tick={{ fontSize: 10 }} />
+                            <YAxis stroke={CHART_AXIS.stroke} tick={{ fontSize: 10 }} domain={[0, 60]} />
                             <Tooltip
                               formatter={(value: number | string | undefined) => `${Number(value ?? 0).toFixed(1)}%`}
                               contentStyle={{
-                                backgroundColor: '#0f172a',
-                                border: '1px solid #475569',
+                                backgroundColor: RECHARTS_TOOLTIP_STYLE.backgroundColor,
+                                border: `1px solid ${CHART_GRID.stroke}`,
                                 borderRadius: '8px',
-                                color: '#f1f5f9',
+                                color: CHART_COLORS.primary,
                               }}
-                              labelStyle={{ color: '#f1f5f9', fontWeight: 'bold' }}
-                              itemStyle={{ color: '#e2e8f0' }}
+                              labelStyle={{ color: CHART_COLORS.primary, fontWeight: 'bold' }}
+                              itemStyle={{ color: CHART_COLORS.primary }}
                             />
-                            <Legend wrapperStyle={{ color: '#94a3b8' }} verticalAlign="top" height={24} />
-                            <Bar dataKey="rate" name="Zónaarány" fill="#38bdf8" radius={[6, 6, 0, 0]} />
+                            <Legend wrapperStyle={{ color: CHART_AXIS.stroke }} verticalAlign="top" height={24} />
+                            <Bar dataKey="rate" name="Zónaarány" fill={CHART_COLORS.cyan} radius={[6, 6, 0, 0]} />
                           </BarChart>
                         </ResponsiveContainer>
                       </div>
@@ -12927,22 +12957,22 @@ export function SeasonComparison({
                         <div className="text-sm text-secondary font-medium mb-2">Zónahatékonyság (FG%)</div>
                         <ResponsiveContainer width="100%" height={280}>
                           <BarChart data={teamSeasonShotZoneRows} margin={{ left: 8, right: 8 }}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                            <XAxis dataKey="label" stroke="#94a3b8" tick={{ fontSize: 10 }} />
-                            <YAxis stroke="#94a3b8" tick={{ fontSize: 10 }} domain={[0, 100]} />
+                            <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID.stroke} />
+                            <XAxis dataKey="label" stroke={CHART_AXIS.stroke} tick={{ fontSize: 10 }} />
+                            <YAxis stroke={CHART_AXIS.stroke} tick={{ fontSize: 10 }} domain={[0, 100]} />
                             <Tooltip
                               formatter={(value: number | string | undefined) => `${Number(value ?? 0).toFixed(1)}%`}
                               contentStyle={{
-                                backgroundColor: '#0f172a',
-                                border: '1px solid #475569',
+                                backgroundColor: RECHARTS_TOOLTIP_STYLE.backgroundColor,
+                                border: `1px solid ${CHART_GRID.stroke}`,
                                 borderRadius: '8px',
-                                color: '#f1f5f9',
+                                color: CHART_COLORS.primary,
                               }}
-                              labelStyle={{ color: '#f1f5f9', fontWeight: 'bold' }}
-                              itemStyle={{ color: '#e2e8f0' }}
+                              labelStyle={{ color: CHART_COLORS.primary, fontWeight: 'bold' }}
+                              itemStyle={{ color: CHART_COLORS.primary }}
                             />
-                            <Legend wrapperStyle={{ color: '#94a3b8' }} verticalAlign="top" height={24} />
-                            <Bar dataKey="pct" name="FG%" fill="#22c55e" radius={[6, 6, 0, 0]} />
+                            <Legend wrapperStyle={{ color: CHART_AXIS.stroke }} verticalAlign="top" height={24} />
+                            <Bar dataKey="pct" name="FG%" fill={CHART_COLORS.positive} radius={[6, 6, 0, 0]} />
                           </BarChart>
                         </ResponsiveContainer>
                       </div>
@@ -13211,9 +13241,9 @@ export function SeasonComparison({
                         layout="vertical"
                         margin={{ left: 12, right: 12 }}
                       >
-                        <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
-                        <XAxis type="number" domain={[0, 100]} stroke="#94a3b8" tick={{ fontSize: 11 }} />
-                        <YAxis dataKey="label" type="category" width={110} stroke="#94a3b8" tick={{ fontSize: 11 }} />
+                        <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID.stroke} />
+                        <XAxis type="number" domain={[0, 100]} stroke={CHART_AXIS.stroke} tick={{ fontSize: 11 }} />
+                        <YAxis dataKey="label" type="category" width={110} stroke={CHART_AXIS.stroke} tick={{ fontSize: 11 }} />
                         <Tooltip
                           content={({ active, payload }) => {
                             if (!active || !payload || payload.length === 0) return null;
@@ -13412,7 +13442,7 @@ export function SeasonComparison({
           {savedManualTeam && (
             <div className="ai-marker border border-border-subtle rounded-lg p-3 space-y-1">
               <div className="text-xs text-muted">Manuális csapatelemzés • Mentve: {formatGeneratedAt(savedManualTeam.savedAt) ?? 'ismeretlen'}</div>
-              <div className="text-sm text-secondary whitespace-pre-wrap leading-relaxed">{savedManualTeam.text}</div>
+              <div className="text-sm text-secondary whitespace-pre-wrap break-words leading-relaxed">{savedManualTeam.text}</div>
             </div>
           )}
           <Textarea
@@ -14203,9 +14233,9 @@ export function SeasonComparison({
               : [];
 
             const focusWeightBars = [
-              { label: 'Labdanyomás', value: pressureWeight, fill: '#f59e0b' },
-              { label: 'Periméter', value: perimeterWeight, fill: '#38bdf8' },
-              { label: 'Festék', value: paintWeight, fill: '#10b981' },
+              { label: 'Labdanyomás', value: pressureWeight, fill: CHART_COLORS.warning },
+              { label: 'Periméter', value: perimeterWeight, fill: CHART_COLORS.cyan },
+              { label: 'Festék', value: paintWeight, fill: CHART_COLORS.positive },
             ];
             const overallIntensityLabel = calibrationDiagnostics
               ? calibrationDiagnostics.overallIntensity >= 70
@@ -14240,8 +14270,8 @@ export function SeasonComparison({
             const controlledScenario = adjustedScenarioOutcomes.find(item => item.key === 'controlled_tempo') ?? null;
             const highVarianceScenario = adjustedScenarioOutcomes.find(item => item.key === 'high_variance') ?? null;
             const pregameXAxisProps = {
-              stroke: '#94a3b8',
-              tick: { fill: '#94a3b8', fontSize: 10 },
+              stroke: CHART_AXIS.stroke,
+              tick: { fill: CHART_AXIS.stroke, fontSize: 10 },
               interval: 0 as const,
               angle: -18,
               textAnchor: 'end' as const,
@@ -14367,7 +14397,7 @@ export function SeasonComparison({
                         <div className="text-primary mt-1">{topFocusPoints[0] ?? 'Nincs kiemelt fókuszpont'}</div>
                       </div>
                     </div>
-                    <div className="text-sm text-primary leading-relaxed whitespace-pre-line">{pregameReport.summary}</div>
+                    <div className="text-sm text-primary leading-relaxed whitespace-pre-line break-words">{pregameReport.summary}</div>
                     {confidenceReasons.length > 0 && (
                       <div className="text-xs text-warning bg-warning/10 border border-warning/30 rounded-md px-3 py-2">
                         Bizonyosság oka: {confidenceReasons.join(' • ')}
@@ -14630,7 +14660,7 @@ export function SeasonComparison({
                         <div className="text-xs uppercase tracking-wide text-muted mb-2">Zónaarány összevetés</div>
                         <ResponsiveContainer width="100%" height={244}>
                           <BarChart data={shotProfileChartData} margin={{ top: 8, right: 8, left: 8, bottom: 22 }}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                            <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID.stroke} />
                             <XAxis
                               dataKey="label"
                               {...pregameXAxisProps}
@@ -14638,18 +14668,18 @@ export function SeasonComparison({
                               height={68}
                               tickFormatter={(value: string | number) => zoneChartLabelMap[String(value)] ?? String(value)}
                             />
-                            <YAxis stroke="#94a3b8" tick={{ fontSize: 10 }} />
+                            <YAxis stroke={CHART_AXIS.stroke} tick={{ fontSize: 10 }} />
                             <Tooltip
                               contentStyle={{
-                                backgroundColor: '#0f172a',
-                                border: '1px solid #475569',
+                                backgroundColor: RECHARTS_TOOLTIP_STYLE.backgroundColor,
+                                border: `1px solid ${CHART_GRID.stroke}`,
                                 borderRadius: '8px',
-                                color: '#f1f5f9',
+                                color: CHART_COLORS.primary,
                               }}
                             />
-                            <Legend wrapperStyle={{ color: '#94a3b8' }} />
-                            <Bar dataKey="ownRate" name={`${ownLabel} zónaarány`} fill="#10b981" radius={[6, 6, 0, 0]} />
-                            <Bar dataKey="opponentRate" name={`${opponentLabel} zónaarány`} fill="#f97316" radius={[6, 6, 0, 0]} />
+                            <Legend wrapperStyle={{ color: CHART_AXIS.stroke }} />
+                            <Bar dataKey="ownRate" name={`${ownLabel} zónaarány`} fill={CHART_COLORS.positive} radius={[6, 6, 0, 0]} />
+                            <Bar dataKey="opponentRate" name={`${opponentLabel} zónaarány`} fill={CHART_COLORS.orange} radius={[6, 6, 0, 0]} />
                           </BarChart>
                         </ResponsiveContainer>
                         <div className="text-xs text-muted mt-1">A sávok a szezonos dobásmegoszlást mutatják zónánként.</div>
@@ -14669,20 +14699,20 @@ export function SeasonComparison({
                       <div className="text-xs uppercase tracking-wide text-muted mb-2">Offense vs defense zóna-matchup</div>
                       <ResponsiveContainer width="100%" height={252}>
                         <BarChart data={offenseDefenseZoneData} margin={{ top: 8, right: 8, left: 8, bottom: 14 }}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                          <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID.stroke} />
                           <XAxis dataKey="label" {...pregameXAxisProps} />
-                          <YAxis stroke="#94a3b8" tick={{ fontSize: 10 }} />
+                          <YAxis stroke={CHART_AXIS.stroke} tick={{ fontSize: 10 }} />
                           <Tooltip
                             contentStyle={{
-                              backgroundColor: '#0f172a',
-                              border: '1px solid #475569',
+                              backgroundColor: RECHARTS_TOOLTIP_STYLE.backgroundColor,
+                              border: `1px solid ${CHART_GRID.stroke}`,
                               borderRadius: '8px',
-                              color: '#f1f5f9',
+                              color: CHART_COLORS.primary,
                             }}
                           />
-                          <Legend wrapperStyle={{ color: '#94a3b8' }} />
-                          <Bar dataKey="ownAttackEdge" name={`${ownLabel} támadás vs ${opponentLabel} engedett`} fill="#10b981" radius={[6, 6, 0, 0]} />
-                          <Bar dataKey="opponentAttackEdge" name={`${opponentLabel} támadás vs ${ownLabel} engedett`} fill="#f97316" radius={[6, 6, 0, 0]} />
+                          <Legend wrapperStyle={{ color: CHART_AXIS.stroke }} />
+                          <Bar dataKey="ownAttackEdge" name={`${ownLabel} támadás vs ${opponentLabel} engedett`} fill={CHART_COLORS.positive} radius={[6, 6, 0, 0]} />
+                          <Bar dataKey="opponentAttackEdge" name={`${opponentLabel} támadás vs ${ownLabel} engedett`} fill={CHART_COLORS.orange} radius={[6, 6, 0, 0]} />
                         </BarChart>
                       </ResponsiveContainer>
                       <div className="text-xs text-muted mt-1">A pozitív érték zónaszinten kedvezőbb támadás-védekezés matchupot jelez az adott oldalon.</div>
@@ -14925,20 +14955,20 @@ export function SeasonComparison({
                     <div className="text-sm text-secondary font-medium mb-2">Támadó-védő profil mutatók</div>
                     <ResponsiveContainer width="100%" height={248}>
                       <BarChart data={pregameStyleMetricChartData} margin={{ top: 8, right: 8, left: 8, bottom: 12 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                        <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID.stroke} />
                         <XAxis dataKey="label" {...pregameXAxisProps} />
-                        <YAxis stroke="#94a3b8" tick={{ fontSize: 10 }} />
+                        <YAxis stroke={CHART_AXIS.stroke} tick={{ fontSize: 10 }} />
                         <Tooltip
                           contentStyle={{
-                            backgroundColor: '#0f172a',
-                            border: '1px solid #475569',
+                            backgroundColor: RECHARTS_TOOLTIP_STYLE.backgroundColor,
+                            border: `1px solid ${CHART_GRID.stroke}`,
                             borderRadius: '8px',
-                            color: '#f1f5f9',
+                            color: CHART_COLORS.primary,
                           }}
                         />
-                        <Legend wrapperStyle={{ color: '#94a3b8' }} />
-                        <Bar dataKey="own" name={ownLabel} fill="#10b981" radius={[6, 6, 0, 0]} />
-                        <Bar dataKey="opponent" name={opponentLabel} fill="#f97316" radius={[6, 6, 0, 0]} />
+                        <Legend wrapperStyle={{ color: CHART_AXIS.stroke }} />
+                        <Bar dataKey="own" name={ownLabel} fill={CHART_COLORS.positive} radius={[6, 6, 0, 0]} />
+                        <Bar dataKey="opponent" name={opponentLabel} fill={CHART_COLORS.orange} radius={[6, 6, 0, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
                     <div className="text-xs text-muted mt-1">
@@ -14994,14 +15024,14 @@ export function SeasonComparison({
 
                     <ResponsiveContainer width="100%" height={128}>
                       <BarChart data={focusWeightBars} layout="vertical" margin={{ top: 6, right: 10, left: 18, bottom: 6 }}>
-                        <XAxis type="number" domain={[0, 100]} stroke="#94a3b8" tick={{ fontSize: 10 }} />
-                        <YAxis dataKey="label" type="category" stroke="#94a3b8" tick={{ fontSize: 10 }} width={108} />
+                        <XAxis type="number" domain={[0, 100]} stroke={CHART_AXIS.stroke} tick={{ fontSize: 10 }} />
+                        <YAxis dataKey="label" type="category" stroke={CHART_AXIS.stroke} tick={{ fontSize: 10 }} width={108} />
                         <Tooltip
                           contentStyle={{
-                            backgroundColor: '#0f172a',
-                            border: '1px solid #475569',
+                            backgroundColor: RECHARTS_TOOLTIP_STYLE.backgroundColor,
+                            border: `1px solid ${CHART_GRID.stroke}`,
                             borderRadius: '8px',
-                            color: '#f1f5f9',
+                            color: CHART_COLORS.primary,
                           }}
                         />
                         <Bar dataKey="value" radius={[0, 6, 6, 0]}>
@@ -15282,20 +15312,20 @@ export function SeasonComparison({
                     <div className="text-sm text-secondary font-medium">Forgatókönyv-modellezés</div>
                     <ResponsiveContainer width="100%" height={248}>
                       <BarChart data={scenarioChartData} margin={{ top: 8, right: 8, left: 8, bottom: 14 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                        <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID.stroke} />
                         <XAxis dataKey="label" {...pregameXAxisProps} />
-                        <YAxis stroke="#94a3b8" tick={{ fontSize: 10 }} domain={[0, 100]} />
+                        <YAxis stroke={CHART_AXIS.stroke} tick={{ fontSize: 10 }} domain={[0, 100]} />
                         <Tooltip
                           contentStyle={{
-                            backgroundColor: '#0f172a',
-                            border: '1px solid #475569',
+                            backgroundColor: RECHARTS_TOOLTIP_STYLE.backgroundColor,
+                            border: `1px solid ${CHART_GRID.stroke}`,
                             borderRadius: '8px',
-                            color: '#f1f5f9',
+                            color: CHART_COLORS.primary,
                           }}
                         />
-                        <Legend wrapperStyle={{ color: '#94a3b8' }} />
-                        <Bar dataKey="ownPct" name={ownLabel} fill="#10b981" radius={[6, 6, 0, 0]} />
-                        <Bar dataKey="opponentPct" name={opponentLabel} fill="#f97316" radius={[6, 6, 0, 0]} />
+                        <Legend wrapperStyle={{ color: CHART_AXIS.stroke }} />
+                        <Bar dataKey="ownPct" name={ownLabel} fill={CHART_COLORS.positive} radius={[6, 6, 0, 0]} />
+                        <Bar dataKey="opponentPct" name={opponentLabel} fill={CHART_COLORS.orange} radius={[6, 6, 0, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
                     <div className="space-y-2">
@@ -15338,22 +15368,22 @@ export function SeasonComparison({
                     </div>
                     <ResponsiveContainer width="100%" height={240}>
                       <BarChart data={calibrationChartData} layout="vertical" margin={{ top: 8, right: 10, left: 18, bottom: 8 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                        <XAxis type="number" domain={[0, 100]} stroke="#94a3b8" tick={{ fontSize: 10 }} />
-                        <YAxis dataKey="label" type="category" stroke="#94a3b8" tick={{ fontSize: 10 }} width={188} />
+                        <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID.stroke} />
+                        <XAxis type="number" domain={[0, 100]} stroke={CHART_AXIS.stroke} tick={{ fontSize: 10 }} />
+                        <YAxis dataKey="label" type="category" stroke={CHART_AXIS.stroke} tick={{ fontSize: 10 }} width={188} />
                         <Tooltip
                           contentStyle={{
-                            backgroundColor: '#0f172a',
-                            border: '1px solid #475569',
+                            backgroundColor: RECHARTS_TOOLTIP_STYLE.backgroundColor,
+                            border: `1px solid ${CHART_GRID.stroke}`,
                             borderRadius: '8px',
-                            color: '#f1f5f9',
+                            color: CHART_COLORS.primary,
                           }}
                         />
                         <Bar dataKey="score" radius={[0, 6, 6, 0]}>
                           {calibrationChartData.map(item => (
                             <Cell
                               key={`calibration-${item.label}`}
-                              fill={item.score >= 70 ? '#ef4444' : item.score >= 45 ? '#f59e0b' : '#10b981'}
+                              fill={item.score >= 70 ? CHART_COLORS.negative : item.score >= 45 ? CHART_COLORS.warning : CHART_COLORS.positive}
                             />
                           ))}
                         </Bar>
@@ -15393,22 +15423,22 @@ export function SeasonComparison({
                     <>
                       <ResponsiveContainer width="100%" height={240}>
                         <BarChart data={positionComparisonChart} margin={{ top: 8, right: 8, left: 8, bottom: 12 }}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                          <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID.stroke} />
                           <XAxis dataKey="label" {...pregameXAxisProps} />
-                          <YAxis stroke="#94a3b8" tick={{ fontSize: 10 }} />
+                          <YAxis stroke={CHART_AXIS.stroke} tick={{ fontSize: 10 }} />
                           <Tooltip
                             contentStyle={{
-                              backgroundColor: '#0f172a',
-                              border: '1px solid #475569',
+                              backgroundColor: RECHARTS_TOOLTIP_STYLE.backgroundColor,
+                              border: `1px solid ${CHART_GRID.stroke}`,
                               borderRadius: '8px',
-                              color: '#f1f5f9',
+                              color: CHART_COLORS.primary,
                             }}
-                            labelStyle={{ color: '#f1f5f9', fontWeight: 'bold' }}
-                            itemStyle={{ color: '#e2e8f0' }}
+                            labelStyle={{ color: CHART_COLORS.primary, fontWeight: 'bold' }}
+                            itemStyle={{ color: CHART_COLORS.primary }}
                           />
-                          <Legend wrapperStyle={{ color: '#94a3b8' }} />
-                          <Bar dataKey="ownValPer36" name="Saját csapat" fill="#10b981" radius={[6, 6, 0, 0]} />
-                          <Bar dataKey="oppValPer36" name="Ellenfél" fill="#f97316" radius={[6, 6, 0, 0]} />
+                          <Legend wrapperStyle={{ color: CHART_AXIS.stroke }} />
+                          <Bar dataKey="ownValPer36" name="Saját csapat" fill={CHART_COLORS.positive} radius={[6, 6, 0, 0]} />
+                          <Bar dataKey="oppValPer36" name="Ellenfél" fill={CHART_COLORS.orange} radius={[6, 6, 0, 0]} />
                         </BarChart>
                       </ResponsiveContainer>
 
@@ -15692,7 +15722,7 @@ export function SeasonComparison({
                     'Ez a szöveg még nincs adatbázisban mentve.'
                   )}
                 </div>
-                <div className="text-sm text-primary whitespace-pre-line bg-surface-2/60 border border-border-subtle rounded-lg px-4 py-3">
+                <div className="text-sm text-primary whitespace-pre-line break-words bg-surface-2/60 border border-border-subtle rounded-lg px-4 py-3">
                   {pregameText}
                 </div>
               </div>
@@ -15742,7 +15772,7 @@ export function SeasonComparison({
               {savedManualPregame && (
                 <div className="ai-marker border border-border-subtle rounded-lg p-3 space-y-1">
                   <div className="text-xs text-muted">Manuális pregame • Mentve: {formatGeneratedAt(savedManualPregame.savedAt) ?? 'ismeretlen'}</div>
-                  <div className="text-sm text-secondary whitespace-pre-wrap leading-relaxed">{savedManualPregame.text}</div>
+                  <div className="text-sm text-secondary whitespace-pre-wrap break-words leading-relaxed">{savedManualPregame.text}</div>
                 </div>
               )}
               <Textarea
@@ -15908,24 +15938,24 @@ export function SeasonComparison({
                         <div className="text-[11px] text-secondary mb-1">Negyed trend mini chart (pontkülönbség)</div>
                         <ResponsiveContainer width="100%" height={120}>
                           <BarChart data={kosarstatPostgameContext.quarterDiffRows} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                            <XAxis dataKey="quarter" tickFormatter={(value: number | string) => `Q${value}`} stroke="#94a3b8" tick={{ fontSize: 10 }} />
-                            <YAxis stroke="#94a3b8" tick={{ fontSize: 10 }} />
+                            <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID.stroke} />
+                            <XAxis dataKey="quarter" tickFormatter={(value: number | string) => `Q${value}`} stroke={CHART_AXIS.stroke} tick={{ fontSize: 10 }} />
+                            <YAxis stroke={CHART_AXIS.stroke} tick={{ fontSize: 10 }} />
                             <Tooltip
                               formatter={(value: number | string | undefined) => [`${Number(value ?? 0).toFixed(0)}`, 'Pontkülönbség']}
                               labelFormatter={(label: unknown) => `Q${String(label ?? '')}`}
                               contentStyle={{
-                                backgroundColor: '#0f172a',
-                                border: '1px solid #475569',
+                                backgroundColor: RECHARTS_TOOLTIP_STYLE.backgroundColor,
+                                border: `1px solid ${CHART_GRID.stroke}`,
                                 borderRadius: '8px',
-                                color: '#f1f5f9',
+                                color: CHART_COLORS.primary,
                               }}
                             />
                             <Bar dataKey="diff" radius={[4, 4, 0, 0]}>
                               {kosarstatPostgameContext.quarterDiffRows.map(item => (
                                 <Cell
                                   key={`quarter-diff-cell-${item.quarter}`}
-                                  fill={item.diff >= 0 ? '#34d399' : '#fb7185'}
+                                  fill={item.diff >= 0 ? CHART_COLORS.positive : CHART_COLORS.negative}
                                 />
                               ))}
                             </Bar>
@@ -16462,24 +16492,24 @@ export function SeasonComparison({
                   <div className="text-sm text-secondary font-medium mb-2">Hatékonyság összevetés</div>
                   <ResponsiveContainer width="100%" height={240}>
                     <BarChart data={postgameReport.charts.efficiency} margin={{ left: 8, right: 8 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                      <XAxis dataKey="label" stroke="#94a3b8" tick={{ fontSize: 10 }} />
-                      <YAxis stroke="#94a3b8" tick={{ fontSize: 10 }} />
+                      <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID.stroke} />
+                      <XAxis dataKey="label" stroke={CHART_AXIS.stroke} tick={{ fontSize: 10 }} />
+                      <YAxis stroke={CHART_AXIS.stroke} tick={{ fontSize: 10 }} />
                       <Tooltip
                         contentStyle={{
-                          backgroundColor: '#0f172a',
-                          border: '1px solid #475569',
+                          backgroundColor: RECHARTS_TOOLTIP_STYLE.backgroundColor,
+                          border: `1px solid ${CHART_GRID.stroke}`,
                           borderRadius: '8px',
-                          color: '#f1f5f9',
+                          color: CHART_COLORS.primary,
                         }}
-                        labelStyle={{ color: '#f1f5f9', fontWeight: 'bold' }}
-                        itemStyle={{ color: '#e2e8f0' }}
+                        labelStyle={{ color: CHART_COLORS.primary, fontWeight: 'bold' }}
+                        itemStyle={{ color: CHART_COLORS.primary }}
                       />
-                      <Legend wrapperStyle={{ color: '#94a3b8' }} />
-                      <Bar dataKey="game" name="Meccs" fill="#38bdf8" radius={[6, 6, 0, 0]} />
-                      <Bar dataKey="season" name="Szezon" fill="#10b981" radius={[6, 6, 0, 0]} />
+                      <Legend wrapperStyle={{ color: CHART_AXIS.stroke }} />
+                      <Bar dataKey="game" name="Meccs" fill={CHART_COLORS.cyan} radius={[6, 6, 0, 0]} />
+                      <Bar dataKey="season" name="Szezon" fill={CHART_COLORS.positive} radius={[6, 6, 0, 0]} />
                       {postgameReport.charts.efficiency.some(item => Number.isFinite(item.league)) && (
-                        <Bar dataKey="league" name="Liga medián" fill="#a855f7" radius={[6, 6, 0, 0]} />
+                        <Bar dataKey="league" name="Liga medián" fill={CHART_COLORS.ai} radius={[6, 6, 0, 0]} />
                       )}
                     </BarChart>
                   </ResponsiveContainer>
@@ -16488,22 +16518,22 @@ export function SeasonComparison({
                   <div className="text-sm text-secondary font-medium mb-2">Dobásprofil</div>
                   <ResponsiveContainer width="100%" height={240}>
                     <BarChart data={postgameReport.charts.shotProfile} margin={{ left: 8, right: 8 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                      <XAxis dataKey="label" stroke="#94a3b8" tick={{ fontSize: 10 }} />
-                      <YAxis stroke="#94a3b8" tick={{ fontSize: 10 }} />
+                      <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID.stroke} />
+                      <XAxis dataKey="label" stroke={CHART_AXIS.stroke} tick={{ fontSize: 10 }} />
+                      <YAxis stroke={CHART_AXIS.stroke} tick={{ fontSize: 10 }} />
                       <Tooltip
                         contentStyle={{
-                          backgroundColor: '#0f172a',
-                          border: '1px solid #475569',
+                          backgroundColor: RECHARTS_TOOLTIP_STYLE.backgroundColor,
+                          border: `1px solid ${CHART_GRID.stroke}`,
                           borderRadius: '8px',
-                          color: '#f1f5f9',
+                          color: CHART_COLORS.primary,
                         }}
-                        labelStyle={{ color: '#f1f5f9', fontWeight: 'bold' }}
-                        itemStyle={{ color: '#e2e8f0' }}
+                        labelStyle={{ color: CHART_COLORS.primary, fontWeight: 'bold' }}
+                        itemStyle={{ color: CHART_COLORS.primary }}
                       />
-                      <Legend wrapperStyle={{ color: '#94a3b8' }} />
-                      <Bar dataKey="game" name="Meccs" fill="#f97316" radius={[6, 6, 0, 0]} />
-                      <Bar dataKey="season" name="Szezon" fill="#22c55e" radius={[6, 6, 0, 0]} />
+                      <Legend wrapperStyle={{ color: CHART_AXIS.stroke }} />
+                      <Bar dataKey="game" name="Meccs" fill={CHART_COLORS.orange} radius={[6, 6, 0, 0]} />
+                      <Bar dataKey="season" name="Szezon" fill={CHART_COLORS.positive} radius={[6, 6, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -16720,23 +16750,23 @@ export function SeasonComparison({
                             <div className="text-sm text-secondary font-medium mb-2">Zónaeloszlás (%)</div>
                             <ResponsiveContainer width="100%" height={260}>
                               <BarChart data={zoneRows} margin={{ left: 8, right: 8 }}>
-                                <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                                <XAxis dataKey="label" stroke="#94a3b8" tick={{ fontSize: 10 }} />
-                                <YAxis stroke="#94a3b8" tick={{ fontSize: 10 }} domain={[0, 60]} />
+                                <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID.stroke} />
+                                <XAxis dataKey="label" stroke={CHART_AXIS.stroke} tick={{ fontSize: 10 }} />
+                                <YAxis stroke={CHART_AXIS.stroke} tick={{ fontSize: 10 }} domain={[0, 60]} />
                                 <Tooltip
                                   formatter={(value: number | string | undefined) => `${Number(value ?? 0).toFixed(1)}%`}
                                   contentStyle={{
-                                    backgroundColor: '#0f172a',
-                                    border: '1px solid #475569',
+                                    backgroundColor: RECHARTS_TOOLTIP_STYLE.backgroundColor,
+                                    border: `1px solid ${CHART_GRID.stroke}`,
                                     borderRadius: '8px',
-                                    color: '#f1f5f9',
+                                    color: CHART_COLORS.primary,
                                   }}
-                                  labelStyle={{ color: '#f1f5f9', fontWeight: 'bold' }}
-                                  itemStyle={{ color: '#e2e8f0' }}
+                                  labelStyle={{ color: CHART_COLORS.primary, fontWeight: 'bold' }}
+                                  itemStyle={{ color: CHART_COLORS.primary }}
                                 />
-                                <Legend wrapperStyle={{ color: '#94a3b8' }} />
-                                <Bar dataKey="gameRate" name="Meccs" fill="#f97316" radius={[6, 6, 0, 0]} />
-                                <Bar dataKey="seasonRate" name="Szezon" fill="#22c55e" radius={[6, 6, 0, 0]} />
+                                <Legend wrapperStyle={{ color: CHART_AXIS.stroke }} />
+                                <Bar dataKey="gameRate" name="Meccs" fill={CHART_COLORS.orange} radius={[6, 6, 0, 0]} />
+                                <Bar dataKey="seasonRate" name="Szezon" fill={CHART_COLORS.positive} radius={[6, 6, 0, 0]} />
                               </BarChart>
                             </ResponsiveContainer>
                           </div>
@@ -16744,23 +16774,23 @@ export function SeasonComparison({
                             <div className="text-sm text-secondary font-medium mb-2">Zónahatékonyság (FG%)</div>
                             <ResponsiveContainer width="100%" height={260}>
                               <LineChart data={zoneRows} margin={{ left: 8, right: 8 }}>
-                                <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                                <XAxis dataKey="label" stroke="#94a3b8" tick={{ fontSize: 10 }} />
-                                <YAxis stroke="#94a3b8" tick={{ fontSize: 10 }} domain={[0, 100]} />
+                                <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID.stroke} />
+                                <XAxis dataKey="label" stroke={CHART_AXIS.stroke} tick={{ fontSize: 10 }} />
+                                <YAxis stroke={CHART_AXIS.stroke} tick={{ fontSize: 10 }} domain={[0, 100]} />
                                 <Tooltip
                                   formatter={(value: number | string | undefined) => `${Number(value ?? 0).toFixed(1)}%`}
                                   contentStyle={{
-                                    backgroundColor: '#0f172a',
-                                    border: '1px solid #475569',
+                                    backgroundColor: RECHARTS_TOOLTIP_STYLE.backgroundColor,
+                                    border: `1px solid ${CHART_GRID.stroke}`,
                                     borderRadius: '8px',
-                                    color: '#f1f5f9',
+                                    color: CHART_COLORS.primary,
                                   }}
-                                  labelStyle={{ color: '#f1f5f9', fontWeight: 'bold' }}
-                                  itemStyle={{ color: '#e2e8f0' }}
+                                  labelStyle={{ color: CHART_COLORS.primary, fontWeight: 'bold' }}
+                                  itemStyle={{ color: CHART_COLORS.primary }}
                                 />
-                                <Legend wrapperStyle={{ color: '#94a3b8' }} />
-                                <Line type="monotone" dataKey="gamePct" name="Meccs FG%" stroke="#f97316" strokeWidth={2.5} dot={{ r: 3 }} />
-                                <Line type="monotone" dataKey="seasonPct" name="Szezon FG%" stroke="#22c55e" strokeWidth={2.5} dot={{ r: 3 }} />
+                                <Legend wrapperStyle={{ color: CHART_AXIS.stroke }} />
+                                <Line type="monotone" dataKey="gamePct" name="Meccs FG%" stroke={CHART_COLORS.orange} strokeWidth={2.5} dot={{ r: 3 }} />
+                                <Line type="monotone" dataKey="seasonPct" name="Szezon FG%" stroke={CHART_COLORS.positive} strokeWidth={2.5} dot={{ r: 3 }} />
                               </LineChart>
                             </ResponsiveContainer>
                           </div>
@@ -16951,13 +16981,13 @@ export function SeasonComparison({
                       <div className="h-52">
                         <ResponsiveContainer width="100%" height="100%">
                           <BarChart data={opponentImpactChartData} margin={{ top: 8, right: 10, left: 0, bottom: 8 }}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                            <XAxis dataKey="label" tick={{ fill: '#94a3b8', fontSize: 11 }} interval={0} angle={-15} textAnchor="end" height={55} />
-                            <YAxis allowDecimals={false} tick={{ fill: '#94a3b8', fontSize: 11 }} />
+                            <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID.stroke} />
+                            <XAxis dataKey="label" tick={{ fill: CHART_AXIS.stroke, fontSize: 11 }} interval={0} angle={-15} textAnchor="end" height={55} />
+                            <YAxis allowDecimals={false} tick={{ fill: CHART_AXIS.stroke, fontSize: 11 }} />
                             <Tooltip
-                              contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #334155' }}
-                              labelStyle={{ color: '#e2e8f0' }}
-                              itemStyle={{ color: '#e2e8f0' }}
+                              contentStyle={{ backgroundColor: RECHARTS_TOOLTIP_STYLE.backgroundColor, border: `1px solid ${CHART_GRID.stroke}` }}
+                              labelStyle={{ color: CHART_COLORS.primary }}
+                              itemStyle={{ color: CHART_COLORS.primary }}
                               formatter={(value: number | string | undefined, _name?: string, item?: { payload?: { axis?: string } }) => {
                                 const axis = item?.payload?.axis ?? '-';
                                 return [`${Number(value ?? 0)} faktor`, `${axis}`];
@@ -16965,7 +16995,7 @@ export function SeasonComparison({
                             />
                             <Bar dataKey="impact" radius={[6, 6, 0, 0]}>
                               {opponentImpactChartData.map((item) => (
-                                <Cell key={`impact-${item.label}`} fill={item.axis === 'Védekezés' ? '#38bdf8' : '#fb923c'} />
+                                <Cell key={`impact-${item.label}`} fill={item.axis === 'Védekezés' ? CHART_COLORS.cyan : CHART_COLORS.orange} />
                               ))}
                             </Bar>
                           </BarChart>
@@ -17087,27 +17117,27 @@ export function SeasonComparison({
                           <div className="h-72">
                             <ResponsiveContainer width="100%" height="100%">
                               <ScatterChart margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
-                                <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                                <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID.stroke} />
                                 <XAxis
                                   type="number"
                                   dataKey="usagePct"
                                   name="Usage%"
-                                  tick={{ fill: '#94a3b8', fontSize: 11 }}
-                                  label={{ value: 'Usage %', position: 'insideBottom', offset: -4, fill: '#94a3b8', fontSize: 11 }}
+                                  tick={{ fill: CHART_AXIS.stroke, fontSize: 11 }}
+                                  label={{ value: 'Usage %', position: 'insideBottom', offset: -4, fill: CHART_AXIS.stroke, fontSize: 11 }}
                                 />
                                 <YAxis
                                   type="number"
                                   dataKey="tsPct"
                                   name="TS%"
-                                  tick={{ fill: '#94a3b8', fontSize: 11 }}
-                                  label={{ value: 'TS %', angle: -90, position: 'insideLeft', fill: '#94a3b8', fontSize: 11 }}
+                                  tick={{ fill: CHART_AXIS.stroke, fontSize: 11 }}
+                                  label={{ value: 'TS %', angle: -90, position: 'insideLeft', fill: CHART_AXIS.stroke, fontSize: 11 }}
                                 />
                                 <ZAxis type="number" dataKey="valPer36" range={[70, 320]} name="VAL/36" />
                                 <Tooltip
                                   cursor={{ strokeDasharray: '3 3' }}
-                                  contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #334155' }}
-                                  labelStyle={{ color: '#e2e8f0' }}
-                                  itemStyle={{ color: '#e2e8f0' }}
+                                  contentStyle={{ backgroundColor: RECHARTS_TOOLTIP_STYLE.backgroundColor, border: `1px solid ${CHART_GRID.stroke}` }}
+                                  labelStyle={{ color: CHART_COLORS.primary }}
+                                  itemStyle={{ color: CHART_COLORS.primary }}
                                   formatter={(value: number | string | undefined, name?: string) => {
                                     if (name === 'Usage%') return [`${Number(value ?? 0).toFixed(1)}%`, 'Usage'];
                                     if (name === 'TS%') return [`${Number(value ?? 0).toFixed(1)}%`, 'TS'];
@@ -17115,7 +17145,7 @@ export function SeasonComparison({
                                   }}
                                   labelFormatter={(label) => String(label)}
                                 />
-                                <Scatter name="Játékosok" data={playerUsageVsTsData} fill="#22d3ee">
+                                <Scatter name="Játékosok" data={playerUsageVsTsData} fill={CHART_COLORS.cyan}>
                                   <LabelList dataKey="name" content={renderUsageTsBubbleLabel} />
                                 </Scatter>
                               </ScatterChart>
@@ -17148,14 +17178,14 @@ export function SeasonComparison({
                         <div className="h-64">
                           <ResponsiveContainer width="100%" height="100%">
                             <LineChart data={playerTrendSeries} margin={{ top: 8, right: 12, left: 0, bottom: 8 }}>
-                              <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                              <XAxis dataKey="label" tick={{ fill: '#94a3b8', fontSize: 11 }} />
-                              <YAxis yAxisId="left" tick={{ fill: '#94a3b8', fontSize: 11 }} />
-                              <YAxis yAxisId="right" orientation="right" tick={{ fill: '#94a3b8', fontSize: 11 }} />
+                              <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID.stroke} />
+                              <XAxis dataKey="label" tick={{ fill: CHART_AXIS.stroke, fontSize: 11 }} />
+                              <YAxis yAxisId="left" tick={{ fill: CHART_AXIS.stroke, fontSize: 11 }} />
+                              <YAxis yAxisId="right" orientation="right" tick={{ fill: CHART_AXIS.stroke, fontSize: 11 }} />
                               <Tooltip
-                                contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #334155' }}
-                                labelStyle={{ color: '#e2e8f0' }}
-                                itemStyle={{ color: '#e2e8f0' }}
+                                contentStyle={{ backgroundColor: RECHARTS_TOOLTIP_STYLE.backgroundColor, border: `1px solid ${CHART_GRID.stroke}` }}
+                                labelStyle={{ color: CHART_COLORS.primary }}
+                                itemStyle={{ color: CHART_COLORS.primary }}
                                 formatter={(value: number | string | undefined, name?: string) => {
                                   if (name === 'TS%') return [`${Number(value ?? 0).toFixed(1)}%`, 'TS%'];
                                   if (name === 'Usage%') return [`${Number(value ?? 0).toFixed(1)}%`, 'Usage%'];
@@ -17163,9 +17193,9 @@ export function SeasonComparison({
                                 }}
                               />
                               <Legend />
-                              <Line yAxisId="left" type="monotone" dataKey="tsPct" stroke="#38bdf8" strokeWidth={2} dot={false} name="TS%" />
-                              <Line yAxisId="left" type="monotone" dataKey="usagePct" stroke="#f59e0b" strokeWidth={2} dot={false} name="Usage%" />
-                              <Line yAxisId="right" type="monotone" dataKey="valPer36" stroke="#34d399" strokeWidth={2} dot={false} name="VAL/36" />
+                              <Line yAxisId="left" type="monotone" dataKey="tsPct" stroke={CHART_COLORS.cyan} strokeWidth={2} dot={false} name="TS%" />
+                              <Line yAxisId="left" type="monotone" dataKey="usagePct" stroke={CHART_COLORS.warning} strokeWidth={2} dot={false} name="Usage%" />
+                              <Line yAxisId="right" type="monotone" dataKey="valPer36" stroke={CHART_COLORS.positive} strokeWidth={2} dot={false} name="VAL/36" />
                             </LineChart>
                           </ResponsiveContainer>
                         </div>
@@ -17261,7 +17291,7 @@ export function SeasonComparison({
                                 )}
                               </div>
                               {narrativeState?.text && (
-                                <div className="text-sm text-primary whitespace-pre-line bg-surface-1/80 border border-border-subtle rounded-md px-3 py-2">
+                                <div className="text-sm text-primary whitespace-pre-line break-words bg-surface-1/80 border border-border-subtle rounded-md px-3 py-2">
                                   {narrativeState.text}
                                 </div>
                               )}
@@ -17374,7 +17404,7 @@ export function SeasonComparison({
                 Mentve: {formatGeneratedAt(textReportMeta.generatedAt) ?? 'ismeretlen időpont'} • Forrás:{' '}
                 {textReportMeta.generatedBy ?? 'gpt-automata'}
               </div>
-              <div className="text-sm text-primary whitespace-pre-line bg-surface-2/60 border border-border-subtle rounded-lg px-4 py-3">
+              <div className="text-sm text-primary whitespace-pre-line break-words bg-surface-2/60 border border-border-subtle rounded-lg px-4 py-3">
                 {textReport}
               </div>
             </div>
@@ -17429,7 +17459,7 @@ export function SeasonComparison({
               {savedManualPostgame && (
                 <div className="ai-marker border border-border-subtle rounded-lg p-3 space-y-1">
                   <div className="text-xs text-muted">Manuális postgame • Mentve: {formatGeneratedAt(savedManualPostgame.savedAt) ?? 'ismeretlen'}</div>
-                  <div className="text-sm text-secondary whitespace-pre-wrap leading-relaxed">{savedManualPostgame.text}</div>
+                  <div className="text-sm text-secondary whitespace-pre-wrap break-words leading-relaxed">{savedManualPostgame.text}</div>
                 </div>
               )}
               <Textarea

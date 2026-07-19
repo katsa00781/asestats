@@ -24,20 +24,27 @@ export function AppTopbar({ activeTab, userEmail, isAdmin, onSignOut }: AppTopba
   const crumb = findBreadcrumb(activeTab);
 
   return (
-    <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border-subtle pb-4 mb-6">
-      <div className="flex min-w-0 items-center gap-2 font-display uppercase tracking-[0.14em] text-xs text-secondary">
-        <span className="hidden sm:inline">ASE Statisztika Kezelő</span>
+    <header className="flex flex-wrap items-start justify-between gap-3 border-b border-border-subtle pb-4 mb-6">
+      <div className="min-w-0">
+        <div className="flex items-center gap-2 font-display uppercase tracking-[0.14em] text-xs text-secondary">
+          <span className="hidden sm:inline">ASE Statisztika Kezelő</span>
+          {crumb && (
+            <>
+              <span className="hidden sm:inline text-muted">›</span>
+              <span className="truncate">{crumb.groupLabel}</span>
+              <span className="text-muted">›</span>
+              <span className="truncate text-cyan">{crumb.itemLabel}</span>
+            </>
+          )}
+        </div>
         {crumb && (
-          <>
-            <span className="hidden sm:inline text-muted">›</span>
-            <span className="truncate">{crumb.groupLabel}</span>
-            <span className="text-muted">›</span>
-            <span className="truncate text-cyan">{crumb.itemLabel}</span>
-          </>
+          <h1 className="mt-2 font-display text-2xl sm:text-3xl font-semibold tracking-tight text-primary truncate">
+            {crumb.itemLabel}
+          </h1>
         )}
       </div>
 
-      <div className="flex items-center gap-2 sm:gap-3">
+      <div className="flex items-center gap-2 sm:gap-3 pt-1">
         <div className="hidden md:flex items-center gap-2 text-xs text-secondary">
           <span className="font-mono truncate max-w-55">{userEmail}</span>
         </div>

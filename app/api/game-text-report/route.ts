@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { requireAuth } from '@/lib/api-auth';
+import { requireAdmin } from '@/lib/api-auth';
 import type { ScoutingReport } from '@/lib/pregame-scouting';
 import type { PostGameReport } from '@/lib/postgame-report';
 import { getSupabaseAdmin } from '@/lib/supabase-admin';
@@ -24,7 +24,7 @@ type SaveTextReportPayload = {
 };
 
 export async function POST(request: Request) {
-  const auth = await requireAuth(request);
+  const auth = await requireAdmin(request);
   if (!auth.ok) return auth.response;
 
   const payload = (await request.json().catch(() => null)) as SaveTextReportPayload | null;

@@ -14,9 +14,10 @@ type GamesListProps = {
   games: TeamGame[];
   upcomingFixtures?: UpcomingFixture[];
   onGameDeleted?: () => void;
+  isAdmin?: boolean;
 };
 
-export function GamesList({ games, upcomingFixtures = [], onGameDeleted }: GamesListProps) {
+export function GamesList({ games, upcomingFixtures = [], onGameDeleted, isAdmin = false }: GamesListProps) {
   const [deletingGameId, setDeletingGameId] = useState<string | null>(null);
   const [editingGameId, setEditingGameId] = useState<string | null>(null);
   const [viewingGameId, setViewingGameId] = useState<string | null>(null);
@@ -349,34 +350,38 @@ export function GamesList({ games, upcomingFixtures = [], onGameDeleted }: Games
                         <Eye size={14} className="mr-1 sm:mr-2 shrink-0" strokeWidth={1.6} />
                         Részletek
                       </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleEditGame(game)}
-                        className="border-border-subtle hover:bg-surface-2 text-xs sm:text-sm w-full sm:w-auto"
-                      >
-                        <Edit size={14} className="mr-1 sm:mr-2 shrink-0" strokeWidth={1.6} />
-                        Szerkesztés
-                      </Button>
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={() => handleDeleteGame(game.id, game.opponent, game.date)}
-                        disabled={isDeleting}
-                        className="text-xs sm:text-sm w-full sm:w-auto"
-                      >
-                        {isDeleting ? (
-                          <>
-                            <Loader2 className="mr-1 sm:mr-2 animate-spin shrink-0" size={14} />
-                            Törlés...
-                          </>
-                        ) : (
-                          <>
-                            <Trash2 className="mr-1 sm:mr-2 shrink-0" size={14} strokeWidth={1.6} />
-                            Törlés
-                          </>
-                        )}
-                      </Button>
+                      {isAdmin && (
+                        <>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleEditGame(game)}
+                            className="border-border-subtle hover:bg-surface-2 text-xs sm:text-sm w-full sm:w-auto"
+                          >
+                            <Edit size={14} className="mr-1 sm:mr-2 shrink-0" strokeWidth={1.6} />
+                            Szerkesztés
+                          </Button>
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={() => handleDeleteGame(game.id, game.opponent, game.date)}
+                            disabled={isDeleting}
+                            className="text-xs sm:text-sm w-full sm:w-auto"
+                          >
+                            {isDeleting ? (
+                              <>
+                                <Loader2 className="mr-1 sm:mr-2 animate-spin shrink-0" size={14} />
+                                Törlés...
+                              </>
+                            ) : (
+                              <>
+                                <Trash2 className="mr-1 sm:mr-2 shrink-0" size={14} strokeWidth={1.6} />
+                                Törlés
+                              </>
+                            )}
+                          </Button>
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>

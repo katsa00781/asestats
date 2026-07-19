@@ -183,7 +183,7 @@ const courtPlugin: Plugin<'scatter'> = {
     ctx.ellipse(hoopX, hoopY, 6, 6, 0, 0, Math.PI * 2);
     ctx.stroke();
 
-    ctx.strokeStyle = '#f8fafc';
+    ctx.strokeStyle = CHART_COLORS.primary;
     ctx.lineWidth = 3;
     ctx.lineCap = 'round';
     ctx.beginPath();
@@ -323,7 +323,7 @@ export function PostgameShotScatterChart({ shots, showPoints, showHeatmap, heatm
           label: 'Bement',
           data: showPoints ? made.map(shot => ({ x: shot.y, y: shot.x, player: shot.player })) : [],
           backgroundColor: `${CHART_COLORS.positive}EB`,
-          borderColor: '#050B14',
+          borderColor: CHART_COLORS.base,
           borderWidth: 1,
           pointRadius: 5,
           pointHoverRadius: 7,
@@ -332,7 +332,7 @@ export function PostgameShotScatterChart({ shots, showPoints, showHeatmap, heatm
           label: 'Kimaradt',
           data: showPoints ? missed.map(shot => ({ x: shot.y, y: shot.x, player: shot.player })) : [],
           backgroundColor: `${CHART_COLORS.negative}EB`,
-          borderColor: '#050B14',
+          borderColor: CHART_COLORS.base,
           borderWidth: 1,
           pointRadius: 5,
           pointHoverRadius: 7,

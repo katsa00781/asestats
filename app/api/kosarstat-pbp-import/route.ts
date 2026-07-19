@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { requireAuth } from '@/lib/api-auth';
+import { requireAdmin } from '@/lib/api-auth';
 import { spawn } from 'child_process';
 
 export const dynamic = 'force-dynamic';
@@ -79,7 +79,7 @@ let liveState: LiveImportState = {
 };
 
 export async function DELETE(request: Request) {
-  const auth = await requireAuth(request);
+  const auth = await requireAdmin(request);
   if (!auth.ok) return auth.response;
 
   if (!isRunning && !liveState.pid) {
@@ -126,7 +126,7 @@ export async function DELETE(request: Request) {
 }
 
 export async function GET(request: Request) {
-  const auth = await requireAuth(request);
+  const auth = await requireAdmin(request);
   if (!auth.ok) return auth.response;
 
   const url = new URL(request.url);
@@ -166,7 +166,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const auth = await requireAuth(request);
+  const auth = await requireAdmin(request);
   if (!auth.ok) return auth.response;
 
   if (isRunning) {

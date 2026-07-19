@@ -1,6 +1,76 @@
 # BACKLOG.md – ASEStats Projekt
 
-_Utoljára frissítve: 2026-07-19 (AppShell – Sidebar+Topbar navigáció bevezetve)_
+_Utoljára frissítve: 2026-07-19 (Funkcionális backlog sprint lezárva – a 4 sprintes terv teljesítve)_
+
+---
+
+## Lezárt sprint – Funkcionális backlog tételek ✓ (2026-07-19)
+
+A négy sprintes terv (RBAC → 2026/2027 szezon-előkészület → design konzisztencia → funkcionális backlog) utolsó, funkcionális egysége. Az "élő adat" jellegű tételek (automatikus adatfrissítés ütemezés) kimaradtak, mert a `.github/workflows/scrape.yml` már ütemezett és kézzel indítható – nem volt hozzá új munka.
+
+- [x] **`components/TeamSelector.tsx` 400-fix** – a nemlétező `standings.team_name` oszlopra hivatkozó, mindig hibázó lekérdezés törölve; a csapatlista mostantól közvetlenül a `teams` táblából töltődik be (ami eddig is a működő fallback út volt). A standings-ból csapat-auto-létrehozó logika is törölve, mert kizárólag az eltávolított hibás lekérdezésre épült – nem volt funkcionális hatása korábban sem (a lekérdezés sosem sikerült). Ismert hiányosságok #5 lezárva.
+- [x] **Riport "Elavult" badge** (`components/SeasonComparison.tsx`) – a játékos szezonértékelés és a csapat AI-elemzés mellett `badge-warning` "Elavult" jelzés jelenik meg, ha a szezon/csapat legutóbbi meccsének dátuma újabb, mint a riport generálási időpontja (séma-módosítás nélkül, a már betöltött `games` propból számolva). **Tudatosan kihagyva**: `GameDetails.tsx` per-meccs pregame/postgame riportjai – egy lezárult meccs adatai nem változnak új meccsektől függetlenül, ott a "elavult" jelzésnek nincs értelmes jelentése a jelenlegi adatmodellel.
+- [x] **Play-by-play momentum + Four Factors chart** (`components/GamePbpCharts.tsx`, `GameDetails.tsx`) – új kumulatív pontkülönbség vonaldiagram a `kosarstat_game_quarter_stats.cumulative_points` mezőből (eddig csak számításban használt, vizualizálatlan adat), és Four Factors (eFG%/TOV%/ORB%/FT Rate) oszlopdiagram a `kosarstat_game_team_metrics`-ből – ehhez `GameDetails.tsx` egy új lekérdezést kapott (`teamMetrics` state), a `chart-theme.ts` tokenjeivel.
+- [x] **Keresés bővítése** (`components/PlayersList.tsx`) – játékosnév-kereső hozzáadva a `GameLog.tsx` meglévő ellenfél-kereső mintája szerint (Input + Search ikon + X törlés). **Korrekció a tervhez képest**: felderítés közben kiderült, hogy a `GameLog.tsx`-ben már létezik játékos-szűrő (dropdown, nem csak ellenfél-kereső) – ott nem volt szükség további munkára.
+- [x] **Loading/hiba visszajelzés** (`app/page.tsx`) – az első betöltéskor (még nincs adat) a szöveges "Adatok betöltése..." helyett `.skeleton-shimmer` blokkok jelennek meg (eddig sehol nem használt CSS osztály); háttérfrissítéskor (van már adat) marad a diszkrét spinner. `filterError`/`dataError` mostantól Sonner `toast.error`-t is dob a már meglévő inline hibapanel (retry gombbal) mellett – erősebb, azonnali visszajelzés adatbetöltési hibánál.
+- [x] `npx tsc --noEmit` + `npm run build` tiszta minden lépés után.
+
+---
+
+## Lezárt sprint – Design konzisztencia az AseStat 2 mockupokkal ✓ (2026-07-19)
+
+Az `AseStat 2` mappa mockupjaival (`Sidebar Nav.html`, `StatCard.html`, `DataTable.html`) szembeni audit alapján a maradék vizuális rések bezárása. Az élő adatos mockup-elemek (sync/live pill, ⌘1..9 gyorsbillentyűk) tudatosan kimaradtak – nincs mögöttük adatforrás/funkció.
+
+- [x] **`components/GameInput.tsx` törölve** – sehol nem volt importálva (holt kód, ~116 hardcoded paletta-szín), felhasználói döntés alapján törölhető.
+- [x] **Chart-színek tokenizálva** a meglévő `lib/chart-theme.ts` konstansaira:
+  - `components/TeamStatistics.tsx` – slate/szín hex-ek → `CHART_COLORS`/`CHART_GRID`/`CHART_AXIS`/`RECHARTS_TOOLTIP_STYLE`/`RECHARTS_LEGEND_STYLE`.
+  - `components/SeasonComparison.tsx` (18k soros fájl, 194 hardcoded hex előfordulás) – szkriptelt, érték-szintű csere ugyanezekre a tokenekre; `npx tsc --noEmit` + `npm run build` ellenőrizve utána.
+  - `components/PostgameShotScatterChart.tsx` – `#050B14`/`#f8fafc` → `CHART_COLORS.base` (új konstans a `chart-theme.ts`-ben, a meglévő `--bg-base` design token JS-oldali tükrözése) / `CHART_COLORS.primary`.
+- [x] **Sidebar mockup-részletek** (`app/globals.css` "Sidebar/AppShell" szekció + `components/AppSidebar.tsx`):
+  - Avatar jelenlét-pont (`.sb-avatar::after`, zöld pont `--bg-surface-1` gyűrűvel).
+  - Összecsukott nézet tooltip nyila (`.nav-item-tip::before`, forgatott négyzet caret).
+  - Nav-item meta badge-ek (`.nav-item-meta` CSS + `AppSidebar` `navMeta` prop) – a Játékosok és Mérkőzések nav-item valós darabszámot mutat (`playersBySeason.length`, `games.length`), a `page.tsx`-ben már betöltött adatokból, új lekérdezés nélkül.
+- [x] **Topbar oldalcím** (`components/AppTopbar.tsx`) – a breadcrumb alá nagy (2xl/3xl) Barlow Condensed `h1` került az aktív tab címével, a mockup `.topbar h1` mintája szerint.
+- [x] `npx tsc --noEmit` + `npm run build` tiszta mindkét körben.
+- [ ] **Nem változtatott, tudatosan**: `--text-secondary`/`--text-muted` jelenlegi (mockupnál világosabb) értékei maradnak – szándékos olvashatósági eltérés. Sync/live pill és ⌘-gyorsbillentyűk kimaradtak (nincs mögöttük funkció).
+
+---
+
+## Lezárt sprint – 2026/2027 szezon előkészület ✓ (2026-07-19)
+
+Felderítés kimutatta, hogy az SQL-oldali munka nagyrészt már készen volt (`migrations/add-player-game-stats-2026-2027.sql`, `lib/season-tables.ts` mapping) egy korábbi, nem dokumentált munkamenetből. Ez a sprint a hátralévő kód-fixet és a dokumentáció szinkronizálását végezte el.
+
+- [x] **`components/Updates.tsx`** – a hardcoded `player_game_stats_2025_2026` lekérdezés lecserélve: a `seasons` táblából kiolvasott `is_current` szezon nevéből `getSeasonStatsTable()`-lel derivált táblanévre. Szezonváltáskor kód-módosítás nélkül naprakész marad.
+- [x] **`HOWTO-uj-szezon.md`** – teljesen újraírva, hogy a valódi migráció (7 lépés: tábla+FK, RLS, UNION view, 3 INSTEAD OF trigger, aggregált view-k, seasons sor, ellenőrzés) lépéseit tükrözze; a korábbi verzió elavult egyszerűsítést tartalmazott (trigger-frissítés és RLS teljesen hiányzott belőle). Új szakasz az RBAC-kompatibilis RLS-ről és egy külön "Szezonkezdési checklist"-ről (is_current váltás + CI repo variables + első import).
+- [x] `npx tsc --noEmit` tiszta.
+- [ ] **Hátralévő kézi lépés (felhasználó)**: `migrations/add-player-game-stats-2026-2027.sql` futtatása a Supabase SQL Editorban, ha még nem történt meg – enélkül a `lib/season-tables.ts` mappingben szereplő 2026/2027 bejegyzés "üres" hivatkozás.
+- [ ] **Szezonkezdéskor** (nem most): `is_current` átbillentés + GitHub Actions repo variables (`HUNBASKET_SEASON_SLUG`/`HUNBASKET_SEASON_NAME`/`KOSARSTAT_SEASON_NAME`) átállítása – lásd `HOWTO-uj-szezon.md` checklist.
+
+---
+
+## Lezárt sprint – RBAC: Admin vs. Felhasználó ✓ (2026-07-19)
+
+Felhasználói döntés alapján: MINDEN írás (import, törlés, kezelés ÉS AI riport generálás/mentés) admin-only, a sima bejelentkezett felhasználó tisztán olvasó. Az admin szerepkör a Supabase `user_metadata.role === 'admin'` alapján dől el (Dashboardban kézzel állítva, ahogy eddig).
+
+- [x] **`lib/api-auth.ts`** – új `requireAdmin()` guard: token-validálás + `user_metadata.role === 'admin'` ellenőrzés, hiánya esetén 403. A `requireAuth` megmarad jövőbeli olvasó route-okhoz.
+- [x] **Mind a 13 `app/api/*` route** átállítva `requireAuth` → `requireAdmin`-ra (minden route mutáló; a riport-olvasás kliens-oldali Supabase lekérdezés, nem API route – azt nem érinti).
+- [x] **`app/page.tsx`** – a `standings` tabon a `StandingsImport` mostantól `{isAdmin && ...}` mögött (a `StandingsView` mindenkié marad); a `GamesList` `isAdmin` propot kap.
+- [x] **`components/GamesList.tsx`** – Szerkesztés és Törlés gombok csak adminnak renderelődnek (`isAdmin` prop, default false).
+- [x] **`migrations/extend-rbac-standings-teams.sql`** (új) – admin-only INSERT/UPDATE/DELETE a `standings` és `teams` táblákra; a korábbi „bármely authenticated írhat" standings-policy cseréje. Dinamikusan törli a meglévő írás-policykat, SELECT marad mindenkinek. – **KÉZZEL FUTTATANDÓ Supabase SQL Editorban!** Előfeltétel: `add-rbac-rls.sql` (is_admin() függvény) lefuttatva – **ellenőrizendő, hogy élesben le van-e futtatva!**
+- [x] `npx tsc --noEmit` + `npm run build` tiszta.
+- [ ] **Hátralévő kézi lépés**: a két migráció futtatása/ellenőrzése Supabase-ben + böngészős teszt nem-admin userrel (403 az API-n, rejtett gombok a UI-n).
+
+---
+
+## Lezárt sprint – Elemzések oldal reszponzivitás-hiba javítása ✓ (2026-07-19)
+
+Az AppShell sprint után jelzett hiba: a sidebar bevezetése óta az Elemzések (SeasonComparison) oldal, főleg a post-game jelentés generálásakor, vízszintesen túlcsordult – görgetni kellett, sidebar állapottól és ablakmérettől függetlenül. Böngészős console-diagnosztikával (`scrollWidth`/`clientWidth` összevetés) behatárolva, két különálló gyökérok:
+
+- [x] **`app/globals.css` – `.app-shell > main { min-width: 0 }`** – a sidebar melletti tartalom-grid-cella alapból a benne lévő legszélesebb elem (pl. fix-szélességű play-by-play táblázat) min-content méretére hízott, ez nyomta szélesebbre az egész oldalt a viewportnál. Ez önmagában nem volt elég (lásd következő pont).
+- [x] **`app/globals.css` – `.grid > * { min-width: 0 }`** (a valódi fő ok) – a CSS Grid specifikáció mindkét tengelyen (nem csak a flex fő tengelyén) tartalom-alapú minimumot ad a grid-elemeknek. Az Elemzések oldalon (főleg a post-game szekcióban) rengeteg beágyazott `grid grid-cols-*` elrendezés van (chartok, KPI blokkok, táblázatok), ezek mindegyike egyénileg blokkolta a zsugorodást, ezért a sidebar-fix nem oldotta meg a post-game nézetet. Konzol-diagnosztika: üres classNevű, `clientWidth:0` / `scrollWidth:~1320` divek = a Recharts `ResponsiveContainer` (alapból nem kap classNevet), ami a grid-cella hibás min-content méretezése miatt nem tudott zsugorodni. Globális, de biztonságos szabály – a kódbázisban a grid mindenhol elrendezésre, nem tartalom-alapú méretezésre szolgál, a tényleges görgetést a meglévő `overflow-x-auto` konténerek kezelik.
+- [x] **`components/SeasonComparison.tsx`** – mind a 11 AI-generált / manuálisan beillesztett szöveges riport blokkra (pregame/postgame GPT-szöveg, játékos/csapat narratívák, manuális beillesztések, tooltip) `break-words` hozzáadva – egy hosszú, szóköz nélküli token (markdown táblázat, kötőjeles felsorolás) az `overflow-wrap` hiányában szintén tudta volna szélesíteni az oldalt. Másodlagos védelem a fő ok mellett.
+- [x] `npx tsc --noEmit` tiszta mindkét körben; felhasználó böngészőben újratesztelte, megerősítve javítva.
+- [x] **Nyitott, e sprintben nem javított**: ugyanez a `.grid > *` minta más oldalakon (pl. Áttekintés, Játékosok) elvileg is előfordulhatott korábban kisebb mértékben – nem volt jelzett panasz rájuk, de a globális szabály ott is érvényesül mostantól.
 
 ---
 

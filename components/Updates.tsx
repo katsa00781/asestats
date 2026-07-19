@@ -2,8 +2,9 @@
 import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Sparkles, TrendingUp, Users, Calendar, BarChart3, Trophy, RefreshCw, Clock } from 'lucide-react';
+import { Sparkles, TrendingUp, Users, Calendar, BarChart3, Trophy, RefreshCw, Clock, ShieldCheck } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { getSeasonStatsTable } from '@/lib/season-tables';
 
 type UpdateItem = {
   date: string;
@@ -15,6 +16,42 @@ type UpdateItem = {
 };
 
 const updates: UpdateItem[] = [
+  {
+    date: '2026. július 19.',
+    version: '1.8.3',
+    category: 'feature',
+    icon: <TrendingUp className="w-5 h-5" />,
+    title: 'Momentum chart, Four Factors, riport-elavulás jelzés és keresés',
+    description:
+      'A meccs részletes nézete két új chart-tal bővült: a kumulatív pontkülönbség (momentum) vonaldiagram negyedenként mutatja, melyik csapat vezetett és mennyivel, a Four Factors oszlopdiagram pedig az eFG%, TOV%, ORB% és FT Rate mutatókat veti össze a két csapat között. Az Elemzések oldalon a mentett játékos- és csapatelemzések "Elavult" jelzést kapnak, ha új meccs történt a riport generálása óta. A Játékosok nézetben új névkereső segíti a gyors szűrést. Emellett javítva egy régóta jelentkező, néma 400-as hiba (hibás csapatlekérdezés a szűrőben), és az adatbetöltési hibák mostantól azonnali felugró üzenetet is kapnak a meglévő hibapanel mellett.',
+  },
+  {
+    date: '2026. július 19.',
+    version: '1.8.2',
+    category: 'improvement',
+    icon: <Sparkles className="w-5 h-5" />,
+    title: 'Design konzisztencia az AseStat 2 mockupokkal',
+    description:
+      'A Dark Command Center redesign óta visszamaradt vizuális rések bezárva: a sidebar navigáció mostantól valós darabszám-jelzőket mutat (játékos- és meccsszám), az összecsukott nézet tooltipjei nyilat kaptak, az avatar mellett zöld jelenlét-pont jelzi a bejelentkezett állapotot, és a Topbar egy nagy oldalcímmel egészült ki az aktuális nézet nevével. A csapatstatisztika és elemzés oldalak (SeasonComparison, TeamStatistics) valamint a dobástérkép chartjai mostantól a projekt egységes szín-token rendszerét használják a korábbi, kézzel beírt színkódok helyett – nincs vizuális változás, csak a karbantarthatóság javult. A holt GameInput.tsx fájl (sehol nem használt, régi kód) törölve.',
+  },
+  {
+    date: '2026. július 19.',
+    version: '1.8.1',
+    category: 'fix',
+    icon: <Calendar className="w-5 h-5" />,
+    title: '2026/2027 szezon-előkészület: dinamikus statisztikatábla',
+    description:
+      'A Frissítések oldal statisztika-időbélyege eddig mindig a 2025/2026 szezon tábláját kérdezte le hardcode-olva. Mostantól a mindenkori aktuális (is_current) szezon tábláját olvassa a lib/season-tables.ts mappingből, így szezonváltáskor automatikusan naprakész marad. A 2026/2027 szezon SQL-oldali előkészülete (tábla, view-k, triggerek) már elkészült egy korábbi migrációban – az aktiválás lépéseit a HOWTO-uj-szezon.md dokumentálja.',
+  },
+  {
+    date: '2026. július 19.',
+    version: '1.8.0',
+    category: 'feature',
+    icon: <ShieldCheck className="w-5 h-5" />,
+    title: 'Admin és felhasználói jogosultságok (RBAC)',
+    description:
+      'Az alkalmazás mostantól kétszintű jogosultságkezelést használ: az adminok kezelhetik az adatokat (import, törlés, szerkesztés, tabella-import) és generálhatnak AI riportokat, a sima felhasználók pedig olvasó módban érik el az összes statisztikát és elemzést. A védelem három rétegű: a felület elrejti az admin funkciókat, az API végpontok admin szerepkört követelnek meg, és az adatbázis szintjén is csak admin írhat.',
+  },
   {
     date: '2026. április 3.',
     version: '1.7.7',
@@ -358,6 +395,12 @@ export function Updates() {
 
   useEffect(() => {
     async function fetchTimestamps() {
+      const { data: seasons } = await supabase
+        .from('seasons')
+        .select('name, is_current');
+      const currentSeasonName = seasons?.find(s => s.is_current)?.name;
+      const statsTable = currentSeasonName ? getSeasonStatsTable(currentSeasonName) : 'player_game_stats';
+
       const [gamesRes, statsRes, fixturesRes] = await Promise.all([
         supabase
           .from('games')
@@ -366,7 +409,7 @@ export function Updates() {
           .limit(1)
           .single(),
         supabase
-          .from('player_game_stats_2025_2026')
+          .from(statsTable)
           .select('created_at')
           .order('created_at', { ascending: false })
           .limit(1)

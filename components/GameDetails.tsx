@@ -157,6 +157,17 @@ type QuarterStatRow = {
   team_side: 'home' | 'away' | 'unknown';
   quarter: number;
   points: number | null;
+  cumulative_points: number | null;
+};
+
+type TeamMetricsRow = {
+  team_side: 'home' | 'away' | 'unknown';
+  poss: number | null;
+  ortg: number | null;
+  efg: number | null;
+  tov_pct: number | null;
+  orb_pct: number | null;
+  ftm_rate: number | null;
 };
 
 const PLAYER_STATS_COLUMNS: ColumnDef<PlayerGameStat>[] = [
@@ -285,6 +296,7 @@ export function GameDetails({ gameId, onBack }: GameDetailsProps) {
   const [playerStats, setPlayerStats] = useState<PlayerGameStat[]>([]);
   const [textReports, setTextReports] = useState<TextReport[]>([]);
   const [quarterStats, setQuarterStats] = useState<QuarterStatRow[]>([]);
+  const [teamMetrics, setTeamMetrics] = useState<TeamMetricsRow[]>([]);
   const [ourSide, setOurSide] = useState<'home' | 'away'>('home');
   const [loading, setLoading] = useState(true);
   const [playerBreakdowns, setPlayerBreakdowns] = useState<PlayerPostGameBreakdown[]>([]);
@@ -416,13 +428,21 @@ export function GameDetails({ gameId, onBack }: GameDetailsProps) {
       if (gameRow?.kosarstat_game_id && gameRow?.season_id) {
         const { data: qData } = await supabase
           .from('kosarstat_game_quarter_stats' as never)
-          .select('team_side, quarter, points')
+          .select('team_side, quarter, points, cumulative_points')
           .eq('kosarstat_game_id', gameRow.kosarstat_game_id)
           .eq('season_id', gameRow.season_id)
           .order('quarter');
 
         setQuarterStats((qData ?? []) as QuarterStatRow[]);
         setOurSide(gameRow.home_away as 'home' | 'away');
+
+        const { data: tmData } = await supabase
+          .from('kosarstat_game_team_metrics' as never)
+          .select('team_side, poss, ortg, efg, tov_pct, orb_pct, ftm_rate')
+          .eq('kosarstat_game_id', gameRow.kosarstat_game_id)
+          .eq('season_id', gameRow.season_id);
+
+        setTeamMetrics((tmData ?? []) as TeamMetricsRow[]);
 
         // Load Kosarstat clutch data
         const { data: clutchRawRows } = await supabase
@@ -963,6 +983,7 @@ export function GameDetails({ gameId, onBack }: GameDetailsProps) {
       <GamePbpCharts
         quarterStats={quarterStats}
         playerStats={playerStats}
+        teamMetrics={teamMetrics}
         ourSide={ourSide}
         teamShortName={gameComparison.team_short_name}
         opponent={gameComparison.opponent}

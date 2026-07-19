@@ -859,6 +859,24 @@
 .app-shell.is-collapsed {
   grid-template-columns: var(--sb-w-collapsed) 1fr;
 }
+/* A tartalom grid-cella alapból a benne lévő legszélesebb elem (pl. fix-szélességű
+   play-by-play táblázat) min-content méretére hízik, ami az egész oldalt szélesebbre
+   nyomja a viewportnál. min-width: 0 engedi, hogy a cella a track méretére zsugorodjon,
+   a belső overflow-x-auto konténerek pedig ténylegesen görgessenek túlcsordulás helyett. */
+.app-shell > main {
+  min-width: 0;
+}
+/* A CSS Grid tovább örökli ugyanezt a hibát minden beágyazott `grid grid-cols-*`
+   elrendezésnél (a Grid specifikáció mindkét tengelyen tartalom-alapú minimumot ad
+   az elemeknek, nem csak flexnél a fő tengelyen) – az Elemzések oldalon egy chart
+   (ResponsiveContainer) vagy fix-szélességű táblázat egy grid-cellában így az egész
+   sort, majd az egész oldalt szélesebbre nyomta a viewportnál, sidebar-állapottól
+   függetlenül. A grid itt mindenhol elrendezésre, nem tartalom-alapú méretezésre
+   szolgál, ezért globálisan engedjük a zsugorodást; a belső overflow-x-auto
+   konténerek kezelik a tényleges görgetést. */
+.grid > * {
+  min-width: 0;
+}
 
 .sidebar {
   position: sticky;
@@ -1000,6 +1018,15 @@
   opacity: 1;
   transition: opacity 120ms var(--ease-glide);
 }
+.nav-item .nav-item-meta {
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+  padding: 2px 5px;
+  border: 1px solid var(--border-active);
+  border-radius: var(--radius-xs);
+}
 
 .nav-item.active {
   background: var(--bg-surface-1);
@@ -1029,7 +1056,8 @@
 }
 .sidebar[data-collapsed="true"] .sb-brand,
 .sidebar[data-collapsed="true"] .sb-group-label,
-.sidebar[data-collapsed="true"] .nav-item-label {
+.sidebar[data-collapsed="true"] .nav-item-label,
+.sidebar[data-collapsed="true"] .nav-item-meta {
   opacity: 0;
   pointer-events: none;
 }
@@ -1079,6 +1107,15 @@
   box-shadow: 0 8px 24px rgba(0, 0, 0, .5);
   display: none;
 }
+.nav-item .nav-item-tip::before {
+  content: "";
+  position: absolute;
+  left: -5px; top: 50%; transform: translateY(-50%) rotate(45deg);
+  width: 8px; height: 8px;
+  background: var(--bg-surface-3);
+  border-left: 1px solid var(--border-active);
+  border-bottom: 1px solid var(--border-active);
+}
 .sidebar[data-collapsed="true"] .nav-item .nav-item-tip { display: block; }
 .sidebar[data-collapsed="true"] .nav-item:hover .nav-item-tip {
   opacity: 1;
@@ -1101,6 +1138,14 @@
   font-size: 0.78rem;
   color: var(--bg-base);
   letter-spacing: 0.04em;
+  position: relative;
+}
+.sb-avatar::after {
+  content: "";
+  position: absolute; right: -1px; bottom: -1px;
+  width: 9px; height: 9px; border-radius: 999px;
+  background: var(--positive);
+  border: 2px solid var(--bg-surface-1);
 }
 .sb-user {
   display: flex; flex-direction: column;
@@ -1170,7 +1215,8 @@
     pointer-events: auto !important;
     letter-spacing: 0.02em;
   }
-  .nav-item .nav-item-tip { display: none !important; }
+  .nav-item .nav-item-tip,
+  .nav-item .nav-item-meta { display: none !important; }
   .nav-item.active { background: var(--bg-surface-2); box-shadow: none; }
   .nav-item.active::after {
     content: "";

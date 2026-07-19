@@ -1,9 +1,11 @@
 'use client';
 
+import { useState } from 'react';
 import type { GamePerformance, PlayerStats, ShootingStats } from '@/lib/dashboard-types';
 import { DataTable, type ColumnDef } from './ui/data-table';
 import { Button } from './ui/button';
-import { Users } from 'lucide-react';
+import { Input } from './ui/input';
+import { Users, Search, X } from 'lucide-react';
 
 type PlayersListProps = {
   players: PlayerStats[];
@@ -106,6 +108,8 @@ function buildPositionBadgeClass(position: string): string {
 }
 
 export function PlayersList({ players, onSelectPlayer, onCompare }: PlayersListProps) {
+  const [nameSearch, setNameSearch] = useState('');
+
   if (players.length === 0) {
     return (
       <div className="text-center py-12">
@@ -115,7 +119,11 @@ export function PlayersList({ players, onSelectPlayer, onCompare }: PlayersListP
     );
   }
 
-  const rows: PlayerRow[] = players.map((p) => ({
+  const filteredPlayers = nameSearch.trim()
+    ? players.filter((p) => p.name.toLowerCase().includes(nameSearch.toLowerCase()))
+    : players;
+
+  const rows: PlayerRow[] = filteredPlayers.map((p) => ({
     ...p,
     ppg: p.gamesPlayed > 0 ? p.points / p.gamesPlayed : 0,
     rpg: p.gamesPlayed > 0 ? p.rebounds.total / p.gamesPlayed : 0,
@@ -255,6 +263,23 @@ export function PlayersList({ players, onSelectPlayer, onCompare }: PlayersListP
             <Users className="h-4 w-4 mr-2" strokeWidth={1.6} />
             Összehasonlítás
           </Button>
+        )}
+      </div>
+      <div className="relative sm:max-w-xs">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted pointer-events-none" strokeWidth={1.6} />
+        <Input
+          value={nameSearch}
+          onChange={(e) => setNameSearch(e.target.value)}
+          placeholder="Játékos keresése..."
+          className="pl-9 pr-9"
+        />
+        {nameSearch && (
+          <button
+            onClick={() => setNameSearch('')}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-secondary"
+          >
+            <X className="h-4 w-4" strokeWidth={1.6} />
+          </button>
         )}
       </div>
       <DataTable<PlayerRow>

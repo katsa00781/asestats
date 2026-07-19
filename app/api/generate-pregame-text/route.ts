@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { requireAuth } from '@/lib/api-auth';
+import { requireAdmin } from '@/lib/api-auth';
 import { createHash } from 'node:crypto';
 import type { ScoutingReport } from '@/lib/pregame-scouting';
 import { callAi, AI_GENERATED_BY } from '@/lib/ai-client';
@@ -242,7 +242,7 @@ const callAiForPregame = (prompt: string) =>
   callAi(SYSTEM_PROMPT, prompt, 0.3);
 
 export async function POST(request: Request) {
-  const auth = await requireAuth(request);
+  const auth = await requireAdmin(request);
   if (!auth.ok) return auth.response;
 
   const payload = (await request.json().catch(() => null)) as PregameTextPayload | null;

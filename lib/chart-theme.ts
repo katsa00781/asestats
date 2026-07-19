@@ -14,6 +14,7 @@ export const CHART_COLORS = {
   primary:  '#E8F4FF',
   secondary:'#5A7A99',
   muted:    '#2D4A6B',
+  base:     '#050B14',
 } as const;
 
 export const CHART_GRID = {

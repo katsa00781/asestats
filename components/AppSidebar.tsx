@@ -77,9 +77,10 @@ interface AppSidebarProps {
   isAdmin: boolean;
   userEmail: string;
   onCollapsedChange?: (collapsed: boolean) => void;
+  navMeta?: Record<string, number>;
 }
 
-export function AppSidebar({ activeTab, onTabChange, isAdmin, userEmail, onCollapsedChange }: AppSidebarProps) {
+export function AppSidebar({ activeTab, onTabChange, isAdmin, userEmail, onCollapsedChange, navMeta }: AppSidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
 
   useEffect(() => {
@@ -143,6 +144,7 @@ export function AppSidebar({ activeTab, onTabChange, isAdmin, userEmail, onColla
             {group.items.map(item => {
               const Icon = item.icon;
               const isActive = activeTab === item.key;
+              const meta = navMeta?.[item.key];
               return (
                 <button
                   key={item.key}
@@ -156,6 +158,7 @@ export function AppSidebar({ activeTab, onTabChange, isAdmin, userEmail, onColla
                     <Icon className="h-[18px] w-[18px]" strokeWidth={1.6} />
                   </span>
                   <span className="nav-item-label">{item.label}</span>
+                  {meta !== undefined && <span className="nav-item-meta">{meta}</span>}
                   <span className="nav-item-tip">{item.label}</span>
                 </button>
               );

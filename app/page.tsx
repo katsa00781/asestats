@@ -1,7 +1,8 @@
 'use client';
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { Loader2, AlertCircle, RefreshCw } from 'lucide-react';
+import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { AppSidebar } from '@/components/AppSidebar';
 import { AppTopbar } from '@/components/AppTopbar';
@@ -89,6 +90,14 @@ export default function Home() {
 
   const { user, loading, isAdmin, signOut } = useAuth();
 
+  useEffect(() => {
+    if (filterError) toast.error(filterError);
+  }, [filterError]);
+
+  useEffect(() => {
+    if (dataError) toast.error(dataError);
+  }, [dataError]);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-base dark flex items-center justify-center">
@@ -109,6 +118,7 @@ export default function Home() {
         isAdmin={isAdmin}
         userEmail={user.email ?? ''}
         onCollapsedChange={setSidebarCollapsed}
+        navMeta={{ players: playersBySeason.length, games: games.length }}
       />
       <main className="px-4 sm:px-8 lg:px-9 py-6 sm:py-7 pb-24 md:pb-7">
         <AppTopbar
@@ -158,10 +168,18 @@ export default function Home() {
           </div>
         )}
         {(filterLoading || dataLoading) && (
-          <div className="mb-4 flex items-center gap-2 text-sm text-secondary">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Adatok betöltése...
-          </div>
+          players.length === 0 ? (
+            <div className="mb-4 grid grid-cols-2 sm:grid-cols-4 gap-3 stagger">
+              {[0, 1, 2, 3].map((i) => (
+                <div key={i} className="skeleton-shimmer h-20 rounded-lg" style={{ ['--i' as unknown as string]: i }} />
+              ))}
+            </div>
+          ) : (
+            <div className="mb-4 flex items-center gap-2 text-sm text-secondary">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Adatok frissítése...
+            </div>
+          )
         )}
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4 sm:space-y-6">
@@ -242,11 +260,13 @@ export default function Home() {
                 selectedSeasonId={selectedSeasonId}
                 selectedSeasonName={allSeasons.find(s => s.id === selectedSeasonId)?.name}
               />
-              <StandingsImport
-                onImportComplete={() => setStandingsRefresh(prev => prev + 1)}
-                selectedSeasonId={selectedSeasonId}
-                selectedSeasonName={allSeasons.find(s => s.id === selectedSeasonId)?.name}
-              />
+              {isAdmin && (
+                <StandingsImport
+                  onImportComplete={() => setStandingsRefresh(prev => prev + 1)}
+                  selectedSeasonId={selectedSeasonId}
+                  selectedSeasonName={allSeasons.find(s => s.id === selectedSeasonId)?.name}
+                />
+              )}
             </div>
           </TabsContent>
 
@@ -255,6 +275,7 @@ export default function Home() {
               games={games}
               upcomingFixtures={upcomingFixtures}
               onGameDeleted={loadData}
+              isAdmin={isAdmin}
             />
           </TabsContent>
 
