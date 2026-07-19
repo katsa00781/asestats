@@ -12427,10 +12427,10 @@ export function SeasonComparison({
                   </TooltipProvider>
 
                   {playerAdvancedInsights.coachingFocus.length > 0 && (
-                    <div className="space-y-1 rounded-md border border-cyan-900/70 bg-cyan-950/20 p-3">
-                      <div className="text-xs font-medium text-cyan-200">Edzői fókusz (automatikus)</div>
+                    <div className="space-y-1 rounded-md border border-cyan/30 bg-cyan/10 p-3">
+                      <div className="text-xs font-medium text-cyan">Edzői fókusz (automatikus)</div>
                       {playerAdvancedInsights.coachingFocus.map(item => (
-                        <div key={item} className="text-xs text-cyan-100">• {item}</div>
+                        <div key={item} className="text-xs text-cyan">• {item}</div>
                       ))}
                     </div>
                   )}
@@ -12600,7 +12600,7 @@ export function SeasonComparison({
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="text-sm text-secondary font-medium">LLM csapatértékelés (gyenge pontok és matchup következmény)</div>
                   <div className="flex flex-wrap items-center gap-2">
-                    <div className="flex items-center gap-1 rounded-md border border-border-subtlebg-surface-1/80 p-1">
+                    <div className="flex items-center gap-1 rounded-md border border-border-subtle bg-surface-1/80 p-1">
                       {[
                         { key: 'fan', label: 'Szurkolóbarát' },
                         { key: 'coach', label: 'Edzői' },
@@ -12625,7 +12625,7 @@ export function SeasonComparison({
                       size="sm"
                       onClick={handleGenerateTeamNarrative}
                       disabled={isGeneratingTeamNarrative || !effectiveTeamAnalysis}
-                      className="bg-indigo-500 hover:bg-indigo-400 text-white disabled:opacity-60"
+                      className="bg-ai text-white hover:opacity-90 disabled:opacity-60"
                     >
                       {isGeneratingTeamNarrative ? 'LLM értékelés készül…' : teamNarrative.status === 'success' ? 'LLM értékelés frissítése' : 'LLM értékelés generálása'}
                     </Button>
@@ -13133,7 +13133,7 @@ export function SeasonComparison({
                 <div className="space-y-2">
                   <div className="text-sm text-secondary font-medium">Actionable fókusz (edzői)</div>
                   {effectiveTeamAnalysis.actionableFocus.map(item => (
-                    <div key={item} className="text-sm text-cyan-100 rounded-md border border-cyan-700/40 bg-cyan-950/20 px-3 py-2">• {item}</div>
+                    <div key={item} className="text-sm text-cyan rounded-md border border-cyan/30 bg-cyan/10 px-3 py-2">• {item}</div>
                   ))}
                 </div>
               )}
@@ -13472,7 +13472,7 @@ export function SeasonComparison({
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="rounded-md border border-border-subtlebg-surface-2/60 px-3 py-2 text-xs text-secondary">
+                <div className="rounded-md border border-border-subtle bg-surface-2/60 px-3 py-2 text-xs text-secondary">
                   Aktív profil: <span className="font-semibold text-primary">{projectionScenarioSettings.label}</span>
                   <div className="mt-1 text-secondary">
                     A modell csapatstatisztikákból számolt erősségre épül, utolsó 5 meccs súlyozással.
@@ -13480,7 +13480,7 @@ export function SeasonComparison({
                 </div>
               </div>
 
-              <div className="rounded-md border border-border-subtlebg-surface-2/50 p-3 space-y-3">
+              <div className="rounded-md border border-border-subtle bg-surface-2/50 p-3 space-y-3">
                 <div className="text-xs uppercase tracking-wide text-secondary">What-if panel</div>
                 <div className="rounded-md border border-border-subtle bg-surface-1/60 px-3 py-2 text-xs text-secondary space-y-1">
                   <div className="font-medium text-primary">Használati útmutató</div>
@@ -13539,7 +13539,7 @@ export function SeasonComparison({
                       className=""
                     />
                   </div>
-                  <Button type="button" size="sm" onClick={applyWhatIfTeamAdjustment} className="bg-cyan-600 hover:bg-cyan-500 text-white">
+                  <Button type="button" size="sm" onClick={applyWhatIfTeamAdjustment}>
                     Alkalmaz
                   </Button>
                   <Button type="button" size="sm" variant="outline" onClick={resetWhatIfSettings} className="border-border-subtle text-secondary hover:bg-surface-2">
@@ -13569,7 +13569,7 @@ export function SeasonComparison({
                 )}
               </div>
 
-              <div className="rounded-md border border-border-subtlebg-surface-2/40 p-3">
+              <div className="rounded-md border border-border-subtle bg-surface-2/40 p-3">
                 <div className="text-xs uppercase tracking-wide text-secondary mb-2">Forma ellenőrzés (utolsó 5 meccs)</div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs">
@@ -13601,21 +13601,21 @@ export function SeasonComparison({
               </div>
 
               {projectionContext && (
-                <div className="rounded-lg border border-cyan-700/40 bg-cyan-950/20 px-4 py-3 text-sm text-cyan-100">
+                <div className="rounded-lg border border-cyan/30 bg-cyan/10 px-4 py-3 text-sm text-cyan">
                   <div>
                     Várható alapszakasz seed: <span className="font-semibold">{projectionContext.seed}. hely</span>
                     {projectionFinalPlaceForSelectedTeam && (
-                      <span className="ml-2 text-cyan-200">
-                        • Várható végső hely: <span className="font-semibold text-cyan-100">{projectionFinalPlaceForSelectedTeam}. hely</span>
+                      <span className="ml-2 text-cyan">
+                        • Várható végső hely: <span className="font-semibold text-cyan">{projectionFinalPlaceForSelectedTeam}. hely</span>
                       </span>
                     )}
                   </div>
-                  <div className="mt-1 text-cyan-200">
+                  <div className="mt-1 text-cyan">
                     Hátralévő meccsek átlagos győzelmi esélye: {(projectionContext.avgWinProbability * 100).toFixed(1)}% •
                     Bizonyosság: {projectionContext.certaintyLabel}
                   </div>
                   {projectionContext.playoffOpponent && projectionContext.playoffOpponentSeed && (
-                    <div className="mt-1 text-cyan-200">
+                    <div className="mt-1 text-cyan">
                       Lehetséges playoff párharc: {projectionContext.seed}. vs {projectionContext.playoffOpponentSeed}. (
                       {projectionContext.playoffOpponent})
                     </div>
@@ -13624,40 +13624,40 @@ export function SeasonComparison({
               )}
 
               {projectionWhyForSelectedTeam && (
-                <div className="rounded-md border border-indigo-700/40 bg-indigo-950/20 px-4 py-3 space-y-2">
-                  <div className="text-xs uppercase tracking-wide text-indigo-200">Miért ez a várható végső hely?</div>
-                  <div className="text-sm text-indigo-100">
+                <div className="rounded-md border border-cyan/30 bg-cyan/10 px-4 py-3 space-y-2">
+                  <div className="text-xs uppercase tracking-wide text-cyan">Miért ez a várható végső hely?</div>
+                  <div className="text-sm text-cyan">
                     {projectionWhyForSelectedTeam.selectedTeamName} erősségi score: {projectionWhyForSelectedTeam.selectedStrength >= 0 ? '+' : ''}
                     {projectionWhyForSelectedTeam.selectedStrength.toFixed(2)}
                   </div>
                   {projectionWhyForSelectedTeam.selectedForm && (
-                    <div className="text-sm text-indigo-200">
+                    <div className="text-sm text-cyan">
                       Utolsó {projectionWhyForSelectedTeam.selectedForm.games} meccs forma: {projectionWhyForSelectedTeam.selectedForm.wins}-
                       {projectionWhyForSelectedTeam.selectedForm.losses}, nettó {projectionWhyForSelectedTeam.selectedForm.netPerGame >= 0 ? '+' : ''}
                       {projectionWhyForSelectedTeam.selectedForm.netPerGame.toFixed(1)} pont/meccs.
                     </div>
                   )}
                   {projectionWhyForSelectedTeam.selectedScheduleStrength && (
-                    <div className="text-sm text-indigo-200">
+                    <div className="text-sm text-cyan">
                       Ellenfél-erősség (SOS): szezon {projectionWhyForSelectedTeam.selectedScheduleStrength.season >= 0 ? '+' : ''}
                       {projectionWhyForSelectedTeam.selectedScheduleStrength.season.toFixed(2)} • utolsó 5 {projectionWhyForSelectedTeam.selectedScheduleStrength.recent >= 0 ? '+' : ''}
                       {projectionWhyForSelectedTeam.selectedScheduleStrength.recent.toFixed(2)}.
                     </div>
                   )}
                   {projectionWhyForSelectedTeam.qfSeries && (
-                    <div className="text-sm text-indigo-200">
+                    <div className="text-sm text-cyan">
                       Negyeddöntő esély: {projectionWhyForSelectedTeam.qfSeries.winner} várható győzelmi esélye{' '}
                       {(Math.max(projectionWhyForSelectedTeam.qfSeries.homeWinProbability, projectionWhyForSelectedTeam.qfSeries.awayWinProbability) * 100).toFixed(1)}%
                       .
                     </div>
                   )}
                   {projectionWhyForSelectedTeam.h2hLine && (
-                    <div className="text-sm text-indigo-200">{projectionWhyForSelectedTeam.h2hLine}</div>
+                    <div className="text-sm text-cyan">{projectionWhyForSelectedTeam.h2hLine}</div>
                   )}
                 </div>
               )}
 
-              <div className="rounded-md border border-border-subtlebg-surface-2/40 p-3 space-y-3">
+              <div className="rounded-md border border-border-subtle bg-surface-2/40 p-3 space-y-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
                     <div className="text-xs uppercase tracking-wide text-secondary">Hátralévő meccsek (interaktív)</div>
@@ -13749,7 +13749,7 @@ export function SeasonComparison({
                       return (
                         <tr
                           key={row.team}
-                          className={`border-b border-border-subtle ${isSelectedTeam ? 'bg-sky-900/20' : ''}`}
+                          className={`border-b border-border-subtle ${isSelectedTeam ? 'bg-cyan/10' : ''}`}
                         >
                           <td className="py-2 pr-2 text-primary">
                             <span className={isTop8 ? 'text-positive font-semibold' : 'text-secondary'}>{index + 1}</span>
@@ -13758,7 +13758,7 @@ export function SeasonComparison({
                             <button
                               type="button"
                               onClick={() => setSelectedProjectionTeamKey(rowTeamKey)}
-                              className={`text-left hover:text-cyan-300 ${isSelectedTeam ? 'text-cyan-200 font-medium' : ''}`}
+                              className={`text-left hover:text-cyan ${isSelectedTeam ? 'text-cyan font-medium' : ''}`}
                             >
                               {row.team}
                             </button>
@@ -13769,7 +13769,7 @@ export function SeasonComparison({
                           <td className="py-2 pr-2 text-right text-primary">{row.projectedWins.toFixed(1)}</td>
                           <td className="py-2 pr-2 text-right text-primary">{row.projectedLosses.toFixed(1)}</td>
                           <td className="py-2 pr-2 text-right text-secondary">{(row.avgWinProbability * 100).toFixed(1)}%</td>
-                          <td className="py-2 text-right text-cyan-300">+{row.expectedExtraWins.toFixed(1)}</td>
+                          <td className="py-2 text-right text-cyan">+{row.expectedExtraWins.toFixed(1)}</td>
                           <td
                             className={`py-2 text-right ${
                               row.certaintyLabel === 'Magas'
@@ -13819,7 +13819,7 @@ export function SeasonComparison({
                               ({item.homeSeed}) {item.homeTeam} vs ({item.awaySeed}) {item.awayTeam}
                             </td>
                             <td className="py-2 pr-2 text-right text-primary">{(item.homeWinProbability * 100).toFixed(1)}%</td>
-                            <td className="py-2 pr-2 text-right text-cyan-300">
+                            <td className="py-2 pr-2 text-right text-cyan">
                               {item.winner} ({item.mostLikelyScore})
                             </td>
                             <td className="py-2 pr-2 text-right">
@@ -14313,7 +14313,7 @@ export function SeasonComparison({
                   rows.push({
                     teamKey: 'opponent',
                     teamLabel: opponentLabel,
-                    accentClass: 'border-orange-800/50 bg-orange-950/10',
+                    accentClass: 'border-orange/30 bg-orange/10',
                     card: opponentCard,
                   });
                 }
@@ -14341,7 +14341,7 @@ export function SeasonComparison({
                           <div className="px-2 py-1 rounded-full border border-positive/30 bg-positive/15 text-positive">
                             {ownLabel}: {pregameReport.winProbability.ownPct.toFixed(1)}%
                           </div>
-                          <div className="px-2 py-1 rounded-full border border-orange-700/50 bg-orange-950/30 text-orange-200">
+                          <div className="px-2 py-1 rounded-full border border-orange/40 bg-orange/15 text-orange">
                             {opponentLabel}: {pregameReport.winProbability.opponentPct.toFixed(1)}%
                           </div>
                         </div>
@@ -14453,7 +14453,7 @@ export function SeasonComparison({
                         <div className="text-xs text-secondary">{pregameOptimalLineup.headline}</div>
                         <div className="flex flex-wrap gap-2">
                           {pregameOptimalLineup.best.roleAssignments.map(item => (
-                            <Badge key={`pregame-optimal-${item.playerId}-${item.role}`} variant="secondary" className="bg-sky-900/30 text-sky-100 border border-sky-700/50">
+                            <Badge key={`pregame-optimal-${item.playerId}-${item.role}`} variant="secondary" className="bg-cyan/15 text-cyan border border-cyan/40">
                               {item.role}: {item.name}
                             </Badge>
                           ))}
@@ -14553,7 +14553,7 @@ export function SeasonComparison({
                                   {ownOffenseLabels.map(item => (
                                     <Badge
                                       key={`own-offense-${item}`}
-                                      className="bg-sky-600/20 text-sky-200 border border-sky-700/40"
+                                      className="bg-cyan/15 text-cyan border border-cyan/40"
                                     >
                                       {item}
                                     </Badge>
@@ -14591,7 +14591,7 @@ export function SeasonComparison({
                                   {opponentOffenseLabels.map(item => (
                                     <Badge
                                       key={`opp-offense-${item}`}
-                                      className="bg-orange-600/20 text-orange-200 border border-orange-700/40"
+                                      className="bg-orange/15 text-orange border border-orange/40"
                                     >
                                       {item}
                                     </Badge>
@@ -14716,10 +14716,10 @@ export function SeasonComparison({
                               <div className="text-xs text-secondary">Arány: {zone.rate.toFixed(1)}% • Hatékonyság: {zone.pct.toFixed(1)}%</div>
                             </div>
                             <div className="text-right text-xs">
-                              <div className={zone.rateDeltaVsLeague >= 0 ? 'text-orange-300' : 'text-secondary'}>
+                              <div className={zone.rateDeltaVsLeague >= 0 ? 'text-orange' : 'text-secondary'}>
                                 {zone.rateDeltaVsLeague >= 0 ? '+' : ''}{zone.rateDeltaVsLeague.toFixed(1)} pp ráta
                               </div>
-                              <div className={zone.pctDeltaVsLeague >= 0 ? 'text-orange-300' : 'text-secondary'}>
+                              <div className={zone.pctDeltaVsLeague >= 0 ? 'text-orange' : 'text-secondary'}>
                                 {zone.pctDeltaVsLeague >= 0 ? '+' : ''}{zone.pctDeltaVsLeague.toFixed(1)} pp liga vs
                               </div>
                             </div>
@@ -14759,7 +14759,7 @@ export function SeasonComparison({
                           {
                             key: 'opponent',
                             title: opponentLabel,
-                            accentClass: 'border-orange-800/50 bg-orange-950/10',
+                            accentClass: 'border-orange/30 bg-orange/10',
                             groups: pregameReport.keyPlayers,
                           },
                         ].map(section => (
@@ -14971,7 +14971,7 @@ export function SeasonComparison({
                           step={1}
                           value={perimeterWeight}
                           onChange={event => setPregamePerimeterWeight(Math.min(Number(event.target.value), 100 - pressureWeight))}
-                          className="w-full accent-sky-400"
+                          className="w-full accent-cyan"
                         />
                       </label>
                       <div className="flex justify-between"><span>Festék kontroll (auto)</span><span>{paintWeight}%</span></div>
@@ -15060,7 +15060,7 @@ export function SeasonComparison({
                       </div>
                       <div className="rounded-lg border border-border-subtle bg-surface-2/40 px-3 py-2">
                         <div className="text-muted uppercase tracking-wide">Ellenfél pontcsökkentés</div>
-                        <div className="mt-1 text-lg font-semibold text-cyan-300">{efficiencyModel.opponentSuppression.toFixed(1)}</div>
+                        <div className="mt-1 text-lg font-semibold text-cyan">{efficiencyModel.opponentSuppression.toFixed(1)}</div>
                         <div className="text-muted">pont/meccs a bázishoz képest</div>
                       </div>
                       <div className="rounded-lg border border-border-subtle bg-surface-2/40 px-3 py-2">
@@ -15100,7 +15100,7 @@ export function SeasonComparison({
                         },
                         {
                           label: opponentLabel,
-                          toneClass: 'accent-orange-400',
+                          toneClass: 'accent-orange',
                           baseline: efficiencyBaseline.opponent,
                           projection: efficiencyModel.opponent,
                           values: {
@@ -15597,7 +15597,7 @@ export function SeasonComparison({
                               className="grid grid-cols-[1fr_auto_auto] gap-2 items-center bg-surface-1/60 border border-border-subtle rounded-md px-2 py-1 text-xs"
                             >
                               <span className="text-primary">{player.name} <span className="text-muted">({player.minutesPerGame.toFixed(1)} mpg)</span></span>
-                              <span className="text-sky-300">PER*: {player.proxyPer.toFixed(1)}</span>
+                              <span className="text-cyan">PER*: {player.proxyPer.toFixed(1)}</span>
                               <span className="text-positive">WS*: {player.proxyWinShare.toFixed(2)}</span>
                             </div>
                           )) : <div className="text-xs text-muted">Nincs elég adat.</div>}
@@ -15612,8 +15612,8 @@ export function SeasonComparison({
                               className="grid grid-cols-[1fr_auto_auto] gap-2 items-center bg-surface-1/60 border border-border-subtle rounded-md px-2 py-1 text-xs"
                             >
                               <span className="text-primary">{player.name} <span className="text-muted">({player.minutesPerGame.toFixed(1)} mpg)</span></span>
-                              <span className="text-sky-300">PER*: {player.proxyPer.toFixed(1)}</span>
-                              <span className="text-orange-300">WS*: {player.proxyWinShare.toFixed(2)}</span>
+                              <span className="text-cyan">PER*: {player.proxyPer.toFixed(1)}</span>
+                              <span className="text-orange">WS*: {player.proxyWinShare.toFixed(2)}</span>
                             </div>
                           )) : <div className="text-xs text-muted">Nincs elég adat.</div>}
                         </div>
@@ -15632,7 +15632,7 @@ export function SeasonComparison({
                         type="button"
                         onClick={handleGeneratePregameText}
                         disabled={!canGeneratePregameText || isGeneratingPregameText}
-                        className="bg-sky-600 hover:bg-sky-500 text-white disabled:opacity-60"
+                        className="bg-ai text-white hover:opacity-90 disabled:opacity-60"
                       >
                         {isGeneratingPregameText ? 'Pre-game értékelés készítése…' : 'Pre-game GPT értékelés'}
                       </Button>
@@ -15878,10 +15878,10 @@ export function SeasonComparison({
                 || Boolean(kosarstatPostgameContext.clutch?.available)
                 || kosarstatPostgameContext.turnoverTypes.length > 0
               ) && (
-                <div className="rounded-lg border border-sky-900/60 bg-sky-950/20 p-4 space-y-3">
+                <div className="rounded-lg border border-cyan/30 bg-cyan/10 p-4 space-y-3">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="text-sm font-medium text-sky-100">Kosarstat meccs-flow (új import)</div>
-                    <div className="text-xs text-sky-300/70">Negyedek + team metricek</div>
+                    <div className="text-sm font-medium text-cyan">Kosarstat meccs-flow (új import)</div>
+                    <div className="text-xs text-cyan/70">Negyedek + team metricek</div>
                   </div>
 
                   {kosarstatPostgameContext.quarterDiffRows.length > 0 && (
@@ -16041,7 +16041,7 @@ export function SeasonComparison({
                           <div className="text-muted mb-1 text-xs">Labdavesztés típusok (top 5)</div>
                           <div className="flex flex-wrap gap-2">
                             {kosarstatPostgameContext.turnoverTypes.map(item => (
-                              <div key={`to-type-${item.type}`} className="rounded-md border border-border-subtlebg-surface-1/80 px-2 py-1 text-xs text-primary tabular-nums">
+                              <div key={`to-type-${item.type}`} className="rounded-md border border-border-subtle bg-surface-1/80 px-2 py-1 text-xs text-primary tabular-nums">
                                 <span className="text-secondary">{item.type}: </span>
                                 <span className="text-negative">{item.count}</span>
                               </div>
@@ -16061,7 +16061,7 @@ export function SeasonComparison({
               )}
 
               {activeKosarstatTeamAnalysis && (
-                <div className="rounded-lg border border-border-subtlebg-surface-1/80 p-4 space-y-4">
+                <div className="rounded-lg border border-border-subtle bg-surface-1/80 p-4 space-y-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="text-sm font-medium text-primary">
                       Kosarstat lineup elemzés: {activeKosarstatTeamAnalysis.teamName}
@@ -16402,7 +16402,7 @@ export function SeasonComparison({
                             .map(item => (
                               <div key={`best-def-${item.key}`} className="text-xs bg-surface-1/60 rounded px-2 py-1 flex items-center justify-between">
                                 <span className="text-primary truncate pr-2">{item.players.join(' + ')}</span>
-                                <span className="text-cyan-300">{item.defPer40.toFixed(1)}</span>
+                                <span className="text-cyan">{item.defPer40.toFixed(1)}</span>
                               </div>
                             ))}
                         </div>
@@ -16892,7 +16892,7 @@ export function SeasonComparison({
                         <div className="mt-2 flex flex-wrap items-center gap-4 text-xs text-muted">
                           {showPostgameShotPoints && <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-full bg-positive" />Bement</span>}
                           {showPostgameShotPoints && <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-full bg-negative" />Kimaradt</span>}
-                          {showPostgameShotHeatmap && <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-sm bg-orange-400/90" />Heatmap ({postgameHeatmapMode === 'volume' ? 'volumen' : 'FG% hatékonyság'})</span>}
+                          {showPostgameShotHeatmap && <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-sm bg-orange/90" />Heatmap ({postgameHeatmapMode === 'volume' ? 'volumen' : 'FG% hatékonyság'})</span>}
                           <span>Kék vonal: hárompontos ív és sarokhatár, fehér vonal: alapvonal/palánk</span>
                         </div>
                       </div>
@@ -16913,7 +16913,7 @@ export function SeasonComparison({
                         >
                           <div className="flex items-center justify-between text-[11px] uppercase tracking-wide text-secondary">
                             <span>{group.label}</span>
-                            <span className={group.axis === 'offense' ? 'text-orange-300' : 'text-cyan-300'}>
+                            <span className={group.axis === 'offense' ? 'text-orange' : 'text-cyan'}>
                               {group.axis === 'offense' ? '⚡' : '🛡️'}
                             </span>
                           </div>
@@ -17051,7 +17051,7 @@ export function SeasonComparison({
                           key: 'engines',
                           title: 'Stabil alappillérek',
                           player: postgameReport.playerReport.highlights.engines[0],
-                          classes: 'bg-sky-950/30 border border-sky-800/40',
+                          classes: 'bg-cyan/10 border border-cyan/30',
                           fallback: 'Nincs stabil másodlagos motor.',
                         },
                         {
@@ -17183,7 +17183,7 @@ export function SeasonComparison({
                       variant="outline"
                       onClick={handleGenerateAllPlayerNarratives}
                       disabled={isGeneratingAllPlayerNarratives || !postgameReport.playerReport.players.length}
-                      className="bg-violet-900/40 text-violet-200 border-violet-700 hover:bg-violet-800/60"
+                      className="bg-ai/15 text-ai border-ai/50 hover:bg-ai/25"
                     >
                       {isGeneratingAllPlayerNarratives ? 'LLM értékelések készülnek…' : 'Összes játékos LLM értékelése'}
                     </Button>
@@ -17312,7 +17312,7 @@ export function SeasonComparison({
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex flex-wrap items-center gap-3">
-            <div className="flex items-center gap-1 rounded-md border border-border-subtlebg-surface-1/80 p-1">
+            <div className="flex items-center gap-1 rounded-md border border-border-subtle bg-surface-1/80 p-1">
               {[
                 { key: 'fan', label: 'Szurkolóbarát' },
                 { key: 'balanced', label: 'Balanced' },
@@ -17336,7 +17336,7 @@ export function SeasonComparison({
               type="button"
               onClick={handleGenerateTextReport}
               disabled={!canGenerateTextReport || isGeneratingTextReport}
-              className="bg-indigo-500 hover:bg-indigo-400 text-white disabled:opacity-60"
+              className="bg-ai text-white hover:opacity-90 disabled:opacity-60"
             >
               {isGeneratingTextReport
                 ? 'Elemzés készítése...'
@@ -17825,7 +17825,7 @@ export function SeasonComparison({
               )}
 
               {incomingCandidates.length > 1 && (
-                <div className="rounded-md border border-border-subtlebg-base/60 p-3 space-y-3">
+                <div className="rounded-md border border-border-subtle bg-base/60 p-3 space-y-3">
                   <div className="text-xs text-secondary">Valaszd ki a megfelelo jatekost:</div>
                   <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
                     {incomingCandidates.map(candidate => (
@@ -17839,7 +17839,7 @@ export function SeasonComparison({
                             alt={candidate.name}
                             width={64}
                             height={64}
-                            className="h-16 w-16 rounded object-cover border border-border-subtlebg-surface-2"
+                            className="h-16 w-16 rounded object-cover border border-border-subtle bg-surface-2"
                             loading="lazy"
                             unoptimized
                             onError={() => {
@@ -17933,7 +17933,7 @@ export function SeasonComparison({
                       <CardContent className="space-y-4">
                         <div className="flex flex-wrap items-center gap-2">
                           {incomingAnalysis.roles.map(role => (
-                            <Badge key={role} className="bg-orange-600/20 text-orange-300 border border-orange-600/40">
+                            <Badge key={role} className="bg-orange/15 text-orange border border-orange/40">
                               {role}
                             </Badge>
                           ))}

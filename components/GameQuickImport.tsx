@@ -339,7 +339,7 @@ export function GameQuickImport({ onImportComplete, selectedSeasonId }: GameQuic
   return (
     <div className="space-y-6">
       {!selectedSeasonId && (
-        <Card className="border-orange-500/30 bg-orange-900/20">
+        <Card className="border-orange/30 bg-orange/15">
           <CardContent className="p-4">
             <div className="flex items-center gap-2 text-orange">
               <AlertCircle size={20} strokeWidth={1.6} />
