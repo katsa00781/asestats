@@ -32,6 +32,8 @@ export type PlayerStats = {
   foulsDrawn: number;
   blocks: number;
   valuation: number;
+  // Szezon-aggregált, saját képlettel számolt mutató (pont/kísérlet ill. akció/meccs) –
+  // NEM azonos a GamePerformance.offensiveRating/defensiveRating Hunbasket ORtg/DRtg értékével.
   offensiveRating: number;
   defensiveRating: number;
   trueShootingPct: number;
@@ -52,6 +54,7 @@ export type GamePerformance = {
   turnovers: number;
   blocks: number;
   valuation: number;
+  // Hunbasket hivatalos, meccsenkénti ORtg/DRtg értéke – lásd StatInfoTooltip 'ortg'/'drtg'.
   offensiveRating?: number;
   defensiveRating?: number;
   trueShootingPct?: number;

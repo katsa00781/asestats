@@ -274,7 +274,18 @@ function PlayerDetails( { player, onBack }: PlayerDetailProps) {
   const avgDRtg = gamesWithDRtg.length > 0
     ? gamesWithDRtg.reduce((sum, g) => sum + (g.defensiveRating || 0), 0) / gamesWithDRtg.length
     : 0;
-  
+
+  // Teljes szezonos ORtg/DRtg átlag (nem szűrve) – ugyanaz a Hunbasket-mutató, mint az avgORtg/avgDRtg,
+  // csak a player.gameHistory teljes listájából. NEM player.offensiveRating/defensiveRating (az más képlet).
+  const seasonGamesWithORtg = player.gameHistory.filter(g => g.offensiveRating != null);
+  const seasonAvgORtg = seasonGamesWithORtg.length > 0
+    ? seasonGamesWithORtg.reduce((sum, g) => sum + (g.offensiveRating || 0), 0) / seasonGamesWithORtg.length
+    : 0;
+  const seasonGamesWithDRtg = player.gameHistory.filter(g => g.defensiveRating != null);
+  const seasonAvgDRtg = seasonGamesWithDRtg.length > 0
+    ? seasonGamesWithDRtg.reduce((sum, g) => sum + (g.defensiveRating || 0), 0) / seasonGamesWithDRtg.length
+    : 0;
+
   // TS% és eFG% számítása a szűrt adatokból
   const totalFGMade = totalCloseMade + totalMidMade + totalThreeMade;
   const totalFGAttempted = totalCloseAttempted + totalMidAttempted + totalThreeAttempted;
@@ -660,7 +671,7 @@ function PlayerDetails( { player, onBack }: PlayerDetailProps) {
                 <span className="text-positive font-mono tabular-nums sm:text-lg">{avgORtg.toFixed(1)}</span>
                 {isFiltered && (
                   <div className="text-muted text-xs mt-1">
-                    Szezon: {player.offensiveRating.toFixed(1)}
+                    Szezon: {seasonAvgORtg.toFixed(1)}
                   </div>
                 )}
               </div>
@@ -676,7 +687,7 @@ function PlayerDetails( { player, onBack }: PlayerDetailProps) {
                 <span className="text-cyan font-mono tabular-nums sm:text-lg">{avgDRtg.toFixed(1)}</span>
                 {isFiltered && (
                   <div className="text-muted text-xs mt-1">
-                    Szezon: {player.defensiveRating.toFixed(1)}
+                    Szezon: {seasonAvgDRtg.toFixed(1)}
                   </div>
                 )}
               </div>

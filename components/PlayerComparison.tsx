@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { StatInfoTooltip } from '@/components/StatInfoTooltip';
 import { ArrowLeft, Users, X } from 'lucide-react';
 import type { PlayerStats } from '@/lib/dashboard-types';
 import {
@@ -251,16 +252,18 @@ export function PlayerComparison({
   ];
 
   // Fejlett statisztikák
+  // Figyelem: player.offensiveRating/defensiveRating a szezon-aggregált pont hatékonyság
+  // / védekezési index (nem a Hunbasket ORtg/DRtg – az a táblázatban külön, "ORtg"/"DRtg" néven szerepel).
   const advancedStatsData = [
     {
-      category: 'OffRtg',
+      category: 'Pont hat.',
       ...selectedPlayers.reduce((acc, player) => ({
         ...acc,
         [getPlayerLabel(player)]: parseFloat((player.offensiveRating || 0).toFixed(1))
       }), {})
     },
     {
-      category: 'DefRtg',
+      category: 'Véd. idx',
       ...selectedPlayers.reduce((acc, player) => ({
         ...acc,
         [getPlayerLabel(player)]: parseFloat((player.defensiveRating || 0).toFixed(1))
@@ -596,7 +599,9 @@ export function PlayerComparison({
                     ))}
                   </tr>
                   <tr className="border-b border-border-subtle">
-                    <td className="py-2 sm:py-3 text-secondary">Offensive Rating</td>
+                    <td className="py-2 sm:py-3 text-secondary">
+                      <StatInfoTooltip stat="ortg">ORtg</StatInfoTooltip>
+                    </td>
                     {selectedPlayers.map((player, idx) => {
                       const gamesWithORtg = player.gameHistory.filter(g => g.offensiveRating != null);
                       const avgORtg = gamesWithORtg.length > 0
@@ -608,7 +613,9 @@ export function PlayerComparison({
                     })}
                   </tr>
                   <tr className="border-b border-border-subtle">
-                    <td className="py-2 sm:py-3 text-secondary">Defensive Rating</td>
+                    <td className="py-2 sm:py-3 text-secondary">
+                      <StatInfoTooltip stat="drtg">DRtg</StatInfoTooltip>
+                    </td>
                     {selectedPlayers.map((player, idx) => {
                       const gamesWithDRtg = player.gameHistory.filter(g => g.defensiveRating != null);
                       const avgDRtg = gamesWithDRtg.length > 0
