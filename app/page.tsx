@@ -1,8 +1,10 @@
 'use client';
 import React, { useState, useMemo } from 'react';
+import { Tabs, TabsContent } from '@/components/ui/tabs';
+import { Loader2, AlertCircle, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Trophy, LogOut, Loader2, AlertCircle, RefreshCw } from 'lucide-react';
+import { AppSidebar } from '@/components/AppSidebar';
+import { AppTopbar } from '@/components/AppTopbar';
 import { PlayerDetails } from '@/components/PlayerDetails';
 import { PlayersList } from '@/components/PlayersList';
 import { TeamStatistics } from '@/components/TeamStatistics';
@@ -33,16 +35,6 @@ import { useFilterData } from '@/hooks/useFilterData';
 import { useGameData } from '@/hooks/useGameData';
 export type { ShootingStats, PlayerStats, GamePerformance, GamePlayer, TeamGame, GameAggregate, UpcomingFixture } from '@/lib/dashboard-types';
 
-const TAB_TRIGGER_CLASS = 'flex-shrink-0 md:flex-1 min-w-[7rem] whitespace-nowrap';
-
-type MobileGroup = 'stats' | 'games' | 'admin';
-
-const MOBILE_GROUPS: { key: MobileGroup; label: string; tabs: string[]; adminOnly?: boolean }[] = [
-  { key: 'stats', label: 'Statisztikák', tabs: ['overview', 'players', 'comparison', 'situational'] },
-  { key: 'games', label: 'Meccsek', tabs: ['games', 'gamelog', 'standings', 'updates'] },
-  { key: 'admin', label: 'Admin', tabs: ['manage', 'playersimport', 'delete', 'import'], adminOnly: true },
-];
-
 export default function Home() {
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [showComparison, setShowComparison] = useState(false);
@@ -51,16 +43,7 @@ export default function Home() {
   const [selectedSeasonId, setSelectedSeasonId] = useState<string | null>(null);
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('overview');
-  const [mobileGroup, setMobileGroup] = useState<MobileGroup>('stats');
-
-  const handleTabChange = (tab: string) => {
-    setActiveTab(tab);
-    const group = MOBILE_GROUPS.find(g => g.tabs.includes(tab));
-    if (group) setMobileGroup(group.key);
-  };
-
-  const isMobileVisible = (tabValue: string) =>
-    MOBILE_GROUPS.find(g => g.key === mobileGroup)?.tabs.includes(tabValue) ?? false;
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [lastImportedGame, setLastImportedGame] = useState<{
     date: string;
     homeTeamName: string;
@@ -119,28 +102,22 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen bg-base dark">
-      <header className="bg-surface-1 border-b border-border-subtle py-4 sm:py-6 shadow-panel">
-        <div className="container mx-auto px-4">
-          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <h1 className="text-center md:text-left text-2xl sm:text-3xl md:text-4xl font-display font-semibold tracking-tight flex items-center gap-2 sm:gap-3">
-              <Trophy className="h-6 w-6 sm:h-8 sm:w-8 md:h-10 md:w-10 text-cyan" strokeWidth={1.5} />
-              ASE Statisztika Kezelő
-            </h1>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => signOut()}
-              className="flex items-center justify-center gap-2 w-full md:w-auto"
-            >
-              <LogOut className="h-4 w-4" />
-              Kijelentkezés
-            </Button>
-          </div>
-        </div>
-      </header>
+    <div className={cn('app-shell dark bg-base', sidebarCollapsed && 'is-collapsed')}>
+      <AppSidebar
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        isAdmin={isAdmin}
+        userEmail={user.email ?? ''}
+        onCollapsedChange={setSidebarCollapsed}
+      />
+      <main className="px-4 sm:px-8 lg:px-9 py-6 sm:py-7 pb-24 md:pb-7">
+        <AppTopbar
+          activeTab={activeTab}
+          userEmail={user.email ?? ''}
+          isAdmin={isAdmin}
+          onSignOut={() => signOut()}
+        />
 
-      <main className="container mx-auto px-2 sm:px-4 py-4 sm:py-8">
         <div className="mb-6 space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="w-full">
@@ -187,43 +164,7 @@ export default function Home() {
           </div>
         )}
 
-        <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-4 sm:space-y-6">
-          <div className="-mx-2 sm:mx-0">
-            {/* Mobil csoportválasztó */}
-            <div className="md:hidden flex gap-2 mb-2 px-1">
-              {MOBILE_GROUPS.filter(g => !g.adminOnly || isAdmin).map(group => (
-                <button
-                  key={group.key}
-                  onClick={() => setMobileGroup(group.key)}
-                  className={cn(
-                    'flex-1 px-3 py-1.5 rounded-sm font-display font-semibold text-[0.7rem] uppercase tracking-widest transition-all border',
-                    mobileGroup === group.key
-                      ? 'bg-surface-3 border-border-active text-cyan shadow-glow-cyan'
-                      : 'bg-transparent border-border-subtle text-secondary hover:text-primary hover:border-border-active'
-                  )}
-                >
-                  {group.label}
-                </button>
-              ))}
-            </div>
-            <div className="overflow-x-auto pb-2">
-              <TabsList className="min-w-max md:min-w-0 md:w-full flex-nowrap md:flex-wrap h-auto gap-2 p-1 justify-start">
-                <TabsTrigger value="overview" className={cn(TAB_TRIGGER_CLASS, !isMobileVisible('overview') && 'hidden md:flex')}>Áttekintés</TabsTrigger>
-                <TabsTrigger value="players" className={cn(TAB_TRIGGER_CLASS, !isMobileVisible('players') && 'hidden md:flex')}>Játékosok</TabsTrigger>
-                <TabsTrigger value="comparison" className={cn(TAB_TRIGGER_CLASS, !isMobileVisible('comparison') && 'hidden md:flex')}>Elemzések</TabsTrigger>
-                <TabsTrigger value="standings" className={cn(TAB_TRIGGER_CLASS, !isMobileVisible('standings') && 'hidden md:flex')}>Tabella</TabsTrigger>
-                <TabsTrigger value="games" className={cn(TAB_TRIGGER_CLASS, !isMobileVisible('games') && 'hidden md:flex')}>Meccsek</TabsTrigger>
-                <TabsTrigger value="gamelog" className={cn(TAB_TRIGGER_CLASS, !isMobileVisible('gamelog') && 'hidden md:flex')}>Meccs Log</TabsTrigger>
-                <TabsTrigger value="situational" className={cn(TAB_TRIGGER_CLASS, !isMobileVisible('situational') && 'hidden md:flex')}>Szituációk</TabsTrigger>
-                <TabsTrigger value="updates" className={cn(TAB_TRIGGER_CLASS, !isMobileVisible('updates') && 'hidden md:flex')}>Frissítések</TabsTrigger>
-                {isAdmin && <TabsTrigger value="manage" className={cn(TAB_TRIGGER_CLASS, !isMobileVisible('manage') && 'hidden md:flex')}>Kezelés</TabsTrigger>}
-                {isAdmin && <TabsTrigger value="playersimport" className={cn(TAB_TRIGGER_CLASS, !isMobileVisible('playersimport') && 'hidden md:flex')}>Játékos Import</TabsTrigger>}
-                {isAdmin && <TabsTrigger value="delete" className={cn(TAB_TRIGGER_CLASS, 'text-negative', !isMobileVisible('delete') && 'hidden md:flex')}>Törlés</TabsTrigger>}
-                {isAdmin && <TabsTrigger value="import" className={cn(TAB_TRIGGER_CLASS, !isMobileVisible('import') && 'hidden md:flex')}>Import</TabsTrigger>}
-              </TabsList>
-            </div>
-          </div>
-
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4 sm:space-y-6">
           <TabsContent value="overview">
             {showTeamComparison ? (
               <TeamComparison

@@ -1,6 +1,41 @@
 # BACKLOG.md – ASEStats Projekt
 
-_Utoljára frissítve: 2026-07-18 (Javítási sprint Fázis 1 – statisztikát torzító hibák javítva)_
+_Utoljára frissítve: 2026-07-19 (AppShell – Sidebar+Topbar navigáció bevezetve)_
+
+---
+
+## Lezárt sprint – AppShell bevezetése (Sidebar + Topbar navigáció) ✓ (2026-07-19)
+
+A `BACKLOG.md` "UX átstrukturálás" tétele alapján, a `AseStat 2/Sidebar Nav.html` mockup mintáját követve a 12 tabos `shadcn Tabs` navigáció lecserélve sidebar+topbar AppShell-re. A `AseStat 2/Command Center.html` mockup csak vízió/stílus-katalógus volt (live scoreboard, AI insights stream, PER/BPM/VORP – ezekhez nincs adatforrás), abból nem került át semmi.
+
+- [x] **`components/AppSidebar.tsx`** (új) – collapsibla sidebar (240px ↔ 64px, `localStorage` perzisztencia, `Cmd/Ctrl+B` gyorsbillentyű), 3 navigációs csoport: **Analitika** (Áttekintés, Játékosok, Elemzések [AI accent], Szituációk), **Csapat** (Tabella, Mérkőzések, Meccs Log, Frissítések), **Admin** (csak adminnak: Kezelés, Játékos Import, Törlés [negatív accent], Import). Mobilon (<768px) CSS-media-query-vel alsó fix, vízszintesen görgethető navsávvá alakul – ez váltja ki a korábbi `MOBILE_GROUPS` pill-szűrő mintát.
+- [x] **`components/AppTopbar.tsx`** (új) – breadcrumb (csoport › tab label), user-chip (email, admin esetén `badge-cyan` "Admin" jelzés) + Kijelentkezés gomb. Mobilon a hosszú email elrejtve, csak ikon-gomb marad kijelentkezéshez (túlcsordulás elkerülése).
+- [x] **`app/globals.css`** – új "11) Sidebar / AppShell" szekció a mockup CSS-éből portolva (nincs új design token, csak layout-konstansok: `--sb-w-expanded`, `--sb-w-collapsed`).
+- [x] **`app/page.tsx`** – `TAB_TRIGGER_CLASS`, `MOBILE_GROUPS`/`mobileGroup`/`isMobileVisible`, a régi `<header>` és `<TabsList>` blokk törölve; `AppSidebar`/`AppTopbar` bekötve. A `Tabs`/`TabsContent` content-switching mechanika (mind a 12 tab, minden komponens-hívás/prop) **változatlan** – csak a navigációs UI cserélődött.
+- [x] **Javított bug implementáció közben**: a sidebar collapse állapota kezdetben csak a `.sidebar` elem szélességét változtatta, a szülő `.app-shell` grid-oszlopa nem – üres rés maradt összecsukott állapotban. Javítva: a collapse state felkerült `page.tsx`-be (`onCollapsedChange` callback), az `is-collapsed` class most a grid-wrapperen váltakozik.
+- [x] **Javított bug implementáció közben**: mobil nézetben a Topbar (breadcrumb + hosszú email + admin badge + gomb) egy sorban túlcsordult 390px szélességen. Javítva: `flex-wrap`, email elrejtve `md:` alatt, gomb-felirat elrejtve `sm:` alatt.
+- [x] Nincs URL routing bevezetve (`activeTab` marad tiszta `useState`, egyeztetett döntés).
+- [x] Szezon/Csapat szűrők a főtartalom tetején maradtak (Topbar alatt), nem kerültek a Topbarba.
+- [x] `npx tsc --noEmit` és `npm run build` tiszta; böngészős ellenőrzés ideiglenes (soft-deleted) teszt-userrel: desktop nav váltás, admin-only csoport láthatóság, collapse/expand, mobil alsó navsáv – mind működik valós Supabase adaton.
+- [x] **Talált, nem javított, nem e sprint scope-ja**: `TeamSelector.tsx` `standings?select=team_name` lekérdezése 400-at ad vissza (preexisting, a navigációs változástól független) – lásd Ismert hiányosságok #5.
+
+---
+
+## Lezárt sprint – Tailwind design token audit ✓ (2026-07-19)
+
+Teljes kódbázis-audit: a Dark Command Center redesign sprint (2026-05-24) után visszamaradt, sosem migrált shadcn default Tailwind paletta osztályok (`slate-*`, `sky-*`, `indigo-*`, `violet-*`, `emerald-*`, `amber-*`, számozott `cyan-*`/`orange-*` árnyalatok stb.) cseréje a projekt design tokenjeire, a CLAUDE.md "Hardcoded hex szín tiltott" szabálya szerint.
+
+- [x] **`components/ui/tooltip.tsx`** – `border-slate-700 bg-slate-800 text-slate-50` → `border-border-subtle bg-popover text-popover-foreground` (minden tooltipet érintett, app-szerte)
+- [x] **`SeasonSelector.tsx`, `TeamSelector.tsx`** – redundáns `bg-slate-800 border-slate-700` Select override-ok eltávolítva (a Select komponens már tokenizált, az override felülírta feleslegesen)
+- [x] **`StatInfoTooltip.tsx`, `TerminologyGlossary.tsx`** – slate/orange-300 → secondary/primary/orange tokenek
+- [x] **`FixturesImport.tsx`, `RosterImport.tsx`, `RoundImport.tsx`** – figyelmeztető/hiba doboz `amber-500`/`red-950` → `warning`/`negative` tokenek (egységes minta mindhárom fájlban)
+- [x] **`GameQuickImport.tsx`, `JsonImport.tsx`, `KosarstatPbpImport.tsx`** – JsonImport preview táblázat összes szemantikus oszlopszíne (steal/turnover/GP/VAL/ORtg/DRtg/TS%/eFG%) tokenizálva; KosarstatPbpImport törlés gomb felesleges `bg-red-700` override törölve (a `variant="destructive"` már helyesen színez)
+- [x] **`PlayersImport.tsx`, `PlayersManagement.tsx`, `GameManagement.tsx`** – amber/emerald/red figyelmeztető dobozok és hover state-ek → warning/positive/negative tokenek
+- [x] **`GameDetails.tsx`, `GamePbpCharts.tsx`, `TeamComparison.tsx`** – `GamePbpCharts.tsx` teljesen átállítva a `lib/chart-theme.ts` közös Recharts konstansaira (ez a fájl kimaradt az 05-24-es chart-theme migrációból)
+- [x] **`SeasonComparison.tsx`** (47 hely) – `cyan-*`/`sky-*`/`indigo-*` → `cyan` token (a projekt egyetlen kék accentje), `violet-*`/az LLM-generáló gombok → `ai` token (a `GameDetails.tsx` már bevett `bg-ai text-white hover:opacity-90` mintája szerint), `orange-*` számozott árnyalatok → `orange` token
+- [x] **Valódi bug**: `SeasonComparison.tsx`-ben 10 helyen hiányzott a szóköz két class között (`border-border-subtlebg-surface-2/40`), ami érvénytelen Tailwind class-t eredményezett – sem a border, sem a háttérszín nem érvényesült ténylegesen ezeken az elemeken. Javítva.
+- [x] **`GameInput.tsx`** – legnagyobb volumenű (118 db) slate/emerald/violet paletta-használat, de a fájl **sehol nincs importálva** (holt kód) – nem érintve, funkcionális döntés nélkül nem törölhető
+- [x] Build (`next build`) és `tsc --noEmit` tiszta; lint változatlan (7 db, a sprinttől független preexisting warning)
 
 ---
 
@@ -196,42 +231,45 @@ A design rendszer alapja kész (`app/globals.css`, `app/layout.tsx`). Közös ch
 
 ### Kódból látható problémák
 
-**1. `fouls_drawn` mindig 0**
+**1. ~~`fouls_drawn` mindig 0~~ – ellenőrizve, már megoldva (2026-07-19)**
 
-A `total_fouls_drawn` mező a `player_season_stats_by_season` view-ban nincs aggregálva. Az `app/page.tsx` `?? 0` fallback-kel kezeli. A PlayerStats típusban jelen van, de az adat nem töltődik be. Migráció létezik (`migrations/add-fouls-drawn-to-view.sql`), futtatás szükséges Supabase SQL Editorban.
+A `migrations/add-fouls-drawn-to-view.sql` migráció már le van futtatva (Supabase migrációs történetben: `add_fouls_drawn_to_view`, 2026-05-14). A `player_season_stats_by_season` view `total_fouls_drawn` oszlopa valós, játékosonként eltérő értékeket tartalmaz (pl. Perl Zoltán: 9, Trammell Darrion: 12 – nem mindenki 0, ahogy egyeseknél legitim is a 0). A `lib/player-stat-mapping.ts` `ps.total_fouls_drawn ?? 0` mappingje helyesen olvassa mind `hooks/useGameData.ts`, mind `hooks/useFilterData.ts` útvonalon. Nincs teendő.
 
-**2. `offensiveRating` / `defensiveRating` nem NBA metrikák**
+**2. ~~`offensiveRating` / `defensiveRating` nem NBA metrikák~~ – címkézés javítva (2026-07-19)**
 
-Az `app/page.tsx`-ben definiált számítás nem az NBA-féle offensive/defensive rating, hanem:
-- `offensiveRating` = ponthatékonyság (Points / scoring attempts)
-- `defensiveRating` = védekezési index (steals + blocks + def. rebounds) / meccs
+Vizsgálat közben kiderült, hogy ez mélyebb probléma volt puszta elnevezésnél: a kódbázisban **három különböző** "rating" létezik azonos-hangzású néven:
 
-A `StatInfoTooltip.tsx`-ben dokumentálva, de a UI labeleken még a régi név szerepel – átnevezés vagy egyértelmű címkézés szükséges.
+1. Csapat-szintű `ortg`/`drtg`/`netRtg` (`lib/team-analysis.ts`) – valódi NBA-stílusú per-100-poss rating, korrekt, nem érintett.
+2. Játékos-szintű, **meccsenkénti** `offensiveRating`/`defensiveRating` (`GamePerformance` típus) – Hunbasket saját, hivatalos mutatója (~0–160 skála), `StatInfoTooltip` "ortg"/"drtg" kulcs alatt már helyesen dokumentálva.
+3. Játékos-szintű, **szezon-aggregált** `offensiveRating`/`defensiveRating` (`PlayerStats` típus) – saját képlet: pont/dobáskísérlet ill. (steal+blokk+véd.lepattanó)/meccs, ~0.5–1.5 skála.
 
-**3. `app/layout.tsx` `themeColor` Next 16 viewport API-ba**
+A valódi hiba: a `PlayerDetails.tsx` a 2-es metrikát ("Offensive Rating" cím, Hunbasket-skála) mutatta, alatta egy "Szezon: X" sorral, ami viszont a 3-as metrikát (teljesen más képlet, más nagyságrend) jelenítette meg – mintha ugyanannak a mutatónak lenne a szezonátlaga. Javítva: a "Szezon:" sor mostantól a `player.gameHistory` teljes szezonos Hunbasket ORtg/DRtg átlagát mutatja (`seasonAvgORtg`/`seasonAvgDRtg`), nem a 3-as metrikát. A `PlayerComparison.tsx` "Fejlett statisztikák" grafikonja (3-as metrika) átcímkézve `OffRtg`/`DefRtg` → `Pont hat.`/`Véd. idx` (a `PlayersList.tsx` mintája szerint), a táblázat alatti Hunbasket-sor (2-es metrika) `Offensive Rating`/`Defensive Rating` → `ORtg`/`DRtg` + `StatInfoTooltip` a disztinkció miatt. `lib/dashboard-types.ts`-ben mindkét típusnál (`PlayerStats`, `GamePerformance`) kommentek jelzik, hogy a két azonos nevű mező más képlet. `export-to-md.ts` már eddig is helyesen címkézte ("Offenzív index, nem NBA OrtG"), nem érintve. `next build` + `tsc --noEmit` tiszta.
 
-A `themeColor: "#050B14"` jelenleg a `metadata` exportban van. Next.js 16-ban a `themeColor` (és pár más mező) átkerült a külön `viewport` exportba. Migrációt érdemes ellenőrizni warning miatt.
+**3. ~~`app/layout.tsx` `themeColor` Next 16 viewport API-ba~~ – ellenőrizve, nem releváns (2026-07-19)**
+
+A `themeColor` a jelenlegi `app/layout.tsx` `metadata` exportjában nincs jelen (csak `title`/`description`). A `next build` tiszta, nincs `viewport`/`themeColor` figyelmeztetés. A leírás egy archív mockup-fájlból (`AseStat 2/layout.tsx`, a korábbi UX-mockup export) származott, ami nem a mai kódbázis része – nincs teendő.
 
 **4. Eurobasket.com képek – konfiguráció van, de UI nincs**
 
 A `next.config.ts`-ben engedélyezve van a `www.eurobasket.com`, `www.eurobasket.net`, `basketball.eurobasket.com` domain, de egyetlen komponensben sem jelenik meg játékos fotó. A `players` táblában nincs `photo_url` oszlop sem – DB migráció + import frissítés szükséges előbb.
 
+**5. `standings` lekérdezés 400-at ad vissza (`TeamSelector.tsx`)**
+
+Az AppShell sprint böngészős ellenőrzése közben (2026-07-19) észlelve: a `TeamSelector.tsx` `supabase.from('standings').select('team_name').order('team_name')` lekérdezése 400-as hibát ad (`console: Failed to load resource: the server responded with a status of 400`). Nem a navigációs változás okozza – a komponens nem volt érintve ebben a sprintben. Feltehetően hiányzó/rossz oszlopnév vagy RLS-policy probléma a `standings` táblán. Külön vizsgálat szükséges.
+
 ---
 
 ## Backlog (later)
 
-### UX átstrukturálás (későbbi sprint, design mockupok már léteznek)
+### UX átstrukturálás – AppShell alapja kész, finomítások később
 
-A `Sidebar_Nav.html` és `Command_Center.html` mockupok már megmutatják az UX átstrukturálás irányát. Ezek **későbbi**, külön sprintben kerülnek megvalósításra – a jelenlegi redesign csak a stílust frissíti, nem a layoutot.
+Az **AppShell (Sidebar + Topbar) bevezetése megtörtént** (lásd fent, 2026-07-19-es lezárt sprint) a `Sidebar Nav.html` mockup alapján. A `Command Center.html` mockup elemei (live scoreboard, AI insights stream, PER/BPM/VORP ranglista, ⌘K kereső) vízió-jellegűek voltak, nincs mögöttük adatforrás – ezek **nem** kerültek be, és csak akkor relevánsak, ha a mögöttes funkció (élő adat, AI stream) külön döntés nyomán megépül.
 
-- **AppShell bevezetése (Sidebar + Topbar + Main)** – A 12 tab-os shadcn `Tabs` lecserélése sidebar navigációra (4 csoport: Analitika, Csapat, AI, Admin) + topbar (brand, breadcrumb, akciógombok, user-chip). Komoly UX váltás, külön döntés szükséges róla.
-- **Sidebar collapse + perzisztencia** – Kibontható/összecsukható (240px ↔ 64px), localStorage / cookie / Supabase user prefs.
-- **Topbar globális kereső (⌘K)** – Játékos / csapat / meccs cross-view kereső. Új funkcionalitás.
-- **Topbar breadcrumb** – Liga / szakasz / forduló kontextus megjelenítés.
-- **Topbar akciógombok** – Riasztások (notification harang), letöltés, megosztás. Új funkcionalitás mindhárom.
-- **Sync státusz indikátor** – „LIVE adat / SZINKRONIZÁLVA · 2 MP" típusú jelzés a Topbarban, mögötte tényleges adatfrissítési időbélyeg-tracking.
-- **PageHead minta** – Minden nézet tetején: H1 + badge sor (LIVE, sync, kontextus) + opcionális tab/CTA sor. Ez a layout szintű minta a Command Center mockupból.
-- **Mobil viselkedés** – A sidebar mobilon overlay módra váltson, a topbar elemek szűküljenek vagy slide-os modálba kerüljenek. A `3xl` és `4xl` breakpointok kihasználása nagy képernyőkön.
+- **Topbar globális kereső (⌘K)** – Játékos / csapat / meccs cross-view kereső. Új funkcionalitás, nincs API mögötte.
+- **Topbar akciógombok** – Riasztások (notification harang), letöltés, megosztás. Új funkcionalitás mindhárom, nincs API mögötte.
+- **Sync státusz indikátor** – „SZINKRONIZÁLVA · X perce" típusú jelzés a Topbarban, mögötte tényleges adatfrissítési időbélyeg-tracking (jelenleg nincs ilyen metaadat tárolva).
+- **Sidebar nav-item numerikus meta badge-ek** (pl. játékosszám, meccsszám) és `⌘1..9` gyorsbillentyűk az egyes nav-itemekhez – a mockupban megvan, a jelenlegi sprintben tudatosan kihagyva a scope szűkítése miatt.
+- **Mobil viselkedés finomítása** – a sidebar jelenleg CSS-media-query-vel alsó fix navsávvá alakul (nem overlay-menüvé); ha ez nem megfelelő UX nagyobb admin listáknál, felülvizsgálandó. A `3xl`/`4xl` breakpointok kihasználása nagy képernyőkön még nem történt meg.
 
 ### Funkcionális backlog (UX átstrukturálástól független)
 
@@ -253,7 +291,7 @@ A `Sidebar_Nav.html` és `Command_Center.html` mockupok már megmutatják az UX 
 - **Mi kerüljön az `Updates.tsx`-be?** – A komponens implementált, de tartalma nincs meghatározva.
 - **Role-alapú hozzáférés tervezett-e?** – Edzői stáb vs. admin szétválasztás, vagy mindenki teljes jogosultsággal rendelkezik?
 - **Eurobasket képek megjelenítése aktív igény-e?** – A konfiguráció kész, az import API létezik, de ki kellene dönteni, hogy bekerül-e az MVP-be.
-- **`fouls_drawn` mező hiányzik a view-ból – valós probléma-e?** – Ha a scraper sem gyűjti be ezt az adatot, a view javítása sem segít.
-- **Mi az egyértelmű definíciója az `offensiveRating` és `defensiveRating` mutatóknak?** – A jelenlegi implementáció nem az NBA-féle metrikák; UI címkén is egyértelműsíteni kell (pl. „Pont hatékonyság" és „Védekezési index").
+- ~~`fouls_drawn` mező hiányzik a view-ból~~ – ellenőrizve, a migráció már lefutott, az adat valós (lásd Ismert hiányosságok #1).
+- ~~Mi az egyértelmű definíciója az `offensiveRating` és `defensiveRating` mutatóknak?~~ – tisztázva és címkézve (lásd Ismert hiányosságok #2).
 - **A 2026/2027 szezon előtt szükséges-e előkészület?** – `lib/season-tables.ts` + SQL migráció bővítése.
 - **UX átstrukturálás (sidebar + topbar) mikor kerül sorra?** – A mockupok készen vannak, de jelenleg backlogban; külön sprintben prioritizálandó.
