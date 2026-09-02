@@ -3,7 +3,30 @@ import { createClient } from '@supabase/supabase-js'
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+function createSupabaseClient() {
+  return createClient(supabaseUrl, supabaseAnonKey, {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      // Csak email/jelszó flow van, nincs magic link / OAuth callback
+      detectSessionInUrl: false,
+    },
+  })
+}
+
+// Dev módban a Fast Refresh újraértékelheti ezt a modult, és több GoTrueClient
+// példány versenyezne ugyanazért a refresh tokenért (token rotáció után a
+// második hívás "Invalid Refresh Token: Refresh Token Not Found" hibát kap).
+// A globalThis-en tárolt példány ezt megakadályozza.
+const globalForSupabase = globalThis as typeof globalThis & {
+  __asestatsSupabaseClient?: ReturnType<typeof createSupabaseClient>
+}
+
+export const supabase = globalForSupabase.__asestatsSupabaseClient ?? createSupabaseClient()
+
+if (process.env.NODE_ENV !== 'production') {
+  globalForSupabase.__asestatsSupabaseClient = supabase
+}
 
 export type Json =
   | string

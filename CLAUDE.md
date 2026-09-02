@@ -36,7 +36,7 @@ Az UI egységes, sportos-telemetria érzetű sötét felület. Részletek: `cont
 - 3 betűcsalád szigorú szereposztással (lásd lentebb)
 - Glow-alapú interakció: hover/focus → cián fény, nem szín-váltás
 
-**Single Source of Truth**: `app/globals.css` – a `:root` blokkban nyers tokenek, a `@theme inline` blokkban Tailwind utility-vé konvertálva. **A színeket sem `tailwind.config.ts`-ben, sem komponensben nem definiáljuk újra.**
+**Single Source of Truth**: `app/globals.css` – a `:root` blokkban nyers tokenek, a `@theme inline` blokkban Tailwind utility-vé konvertálva. **A színeket komponensben nem definiáljuk újra.** A projekt CSS-first: `tailwind.config.ts` **nem létezik** – nincs hova színt vagy fontot írni rajta kívül.
 
 **Fontos: a redesign jelenlegi scope-ja kizárólag vizuális stílus.** Az alkalmazás funkcionalitása, a 12 tab-os navigáció és a komponens-szintű viselkedés változatlan marad. A komponensek **belsőleg** állnak át az új design tokenekre, `StatCard`-ra és `DataTable`-re, de a tabok, az adatlekérés, a route-ok és az interakciós flow ugyanaz. Layout átstrukturálás (sidebar / topbar / ⌘K / breadcrumb / sync indikátor) későbbi backlog – lásd `BACKLOG.md`.
 
@@ -85,7 +85,9 @@ asestats/
 │   │   ├── hunbasket-roster-import/
 │   │   ├── hunbasket-round-import/
 │   │   ├── kosarstat-pbp-cleanup/
-│   │   └── kosarstat-pbp-import/
+│   │   ├── kosarstat-pbp-import/
+│   │   ├── player-text-report/
+│   │   └── save-manual-report/
 │   ├── favicon.ico
 │   ├── globals.css             # Design tokenek + @theme inline + shadcn override + animációk
 │   ├── layout.tsx              # next/font: Barlow Condensed / DM Sans / JetBrains Mono · AuthProvider · Toaster
@@ -106,7 +108,7 @@ asestats/
 │   └── ui-context.md           # Dark Command Center design rendszer leírása
 ├── lib/                        # Megosztott logika, típusok, segédfüggvények
 │   ├── ai-client.ts            # Közös OpenAI/Claude hívás (callAi, AI_GENERATED_BY)
-│   ├── api-auth.ts             # requireAuth() guard az API route-okhoz
+│   ├── api-auth.ts             # requireAdmin() guard az API route-okhoz (+ requireAuth, jelenleg nem használt)
 │   ├── api-fetch.ts            # authFetch() – Supabase token az API hívásokhoz
 │   ├── auth-context.tsx
 │   ├── chart-theme.ts
@@ -144,7 +146,6 @@ asestats/
 ├── .env.local.example
 ├── next.config.ts
 ├── components.json             # shadcn/ui konfiguráció (New York stílus)
-├── tailwind.config.ts          # CSS-first: csak content scan + opcionális breakpointok
 └── tsconfig.json
 ```
 
@@ -265,8 +266,8 @@ A komponensek **funkcionalitása változatlan**, csak a vizuális réteg (osztá
   - `text-warning` (`#FFB627`) – watch, figyelmeztetés
 - **Szöveg**:
   - `text-primary` (`#E8F4FF`) – főszöveg
-  - `text-secondary` (`#5A7A99`) – kísérőszöveg
-  - `text-muted` (`#2D4A6B`) – placeholder, deaktivált
+  - `text-secondary` (`#7A9ABB`) – kísérőszöveg
+  - `text-muted` (`#4A6D95`) – placeholder, deaktivált
 - **Vonalak**: `border-subtle`, `border-active`, `border-strong` – növekvő láthatóság
 
 ### Tipográfia – 3 család, szigorú szereposztás
@@ -322,9 +323,11 @@ A 3 fontot a `app/layout.tsx` `next/font/google`-on keresztül tölti be, CSS v�
 
 **Belépő animáció minta**:
 ```tsx
-<div className="card animate-fade-slide-up" style={{ ['--i' as any]: 2 }}>...</div>
+// FIGYELEM: `.card` osztály NINCS a globals.css-ben – kártyához shadcn <Card> kell
+<Card className="animate-fade-slide-up" style={{ ['--i' as unknown as string]: 2 }}>...</Card>
 ```
-Listáknál a szülő `stagger`-t kap, gyermekek `--i={index}`-et.
+Listáknál a szülő `stagger`-t kap, a gyermekek `--i`-t – a lépésköz 60ms. Élő minta: `app/page.tsx:172-174`.
+A CSS custom property indexeléséhez `as unknown as string` a bevett forma (az `any` tiltott); több property esetén a `stat-card.tsx` mintája: `} as React.CSSProperties}`.
 
 **Egyedi utility osztályok**: `.ai-marker` (bal oldali halvány lila gradient sáv, AI tartalom jelölésére), `.live-dot` (8px piros pulzáló pont), `.bar-track` + `.bar-fill` (mini progress / sparkline háttér), `.hairline` (finom horizontális divider).
 
@@ -333,7 +336,7 @@ Listáknál a szülő `stagger`-t kap, gyermekek `--i={index}`-et.
 ## Styling szabályok
 
 - **Tailwind CSS 4** utility osztályok mindig – class név a komponensben, soha `style={{ color: ... }}` literal kivéve dinamikus értékre (pl. `--i`, `--accent-color`).
-- **CSS-first konfiguráció**: a `app/globals.css` `@theme inline` blokkja a Single Source of Truth. A `tailwind.config.ts` csak `content` scant és opcionális breakpointokat (`3xl`, `4xl`) deklarál – színt vagy fontot oda nem írunk.
+- **CSS-first konfiguráció**: a `app/globals.css` `@theme inline` blokkja a Single Source of Truth. `tailwind.config.ts` **nincs a projektben** – a Tailwind 4 CSS-first módban fut, a content scan automatikus. Nincsenek `3xl`/`4xl` breakpointok sem; a beépített `sm`–`2xl` skála érvényes.
 - Osztály kombinálás: `cn()` helper (`lib/utils.ts`) – `clsx` + `tailwind-merge`
 - **Hardcoded hex szín tiltott** – mindig CSS változó token (`var(--accent-cyan)`) vagy Tailwind utility (`text-cyan`). Egyetlen kivétel: inline SVG `stroke` attribútum, ahol nem CSS, hanem SVG attribute kontextusban vagyunk – de még ott is használj `currentColor`-t ha lehet.
 - Komponens variánsokhoz: Class Variance Authority (`cva`) – `button.tsx` mintájára. A változatokat data-attribútumon (`data-variant`, `data-active`, `data-state`) keresztül is el lehet érni, mert a `globals.css` ezekre is illeszt szelektort.
@@ -430,11 +433,15 @@ Konvenciók:
 - `dotenv` a `.env.local` betöltéséhez
 - Közös segédfüggvények: `scrape-utils.ts` (normalizeName, cleanTeamName, findTeamByName*, createScriptClient) – ne duplikáld őket a szkriptekben
 - Minden szkript naplózza a progresszt (`console.log`) és a hibákat (`console.error`)
-- A box-score import (`scrape-hunbasket.ts`) alapból NEM hoz létre új teams sort (névdrift-védelem) – új csapathoz `HUNBASKET_ALLOW_NEW_TEAMS=1`
+- A box-score import (`scrape-hunbasket.ts`) és a menetrend import (`scrape-hunbasket-fixtures.ts`) alapból NEM hoz létre új teams sort (névdrift-védelem) – új csapathoz `HUNBASKET_ALLOW_NEW_TEAMS=1`
+- Klub átnevezésekor a régi nevet fel kell venni a `scrape-utils.ts` `TEAM_NAME_ALIASES` térképébe, különben a korábbi szezonok újraimportálása duplikált teams sort termel
+- A menetrend import a `seasons.start_date`/`end_date` ellen ellenőrzi a beolvasott dátumokat: rossz slug/szezon párosításnál írás előtt leáll
 
 **Automatizálás**: `.github/workflows/scrape.yml` – ütemezett (hétvége esti) + kézzel indítható (workflow_dispatch) GitHub Actions futás, amely a CLI szkripteket hajtja végre. Szükséges repo secretek: `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`.
 
-**API auth**: minden `app/api/*` route a `lib/api-auth.ts` `requireAuth()` guardot futtatja (Supabase access token a `Authorization: Bearer` fejlécben); kliens oldalon a `lib/api-fetch.ts` `authFetch()` helyettesíti a nyers `fetch`-et.
+**API auth**: mind a 14 `app/api/*` route a `lib/api-auth.ts` **`requireAdmin()`** guardot futtatja (Supabase access token a `Authorization: Bearer` fejlécben + `user_metadata.role === 'admin'`; hiánya esetén 403). Minden route mutáló, ezért admin-only – az RBAC sprint óta a `requireAuth()` megmaradt jövőbeli olvasó route-okhoz, de **jelenleg egyetlen route sem hívja**. Kliens oldalon a `lib/api-fetch.ts` `authFetch()` helyettesíti a nyers `fetch`-et.
+
+> A riportok **olvasása** nem API route-on megy: a kliens közvetlen Supabase `SELECT`-tel éri el a `game_text_reports` / `team_text_reports` / `player_text_reports` táblákat (RLS: SELECT minden bejelentkezettnek).
 
 ---
 

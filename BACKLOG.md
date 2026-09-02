@@ -1,6 +1,91 @@
 # BACKLOG.md – ASEStats Projekt
 
-_Utoljára frissítve: 2026-07-19 (Funkcionális backlog sprint lezárva – a 4 sprintes terv teljesítve)_
+_Utoljára frissítve: 2026-09-02 (Hotfix: menetrend import – Playwright böngésző, csapat-névdrift, szezon-illeszkedés)_
+
+---
+
+## Aktív sprint – Mobil (iOS) Expo alkalmazás
+
+**S1 – Tervdokumentáció ✓ (2026-08-30)**
+
+Felhasználói döntések: **Expo / React Native** (nem PWA, nem Capacitor, nem natív Swift) · **fogyasztói nézetek** scope (az import/admin tabok desktop-only maradnak) · **vizuális AI design promptok** · **NativeWind v4** styling · **victory-native XL (Skia)** chartok · az Elemzés tabon **riportok + számított elemzések**.
+
+- [x] **`context/mobile/mobile-overview.md`** – termékdefiníció, miért nem elég a reszponzív web (7 konkrét blokkoló felsorolva), a 8 fogyasztói nézet scope-ja, az „Elemzés" tab pontos határa, iOS információs architektúra: **8 web tab → 5 iOS tab** (Ma / Játékosok / Meccsek / Tabella / Elemzés), tudatos funkcionális eltérések a webtől.
+- [x] **`context/mobile/mobile-architecture.md`** – izolált `mobile/` Expo projekt npm workspace **nélkül** (indoklással: hoisting-ütközés a web React 19 és az Expo pinnelt React-je között + 30+ fájl mozgatása); Metro `watchFolders` + `extraNodeModules` `@core` alias a gyökér `lib/`-re; RN Supabase kliens AsyncStorage adapterrel; lusta betöltési stratégia.
+- [x] **`context/mobile/mobile-ui-context.md`** – teljes token-híd a `globals.css`-ből szó szerint; **új mobil tokenek** (44pt tap target, pt-alapú típusskála, 4pt spacing rács); glow **rétegzéssel**, nem shadow-val (RN korlát); hover → pressed leképezés; StatCard → **StatTile**, DataTable → **StackedRow + StatMatrix** (fagyasztott első oszlop).
+- [x] **`context/mobile/mobile-design-prompts.md`** – **15 prompt** (P0 style tile + P1–P14 képernyők), közös `DS-BLOKK` kontextussal, valós magyar mintaadattal, lefedettség-ellenőrző táblázattal és elfogadási checklistával.
+
+**Felderítési leletek, amikre a terv épül:**
+
+- **A `lib/` elemző mag bizonyítottan tiszta** – 15 modul (~9 500 sor: `stat-formulas`, `positions`, `terminology`, `style-vocabulary`, `dashboard-types`, `player-stat-mapping`, `season-tables`, `fetch-all-rows`, `situational-analysis`, `kosarstat-clutch-parse`, `postgame-report`, `player-analysis`, `player-postgame`, `pregame-scouting`, `team-analysis`) **nulla külső importtal** – se React, se Next, se DOM, se Supabase. Módosítás nélkül futtatható RN alatt. (A `situational-analysis.ts` naiv DOM-grepen fals pozitívot ad: a 260. sorban `window` nevű **lokális** változó van.)
+- **Az AI riportok olvasása nem igényel API route-ot** – a kliens közvetlen `supabase.from('game_text_reports' | 'team_text_reports' | 'player_text_reports')` SELECT-tel olvas. Mind a 14 `app/api/*` route `requireAdmin`-t futtat és mutáló → a fogyasztói scope-on kívül.
+
+**Következő lépések (még nem indultak):**
+
+- [ ] **S2 – Vizuális validáció (felhasználói lépés)**: P0, majd P2 és P8 lefuttatása a választott eszközben. Ha a design nyelv nem áll össze, a `mobile-ui-context.md` módosul, és csak utána megy a maradék 11 prompt.
+- [ ] **S3 – Expo váz**: `mobile/` létrehozása, Metro/tsconfig alias, NativeWind config a tokenekkel, `expo-font`, Supabase kliens, auth + login. **Első feladat: `@core/stat-formulas` import füstteszt** – ha a Metro alias nem működik, fallback az npm workspace-re promotálás.
+- [ ] **S4 – Adatréteg**: `useFilterData`/`useGameData` port lusta betöltéssel, szűrő perzisztálás AsyncStorage-ban.
+- [ ] **S5+ – Képernyők** prioritási sorrendben: Ma → Meccsek → Játékosok → Tabella → Elemzés.
+- [ ] **Új npm csomagok jóváhagyása S3 előtt** (pontos verziókkal): `expo`, `expo-router`, `expo-font`, `nativewind`, `react-native-safe-area-context`, `@react-native-async-storage/async-storage`, `react-native-url-polyfill`, `victory-native`, `@shopify/react-native-skia`, `react-native-reanimated`, `react-native-gesture-handler`, `lucide-react-native`.
+
+---
+
+## Hotfixek
+
+**H1 – „Invalid Refresh Token: Refresh Token Not Found" auth konzolhiba ✓ (2026-09-02)**
+
+Tünet: a dashboard betöltésekor `AuthApiError: Invalid Refresh Token: Refresh Token Not Found` jelent meg a konzolban / a Next.js dev overlay-en. A hibát a `@supabase/auth-js` `_recoverAndRefresh()` logolja induláskor, amikor a localStorage-ban tárolt refresh token már nem érvényes a szerveren (lejárt, rotálódott, vagy két kliens-példány versenyzett érte). A könyvtár ilyenkor magától eldobja a sessiont, de az alkalmazás nem kezelte a hibaágat.
+
+- [x] **`lib/supabase.ts`** – a kliens `globalThis`-en cache-elt singleton lett dev módban (a Fast Refresh modul-újraértékelése eddig több `GoTrueClient` példányt hozhatott létre, amelyek ugyanazt a rotálódó refresh tokent használták → verseny → „Refresh Token Not Found"). Explicit `auth` opciók: `persistSession`, `autoRefreshToken`, `detectSessionInUrl: false` (csak email/jelszó flow van). A `storageKey` **nem** változott, így a meglévő sessionök érvényben maradnak.
+- [x] **`lib/auth-context.tsx`** – a `getSession()` hibaága kezelve: érvénytelen tokennél `signOut({ scope: 'local' })` üríti a beragadt localStorage bejegyzést, a UI pedig tisztán a bejelentkező képernyőre esik vissza. Az effect kapott `active` flaget (unmount utáni `setState` ellen), a `signOut()` pedig lokális fallbacket, ha a szerver már nem ismeri a sessiont.
+- [x] **`lib/api-fetch.ts`** – az `authFetch` eddig csendben eldobta a `getSession()` hibáját; mostantól figyelmeztet és lokálisan kijelentkeztet, így a felület nem marad „bejelentkezve" állapotban érvénytelen tokennel.
+- [x] `npx tsc --noEmit` + `npx eslint` tiszta.
+
+**Megjegyzés a felhasználónak:** a már beragadt tokent a böngészőben egyszer ki kell söpörni (kijelentkezés vagy a site adatainak törlése) – utána a hiba nem jön vissza. Funkcionális változás nincs, az auth flow ugyanaz.
+
+**H2 – Menetrend import „1 kóddal állt le" ✓ (2026-09-02)**
+
+Tünet: a Menetrend import gomb hibára futott, a felületen csak az `Az importáló script (scrape-hunbasket-fixtures.ts) 1 kóddal állt le.` üzenet látszott, ok nélkül.
+
+Valódi ok: **nem kódhiba** – a Playwright böngésző-binárisok hiányoztak a gépről (`~/Library/Caches/ms-playwright/` üres volt). A `playwright ^1.58.0` frissítés után a `chromium_headless_shell-1208` build kellene, de nem volt letöltve, így a `chromium.launch()` azonnal dobott, a szkript pedig `process.exit(1)`-gyel állt le. Ugyanez az összes többi scraping szkriptet is érintette (közös `chromium.launch()` út).
+
+- [x] **`npx playwright install chromium`** lefuttatva – Chrome Headless Shell 145.0.7632.6 (v1208) + ffmpeg letöltve. Nem kódváltozás, gép-szintű környezetjavítás; Playwright-frissítés után újra szükséges lehet.
+- [x] **Ellenőrzés**: `npx tsx scrape-hunbasket-fixtures.ts` → `Parsed fixtures: 182 · Upserted: 182 · Played: 182 · Scheduled: 0 · Fixture import completed.` – az import hibátlanul lefut.
+- [x] **`components/FixturesImport.tsx`** – hiba esetén is megjelenik a script `stdout`/`stderr` kimenete (eddig a `throw` előbb futott le, mint a `setStdout`/`setStderr`, így a valódi hibaüzenetet a UI eldobta és csak a generikus exit-kód üzenet maradt). Ez tette feleslegesen nehézzé a hiba beazonosítását. Funkcionális változás nincs, csak diagnosztika.
+- [x] **`components/RosterImport.tsx`, `components/RoundImport.tsx`** – ugyanaz a javítás átvezetve (a `setStdout`/`setStderr` a `throw` elé került). Mindkét route (`hunbasket-roster-import`, `hunbasket-round-import`) küldi a `stdout`/`stderr` mezőt a hibaválaszban, tehát eddig is volt mit megjeleníteni, csak a kliens dobta el.
+- [x] **`components/KosarstatPbpImport.tsx` – nem igényelt változtatást.** Eltérő architektúra: a POST fire-and-forget (csak 400/409 validációs hibát adhat vissza, script-kimenet nélkül), a futás állapotát a `refreshImportStatus()` polling olvassa a GET endpointról, és az a `stdoutTail`/`stderrTail` értékeket a hibaágon (`lastError` / nem nulla `exitCode`) is beállítja. A kimenet tehát itt már eddig is látszott hiba esetén.
+- [x] `npx tsc --noEmit` + `npx eslint` tiszta.
+
+**H3 – Menetrend import: csapat-névdrift és szezon-illeszkedés ✓ (2026-09-02)**
+
+A H2 (hiányzó Playwright böngésző) után az import a **2026/2027-es** menetrenden újra elszállt, ezúttal a DB-írás közben:
+`Failed to create team OSE Lions: duplicate key value violates unique constraint "teams_short_name_key"`.
+
+Ok: a `scrape-hunbasket-fixtures.ts` **szigorú** névegyeztetést használt (`findTeamByNameStrict`) és ismeretlen névnél **automatikusan új csapatot hozott létre** – szemben a `scrape-hunbasket.ts` box-score importtal, ahol a névdrift-védelem már megvolt. A 26/27-es szezonban több klub szponzorneve megváltozott, így a szigorú match elbukott, az automatikus insert pedig a `short_name` UNIQUE megszorításba ütközött (`"OSE Lions"` → `short_name: "OSE"`, ami már a `"MVM-OSE Lions"`-é volt).
+
+Felderítés – a 26/27-es menetrend 15 egyedi csapatneve: 11 pontos találat, 2 szponzornév-drift (`"OSE Lions"`, `"Falco KC Szombathely"`), 2 ismeretlen (`"Budapesti Honvéd Sportegyesület"`, `"PHOENIX Fóti Tigrisek"`).
+
+- [x] **`scrape-hunbasket-fixtures.ts` – névdrift-védelem** a box-score importtal azonos szabály szerint: `findTeamByNameFuzzy` (feloldja a szponzornév-driftet), alapból **nincs** automatikus csapat-létrehozás (`HUNBASKET_ALLOW_NEW_TEAMS=1` kell hozzá), `short_name` ütközésnél cache-frissítés → újrapróbálás → `short_name: null` fallback.
+- [x] **Előellenőrzés (`resolveTeams`)** – minden csapatnév feloldása **bármilyen DB-írás előtt** megtörténik, és egyszerre jelenti az ÖSSZES ismeretlen nevet. Korábban az import a közepén szállt el, félig megírt állapotot hagyva, és csak az első hibás nevet mutatta.
+- [x] **Csapatdöntések (felhasználói jóváhagyással)**: a `"Budapesti Honvéd Sportegyesület"` az `"Endo Plus Service-Honvéd"` **átnevezése** – a `teams` sor `name` mezője módosult, a `team_id` (`e2a2ab1c-…`) és a hozzá kötött 46 játékos változatlan, a klubtörténet folytonos. A `"PHOENIX Fóti Tigrisek"` **új klubként** felvéve.
+- [x] **`scrape-utils.ts` – `TEAM_NAME_ALIASES` klub-átnevezési térkép.** Az átnevezés regressziót okozott: a 24/25 és 25/26 menetrend-oldalak még a régi nevet írják, amit a fuzzy matching nem tud kitalálni (1 közös token a szükséges 2-ből) – a régebbi szezonok újraimportálása duplikált `teams` sort termelt volna. Az alias a `findTeamByNameStrict`/`findTeamByNameFuzzy` közös belépési pontján old fel, így **mind a 4 scraper** örökli. Sémamódosítás nem történt. Klub átnevezésekor ide kell felvenni a régi nevet.
+- [x] **Szezon-illeszkedés kapu (`assertFixturesMatchSeason`)** – a menetrend URL slugja és a kiválasztott szezon egymástól függetlenül állítható; ha elcsúsznak, egy másik évad teljes menetrendje kerül be rossz `season_id` alá. A szkript mostantól a `seasons.start_date`/`end_date` ellen ellenőrzi a beolvasott dátumokat: >10% kilógásnál **abortál írás előtt**, ≤10%-nál (elhalasztott meccs) csak figyelmeztet.
+- [x] **Üres eredmény = hiba** – 0 kiolvasott mérkőzés eddig „sikeres" importként futott le. Rossz URL-nél / megváltozott tábla-szerkezetnél mostantól explicit hiba.
+- [x] **Ellenőrzés**: mindhárom szezon hibátlanul importál (24/25, 25/26, 26/27: 182–182–182 fixture), a `teams` tábla 17 soros duplikátum nélkül, a szezon-kapu a valós hibát elfogja (x2425 menetrend a 2025/2026 szezonra → abort írás előtt), rossz URL → abort. `npx tsc --noEmit` + `npx eslint` tiszta.
+
+- [x] **Visszamenőleges adattisztítás ✓ (felhasználói jóváhagyással)** – a szezon-kapu 182 hibás sort talált: a `league_fixtures` 2025/2026-os szezonjában 417 sor volt, ebből **182 valójában a 2024/2025-ös menetrend** (`source_url: …/x2425/hun`, 2024-09-27 – 2025-04-12 dátumokkal), egy korábbi, 2026-04-20-i elcsúszott importból. Törlés előtt: a 182 sor JSON mentése, ellenőrzés hogy mind a szezonhatáron kívül van, és hogy **mind a 182 meccs megvan a helyes 2024/2025-ös szezon alatt** (hiányzó: 0 → adatvesztés nincs). Törölve: 182 sor.
+
+**Végállapot** (`league_fixtures`, szezonhatáron kívüli sor mindenhol 0):
+
+| Szezon | Összesen | Lejátszott | Következő |
+|--------|----------|-----------|-----------|
+| 2024/2025 | 182 | 182 | 0 |
+| 2025/2026 | 235 | 221 | 14 |
+| 2026/2027 | 182 | 0 | 182 |
+
+A 25/26-os 235 = 182 alapszakasz + 53 playoff; a 14 „következő" mind a `hun_ply` playoff oldalról jön, kiírt de le nem játszott párharc-meccsek (rövidebben eldőlt sorozatok) – nem hiba.
+
+---
 
 ---
 
@@ -327,6 +412,21 @@ A `next.config.ts`-ben engedélyezve van a `www.eurobasket.com`, `www.eurobasket
 
 Az AppShell sprint böngészős ellenőrzése közben (2026-07-19) észlelve: a `TeamSelector.tsx` `supabase.from('standings').select('team_name').order('team_name')` lekérdezése 400-as hibát ad (`console: Failed to load resource: the server responded with a status of 400`). Nem a navigációs változás okozza – a komponens nem volt érintve ebben a sprintben. Feltehetően hiányzó/rossz oszlopnév vagy RLS-policy probléma a `standings` táblán. Külön vizsgálat szükséges.
 
+**6. `games` szezonkeveredés – a 2024/2025-ös meccsek duplán, 2025/2026-os `season_id`-vel is szerepelnek**
+
+A mobil app adatrétegének építése közben derült ki (2026-09-01), éles adaton ellenőrizve. **Nem mobil-specifikus: a webes játékoslistát és szezonátlagokat ugyanígy érinti.**
+
+**A lelet:** a `games` táblában a 2025/2026-os `season_id` alatt **723 sor** van, amiből **276 sor 2025-08-01 előtti dátumú**, azaz valójában a 2024/2025-ös szezoné. **14 csapatot** érint, nem csak az ASE-t. ASE-re bontva: 58 sor = 19 régi + 39 valódi 2025/26-os meccs. A 19 régi sor a 2024/2025-ös szezonban **is** megvan, **külön `id`-vel, de azonos dátummal, ellenféllel és eredménnyel** (pl. `2024-09-27 Endo Plus Service-Honvéd 91-60`, `2024-10-04 Alba Fehérvár 92-85`) – tehát duplikált import rossz `season_id`-vel, nem elírt szezoncímke.
+
+**Miért fáj:** a duplikált meccsekhez **statisztika is tartozik** a `player_game_stats_2025_2026` táblában (187 sor az ASE 19 régi meccsén), így a `player_season_stats_by_season` view két szezont összegez. Konkrétan Benke Szilárd 2025/2026-ra `games_played: 50` és `total_points: 752`, ami pontosan a valódi 37 meccs / 493 pont **plusz** a 2024/25-ből átszivárgott 13 meccs / 259 pont. Az így kijövő 15.0 PPG helyett a valós érték 13.3 PPG – a hiba minden szezonátlagon (PPG/RPG/APG/perc/TS%/eFG%) végigmegy, és a csapat KPI-okon is (`useGameData` a `games` sorokból átlagol).
+
+**Teendő:**
+1. Azonosítani a duplikátumokat (`date` + `opponent` + `our_team_id` egyezés két szezon között), és eldönteni, melyik `id` a megtartandó – a 2024/2025-ös sorok tűnnek helyesnek, azok dátumtartománya konzisztens (2024-09-27 … 2025-04-12, egyetlen kilógó sor nélkül).
+2. Törölni a rossz `season_id`-vel felvett sorokat **és** a hozzájuk tartozó `player_game_stats_2025_2026` sorokat (FK/cascade viselkedést előbb ellenőrizni), majd újraszámolni/ellenőrizni a `player_season_stats_by_season` view kimenetét.
+3. Megkeresni, mi hozta létre őket – valószínűsíthetően egy import/scraper futás az új szezon slugjával a régi menetrenden (`HUNBASKET_SEASON_SLUG` / `KOSARSTAT_SEASON_NAME` repo variable átállítása körül). Amíg ez nincs meg, a javítás után újra megismétlődhet. Érdemes hozzá egy védelem: a `games.date` essen a `seasons.start_date`–`end_date` közé, vagy legalább egy unique constraint `(season_id, date, our_team_id, opponent)` hármasra.
+
+**Addig:** a mobil app csak olvas, tehát a kevert listát mutatja – lásd `asestatMobile/docs/feature-tasks.md` munkanapló (2026-08-31 `useGameData`, 2026-09-01 `usePlayerData`).
+
 ---
 
 ## Backlog (later)
@@ -339,7 +439,20 @@ Az **AppShell (Sidebar + Topbar) bevezetése megtörtént** (lásd fent, 2026-07
 - **Topbar akciógombok** – Riasztások (notification harang), letöltés, megosztás. Új funkcionalitás mindhárom, nincs API mögötte.
 - **Sync státusz indikátor** – „SZINKRONIZÁLVA · X perce" típusú jelzés a Topbarban, mögötte tényleges adatfrissítési időbélyeg-tracking (jelenleg nincs ilyen metaadat tárolva).
 - **Sidebar nav-item numerikus meta badge-ek** (pl. játékosszám, meccsszám) és `⌘1..9` gyorsbillentyűk az egyes nav-itemekhez – a mockupban megvan, a jelenlegi sprintben tudatosan kihagyva a scope szűkítése miatt.
-- **Mobil viselkedés finomítása** – a sidebar jelenleg CSS-media-query-vel alsó fix navsávvá alakul (nem overlay-menüvé); ha ez nem megfelelő UX nagyobb admin listáknál, felülvizsgálandó. A `3xl`/`4xl` breakpointok kihasználása nagy képernyőkön még nem történt meg.
+- **Mobil viselkedés finomítása** – a sidebar jelenleg CSS-media-query-vel alsó fix navsávvá alakul (nem overlay-menüvé); ha ez nem megfelelő UX nagyobb admin listáknál, felülvizsgálandó. A `3xl`/`4xl` breakpointok kihasználása nagy képernyőkön még nem történt meg. **A fogyasztói mobil élményt a külön iOS Expo app oldja meg** (lásd „Aktív sprint – Mobil (iOS) Expo alkalmazás"); a webes media query az admin/import nézetekhez marad.
+
+### Dokumentációs eltérések
+
+A mobil felderítés során derült ki, hogy két doksi elavult tokeneket ír le. Ez félreviheti a jövőbeli munkát, mert az `app/globals.css` a valódi Single Source of Truth.
+
+- [x] **`context/ui-context.md` teljes újraírása ✓ (2026-08-30)** – a régi verzió **Geist Sans/Geist Mono** fontokat, **OKLCH** shadcn változókat, `--radius: 0.625rem`-et és a megszűnt `container mx-auto` + `bg-slate-900` header mintát írta le. Az új verzió közvetlenül a `globals.css`-ből (soronként ellenőrizve) dokumentálja: a teljes token-készletet, a `@theme inline` utility-leképezést, a shadcn `data-slot` override-okat, a 7 badge variánst, a `StatCard` és `DataTable` props API-t, a DataTable CSS réteg összes osztályát, az AppShell/Sidebar szerkezetet a két `min-width: 0` overflow-fixszel, a mobil media queryt, a 7 animációt és a 6 egyedi utility osztályt. Új záró szakasz: **„Ami NEM létezik – gyakori félreértések"** (`tailwind.config.ts`, `.card` osztály, Geist fontok, OKLCH, light mode, PWA manifest).
+- [x] **`CLAUDE.md` javítása ✓ (2026-09-01)** – hat eltérés javítva, mindegyik a valós forrással szemben ellenőrizve:
+  1. **Szín-tokenek**: `--text-secondary` `#5A7A99` → **`#7A9ABB`**, `--text-muted` `#2D4A6B` → **`#4A6D95`** (a `globals.css` értékei; a világosabb árnyalatok szándékos olvashatósági döntés a „Design konzisztencia" sprintből).
+  2. **`tailwind.config.ts` törölve a mappastruktúrából** – a fájl nem létezik a repóban.
+  3. **„CSS-first konfiguráció" bullet átírva** – nincs `tailwind.config.ts`, és **`3xl`/`4xl` breakpointok sincsenek**; a beépített `sm`–`2xl` skála érvényes.
+  4. **Animációs példa javítva** – a `.card` osztály **nem létezik** a `globals.css`-ben; a példa most shadcn `<Card>`-ot használ. Az `as any` (amit a CLAUDE.md saját szabálya tilt) lecserélve a kódbázis valós idiómájára: `as unknown as string` (`app/page.tsx:174`), hivatkozással a `stat-card.tsx` `as React.CSSProperties` mintájára.
+  5. **API auth szakasz javítva** – a doksi `requireAuth()`-ot állított, de **mind a 14 route `requireAdmin()`-t futtat** (RBAC sprint óta); a `requireAuth` megmaradt, de jelenleg **holt kód**. Új megjegyzés arról, hogy a riportok *olvasása* nem API route-on, hanem közvetlen Supabase `SELECT`-tel megy.
+  6. **2 hiányzó API route pótolva** a fastruktúrában: `player-text-report/`, `save-manual-report/` (12 helyett a valós 14).
 
 ### Funkcionális backlog (UX átstrukturálástól független)
 

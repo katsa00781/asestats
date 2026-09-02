@@ -19,21 +19,44 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Check active session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
+    let active = true;
+
+    // Aktív session ellenőrzése. Ha a tárolt refresh token már érvénytelen
+    // (lejárt / rotálódott / a felhasználó törölve lett), a getSession hibát ad:
+    // ilyenkor csak lokálisan jelentkezünk ki, hogy a beragadt token eltűnjön
+    // a localStorage-ból és tiszta állapotból lehessen újra bejelentkezni.
+    const initSession = async () => {
+      const { data, error } = await supabase.auth.getSession();
+
+      if (error) {
+        console.warn('Session helyreállítása sikertelen, lokális kijelentkezés:', error.message);
+        await supabase.auth.signOut({ scope: 'local' });
+        if (!active) return;
+        setUser(null);
+        setLoading(false);
+        return;
+      }
+
+      if (!active) return;
+      setUser(data.session?.user ?? null);
       setLoading(false);
-    });
+    };
+
+    void initSession();
 
     // Listen for auth changes
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!active) return;
       setUser(session?.user ?? null);
       setLoading(false);
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   const signIn = async (email: string, password: string) => {
@@ -45,7 +68,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    const { error } = await supabase.auth.signOut();
+    // Ha a szerver már nem ismeri a sessiont, a lokális tárolót akkor is ürítjük
+    if (error) {
+      console.warn('Kijelentkezés hibája, lokális session törlése:', error.message);
+      await supabase.auth.signOut({ scope: 'local' });
+    }
+    setUser(null);
   };
 
   const isAdmin = user?.user_metadata?.role === 'admin';

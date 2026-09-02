@@ -74,13 +74,16 @@ export function RoundImport({ selectedSeasonId, selectedSeasonName, onImportComp
 
       const data = (await response.json()) as ApiResponse;
 
+      // A script kimenetét hiba esetén is megjelenítjük – enélkül csak a
+      // generikus "1 kóddal állt le" üzenet látszik, a tényleges ok nem.
+      setStdout(data.stdout || '');
+      setStderr(data.stderr || '');
+
       if (!response.ok || !data.ok) {
         throw new Error(data.error || 'Ismeretlen hiba történt az import során.');
       }
 
       setStatus('success');
-      setStdout(data.stdout || '');
-      setStderr(data.stderr || '');
       setDurationMs(typeof data.durationMs === 'number' ? data.durationMs : null);
       onImportComplete?.();
     } catch (err) {

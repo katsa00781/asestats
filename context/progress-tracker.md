@@ -8,7 +8,7 @@ Update this file after every meaningful implementation change.
 
 ## Current Goal
 
-- Context fájlok elkészítve; következő fejlesztési egység meghatározandó
+- **Mobil (iOS) Expo alkalmazás** – az S1 tervdokumentáció elkészült (`context/mobile/`); következő lépés az S2 vizuális validáció (felhasználói lépés), majd az S3 Expo váz
 
 ## Completed
 
@@ -40,7 +40,10 @@ Update this file after every meaningful implementation change.
 
 ## In Progress
 
-- (Nincs aktív fejlesztési egység – a javítási sprint kódmunkája kész; a 3 új migráció kézi futtatására és a GitHub Actions secretek beállítására vár)
+- **Mobil (iOS) Expo alkalmazás – S1 tervdokumentáció ✓ (2026-08-30)**. Négy új context fájl a `context/mobile/` alatt: `mobile-overview.md` (scope + iOS információs architektúra), `mobile-architecture.md` (repo alak + megosztott mag + adatréteg), `mobile-ui-context.md` (design token híd), `mobile-design-prompts.md` (15 vizuális design prompt). **Nincs kódváltozás** – a webes app érintetlen. Következő: S2 vizuális validáció (felhasználói lépés a design eszközben), majd S3 Expo váz.
+- **`context/ui-context.md` teljes újraírása ✓ (2026-08-30)** – a fájl elavult volt (Geist fontok, OKLCH shadcn változók, `--radius: 0.625rem`, megszűnt `container mx-auto` header minta). Az új verzió soronként a `globals.css`-ből ellenőrizve dokumentálja a teljes design rendszert, plusz egy „Ami NEM létezik" szakaszt a gyakori félreértésekről.
+- **`CLAUDE.md` javítása ✓ (2026-09-01)** – hat eltérés a valós kódhoz igazítva: 2 szín-token (`--text-secondary`, `--text-muted`), a nemlétező `tailwind.config.ts` és a `3xl`/`4xl` breakpointok, a `.card` osztályt és tiltott `as any`-t használó animációs példa, a téves `requireAuth()` állítás (valójában mind a 14 route `requireAdmin`-t futtat, a `requireAuth` holt kód), és 2 hiányzó API route a fastruktúrában.
+- (A javítási sprint kódmunkája kész; a 3 migráció kézi futtatására és a GitHub Actions secretek beállítására vár – lásd „Manuális teendők")
 
 ## Manuális teendők (a sprint lezárásához)
 
@@ -108,7 +111,9 @@ Update this file after every meaningful implementation change.
 
 ## Next Up
 
-- Meghatározandó a következő fejlesztési egység a felhasználóval való egyeztetés alapján
+- **S2 – Mobil vizuális validáció** (felhasználói lépés): a `mobile-design-prompts.md` P0 promptja, majd P2 és P8 lefuttatása a választott design eszközben. Ha a design nyelv nem áll össze, a `mobile-ui-context.md` módosul, és csak utána megy a maradék 11 prompt.
+- **S3 – Expo váz**: `mobile/` létrehozása. **Első feladat egy `@core/stat-formulas` import füstteszt** a szimulátorban – ha a Metro alias nem működik, a fallback az npm workspace-re promotálás. Ezt az első órában kell tudni, nem a tizedik képernyőnél.
+- **Új npm csomagok jóváhagyása S3 előtt**, pontos verziókkal (expo, expo-router, nativewind, victory-native, react-native-skia, async-storage, url-polyfill, safe-area-context, reanimated, gesture-handler, lucide-react-native).
 
 ## Open Questions
 
@@ -126,6 +131,9 @@ Update this file after every meaningful implementation change.
 - **Scraping CLI és API route kettősség**: az npm szkriptek CLI-ből futnak produkciós adatfrissítéshez, az API route-ok az in-app import gombokhoz; ugyanaz a logika, különböző belépési pontok
 - **`dynamic = 'force-dynamic'` minden import API route-on**: a Vercel edge caching megakadályozná az adatfrissítést; minden ilyen route mindig friss adatot kér
 - **Magyar terminológia a UI-ban**: az alkalmazás célközönsége magyar edzői stáb; minden label, üzenet és komment magyarul
+- **Mobil: külön Expo alkalmazás, nem reszponzív web** (2026-08-30): a webes mobilkezelés egyetlen media query, ami csak a navigációt oldja meg – a DataTable (`white-space: nowrap`), a StatCard (fix `text-[2.5rem]` + `min-h-35`) és az 5 prefixeletlen `grid-cols-3/4` érdemi újratervezést igényelne. Ha úgyis újratervezzük, natív platformon tesszük.
+- **Mobil: izolált `mobile/` mappa, npm workspace nélkül** (2026-08-30): a workspace root átalakítása hoisting-ütközést hozna a web React 19 és az Expo pinnelt React-je között, és 30+ fájl mozgatását igényelné a működő webes appban. Az izolált forma nulla webes változtatást igényel és azonnal visszavonható; a megosztás Metro `extraNodeModules` `@core` aliasszal megy a gyökér `lib/`-re. Promotálható valódi workspace-re, ha a megosztás a UI-ra is kiterjed.
+- **Mobil: a `lib/` elemző mag megosztott, a `components/` nem** (2026-08-30): import-audit igazolta, hogy 15 modul (~9 500 sor) nulla külső importot tartalmaz – se React, se Next, se DOM, se Supabase. A 31 583 sornyi `components/` viszont teljes RN újraírás.
 
 ## Session Notes
 

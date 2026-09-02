@@ -30,10 +30,29 @@ export const buildAbbreviation = (value: string) =>
     .map(token => (token.length <= 2 ? token : token[0]))
     .join('');
 
-export const tokenizeTeamName = (value: string) =>
-  normalizeName(value)
+export const tokenizeTeamName = (value: string) => tokenizeNormalized(normalizeName(value));
+
+/** Már normalizált névből tokenek – hogy az alias feloldás után se kelljen újranormalizálni. */
+const tokenizeNormalized = (normalized: string) =>
+  normalized
     .split(/[\s-]+/)
     .filter(token => token.length >= 2);
+
+/**
+ * Klub-átnevezések. A régebbi szezonok scrapelt oldalain még a korábbi név
+ * szerepel, a teams sor viszont már az aktuálisat viseli – a fuzzy matching
+ * ezt nem tudja kitalálni (nincs elég közös token). Kulcs és érték is
+ * normalizált alak (lásd normalizeName).
+ *
+ * Klub átnevezésekor ide kell felvenni a régi nevet, különben a korábbi
+ * szezonok újraimportálása duplikált teams sort termel.
+ */
+export const TEAM_NAME_ALIASES: Record<string, string> = {
+  // 2026/2027-től az "Endo Plus Service" szponzornév kikerült a klub nevéből.
+  'endo plus service-honved': 'budapesti honved sportegyesulet',
+};
+
+const applyTeamNameAlias = (normalized: string) => TEAM_NAME_ALIASES[normalized] || normalized;
 
 export const cleanTeamName = (value: string) =>
   value
@@ -46,7 +65,7 @@ export const findTeamByNameStrict = <T extends ScrapeTeamRecord>(
   teams: T[],
   name: string
 ): T | undefined => {
-  const normalizedTarget = normalizeName(name);
+  const normalizedTarget = applyTeamNameAlias(normalizeName(name));
   if (!normalizedTarget) return undefined;
 
   return (
@@ -65,10 +84,10 @@ export const findTeamByNameFuzzy = <T extends ScrapeTeamRecord>(
   teams: T[],
   name: string
 ): T | undefined => {
-  const normalizedTarget = normalizeName(name);
+  const normalizedTarget = applyTeamNameAlias(normalizeName(name));
   if (!normalizedTarget) return undefined;
 
-  const targetTokens = tokenizeTeamName(name);
+  const targetTokens = tokenizeNormalized(normalizedTarget);
 
   return (
     teams.find(team => normalizeName(team.name) === normalizedTarget) ||
