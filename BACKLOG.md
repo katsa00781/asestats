@@ -458,8 +458,13 @@ A mobil felderítés során derült ki, hogy két doksi elavult tokeneket ír le
 
 - [ ] **Hétvégi `scrape.yml` run minden hétvégén `exit code 1`** – diagnózis: a Node 20 deprecation warning nem a hiba oka; a tényleges bukás egy konkrét lépésben van (secret hiány → `Hiányzó Supabase env változók`, vagy szezonváltás után `Season not found`). Setup és hibakereső leírás: `HOWTO-auto-import.md`.
   - [x] **`scrape.yml` frissítve ✓ (2026-09-02)** – `actions/checkout@v5` + `actions/setup-node@v5` + `node 22` (deprecation warning megszűnik); új **`Env ellenőrzés`** lépés a setup-node után: érték nélkül, csak hosszt kiírva `exit 1`-gyel jelzi, ha a `NEXT_PUBLIC_SUPABASE_URL` vagy `SUPABASE_SERVICE_ROLE_KEY` repo secret hiányzik – a bukás oka azonnal látszik a logban a scrape lépések előtt.
-  - [ ] Következő: a piros run log alapján beazonosítani a bukó lépést (vagy egy kézi `workflow_dispatch` futtatás az új preflight lépéssel). Ellenőrizni a repo secreteket: Settings → Secrets and variables → Actions.
-  - [ ] Külön döntés: `continue-on-error` a kosarstat lépésen, hiba-értesítés (Issue/e-mail), szezon-előkészítés 2026/2027 (`HOWTO-uj-szezon.md`).
+  - [x] **Ok megtalálva ✓ (2026-09-02)** – a Supabase secretek a `production` GitHub environment alatt voltak, a job nem deklarálta az `environment:`-et → `${{ secrets.* }}` üres. Javítva: `environment: production` a `scrape.yml`-ben (commit `a72743f`, pusholva). A secret-hiba megszűnt.
+  - [x] **Kosarstat szezon-változók átadása ✓ (2026-09-02)** – `KOSARSTAT_SEASON_CODE` / `KOSARSTAT_SEASON_NAME` felvéve a `scrape.yml` env blokkba (commit `cd1cfe4`).
+  - [ ] **Szezonváltás 2026/2027 – manuális lépések** (a scraper jelenleg a default 2025/2026-ot húzza):
+    1. `migrations/add-player-game-stats-2026-2027.sql` lefuttatása a Supabase SQL Editorban (a `seasons` sor: `2026/2027`, `2026-09-01`–`2027-06-30`, `is_current=false`). Enélkül a fixtures import `Season not found: 2026/2027`.
+    2. GitHub repo **Variables** (Actions → Variables fül): `HUNBASKET_SEASON_SLUG=x2627`, `HUNBASKET_SEASON_NAME=2026/2027`, `KOSARSTAT_SEASON_CODE=2627`, `KOSARSTAT_SEASON_NAME=2026/2027`. (A `x2627` slug ellenőrizve – a 2026/2027 menetrend fent van a hunbasket.hu-n.)
+    3. Amikor az első forduló lejátszódott: `is_current` flip (`HOWTO-uj-szezon.md` szezonkezdési checklist).
+  - [ ] Külön döntés: `continue-on-error` a kosarstat lépésen, hiba-értesítés (Issue/e-mail).
 
 ### Funkcionális backlog (UX átstrukturálástól független)
 
