@@ -454,6 +454,13 @@ A mobil felderítés során derült ki, hogy két doksi elavult tokeneket ír le
   5. **API auth szakasz javítva** – a doksi `requireAuth()`-ot állított, de **mind a 14 route `requireAdmin()`-t futtat** (RBAC sprint óta); a `requireAuth` megmaradt, de jelenleg **holt kód**. Új megjegyzés arról, hogy a riportok *olvasása* nem API route-on, hanem közvetlen Supabase `SELECT`-tel megy.
   6. **2 hiányzó API route pótolva** a fastruktúrában: `player-text-report/`, `save-manual-report/` (12 helyett a valós 14).
 
+### Auto import (GitHub Actions)
+
+- [ ] **Hétvégi `scrape.yml` run minden hétvégén `exit code 1`** – diagnózis: a Node 20 deprecation warning nem a hiba oka; a tényleges bukás egy konkrét lépésben van (secret hiány → `Hiányzó Supabase env változók`, vagy szezonváltás után `Season not found`). Setup és hibakereső leírás: `HOWTO-auto-import.md`.
+  - [x] **`scrape.yml` frissítve ✓ (2026-09-02)** – `actions/checkout@v5` + `actions/setup-node@v5` + `node 22` (deprecation warning megszűnik); új **`Env ellenőrzés`** lépés a setup-node után: érték nélkül, csak hosszt kiírva `exit 1`-gyel jelzi, ha a `NEXT_PUBLIC_SUPABASE_URL` vagy `SUPABASE_SERVICE_ROLE_KEY` repo secret hiányzik – a bukás oka azonnal látszik a logban a scrape lépések előtt.
+  - [ ] Következő: a piros run log alapján beazonosítani a bukó lépést (vagy egy kézi `workflow_dispatch` futtatás az új preflight lépéssel). Ellenőrizni a repo secreteket: Settings → Secrets and variables → Actions.
+  - [ ] Külön döntés: `continue-on-error` a kosarstat lépésen, hiba-értesítés (Issue/e-mail), szezon-előkészítés 2026/2027 (`HOWTO-uj-szezon.md`).
+
 ### Funkcionális backlog (UX átstrukturálástól független)
 
 - **Role-alapú hozzáférés-vezérlés (RBAC)** – Admin vs. olvasó szerepkörök szétválasztása; jelenleg minden bejelentkezett felhasználó teljes hozzáféréssel rendelkezik.

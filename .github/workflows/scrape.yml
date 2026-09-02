@@ -39,12 +39,29 @@ jobs:
       HUNBASKET_ROUND_FILTER: ${{ inputs.round_filter }}
       HUNBASKET_HEADLESS: 'true'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
+
+      - name: Env ellenőrzés (secretek megléte)
+        run: |
+          missing=0
+          if [ -z "$NEXT_PUBLIC_SUPABASE_URL" ]; then
+            echo "::error::A 'NEXT_PUBLIC_SUPABASE_URL' repo secret hiányzik vagy üres."
+            missing=1
+          fi
+          if [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
+            echo "::error::A 'SUPABASE_SERVICE_ROLE_KEY' repo secret hiányzik vagy üres."
+            missing=1
+          fi
+          if [ "$missing" -eq 1 ]; then
+            echo "Beállítás: Settings -> Secrets and variables -> Actions -> Secrets. Részletek: HOWTO-auto-import.md"
+            exit 1
+          fi
+          echo "Supabase secretek rendben (URL hossz: ${#NEXT_PUBLIC_SUPABASE_URL}, kulcs hossz: ${#SUPABASE_SERVICE_ROLE_KEY})."
 
       - name: Függőségek telepítése
         run: npm ci
