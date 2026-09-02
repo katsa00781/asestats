@@ -10,9 +10,14 @@
 #   - SUPABASE_SERVICE_ROLE_KEY
 #
 # Opcionális repo variables (Settings → Secrets and variables → Actions → Variables):
-#   - HUNBASKET_SEASON_SLUG (default: x2526)
-#   - HUNBASKET_SEASON_NAME (default: 2025/2026)
-#   - KOSARSTAT_SEASON_NAME (ha eltér)
+#   - HUNBASKET_SEASON_SLUG  (default: x2526)   – aktuális szezon: x2627
+#   - HUNBASKET_SEASON_NAME  (default: 2025/2026) – aktuális szezon: 2026/2027
+#   - KOSARSTAT_SEASON_CODE  (default: 2526)    – aktuális szezon: 2627
+#   - KOSARSTAT_SEASON_NAME  (default: 2025/2026) – aktuális szezon: 2026/2027
+#
+# Szezonváltáskor előbb a migrations/add-player-game-stats-YYYY-YYYY.sql-t kell
+# lefuttatni a Supabase SQL Editorban (seasons sor + stat tábla), különben a
+# fixtures import "Season not found" hibával áll le. Részletek: HOWTO-uj-szezon.md
 
 name: Adatimport (Hunbasket + Kosarstat)
 
@@ -41,6 +46,8 @@ jobs:
       HUNBASKET_SEASON_NAME: ${{ vars.HUNBASKET_SEASON_NAME }}
       HUNBASKET_ROUND_FILTER: ${{ inputs.round_filter }}
       HUNBASKET_HEADLESS: 'true'
+      KOSARSTAT_SEASON_CODE: ${{ vars.KOSARSTAT_SEASON_CODE }}
+      KOSARSTAT_SEASON_NAME: ${{ vars.KOSARSTAT_SEASON_NAME }}
     steps:
       - uses: actions/checkout@v5
 
