@@ -170,7 +170,18 @@ const parseClutchTeamTable = (
     const player = String(readCell(idx.player) || '').trim();
     const minutesLabel = String(readCell(idx.min) || '').trim();
     const normalizedPlayer = normalizeClutchHeader(player);
-    if (!player || !minutesLabel || normalizedPlayer === 'jatekos' || normalizedPlayer.startsWith('ossz')) return;
+    // A kosarstat clutch-tábla záró sora a csapatösszeg ("CSAPAT" / "Összesen" /
+    // "Total") – ez nem játékos, kihagyása nélkül a csapat minden összege
+    // duplázódna, és az összegsor "closer"-ként is megjelenne.
+    if (
+      !player ||
+      !minutesLabel ||
+      normalizedPlayer === 'jatekos' ||
+      normalizedPlayer === 'csapat' ||
+      normalizedPlayer === 'total' ||
+      normalizedPlayer.startsWith('ossz')
+    )
+      return;
 
     const seconds = parseMmSsToSeconds(minutesLabel);
     const points = parseSignedNumber(readCell(idx.pts)) ?? 0;
