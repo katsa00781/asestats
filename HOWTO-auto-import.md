@@ -32,9 +32,21 @@ kattints a `scrape` jobra → nyisd ki azt a lépést, ahol a piros ✗ van.
 
 ---
 
-## 2. Kötelező repo secretek
+## 2. Kötelező secretek
 
-**Settings → Secrets and variables → Actions → Secrets → New repository secret**
+A `scrape.yml` job a **`production` environmentet** használja (`environment: production`),
+ezért a secretek **kétféleképp** adhatók meg:
+
+- **Environment secret** a `production` environment alatt:
+  **Settings → Environments → production → Environment secrets** (a jelenlegi setup)
+- vagy **Repository secret**:
+  **Settings → Secrets and variables → Actions → Secrets → New repository secret**
+
+> Ha a secretek egy environment alatt vannak, a jobnak **kötelező** deklarálnia
+> az `environment:`-et – enélkül a `${{ secrets.* }}` üres. Fordítva: environment
+> protection rule-ok (kötelező review, wait timer, branch-korlát) **blokkolhatják
+> az ütemezett futást**, ezért a `production` environmenten ne legyen ilyen szabály,
+> vagy tedd a secreteket repo szintre.
 
 | Név | Honnan | Megjegyzés |
 |-----|--------|-----------|
