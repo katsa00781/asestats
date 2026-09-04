@@ -1,6 +1,6 @@
 # BACKLOG.md – ASEStats Projekt
 
-_Utoljára frissítve: 2026-09-04 (Élő mérkőzés-gyűjtő: séma + Edge Function, a mobil app "élő meccs" nézetéhez)_
+_Utoljára frissítve: 2026-09-04 (Élő mérkőzés-gyűjtő: `live-scan` Edge Function deployolva `--use-api`-val)_
 
 ---
 
@@ -67,8 +67,11 @@ play-by-play eseményekből, nem csak állás. Részletek: `HOWTO-live-scan.md`.
   konvenciója szerint – lásd `HOWTO-live-scan.md` 1. pont)
 - [ ] **`pg_cron`/`pg_net` extension ellenőrzése/engedélyezése** a Supabase
   projekten – ez blokkolja az ütemezést, ha hiányzik
-- [ ] **Edge Function deploy** (`supabase functions deploy live-scan`) + a
-  `pg_cron` job létrehozása
+- [x] **Edge Function deploy** – 2026-09-04, `supabase functions deploy
+  live-scan --use-api` (Management API bundle, **nem** Docker; a `--use-api`
+  megkerüli a lokális Docker-igényt a régi CLI-n is). Projekt linkelve:
+  `iipcpjczjjkwwifwzmut`. Verify_jwt = true (alapértelmezett).
+- [ ] **`pg_cron` job létrehozása** a Supabase SQL Editorban (HOWTO 3. pont)
 - [ ] **Éles validáció** az első 2026/27-es bajnokin (2026-09-25, a szezon
   ekkor indul) – lásd `HOWTO-live-scan.md` 5. pontja: `/elo` szerkezet, óra
   viselkedése, csapatnév-egyezés

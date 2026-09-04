@@ -46,8 +46,9 @@ Update this file after every meaningful implementation change.
   `supabase/functions/live-scan/` Edge Function (MKOSZ netcasting JSON
   forrás, play-by-play eseményekből épített box score – a pontos kód→stat
   leképezés a forrás saját `js/1.n6.js`-éből bizonyítva, nem feltételezés).
-  **Kód kész, séma és deploy még NEM éles** – lásd `HOWTO-live-scan.md` és
-  a „Manuális teendők" lenti új pontja.
+  **Edge Function deployolva (2026-09-04, `--use-api`); séma és `pg_cron`
+  még NEM éles** – lásd `HOWTO-live-scan.md` és a „Manuális teendők" lenti
+  új pontja.
 - **Mobil (iOS) Expo alkalmazás – S1 tervdokumentáció ✓ (2026-08-30)**. Négy új context fájl a `context/mobile/` alatt: `mobile-overview.md` (scope + iOS információs architektúra), `mobile-architecture.md` (repo alak + megosztott mag + adatréteg), `mobile-ui-context.md` (design token híd), `mobile-design-prompts.md` (15 vizuális design prompt). **Nincs kódváltozás** – a webes app érintetlen. Következő: S2 vizuális validáció (felhasználói lépés a design eszközben), majd S3 Expo váz.
 - **`context/ui-context.md` teljes újraírása ✓ (2026-08-30)** – a fájl elavult volt (Geist fontok, OKLCH shadcn változók, `--radius: 0.625rem`, megszűnt `container mx-auto` header minta). Az új verzió soronként a `globals.css`-ből ellenőrizve dokumentálja a teljes design rendszert, plusz egy „Ami NEM létezik" szakaszt a gyakori félreértésekről.
 - **`CLAUDE.md` javítása ✓ (2026-09-01)** – hat eltérés a valós kódhoz igazítva: 2 szín-token (`--text-secondary`, `--text-muted`), a nemlétező `tailwind.config.ts` és a `3xl`/`4xl` breakpointok, a `.card` osztályt és tiltott `as any`-t használó animációs példa, a téves `requireAuth()` állítás (valójában mind a 14 route `requireAdmin`-t futtat, a `requireAuth` holt kód), és 2 hiányzó API route a fastruktúrában.
@@ -66,9 +67,9 @@ Update this file after every meaningful implementation change.
 4. **Egyszeri backfill**: `npm run kosarstat:backfill-links` – a meglévő kosarstat meccsek games-linkjeinek pótlása.
 5. **Élő mérkőzés-gyűjtő élesítése** (lásd `HOWTO-live-scan.md` részletesen):
    `migrations/add-live-match-tables.sql` futtatása SQL Editorban → `pg_cron`
-   + `pg_net` extension ellenőrzése → `supabase functions deploy live-scan`
-   → `cron.schedule(...)` a HOWTO 3. pontjából. Éles validáció csak a
-   2026/27 szezon indulása (2026-09-25) után lehetséges.
+   + `pg_net` extension ellenőrzése → ~~`supabase functions deploy live-scan`~~
+   (kész: 2026-09-04, `--use-api`) → `cron.schedule(...)` a HOWTO 3. pontjából.
+   Éles validáció csak a 2026/27 szezon indulása (2026-09-25) után lehetséges.
 
 ## Completed (legutóbbi)
 

@@ -26,12 +26,28 @@ Editorban** fut, nem a kódbázisból (lásd `CLAUDE.md`).
 
 Előfeltétel: `supabase` CLI telepítve (ez a gépen már megvan, `2.24.3`), és
 be vagy jelentkezve a Supabase fiókkal (`supabase login`), a projekt pedig
-linkelve (`supabase link --project-ref <ref>`).
+linkelve.
 
 ```bash
 cd asestats
-supabase functions deploy live-scan
+supabase link --project-ref iipcpjczjjkwwifwzmut   # ha még nincs linkelve
+supabase functions deploy live-scan --use-api
 ```
+
+**`--use-api` kötelező, ha nem fut Docker.** A CLI alapból (`--use-docker`,
+default `true`) lokális Docker konténerben bundle-öli a függvényt, és Docker
+Desktop nélkül ezzel a hibával áll le:
+
+```text
+failed to inspect docker image: Cannot connect to the Docker daemon
+```
+
+A `--use-api` a Supabase Management API-val bundle-öli szerveroldalon –
+nincs Docker-igény. (Alternatíva: `brew upgrade supabase` – az újabb CLI
+alapból API-val bundle-öl.)
+
+> **Státusz:** 2026-09-04-én deployolva `--use-api`-val a
+> `iipcpjczjjkwwifwzmut` projektre. Újbóli deploy csak kódváltozáskor kell.
 
 A függvény a `SUPABASE_URL` és `SUPABASE_SERVICE_ROLE_KEY` platform-injektált
 secreteket használja – ezeket a Supabase automatikusan beteszi minden
