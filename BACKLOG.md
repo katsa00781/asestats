@@ -1,6 +1,6 @@
 # BACKLOG.md – ASEStats Projekt
 
-_Utoljára frissítve: 2026-09-02 (Hotfix: menetrend import – Playwright böngésző, csapat-névdrift, szezon-illeszkedés)_
+_Utoljára frissítve: 2026-09-04 (Élő mérkőzés-gyűjtő: séma + Edge Function, a mobil app "élő meccs" nézetéhez)_
 
 ---
 
@@ -27,6 +27,57 @@ Felhasználói döntések: **Expo / React Native** (nem PWA, nem Capacitor, nem 
 - [ ] **S4 – Adatréteg**: `useFilterData`/`useGameData` port lusta betöltéssel, szűrő perzisztálás AsyncStorage-ban.
 - [ ] **S5+ – Képernyők** prioritási sorrendben: Ma → Meccsek → Játékosok → Tabella → Elemzés.
 - [ ] **Új npm csomagok jóváhagyása S3 előtt** (pontos verziókkal): `expo`, `expo-router`, `expo-font`, `nativewind`, `react-native-safe-area-context`, `@react-native-async-storage/async-storage`, `react-native-url-polyfill`, `victory-native`, `@shopify/react-native-skia`, `react-native-reanimated`, `react-native-gesture-handler`, `lucide-react-native`.
+
+---
+
+## Aktív sprint – Élő mérkőzés-gyűjtő (backend a mobil app "élő meccs" nézetéhez)
+
+A mobil app (`asestatmobile`, külön repó) kapott egy "élő mérkőzés" funkciót:
+a Ma képernyőn egy élő kártya + egy teljes élő nézet (állás, negyedek, box
+score), ha a kiválasztott csapatnak éppen fut a meccse. A mobil oldali kód
+(típusok, polling hook, UI) kész és commitolva a mobil repóban. Ez a
+sprint a **backend** felét fedi: séma + gyűjtő, ami az adatot betölti.
+
+**Felderítési lelet, amire a terv épül:** az MKOSZ `hunbasket.hu/elo` oldala
+minden élő mérkőzéshez linkeli a `netcasting*.webpont.com` élő jegyzőkönyvet
+(`class="live-game"` link). A netcasting kliens **JSON-t** ad
+(`storage/full<kód>.html`, három string-cserével dekódolható, nem kell
+Playwright/DOM-parse). A kliens saját `js/1.n6.js` fájljában (letöltve és
+átvizsgálva) megtaláltuk a **pontos** esemény-kód → statisztika leképezést
+(`filmCode2Text.hun` szótár + `addEvent()` switch + `alkodok` pontérték-térkép
++ `getTimeStrFromGT()` óra-képlet) – ez alapján valódi box score építhető a
+play-by-play eseményekből, nem csak állás. Részletek: `HOWTO-live-scan.md`.
+
+- [x] `migrations/add-live-match-tables.sql` – `live_games` (egy sor/meccs, nem
+  csapatperspektíva), `live_player_lines` (box score), `live_quarter_scores`
+  (negyedbontás); RLS: authenticated SELECT, írás csak service_role
+- [x] `supabase/functions/live-scan/index.ts` – Deno Edge Function: `/elo`
+  parse → netcasting JSON fetch+decode → csapat-feloldás (`teams`, névdrift-
+  védelemmel, nem hoz létre új sort) → box score + negyedek aggregálása a
+  play-by-play eseményekből → upsert; lezárt/eltűnt meccsek `final`-ra
+  váltása; 6 órás retention törlés
+- [x] `supabase/functions/_shared/stat-formulas.ts`,
+  `supabase/functions/_shared/team-match.ts` – Deno-kompatibilis másolatok
+  (`lib/stat-formulas.ts` valuation képlete, `scrape-utils.ts` szigorú
+  csapatnév-egyezés) – a Deno futásidő nem tudja közvetlenül importálni a
+  Next.js `lib/`-et
+- [x] `HOWTO-live-scan.md` – deploy, `pg_cron`+`pg_net` ütemezés, a forrásból
+  bizonyítottan tudott vs. élő meccsen validálandó pontok listája
+- [ ] **Migráció lefuttatása** a Supabase SQL Editorban (kézzel, a projekt
+  konvenciója szerint – lásd `HOWTO-live-scan.md` 1. pont)
+- [ ] **`pg_cron`/`pg_net` extension ellenőrzése/engedélyezése** a Supabase
+  projekten – ez blokkolja az ütemezést, ha hiányzik
+- [ ] **Edge Function deploy** (`supabase functions deploy live-scan`) + a
+  `pg_cron` job létrehozása
+- [ ] **Éles validáció** az első 2026/27-es bajnokin (2026-09-25, a szezon
+  ekkor indul) – lásd `HOWTO-live-scan.md` 5. pontja: `/elo` szerkezet, óra
+  viselkedése, csapatnév-egyezés
+
+**Tudatosan v1-en kívül hagyva** (dokumentálva a HOWTO-ban, nem elfelejtve):
+percek (`minutes`) számítása csereesemény-párosításból (v1: mindig 0),
+`'halftime'` státusz explicit felismerése (v1: csak `'live'`/`'final'`),
+`player_id` feloldás a `players` táblára (v1: mindig `NULL`, a forrás
+névalakja túl bizonytalan az automatikus párosításhoz).
 
 ---
 
