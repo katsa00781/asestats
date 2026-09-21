@@ -106,10 +106,18 @@ országot – ez a UI-ban következtetésként (nem tényként) jelenik meg. Ter
   (kosarstat csapat-ID → `teams.id`, önjavító fuzzy match-csel töltve),
   `league_players` (stabil kosarstat player-ID törzsadat), `league_player_team_seasons`
   (játékos–csapat–szezon tényadat); RLS: authenticated SELECT, írás csak service_role
-- [ ] **Migráció lefuttatása** a Supabase SQL Editorban (kézzel, a projekt konvenciója szerint)
-- [ ] `scrape-kosarstat-team-players.ts` – csapat-ID feloldás (`/teams/` bejárás
+- [ ] **Migráció lefuttatása** a Supabase SQL Editorban (kézzel, a projekt konvenciója szerint) – **ez blokkolja a scraper éles tesztelését**
+- [x] `scrape-kosarstat-team-players.ts` – csapat-ID feloldás (`/teams/` bejárás
   `findTeamByNameFuzzy`-vel), szezonablak feloldás, csapatonkénti `team_players`
-  oldal parse, stint → szezononkénti sorok bontása, upsert
+  oldal parse (header-név alapú oszlopkeresés, élő DOM-on ellenőrizve: "Játékos",
+  "Poszt", "Szül.", "Mag.", "Töm.", "Státusz", "Első szezon", "Utolsó szezon"),
+  stint → szezononkénti sorok bontása, upsert. `npm run kosarstat:team-players`.
+  **Ismert kivétel**: a `DEAC` és az `MVM-OSE Lions` kosarstat-neve annyira eltér
+  a mi `teams.name` értékünktől, hogy a fuzzy match nem találja meg automatikusan
+  (élőben ellenőrizve) – ehhez a két csapathoz kézi sor kell a `kosarstat_team_map`
+  táblában, miután valaki megnézte kosarstat.hu-n a pontos `team=<ID>` értéküket
+  (jelöltek: "DEBRECENI EAC"/"DEBRECENI EGYETEM" DEAC-hoz, "ORVOSEGYETEM SC" vagy
+  "NYÍREGYHÁZA" az OSE-hoz – megerősítés szükséges).
 - [ ] `migrations/add-league-player-movements-view.sql` – `league_player_movements`
   VIEW (`LAG`/`LEAD` ablakfüggvények szezononként/játékosonként: érkezett/távozott,
   hazai célcsapat vagy ismeretlen/külföld, kihagyás utáni visszatérés) – csak

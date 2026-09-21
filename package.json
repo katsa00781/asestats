@@ -14,7 +14,8 @@
     "hunbasket:shotchart:assign": "tsx process-hunbasket-shotchart-events.ts",
     "hunbasket:standings": "tsx scrape-hunbasket-standings.ts",
     "kosarstat:pbp": "tsx scrape-kosarstat-playbyplay.ts",
-    "kosarstat:backfill-links": "tsx scripts/backfill-kosarstat-game-links.ts"
+    "kosarstat:backfill-links": "tsx scripts/backfill-kosarstat-game-links.ts",
+    "kosarstat:team-players": "tsx scrape-kosarstat-team-players.ts"
   },
   "dependencies": {
     "@radix-ui/react-label": "^2.1.8",

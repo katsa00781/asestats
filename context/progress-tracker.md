@@ -48,9 +48,13 @@ Update this file after every meaningful implementation change.
   megerősítve. Terv: `~/.claude/plans/olvasd-el-a-claude-md-playful-crystal.md`.
   Eddig: `migrations/add-league-player-movements-tables.sql` megírva
   (`kosarstat_team_map`, `league_players`, `league_player_team_seasons`,
-  RLS) – **még nem futtatva** SQL Editorban. Hátra: scraper
-  (`scrape-kosarstat-team-players.ts`), classification VIEW, API route +
-  admin import UI, új nav item + dashboard nézet.
+  RLS) – **még nem futtatva** SQL Editorban, ez blokkolja a scraper éles
+  tesztelését. `scrape-kosarstat-team-players.ts` megírva és élő DOM ellen
+  validálva (header-név alapú oszlopkeresés, `npm run kosarstat:team-players`);
+  a DEAC és az MVM-OSE Lions kosarstat-neve nem illeszthető automatikusan a
+  fuzzy matcherrel, kézi `kosarstat_team_map` sor kell nekik. Hátra:
+  classification VIEW, API route + admin import UI, új nav item + dashboard
+  nézet.
 - **Élő mérkőzés-gyűjtő (2026-09-04)** – a mobil app (`asestatmobile`) élő
   meccs nézetéhez a backend fele: `migrations/add-live-match-tables.sql`
   (`live_games`/`live_player_lines`/`live_quarter_scores` + RLS) és
