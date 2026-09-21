@@ -56,7 +56,9 @@ Update this file after every meaningful implementation change.
   teljes táblakiolvasás, írás előtti forrásvalidáció, dry-run, helyes hibakód.
   Éles import: 473 játékos, 847 tagság, 2023/24–2026/27. Négy parser-teszt
   és célzott lint sikeres. A Database típus tartalmazza az alaptáblákat.
-  Hátra: classification view, dashboard és végső ellenőrzés.
+  Classification view elkészült, PostgreSQL READ ONLY tesztekkel ellenőrizve
+  (szintetikus szélső esetek + valódi Joseph/Chandler ASE-példa).
+  Hátra: dashboard, végső ellenőrzés és a view-migráció kézi futtatása.
 - **Élő mérkőzés-gyűjtő (2026-09-04)** – a mobil app (`asestatmobile`) élő
   meccs nézetéhez a backend fele: `migrations/add-live-match-tables.sql`
   (`live_games`/`live_player_lines`/`live_quarter_scores` + RLS) és

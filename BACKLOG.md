@@ -116,10 +116,16 @@ országot – ez a UI-ban következtetésként (nem tényként) jelenik meg. Ter
   Négy parser-regresszióteszt sikeres. Az U23 nem bizonyít hazai/légiós státuszt,
   ezért NULL; születési évet a pontatlan szezonos életkorból nem számolunk.
   Írás nélküli ellenőrzés: `KOSARSTAT_MOVEMENT_DRY_RUN=1 npm run kosarstat:team-players`.
-- [ ] `migrations/add-league-player-movements-view.sql` – `league_player_movements`
+- [x] `migrations/add-league-player-movements-view.sql` – `league_player_movements`
   VIEW (`LAG`/`LEAD` ablakfüggvények szezononként/játékosonként: érkezett/távozott,
   hazai célcsapat vagy ismeretlen/külföld, kihagyás utáni visszatérés) – csak
-  valós scraped adat után írható meg (validációhoz kell)
+  valós scraped adat után elkészült. READ ONLY PostgreSQL-teszttel ellenőrizve:
+  hazai váltás, visszatérés, több csapat/szezon, folyamatos tagság, időablakhatárok.
+  Valós ASE-példák: Yasiin Joseph Alba → ASE; Jay Jay Chandler egy kihagyott
+  szezon után visszatér. `security_invoker` + authenticated SELECT.
+- [ ] **View-migráció kézi futtatása** a Supabase SQL Editorban:
+  `migrations/add-league-player-movements-view.sql`. A teszt csak a SELECT-et
+  futtatta, a view-t nem hozta létre.
 - [x] `app/api/kosarstat-team-players-import/route.ts` (npm script már kész:
   `kosarstat:team-players`) + `components/LeaguePlayerMovementsImport.tsx`
   az admin Import tabba

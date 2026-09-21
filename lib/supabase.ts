@@ -231,6 +231,27 @@ export type Database = {
       }
     }
     Views: {
+      league_player_movements: {
+        Row: {
+          id: string
+          kosarstat_player_id: string
+          team_id: string
+          season_id: string
+          season_name: string
+          previous_season_name: string
+          direction: 'arrival' | 'departure'
+          movement_type: 'domestic_transfer' | 'return' | 'unknown'
+          counterpart_team_ids: string[]
+          counterpart_team_names: string[]
+          gap_seasons: number
+          status_at_time: Database['public']['Tables']['league_players']['Row']['latest_status']
+          imported_at: string
+          display_name: string
+          position: string | null
+          profile_url: string | null
+          team_name: string
+        }
+      }
       player_season_stats: {
         Row: {
           id: string
