@@ -8,7 +8,7 @@ Update this file after every meaningful implementation change.
 
 ## Current Goal
 
-- **Mobil (iOS) Expo alkalmazás** – az S1 tervdokumentáció elkészült (`context/mobile/`); következő lépés az S2 vizuális validáció (felhasználói lépés), majd az S3 Expo váz
+- **Bajnokság-szintű játékosmozgás nyomonkövetés** – a fennmaradó scraper-validáció, classification view, import API/UI és dashboard befejezése.
 
 ## Completed
 
@@ -39,6 +39,16 @@ Update this file after every meaningful implementation change.
 - Kosarstat PBP page metadata backfill
 
 ## In Progress
+
+- **Játékosmozgás import API/UI (2026-09-21):** új admin-only route és
+  `LeaguePlayerMovementsImport` az Import tabon; 3/4 szezonos időtáv,
+  opcionális csapatszűrő, futászár, időkorlát, hiba esetén is látható napló.
+  Az alaptáblák már léteznek, olvasással ellenőrizve, mindhárom üres.
+  A felhasználó jóváhagyta a szezonos `boxstats` forrást: az archívum
+  első–utolsó éve nem folytonos stint, így a régi kibontás téves adatot adna.
+  A teljes buildet egy korábban meglévő Deno/Next TypeScript ütközés
+  (`supabase/functions/live-scan/index.ts`, `npm:` import) blokkolja;
+  a teljes lintben meglévő AppSidebar effect-hiba és 7 warning van.
 
 - **Bajnokság-szintű játékosmozgás nyomonkövetés (2026-09-21)** – új feature:
   az egész NB I/A bajnokság (nem csak ASE) játékosmozgása csapatonként,

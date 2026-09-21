@@ -31,6 +31,7 @@ import { RoundImport } from '@/components/RoundImport';
 import { RosterImport } from '@/components/RosterImport';
 import { FixturesImport } from '@/components/FixturesImport';
 import { KosarstatPbpImport } from '@/components/KosarstatPbpImport';
+import { LeaguePlayerMovementsImport } from '@/components/LeaguePlayerMovementsImport';
 import { SituationalAnalysis } from '@/components/SituationalAnalysis';
 import { useFilterData } from '@/hooks/useFilterData';
 import { useGameData } from '@/hooks/useGameData';
@@ -326,6 +327,7 @@ export default function Home() {
           {isAdmin && (
             <TabsContent value="import">
               <div className="space-y-6">
+                <LeaguePlayerMovementsImport />
                 <KosarstatPbpImport
                   onImportComplete={loadData}
                   selectedSeasonId={selectedSeasonId}

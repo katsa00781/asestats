@@ -1,6 +1,6 @@
 # BACKLOG.md – ASEStats Projekt
 
-_Utoljára frissítve: 2026-09-04 (Élő mérkőzés-gyűjtő: `live-scan` Edge Function deployolva `--use-api`-val)_
+_Utoljára frissítve: 2026-09-21 (játékosmozgás sprint: import API és admin felület)_
 
 ---
 
@@ -106,7 +106,7 @@ országot – ez a UI-ban következtetésként (nem tényként) jelenik meg. Ter
   (kosarstat csapat-ID → `teams.id`, önjavító fuzzy match-csel töltve),
   `league_players` (stabil kosarstat player-ID törzsadat), `league_player_team_seasons`
   (játékos–csapat–szezon tényadat); RLS: authenticated SELECT, írás csak service_role
-- [ ] **Migráció lefuttatása** a Supabase SQL Editorban (kézzel, a projekt konvenciója szerint) – **ez blokkolja a scraper éles tesztelését**
+- [x] **Alaptáblák létrejötte ellenőrizve (2026-09-21)** – a három tábla elérhető, jelenleg üres. Ebben a munkamenetben éles migrációt nem futtattunk.
 - [x] `scrape-kosarstat-team-players.ts` – csapat-ID feloldás (`/teams/` bejárás
   `findTeamByNameFuzzy`-vel), szezonablak feloldás, csapatonkénti `team_players`
   oldal parse (header-név alapú oszlopkeresés, élő DOM-on ellenőrizve: "Játékos",
@@ -122,9 +122,18 @@ országot – ez a UI-ban következtetésként (nem tényként) jelenik meg. Ter
   VIEW (`LAG`/`LEAD` ablakfüggvények szezononként/játékosonként: érkezett/távozott,
   hazai célcsapat vagy ismeretlen/külföld, kihagyás utáni visszatérés) – csak
   valós scraped adat után írható meg (validációhoz kell)
-- [ ] `app/api/kosarstat-team-players-import/route.ts` (npm script már kész:
+- [x] `app/api/kosarstat-team-players-import/route.ts` (npm script már kész:
   `kosarstat:team-players`) + `components/LeaguePlayerMovementsImport.tsx`
   az admin Import tabba
+
+**2026-09-21-es forráskorrekció (felhasználó jóváhagyta):** a csapatarchívum
+első/utolsó szezonja nem folytonos stint (Eilingsfeld: 2012/13–2025/26,
+de csak 12 szezon), a DOM pedig alapból csak 25 játékost tartalmaz. A szezonos
+tényadat forrása ezért `teams/team/boxstats/?team=<ID>&season=<kód>` lesz,
+teljes táblakiolvasással. Egyedi játékosprofilokat továbbra sem járunk be.
+Az import API validálja a 3/4 szezonos időtávot és a csapatszűrőt, admin
+guarddal, párhuzamos futás elleni zárral és időkorláttal működik. A felület
+sikertelen futásnál is megőrzi a diagnosztikát.
 - [ ] `hooks/usePlayerMovements.ts` + `components/LeaguePlayerMovements.tsx`
   (StatCard sor + DataTable, Dark Command Center tokenek) + új nav item
   (`AppSidebar.tsx`) + `TabsContent` (`app/page.tsx`)
