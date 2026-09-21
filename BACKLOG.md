@@ -84,6 +84,52 @@ névalakja túl bizonytalan az automatikus párosításhoz).
 
 ---
 
+## Aktív sprint – Bajnokság-szintű játékosmozgás nyomonkövetés
+
+Új feature (nem a stílus sprint része): az egész NB I/A bajnokság
+játékosmozgásának vizuális nyomonkövetése csapatonként – ki érkezett, ki
+távozott, hazai csapatváltás vagy külföld irányába/onnan. Felhasználói
+scope-döntések: utolsó 3-4 szezon, csak a jelenlegi élvonal (~14 csapat, a
+meglévő `teams` tábla), önálló 13. nav item az `AppSidebar.tsx`-ben.
+
+**Felderítési lelet, amire a terv épül:** a kosarstat.hu-nak van
+csapat-archívum oldala (`teams/team/team_players/?team=<ID>`), amely minden
+csapatra listázza az összes valaha ott szereplő játékost, hazai/légiós/
+honosított státusszal és első–utolsó szezon (stint) tartománnyal, stabil
+opak player-ID-vel (`players/player/?player=<id>`). Ez élőben megerősítve
+(WebFetch, raw `curl` 403-at ad – Playwright kell hozzá, mint a többi
+scraperhez). Kosarstat nem mondja meg explicit a külföldi célklubot/
+országot – ez a UI-ban következtetésként (nem tényként) jelenik meg. Terv:
+`~/.claude/plans/olvasd-el-a-claude-md-playful-crystal.md`.
+
+- [x] `migrations/add-league-player-movements-tables.sql` – `kosarstat_team_map`
+  (kosarstat csapat-ID → `teams.id`, önjavító fuzzy match-csel töltve),
+  `league_players` (stabil kosarstat player-ID törzsadat), `league_player_team_seasons`
+  (játékos–csapat–szezon tényadat); RLS: authenticated SELECT, írás csak service_role
+- [ ] **Migráció lefuttatása** a Supabase SQL Editorban (kézzel, a projekt konvenciója szerint)
+- [ ] `scrape-kosarstat-team-players.ts` – csapat-ID feloldás (`/teams/` bejárás
+  `findTeamByNameFuzzy`-vel), szezonablak feloldás, csapatonkénti `team_players`
+  oldal parse, stint → szezononkénti sorok bontása, upsert
+- [ ] `migrations/add-league-player-movements-view.sql` – `league_player_movements`
+  VIEW (`LAG`/`LEAD` ablakfüggvények szezononként/játékosonként: érkezett/távozott,
+  hazai célcsapat vagy ismeretlen/külföld, kihagyás utáni visszatérés) – csak
+  valós scraped adat után írható meg (validációhoz kell)
+- [ ] `app/api/kosarstat-team-players-import/route.ts` + npm script
+  (`kosarstat:team-players`) + `components/LeaguePlayerMovementsImport.tsx`
+  az admin Import tabba
+- [ ] `hooks/usePlayerMovements.ts` + `components/LeaguePlayerMovements.tsx`
+  (StatCard sor + DataTable, Dark Command Center tokenek) + új nav item
+  (`AppSidebar.tsx`) + `TabsContent` (`app/page.tsx`)
+
+**Tudatosan v1-en kívül hagyva** (döntés dokumentálva, nem hiányosság):
+egyedi kosarstat player-profil oldalak bejárása (a 14 csapat `team_players`
+oldala elég ehhez a scope-hoz, a `profile_url` mezőben mentjük a linket
+kézi ellenőrzéshez); szezonon belüli (mid-season) átigazolás tiszta
+elkülönítése a `LAG`/`LEAD` modellben; automatikus cron-be kötés
+(`.github/workflows/scrape.yml`) – külön döntés, nem automatikus.
+
+---
+
 ## Hotfixek
 
 **H1 – „Invalid Refresh Token: Refresh Token Not Found" auth konzolhiba ✓ (2026-09-02)**

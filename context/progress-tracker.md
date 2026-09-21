@@ -40,6 +40,17 @@ Update this file after every meaningful implementation change.
 
 ## In Progress
 
+- **Bajnokság-szintű játékosmozgás nyomonkövetés (2026-09-21)** – új feature:
+  az egész NB I/A bajnokság (nem csak ASE) játékosmozgása csapatonként,
+  vizuálisan (érkezés/távozás, hazai csapatváltás, feltehetően külföld
+  irányába/onnan). Forrás: kosarstat.hu csapat-archívum oldalai
+  (`teams/team/team_players/?team=<ID>`), stabil player-ID-vel, élőben
+  megerősítve. Terv: `~/.claude/plans/olvasd-el-a-claude-md-playful-crystal.md`.
+  Eddig: `migrations/add-league-player-movements-tables.sql` megírva
+  (`kosarstat_team_map`, `league_players`, `league_player_team_seasons`,
+  RLS) – **még nem futtatva** SQL Editorban. Hátra: scraper
+  (`scrape-kosarstat-team-players.ts`), classification VIEW, API route +
+  admin import UI, új nav item + dashboard nézet.
 - **Élő mérkőzés-gyűjtő (2026-09-04)** – a mobil app (`asestatmobile`) élő
   meccs nézetéhez a backend fele: `migrations/add-live-match-tables.sql`
   (`live_games`/`live_player_lines`/`live_quarter_scores` + RLS) és
