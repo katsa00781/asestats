@@ -68,6 +68,9 @@ Update this file after every meaningful implementation change.
   `authenticated` alatt a besorolás SELECT-je 726 mozgást ad, `anon` alatt
   0 tagság látható. A nézet még nem létezik az adatbázisban.
   A buildhez a Deno-mappa tsconfig-kizárásának jóváhagyása függőben.
+  A felhasználó kérésére `npm install` és újabb production build lefutott:
+  a függőségek naprakészek, verzióváltozás nincs; a fordítás sikeres,
+  a TypeScript továbbra is a `live-scan/index.ts:36` Deno-importjánál hibázik.
 - **Élő mérkőzés-gyűjtő (2026-09-04)** – a mobil app (`asestatmobile`) élő
   meccs nézetéhez a backend fele: `migrations/add-live-match-tables.sql`
   (`live_games`/`live_player_lines`/`live_quarter_scores` + RLS) és

@@ -139,6 +139,9 @@ Használat és élesítés: `HOWTO-player-movements.md`.
   olvasói jogosultság, mobil overflow és sidebar perzisztencia. Konzolkivétel: 0.
   Lint: 0 error, 7 korábbi warning. A teljes build/tsc korábbi Deno–Next
   ütközésének javításához a védett tsconfig-fájl módosításának jóváhagyása függőben.
+  Újraellenőrizve `npm install` után is: minden függőség telepítve, a fordítás
+  sikeres, de a TypeScript-ellenőrzés a `live-scan/index.ts:36` Deno-importjánál
+  (`npm:@supabase/supabase-js@2`) megáll; csomagtelepítés nem oldja meg.
 - [ ] **Éles view/RLS és dashboard ellenőrzés** a kézi view-migráció után.
 
 **Tudatosan v1-en kívül hagyva** (döntés dokumentálva, nem hiányosság):
