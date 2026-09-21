@@ -40,6 +40,42 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      kosarstat_team_map: {
+        Row: { team_id: string; kosarstat_team_id: string; kosarstat_team_name: string; matched_at: string; notes: string | null }
+        Insert: { team_id: string; kosarstat_team_id: string; kosarstat_team_name: string; matched_at?: string; notes?: string | null }
+        Update: Partial<Database['public']['Tables']['kosarstat_team_map']['Insert']>
+      }
+      league_players: {
+        Row: {
+          kosarstat_player_id: string
+          display_name: string
+          position: string | null
+          birth_year: number | null
+          height_cm: number | null
+          weight_kg: number | null
+          latest_status: 'hazai' | 'legios' | 'honositott' | null
+          profile_url: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: Pick<Database['public']['Tables']['league_players']['Row'], 'kosarstat_player_id' | 'display_name'> &
+          Partial<Omit<Database['public']['Tables']['league_players']['Row'], 'kosarstat_player_id' | 'display_name'>>
+        Update: Partial<Database['public']['Tables']['league_players']['Insert']>
+      }
+      league_player_team_seasons: {
+        Row: {
+          id: string
+          kosarstat_player_id: string
+          team_id: string
+          season_id: string | null
+          kosarstat_season_label: string
+          status_at_time: Database['public']['Tables']['league_players']['Row']['latest_status']
+          imported_at: string
+        }
+        Insert: Omit<Database['public']['Tables']['league_player_team_seasons']['Row'], 'id' | 'imported_at'> &
+          { id?: string; imported_at?: string }
+        Update: Partial<Database['public']['Tables']['league_player_team_seasons']['Insert']>
+      }
       games: {
         Row: {
           id: string

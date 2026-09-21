@@ -106,18 +106,16 @@ országot – ez a UI-ban következtetésként (nem tényként) jelenik meg. Ter
   (kosarstat csapat-ID → `teams.id`, önjavító fuzzy match-csel töltve),
   `league_players` (stabil kosarstat player-ID törzsadat), `league_player_team_seasons`
   (játékos–csapat–szezon tényadat); RLS: authenticated SELECT, írás csak service_role
-- [x] **Alaptáblák létrejötte ellenőrizve (2026-09-21)** – a három tábla elérhető, jelenleg üres. Ebben a munkamenetben éles migrációt nem futtattunk.
-- [x] `scrape-kosarstat-team-players.ts` – csapat-ID feloldás (`/teams/` bejárás
-  `findTeamByNameFuzzy`-vel), szezonablak feloldás, csapatonkénti `team_players`
-  oldal parse (header-név alapú oszlopkeresés, élő DOM-on ellenőrizve: "Játékos",
-  "Poszt", "Szül.", "Mag.", "Töm.", "Státusz", "Első szezon", "Utolsó szezon"),
-  stint → szezononkénti sorok bontása, upsert. `npm run kosarstat:team-players`.
-  **Ismert kivétel**: a `DEAC` és az `MVM-OSE Lions` kosarstat-neve annyira eltér
-  a mi `teams.name` értékünktől, hogy a fuzzy match nem találja meg automatikusan
-  (élőben ellenőrizve) – ehhez a két csapathoz kézi sor kell a `kosarstat_team_map`
-  táblában, miután valaki megnézte kosarstat.hu-n a pontos `team=<ID>` értéküket
-  (jelöltek: "DEBRECENI EAC"/"DEBRECENI EGYETEM" DEAC-hoz, "ORVOSEGYETEM SC" vagy
-  "NYÍREGYHÁZA" az OSE-hoz – megerősítés szükséges).
+- [x] **Alaptáblák létrejötte ellenőrizve (2026-09-21)** – a három tábla elérhető; a szezonos import feltöltötte. Ebben a munkamenetben éles migrációt nem futtattunk.
+- [x] **Szezonos scraper és éles import ✓ (2026-09-21)** – `scrape-kosarstat-team-players.ts`
+  + `lib/kosarstat-movement-source.ts`: pontos `boxstats` keretek; teljes
+  DataTables-adat; a legújabb menetrend 14 csapata; forrásból olvasott
+  klubnév-aliasok (DEAC=119, OSE=155), kézi map elsőbbséggel. A teljes
+  forrásellenőrzés írás előtt történik, hiba nem ad sikeres kilépési kódot.
+  Éles eredmény: **14 csapat, 473 játékos, 847 játékos-szezon sor**, 2023/24–2026/27.
+  Négy parser-regresszióteszt sikeres. Az U23 nem bizonyít hazai/légiós státuszt,
+  ezért NULL; születési évet a pontatlan szezonos életkorból nem számolunk.
+  Írás nélküli ellenőrzés: `KOSARSTAT_MOVEMENT_DRY_RUN=1 npm run kosarstat:team-players`.
 - [ ] `migrations/add-league-player-movements-view.sql` – `league_player_movements`
   VIEW (`LAG`/`LEAD` ablakfüggvények szezononként/játékosonként: érkezett/távozott,
   hazai célcsapat vagy ismeretlen/külföld, kihagyás utáni visszatérés) – csak

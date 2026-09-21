@@ -1,489 +1,161 @@
-// Bajnokság-szintű játékosmozgás – kosarstat.hu csapat-archívum import.
-//
-// Két fázisban dolgozik:
-//   1) kosarstat.hu/teams/ bejárása -> kosarstat csapat-ID feloldása a
-//      meglévő `teams` sorokra (fuzzy match), eredmény: kosarstat_team_map.
-//   2) Csapatonként a kosarstat.hu/teams/team/team_players/?team=<ID> oldal
-//      beolvasása: minden valaha ott szerepelt játékos, hazai/légiós/
-//      honosított státusszal és első-utolsó szezon (stint) tartománnyal.
-//      A stint a nyomon követett szezonablakra vágva szezononkénti sorokra
-//      bomlik: league_players + league_player_team_seasons upsert.
-//
-// A kosarstat.hu böngésző-szerű renderelést vár (raw HTTP kérésre 403-at ad),
-// ezért Playwright kell hozzá, mint a scrape-kosarstat-playbyplay.ts-hez.
+// Játékosmozgás-import: a szezonos csapatoldal VALÓS névsora a tényadat.
+// Az archívum első/utolsó éve nem folytonos stint, nem bontható ki évekre.
+// 2026-09-21: felhasználó által jóváhagyott forráskorrekció.
+import type { Page } from 'playwright';
+import type { SourceTable, SeasonPlayer } from './lib/kosarstat-movement-source';
+import { parseSeasonPlayers, seasonCode } from './lib/kosarstat-movement-source';
+import { fetchAllRows } from './lib/fetch-all-rows';
+import { createScriptClient, normalizeName, findTeamByNameFuzzy, formatSupabaseError } from './scrape-utils';
+import { chromium } from 'playwright';
 
-import { chromium, type Page } from 'playwright';
-import { findTeamByNameFuzzy, cleanTeamName, createScriptClient, formatSupabaseError } from './scrape-utils';
+const supabase = createScriptClient(); // dotenv az opciók kiolvasása előtt
+const seasonCount = Number(process.env.KOSARSTAT_MOVEMENT_SEASON_COUNT || '4');
+const filters = (process.env.KOSARSTAT_TEAM_FILTER || '').split(',').map(normalizeName).filter(Boolean);
+const dryRun = process.env.KOSARSTAT_MOVEMENT_DRY_RUN === '1';
+type Team = { id: string; name: string };
+type Season = { id: string; name: string; start_date: string };
+type TeamMap = { team_id: string; kosarstat_team_id: string; kosarstat_team_name: string };
 
-const KOSARSTAT_BASE = 'https://kosarstat.hu';
-const KOSARSTAT_HEADLESS = process.env.KOSARSTAT_HEADLESS === 'false' ? false : true;
-const KOSARSTAT_MOVEMENT_SEASON_COUNT = parseInt(process.env.KOSARSTAT_MOVEMENT_SEASON_COUNT || '4', 10);
-const TEAM_FILTER = (process.env.KOSARSTAT_TEAM_FILTER || '')
-  .split(',')
-  .map(value => value.trim())
-  .filter(Boolean);
-
-const supabase = createScriptClient();
-
-type TeamRecord = {
-  id: string;
-  name: string;
-  short_name?: string | null;
-  is_primary?: boolean | null;
-};
-
-type SeasonRecord = {
-  id: string;
-  name: string;
-  start_date: string;
-};
-
-type KosarstatTeamMapRow = {
-  team_id: string;
-  kosarstat_team_id: string;
-  kosarstat_team_name: string;
-};
-
-type TeamPlayersRow = {
-  name: string;
-  profileUrl: string | null;
-  kosarstatPlayerId: string | null;
-  position: string | null;
-  birthYear: number | null;
-  heightCm: number | null;
-  weightKg: number | null;
-  status: 'hazai' | 'legios' | 'honositott' | null;
-  firstSeasonLabel: string;
-  lastSeasonLabel: string;
-};
-
-// --- Segédfüggvények ------------------------------------------------------
-
-const dismissCookieBanner = async (page: Page) => {
-  try {
-    const acceptButton = page.locator('button:has-text("Elfogadom")');
-    if (await acceptButton.count()) {
-      await acceptButton.first().click({ timeout: 2000 }).catch(() => undefined);
-    }
-  } catch (error) {
-    console.warn('  ⚠️ Süti banner elfogadása nem sikerült:', error);
-  }
-};
-
-const extractPlayerIdFromUrl = (url: string): string | null => {
-  try {
-    const parsed = new URL(url, KOSARSTAT_BASE);
-    return parsed.searchParams.get('player');
-  } catch {
-    return null;
-  }
-};
-
-const extractTeamIdFromUrl = (url: string): string | null => {
-  try {
-    const parsed = new URL(url, KOSARSTAT_BASE);
-    return parsed.searchParams.get('team');
-  } catch {
-    return null;
-  }
-};
-
-/** "2023-24", "2023-2024", "2023/2024" stb. -> kezdő év (2023). */
-const extractStartYear = (label: string): number | null => {
-  const match = label.match(/(\d{4})/);
-  if (!match) return null;
-  return parseInt(match[1], 10);
-};
-
-const buildSeasonYearIndex = (seasons: SeasonRecord[]): Map<number, SeasonRecord> => {
-  const index = new Map<number, SeasonRecord>();
-  seasons.forEach(season => {
-    const year = new Date(season.start_date).getFullYear();
-    if (!Number.isNaN(year)) index.set(year, season);
-  });
-  return index;
-};
-
-const parsePositiveInt = (value: string | null | undefined): number | null => {
-  if (!value) return null;
-  const match = value.match(/\d+/);
-  return match ? parseInt(match[0], 10) : null;
-};
-
-const parseStatus = (value: string): 'hazai' | 'legios' | 'honositott' | null => {
-  const normalized = value.toLowerCase();
-  if (normalized.includes('honosít')) return 'honositott';
-  if (normalized.includes('légiós') || normalized.includes('legios')) return 'legios';
-  if (normalized.includes('hazai')) return 'hazai';
-  return null;
-};
-
-// --- Fázis 1: csapat-ID feloldás -------------------------------------------
-
-const resolveTeamMap = async (page: Page, trackedTeams: TeamRecord[]): Promise<KosarstatTeamMapRow[]> => {
-  console.log('🔎 kosarstat.hu/teams/ bejárása a csapat-ID-k feloldásához...');
-  await page.goto(`${KOSARSTAT_BASE}/teams/`, { waitUntil: 'domcontentloaded', timeout: 30000 });
-  await page.waitForTimeout(2000);
-  await dismissCookieBanner(page);
-
-  const rawTeams = await page.$$eval('a[href*="/teams/team/"]', anchors => {
-    const unique: Record<string, { name: string; url: string }> = {};
-    anchors.forEach(anchor => {
-      const href = anchor.getAttribute('href') || '';
-      const name = (anchor.textContent || '').replace(/\s+/g, ' ').trim();
-      if (!href || !name) return;
-      const key = href;
-      if (!unique[key]) unique[key] = { name, url: href };
-    });
-    return Object.values(unique);
-  });
-
-  const kosarstatTeams = rawTeams
-    .map(team => ({
-      name: cleanTeamName(team.name),
-      teamId: extractTeamIdFromUrl(team.url),
-    }))
-    .filter((team): team is { name: string; teamId: string } => Boolean(team.teamId));
-
-  console.log(`  📁 ${kosarstatTeams.length} kosarstat csapat-link találva`);
-
-  const rows: KosarstatTeamMapRow[] = [];
-  for (const team of trackedTeams) {
-    const match = findTeamByNameFuzzy(kosarstatTeams.map(kt => ({ id: kt.teamId, name: kt.name })), team.name);
-    if (!match) {
-      console.warn(`  ⚠️ Nincs kosarstat párosítás: "${team.name}" – kihagyva (kézzel javítható a kosarstat_team_map-ben)`);
-      continue;
-    }
-    rows.push({ team_id: team.id, kosarstat_team_id: match.id, kosarstat_team_name: match.name });
-    console.log(`  ✅ ${team.name} -> kosarstat team=${match.id} (${match.name})`);
-  }
-
-  return rows;
-};
-
-const upsertTeamMap = async (rows: KosarstatTeamMapRow[]) => {
-  if (rows.length === 0) return;
-  const { error } = await supabase
-    .from('kosarstat_team_map')
-    .upsert(
-      rows.map(row => ({
-        team_id: row.team_id,
-        kosarstat_team_id: row.kosarstat_team_id,
-        kosarstat_team_name: row.kosarstat_team_name,
-        matched_at: new Date().toISOString(),
-      })),
-      { onConflict: 'team_id' }
-    );
-
-  if (error) {
-    throw new Error(`kosarstat_team_map upsert hiba: ${formatSupabaseError(error)}`);
-  }
-};
-
-// --- Fázis 2: csapatonkénti roster-archívum ---------------------------------
-
-// Élő DOM-on ellenőrzött oszlopfejlécek (2026-09-21, team=102 / Atomerőmű SE):
-// "Játékos","Poszt","Szül.","Mag.","Töm.","Státusz","Első szezon","Utolsó szezon", ...
-// Header-név alapján keressük az indexeket (nem fix pozíció), hogy egy
-// esetleges oszlop-sorrend eltérés más csapatnál ne törje el a parse-t.
-const COLUMN_LABELS = {
-  position: 'poszt',
-  birthYear: 'szül',
-  height: 'mag',
-  weight: 'töm',
-  status: 'státusz',
-  firstSeason: 'első szezon',
-  lastSeason: 'utolsó szezon',
-} as const;
-
-const findColumnIndex = (headers: string[], label: string): number =>
-  headers.findIndex(header => header.toLowerCase().trim().startsWith(label));
-
-const scrapeTeamPlayers = async (page: Page, kosarstatTeamId: string): Promise<TeamPlayersRow[]> => {
-  const url = `${KOSARSTAT_BASE}/teams/team/team_players/?team=${kosarstatTeamId}`;
-  console.log(`  🌐 Roster-archívum megnyitása: ${url}`);
-  await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
-  await page.waitForTimeout(2000);
-  await dismissCookieBanner(page);
-
-  // A "JÁTÉKOS STATISZTIKÁK" tábla a "Első szezon" + "Utolsó szezon" fejléc-
-  // párról azonosítható egyértelműen (élő DOM-on ellenőrizve, ld. header
-  // komment fent) – ez megbízhatóbb, mint kulcsszó-pontozás.
-  const tables = page.locator('table');
-  const tableCount = await tables.count();
-  let targetTableIndex = -1;
-  let headers: string[] = [];
-
-  for (let tableIndex = 0; tableIndex < tableCount; tableIndex += 1) {
-    const table = tables.nth(tableIndex);
-    const headerCells = await table.locator('thead th, thead td').allTextContents();
-    const normalizedHeaders = headerCells.map(h => h.replace(/\s+/g, ' ').trim());
-    if (
-      findColumnIndex(normalizedHeaders, COLUMN_LABELS.firstSeason) !== -1 &&
-      findColumnIndex(normalizedHeaders, COLUMN_LABELS.lastSeason) !== -1
-    ) {
-      targetTableIndex = tableIndex;
-      headers = normalizedHeaders;
-      break;
-    }
-  }
-
-  if (targetTableIndex === -1) {
-    console.warn('  ⚠️ Nem található "Első szezon"/"Utolsó szezon" fejlécű táblázat ezen az oldalon.');
-    return [];
-  }
-
-  const colIndex = {
-    position: findColumnIndex(headers, COLUMN_LABELS.position),
-    birthYear: findColumnIndex(headers, COLUMN_LABELS.birthYear),
-    height: findColumnIndex(headers, COLUMN_LABELS.height),
-    weight: findColumnIndex(headers, COLUMN_LABELS.weight),
-    status: findColumnIndex(headers, COLUMN_LABELS.status),
-    firstSeason: findColumnIndex(headers, COLUMN_LABELS.firstSeason),
-    lastSeason: findColumnIndex(headers, COLUMN_LABELS.lastSeason),
-  };
-
-  const table = tables.nth(targetTableIndex);
-  const rowLocator = table.locator('tbody tr');
-  const rowCount = await rowLocator.count();
-  const results: TeamPlayersRow[] = [];
-
-  for (let rowIndex = 0; rowIndex < rowCount; rowIndex += 1) {
-    const row = rowLocator.nth(rowIndex);
-    const cells = row.locator('td');
-    const cellCount = await cells.count();
-    if (cellCount <= colIndex.lastSeason) continue;
-
-    const values = (await cells.allTextContents()).map(value => value.replace(/\s+/g, ' ').trim());
-
-    const link = row.locator('a[href*="/players/player/"]').first();
-    const linkCount = await link.count();
-    if (linkCount === 0) continue;
-    const name = ((await link.textContent()) || '').replace(/\s+/g, ' ').trim();
-    const href = (await link.getAttribute('href')) || '';
-    const profileUrl = href ? new URL(href, KOSARSTAT_BASE).toString() : null;
-    const kosarstatPlayerId = href ? extractPlayerIdFromUrl(href) : null;
-    if (!name || !kosarstatPlayerId) continue;
-
-    const firstSeasonLabel = values[colIndex.firstSeason] || '';
-    const lastSeasonLabel = values[colIndex.lastSeason] || firstSeasonLabel;
-    if (!firstSeasonLabel) continue;
-
-    results.push({
-      name,
-      profileUrl,
-      kosarstatPlayerId,
-      position: colIndex.position !== -1 ? (values[colIndex.position] || null) : null,
-      birthYear: colIndex.birthYear !== -1 ? parsePositiveInt(values[colIndex.birthYear]) : null,
-      heightCm: colIndex.height !== -1 ? parsePositiveInt(values[colIndex.height]) : null,
-      weightKg: colIndex.weight !== -1 ? parsePositiveInt(values[colIndex.weight]) : null,
-      status: colIndex.status !== -1 ? parseStatus(values[colIndex.status] || '') : null,
-      firstSeasonLabel,
-      lastSeasonLabel,
-    });
-  }
-
-  console.log(`  📁 ${results.length} játékos-stint beolvasva`);
-  return results;
-};
-
-// --- Stint -> szezononkénti sorok, ablakra vágva ----------------------------
-
-const expandStintToSeasons = (
-  row: TeamPlayersRow,
-  seasonYearIndex: Map<number, SeasonRecord>,
-  trackedStartYears: number[]
-): { seasonId: string | null; label: string }[] => {
-  const firstYear = extractStartYear(row.firstSeasonLabel);
-  const lastYear = extractStartYear(row.lastSeasonLabel);
-  if (firstYear === null || lastYear === null) return [];
-
-  const out: { seasonId: string | null; label: string }[] = [];
-  for (const year of trackedStartYears) {
-    if (year < firstYear || year > lastYear) continue;
-    const season = seasonYearIndex.get(year);
-    out.push({ seasonId: season ? season.id : null, label: `${year}-${String((year + 1) % 100).padStart(2, '0')}` });
-  }
-  return out;
-};
-
-// --- Upsert -----------------------------------------------------------------
-
-const upsertLeaguePlayers = async (rows: TeamPlayersRow[]) => {
-  const byId = new Map<string, TeamPlayersRow>();
-  rows.forEach(row => {
-    if (row.kosarstatPlayerId) byId.set(row.kosarstatPlayerId, row);
-  });
-  if (byId.size === 0) return;
-
-  const { error } = await supabase
-    .from('league_players')
-    .upsert(
-      Array.from(byId.values()).map(row => ({
-        kosarstat_player_id: row.kosarstatPlayerId,
-        display_name: row.name,
-        position: row.position,
-        birth_year: row.birthYear,
-        height_cm: row.heightCm,
-        weight_kg: row.weightKg,
-        latest_status: row.status,
-        profile_url: row.profileUrl,
-        updated_at: new Date().toISOString(),
-      })),
-      { onConflict: 'kosarstat_player_id' }
-    );
-
-  if (error) {
-    throw new Error(`league_players upsert hiba: ${formatSupabaseError(error)}`);
-  }
-};
-
-const upsertTeamSeasons = async (
-  teamId: string,
-  rows: TeamPlayersRow[],
-  seasonYearIndex: Map<number, SeasonRecord>,
-  trackedStartYears: number[]
-): Promise<{ rowsUpserted: number; unmatchedSeasonLabels: Set<string> }> => {
-  const unmatchedSeasonLabels = new Set<string>();
-  const records: {
-    kosarstat_player_id: string;
-    team_id: string;
-    season_id: string | null;
-    kosarstat_season_label: string;
-    status_at_time: string | null;
-  }[] = [];
-
-  for (const row of rows) {
-    if (!row.kosarstatPlayerId) continue;
-    const seasons = expandStintToSeasons(row, seasonYearIndex, trackedStartYears);
-    if (seasons.length === 0) {
-      unmatchedSeasonLabels.add(`${row.firstSeasonLabel}–${row.lastSeasonLabel}`);
-      continue;
-    }
-    seasons.forEach(({ seasonId, label }) => {
-      if (!seasonId) unmatchedSeasonLabels.add(label);
-      records.push({
-        kosarstat_player_id: row.kosarstatPlayerId as string,
-        team_id: teamId,
-        season_id: seasonId,
-        kosarstat_season_label: label,
-        status_at_time: row.status,
-      });
-    });
-  }
-
-  if (records.length === 0) return { rowsUpserted: 0, unmatchedSeasonLabels };
-
-  const { error } = await supabase
-    .from('league_player_team_seasons')
-    .upsert(records, { onConflict: 'kosarstat_player_id,team_id,kosarstat_season_label' });
-
-  if (error) {
-    throw new Error(`league_player_team_seasons upsert hiba: ${formatSupabaseError(error)}`);
-  }
-
-  return { rowsUpserted: records.length, unmatchedSeasonLabels };
-};
-
-// --- Fő futás -----------------------------------------------------------------
-
-const main = async () => {
-  console.log('🚀 Kosarstat csapat-archívum (játékosmozgás) import indul');
-
-  const { data: teams, error: teamsError } = await supabase
-    .from('teams')
-    .select('id, name, short_name, is_primary')
-    .order('name');
-  if (teamsError || !teams) {
-    throw new Error(`Csapatok betöltési hiba: ${formatSupabaseError(teamsError)}`);
-  }
-
-  const trackedTeams = teams.filter(team =>
-    TEAM_FILTER.length === 0 || TEAM_FILTER.some(filter => team.name.toLowerCase().includes(filter.toLowerCase()))
-  );
-
-  const { data: seasons, error: seasonsError } = await supabase
-    .from('seasons')
-    .select('id, name, start_date')
-    .order('start_date', { ascending: false })
-    .limit(KOSARSTAT_MOVEMENT_SEASON_COUNT);
-  if (seasonsError || !seasons) {
-    throw new Error(`Szezonok betöltési hiba: ${formatSupabaseError(seasonsError)}`);
-  }
-  if (seasons.length === 0) {
-    console.error('❌ Nincs szezon a seasons táblában.');
-    process.exit(1);
-  }
-
-  const seasonYearIndex = buildSeasonYearIndex(seasons);
-  const trackedStartYears = Array.from(seasonYearIndex.keys()).sort((a, b) => a - b);
-  console.log(`📅 Nyomon követett szezonok: ${seasons.map(s => s.name).join(', ')}`);
-
-  const { data: existingMap } = await supabase
-    .from('kosarstat_team_map')
-    .select('team_id, kosarstat_team_id, kosarstat_team_name');
-  const mapByTeamId = new Map<string, KosarstatTeamMapRow>();
-  (existingMap || []).forEach(row => mapByTeamId.set(row.team_id, row));
-
-  const browser = await chromium.launch({ headless: KOSARSTAT_HEADLESS });
-  const page = await browser.newPage();
-
-  try {
-    const teamsMissingMap = trackedTeams.filter(team => !mapByTeamId.has(team.id));
-    if (teamsMissingMap.length > 0) {
-      const resolved = await resolveTeamMap(page, teamsMissingMap);
-      await upsertTeamMap(resolved);
-      resolved.forEach(row => mapByTeamId.set(row.team_id, row));
-    }
-
-    const allUnmatchedLabels = new Set<string>();
-    let processedTeams = 0;
-
-    for (const [index, team] of trackedTeams.entries()) {
-      const mapRow = mapByTeamId.get(team.id);
-      if (!mapRow) {
-        console.warn(`\n[${index + 1}/${trackedTeams.length}] ⚠️ ${team.name} – nincs kosarstat párosítás, kihagyva`);
-        continue;
+async function openPage(page: Page, url: string) {
+  const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+  if (!response?.ok()) throw new Error(`Forrásoldal nem elérhető: ${response?.status()} ${url}`);
+  await page.locator('table').first().waitFor();
+  await page.waitForTimeout(1000);
+}
+async function readTables(page: Page): Promise<SourceTable[]> {
+  return page.evaluate(() => {
+    type TableApi = {
+      rows: () => { nodes: () => { toArray: () => HTMLTableRowElement[] } };
+      settings: () => { oFeatures: { bServerSide: boolean } }[];
+    };
+    type JQuery = ((table: HTMLTableElement) => { DataTable: () => TableApi }) & {
+      fn?: { dataTable?: { isDataTable: (table: HTMLTableElement) => boolean } };
+    };
+    const jq = (window as unknown as { jQuery?: JQuery }).jQuery;
+    return Array.from(document.querySelectorAll('table')).flatMap(table => {
+      const headers = Array.from(table.querySelectorAll('thead tr:first-child th, thead tr:first-child td')).map(c => c.textContent?.trim() ?? '');
+      if (!headers.includes('active') && !headers.includes('team_name_2') && !headers.includes('first_game')) return [];
+      let rows = Array.from(table.querySelectorAll<HTMLTableRowElement>('tbody tr'));
+      if (jq?.fn?.dataTable?.isDataTable(table)) {
+        const api = jq(table).DataTable();
+        // A többi lap nincs a DOM-ban. Szerveroldali lapozásra váltáskor
+        // megállunk a csonkolás helyett.
+        if (api.settings()[0]?.oFeatures.bServerSide) throw new Error('A forrás szerveroldali lapozásra váltott.');
+        rows = api.rows().nodes().toArray();
       }
-
-      console.log(`\n[${index + 1}/${trackedTeams.length}] ${team.name} (kosarstat team=${mapRow.kosarstat_team_id})`);
-      const roster = await scrapeTeamPlayers(page, mapRow.kosarstat_team_id);
-      if (roster.length === 0) {
-        console.warn('  ⚠️ Nincs olvasható archívum-adat, csapat kihagyva.');
-        continue;
-      }
-
-      await upsertLeaguePlayers(roster);
-      const { rowsUpserted, unmatchedSeasonLabels } = await upsertTeamSeasons(
-        team.id,
-        roster,
-        seasonYearIndex,
-        trackedStartYears
-      );
-      unmatchedSeasonLabels.forEach(label => allUnmatchedLabels.add(label));
-
-      console.log(`  ✅ ${rowsUpserted} játékos-szezon sor beírva`);
-      processedTeams += 1;
-
-      await page.waitForTimeout(1500);
-    }
-
-    console.log(`\n✨ Kész! ${processedTeams}/${trackedTeams.length} csapat feldolgozva.`);
-    if (allUnmatchedLabels.size > 0) {
-      console.warn(
-        `⚠️ ${allUnmatchedLabels.size} szezon-label nem illeszthető a seasons táblára (season_id=NULL maradt): `
-        + Array.from(allUnmatchedLabels).join(', ')
-      );
-    }
-  } catch (error) {
-    console.error('❌ Váratlan hiba futás közben:', error);
-  } finally {
+      return {
+        headers,
+        rows: rows.map(row => ({
+          cells: Array.from(row.querySelectorAll('td')).map(cell => {
+            const copy = cell.cloneNode(true) as HTMLElement;
+            copy.querySelectorAll('br').forEach(br => br.replaceWith('\n'));
+            copy.querySelectorAll('p').forEach(p => p.prepend('\n'));
+            return copy.textContent?.trim() ?? '';
+          }),
+          links: Array.from(row.querySelectorAll<HTMLAnchorElement>('a[href]')).map(a => ({ text: a.textContent?.trim() ?? '', url: a.href })),
+        })),
+      };
+    });
+  });
+}
+async function resolveTeamMaps(page: Page, teams: Team[]): Promise<TeamMap[]> {
+  const { data: existing, error } = await supabase.from('kosarstat_team_map').select('team_id,kosarstat_team_id,kosarstat_team_name');
+  if (error) throw new Error(`Csapattérkép: ${formatSupabaseError(error)}`);
+  const existingById = new Map<string, TeamMap>((existing ?? []).map(row => [row.team_id, row]));
+  await openPage(page, 'https://kosarstat.hu/teams/');
+  const table = (await readTables(page)).find(t => t.headers.includes('Csapat') && t.headers.includes('active'));
+  if (!table) throw new Error('A Kosarstat csapatlista nem található.');
+  const candidates = table.rows.flatMap(row => {
+    const link = row.links.find(link => link.url.includes('/teams/team/'));
+    const id = link ? new URL(link.url).searchParams.get('team') : null;
+    return link && id ? [{ id, name: link.text, aliases: row.cells[0].split('\n').map(normalizeName).filter(Boolean) }] : [];
+  });
+  const maps = teams.map(team => {
+    const saved = existingById.get(team.id);
+    if (saved) return saved;
+    // A forrás saját korábbi klubnevei: nincs rövidítés-alapú találgatás.
+    const exact = candidates.filter(c => c.aliases.includes(normalizeName(team.name)));
+    const matches = exact.length ? exact : candidates.filter(c => findTeamByNameFuzzy([c], team.name));
+    if (matches.length !== 1) throw new Error(`Nem egyértelmű csapatpár: ${team.name}. Javítsd a kosarstat_team_map táblát.`);
+    return { team_id: team.id, kosarstat_team_id: matches[0].id, kosarstat_team_name: matches[0].name };
+  });
+  if (new Set(maps.map(m => m.kosarstat_team_id)).size !== maps.length) throw new Error('Több nyomon követett csapat ugyanahhoz a Kosarstat klubhoz tartozik.');
+  return maps;
+}
+async function main() {
+  if (seasonCount !== 3 && seasonCount !== 4) throw new Error('A szezonok száma 3 vagy 4 lehet.');
+  if (!dryRun && !process.env.SUPABASE_SERVICE_ROLE_KEY) throw new Error('Az importhoz SUPABASE_SERVICE_ROLE_KEY szükséges.');
+  const { data: seasons, error: seasonError } = await supabase.from('seasons').select('id,name,start_date')
+    .lte('start_date', new Date().toISOString().slice(0, 10)).order('start_date', { ascending: false }).limit(seasonCount);
+  if (seasonError || !seasons?.length) throw new Error(`Szezonok: ${formatSupabaseError(seasonError)}`);
+  const orderedSeasons: Season[] = [...seasons].reverse();
+  orderedSeasons.forEach(s => seasonCode(s.name));
+  const fixtures = await fetchAllRows<{ id: string; home_team_id: string; away_team_id: string }>((from, to) => supabase
+    .from('league_fixtures').select('id,home_team_id,away_team_id').eq('season_id', seasons[0].id).order('id').range(from, to));
+  const currentTeamIds = [...new Set(fixtures.flatMap(f => [f.home_team_id, f.away_team_id]))];
+  if (!currentTeamIds.length) throw new Error('Előbb importáld a legújabb szezon menetrendjét a jelenlegi élvonal meghatározásához.');
+  const { data: teams, error: teamsError } = await supabase.from('teams').select('id,name').in('id', currentTeamIds).order('name');
+  if (teamsError || !teams) throw new Error(`Csapatok: ${formatSupabaseError(teamsError)}`);
+  const selectedTeams: Team[] = teams.filter(t => !filters.length || filters.some(f => normalizeName(t.name).includes(f)));
+  if (!selectedTeams.length) throw new Error('A csapatszűrő nem talál egyetlen jelenlegi élvonalbeli csapatot sem.');
+  console.log(`Játékosmozgás-import${dryRun ? ' (csak ellenőrzés, írás nélkül)' : ''}: ${selectedTeams.length} csapat; ${orderedSeasons.map(s => s.name).join(', ')}`);
+  const browser = await chromium.launch({ headless: process.env.KOSARSTAT_HEADLESS !== 'false' });
+  try {
+    const page = await browser.newPage();
+    await page.route('**/*', route => new URL(route.request().url()).hostname === 'kosarstat.hu' ? route.continue() : route.abort());
+    const maps = await resolveTeamMaps(page, selectedTeams);
+    const batches: { team: Team; season: Season; players: SeasonPlayer[] }[] = [];
+    maps.forEach(map => console.log(`${selectedTeams.find(t => t.id === map.team_id)?.name} → ${map.kosarstat_team_name} (${map.kosarstat_team_id})`));
     await page.close();
+    const jobs = selectedTeams.flatMap(team => orderedSeasons.map(season => ({ team, season })));
+    let nextJob = 0;
+    // Három böngészőlap korlátozza a forrás terhelését és az API futásidejét.
+    const results = await Promise.allSettled(Array.from({ length: Math.min(3, jobs.length) }, async () => {
+      const workerPage = await browser.newPage();
+      await workerPage.route('**/*', route => new URL(route.request().url()).hostname === 'kosarstat.hu' ? route.continue() : route.abort());
+      while (nextJob < jobs.length) {
+        const { team, season } = jobs[nextJob++];
+        const map = maps.find(m => m.team_id === team.id)!;
+        await openPage(workerPage, `https://kosarstat.hu/teams/team/boxstats/?team=${encodeURIComponent(map.kosarstat_team_id)}&season=${seasonCode(season.name)}`);
+        const tables = await readTables(workerPage);
+        const heading = tables.find(t => t.headers.includes('team_name_2'));
+        if (!heading?.rows.some(row => row.cells.includes(season.name.replace('/', '-')))) throw new Error(`A forrás más szezont adott vissza: ${team.name} ${season.name}`);
+        const players = parseSeasonPlayers(tables);
+        const hasTeam = heading.rows.some(row => row.cells.some(c => c && c !== season.name.replace('/', '-')));
+        if (!players.length && hasTeam) throw new Error(`Hiányzó játékoslista: ${team.name} ${season.name}. Nem tekintjük üres keretnek.`);
+        console.log(`  ${team.name} ${season.name}: ${players.length} játékos${hasTeam ? '' : ' (nem szerepelt az élvonalban)'}`);
+        batches.push({ team, season, players });
+      }
+      await workerPage.close();
+    }));
+    const failures = results.filter(result => result.status === 'rejected');
+    if (failures.length) throw new AggregateError(failures.map(f => f.reason), 'A forrásellenőrzés sikertelen; adatbázisírás nem történt.');
+    const players = new Map<string, SeasonPlayer>();
+    // Szezon szerinti sorrend: a legújabb ismert státusz legyen a törzsadat.
+    for (const season of orderedSeasons) for (const batch of batches.filter(b => b.season.id === season.id)) {
+      batch.players.forEach(player => players.set(player.kosarstat_player_id, player));
+    }
+    const memberships = batches.flatMap(b => b.players.map(p => ({
+      kosarstat_player_id: p.kosarstat_player_id, team_id: b.team.id, season_id: b.season.id,
+      kosarstat_season_label: `${b.season.name.slice(0, 4)}-${b.season.name.slice(-2)}`,
+      status_at_time: p.latest_status, imported_at: new Date().toISOString(),
+    })));
+    if (!memberships.length) throw new Error('Nincs importálható játékos-szezon adat.');
+    // A teljes forrásellenőrzés megelőzi az első írást.
+    if (!dryRun) {
+      const { error: mapError } = await supabase.from('kosarstat_team_map').upsert(maps, { onConflict: 'team_id' });
+      if (mapError) throw new Error(formatSupabaseError(mapError));
+      const { error: playerError } = await supabase.from('league_players').upsert([...players.values()].map(p => ({ ...p, updated_at: new Date().toISOString() })), { onConflict: 'kosarstat_player_id' });
+      if (playerError) throw new Error(formatSupabaseError(playerError));
+      const { error: membershipError } = await supabase.from('league_player_team_seasons').upsert(memberships, { onConflict: 'kosarstat_player_id,team_id,kosarstat_season_label' });
+      if (membershipError) throw new Error(formatSupabaseError(membershipError));
+    }
+    console.log(`Kész: ${maps.length} csapat, ${players.size} játékos, ${memberships.length} játékos-szezon sor.${dryRun ? ' Adatbázisírás nem történt.' : ''}`);
+  } finally {
     await browser.close();
   }
-};
-
+}
 main().catch(error => {
-  console.error('❌ Kritikus hiba:', error);
-  process.exit(1);
+  console.error('Sikertelen játékosmozgás-import:', error);
+  process.exitCode = 1;
 });

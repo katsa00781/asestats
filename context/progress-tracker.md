@@ -43,28 +43,20 @@ Update this file after every meaningful implementation change.
 - **Játékosmozgás import API/UI (2026-09-21):** új admin-only route és
   `LeaguePlayerMovementsImport` az Import tabon; 3/4 szezonos időtáv,
   opcionális csapatszűrő, futászár, időkorlát, hiba esetén is látható napló.
-  Az alaptáblák már léteznek, olvasással ellenőrizve, mindhárom üres.
+  Az alaptáblák létezését olvasással ellenőriztük, a szezonos import feltöltötte.
   A felhasználó jóváhagyta a szezonos `boxstats` forrást: az archívum
   első–utolsó éve nem folytonos stint, így a régi kibontás téves adatot adna.
   A teljes buildet egy korábban meglévő Deno/Next TypeScript ütközés
   (`supabase/functions/live-scan/index.ts`, `npm:` import) blokkolja;
   a teljes lintben meglévő AppSidebar effect-hiba és 7 warning van.
 
-- **Bajnokság-szintű játékosmozgás nyomonkövetés (2026-09-21)** – új feature:
-  az egész NB I/A bajnokság (nem csak ASE) játékosmozgása csapatonként,
-  vizuálisan (érkezés/távozás, hazai csapatváltás, feltehetően külföld
-  irányába/onnan). Forrás: kosarstat.hu csapat-archívum oldalai
-  (`teams/team/team_players/?team=<ID>`), stabil player-ID-vel, élőben
-  megerősítve. Terv: `~/.claude/plans/olvasd-el-a-claude-md-playful-crystal.md`.
-  Eddig: `migrations/add-league-player-movements-tables.sql` megírva
-  (`kosarstat_team_map`, `league_players`, `league_player_team_seasons`,
-  RLS) – **még nem futtatva** SQL Editorban, ez blokkolja a scraper éles
-  tesztelését. `scrape-kosarstat-team-players.ts` megírva és élő DOM ellen
-  validálva (header-név alapú oszlopkeresés, `npm run kosarstat:team-players`);
-  a DEAC és az MVM-OSE Lions kosarstat-neve nem illeszthető automatikusan a
-  fuzzy matcherrel, kézi `kosarstat_team_map` sor kell nekik. Hátra:
-  classification VIEW, API route + admin import UI, új nav item + dashboard
-  nézet.
+- **Játékosmozgás scraper ✓ (2026-09-21)** – a jóváhagyott szezonos
+  `boxstats` forrásból importál, nem az archívum első–utolsó éve közötti
+  tartományból. Legújabb menetrend alapján 14 csapat, pontos klub-aliasok,
+  teljes táblakiolvasás, írás előtti forrásvalidáció, dry-run, helyes hibakód.
+  Éles import: 473 játékos, 847 tagság, 2023/24–2026/27. Négy parser-teszt
+  és célzott lint sikeres. A Database típus tartalmazza az alaptáblákat.
+  Hátra: classification view, dashboard és végső ellenőrzés.
 - **Élő mérkőzés-gyűjtő (2026-09-04)** – a mobil app (`asestatmobile`) élő
   meccs nézetéhez a backend fele: `migrations/add-live-match-tables.sql`
   (`live_games`/`live_player_lines`/`live_quarter_scores` + RLS) és
