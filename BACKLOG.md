@@ -298,16 +298,65 @@ ad. A `scrape-hunbasket-standings.ts` dedup nélkül mentette mind a 28-at a
   `Duplikált tabellasorok eldobva: 28 → 14`, `Tabella import kész: 14 csapat`.
   `npm run build` és `npx eslint` tiszta.
 
-**Megfigyelések (nem javítva, külön döntés kell):**
+**A megfigyelésekből elvégzett munka ✓ (2026-09-21):**
 
-1. A `hunbasket:shotchart` az egyetlen script **limit/szűrő opció nélkül** –
-   mindig a teljes szezon 182 meccsét dolgozza fel.
-2. A `kosarstat:pbp` `⚠️ nincs párosítható games sor` figyelmeztetést adott; a
-   `kosarstat:backfill-links` ezután **353 hiányzó linket** pótolt. Érdemes lehet
-   a backfillt a rendszeres futásba kötni.
-3. A 2025/26-os szezonban **16 meccsnek 15-nél több stat sora van** (max 22, két
-   csapat játékosaival egy `game_id` alatt) – legacy adat, a mostani script tiszta
-   (8–12 sor/meccs). Külön adattisztítás kérdése.
+1. [x] **`hunbasket:shotchart` szűrők** – a menetrend-szűrés (forduló / dátum /
+   csapat) a negyedik duplikálás helyett a `scrape-utils.ts`-be került
+   (`parseRoundFilter`, `matchesRound`, `matchesStage`, `matchesDateRange`,
+   `parseTeamFilter`, `matchesTeamFilter`), a `scrape-hunbasket.ts` a lokális
+   másolatai helyett ezeket használja, a dobástérkép-import pedig megkapta
+   ugyanazt a szintaxist + `HUNBASKET_SHOT_GAME_LIMIT`-et. 19 helper-teszt zöld,
+   szűrt futás: 182 → 7 → 2 meccs. A szöveges kör illesztése most mindkét oldalon
+   `normalizeName`-mel megy, így a többszörös szóköz sem akadály.
+2. [x] **`kosarstat:backfill-links` a rendszeres futásban** – `scrape.yml` 10.
+   lépése, a pbp után, `--season` szűkítéssel. Idempotens (újrafuttatva 0 új
+   link, 384 már linkelt).
+3. [x] **Legacy adatminőség rendbe téve** – lásd a következő szakaszt.
+
+### Legacy adattisztítás ✓ (2026-09-21)
+
+A „kevert csapat-hozzárendelésű" sorokat **nem lehetett kitörölni**: a vizsgálat
+kimutatta, hogy a 19 érintett meccsből csak **1** volt valódi duplikátum, 17-nél
+részleges az átfedés, 1-nél pedig az adat **csak ott volt meg**. A tömeges törlés
+valós box-score adatot semmisített volna meg.
+
+Helyette a **validált box-score script újrafuttatása** végezte el a javítást: az
+per meccs töröl+beszúr, tehát a hibás sorokat kiseperi és a helyeseket újraírja.
+
+- [x] **24 érintett dátum újraimportálva** (`HUNBASKET_DATE_FROM/TO` szűkítéssel,
+  2025-10-03 – 2026-02-22): 168 meccs-sor újraírva, **0 hiba**.
+  Eredmény 2025/2026-ban: kevert csapat-hozzárendelés **26 meccs → 0**,
+  üres DNP sorok **48 → 9**.
+- [x] **`archive/fix-misdated-duplicate-games.ts`** – az újraimport után 3 olyan
+  `games` sor maradt, amelynek **dátuma nem szerepel a menetrendben**, ezért a
+  szűrt import el sem érte; a stat soraik teljes egészében az ELLENFÉL keretéhez
+  tartoztak. Keletkezés: a menetrendben azóta javított dátum miatt az újraimport
+  a `games` UNIQUE (season_id, our_team_id, date) kulcs mellett új sort hozott
+  létre, a régi ottmaradt. Mindhárom mérkőzés helyes dátum alatt, helyes kerettel
+  megvan (2025-10-04 és 2025-11-13). A szkript 4 feltételt ellenőriz törlés előtt:
+  idegen keret, **azonos eredményű** helyes megfelelő megléte (a dátum épp a
+  hibás mező, ezért az eredmény azonosítja a meccset), nincs `kosarstat_game_id`
+  link, és nincs AI riport. Lefuttatva: **3 sor törölve**, 0 kihagyva;
+  újrafuttatva 0 törlendő.
+
+**Nem hiba, ezért nem nyúltunk hozzá:** a 2024/2025-ös szezonban maradt 16 olyan
+stat sor, ahol a játékos `players.team_id`-ja más csapatra mutat, mint a meccs
+`our_team_id`-ja. Mind a 16 a **2025-01-31 / 2025-02-01** kétnapos ablakban van,
+12–40 perces, pontszerző teljesítményekkel (pl. BIGELOW 34 perc / 29 pont) – ezek
+**szezon közbeni átigazolások**: a `players` tábla a (season_id, team_id, név)
+kulcsa miatt egy játékost szezononként egy csapathoz köt, így a váltást nem tudja
+ábrázolni. Ugyanez a 2025/2026-os „Avery Jr" eset is. Ez a már **tudatosan
+elhalasztott** mid-season átigazolás-modellezés kérdése (lásd az Igazolások
+sprint „Tudatosan v1-en kívül hagyva" pontját), nem adathiba – a sorok törlése
+valós teljesítményeket semmisítene meg.
+
+- [ ] **`archive/fix-empty-dnp-stat-rows.ts` lefuttatása** – a maradék **9 üres
+  DNP sor** (4 Magyar Kupa meccsen, amelyek nincsenek a bajnoki menetrenden,
+  ezért a box-score import nem éri el őket). A szkript kész és dry-run
+  ellenőrzött; csak teljesen üres sort töröl (0 perc ÉS 0 pont ÉS 0 valuation),
+  bármi mást meghagy és jelez. A végrehajtást a Claude Code auto mode
+  „mass delete" védelme blokkolta, ezért **kézzel futtatandó**:
+  `DNP_FIX_APPLY=1 npx tsx archive/fix-empty-dnp-stat-rows.ts`
 
 ---
 
