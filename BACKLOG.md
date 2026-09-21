@@ -140,6 +140,15 @@ Használat és élesítés: `HOWTO-player-movements.md`.
   Lint: 0 error, 7 korábbi warning. A Deno–Next tsconfig-ütközés javítva
   (lásd Hotfixek / H4): `npm run build` végigfut, `npm run lint` 0 error.
 - [ ] **Éles view/RLS és dashboard ellenőrzés** a kézi view-migráció után.
+  **2026-09-21: megerősítve, hogy a migráció még NEM futott le** – a
+  `league_player_movements` view nem létezik az éles adatbázisban
+  (`relation "public.league_player_movements" does not exist`), így az
+  Igazolások tab jelenleg hibára fut. Az előfeltételek megvannak: a
+  `league_player_team_seasons` mind a 6 szükséges oszlopot tartalmazza, és
+  4 egymást követő szezonra van keretadat (2023/24: 222, 2024/25: 204,
+  2025/26: 233, 2026/27: 188 tagság). Teendő: a
+  `migrations/add-league-player-movements-view.sql` lefuttatása a Supabase
+  SQL Editorban.
 
 **Tudatosan v1-en kívül hagyva** (döntés dokumentálva, nem hiányosság):
 egyedi kosarstat player-profil oldalak bejárása (a szezonos csapatoldalakat
@@ -223,6 +232,76 @@ Next.js bundle része.
   az app- és scraper-kód típusellenőrzése változatlan szigorúságú.
 - [x] **Ellenőrzés**: `npm run build` végigfut (Compiled successfully + TypeScript
   check + 16 route), `npm run lint` 0 error / 7 korábbi warning.
+
+---
+
+**H5 – Az import scriptek működőképességének ellenőrzése + tabella-duplikáció ✓ (2026-09-21)**
+
+Teljes körű teszt mind a 9 CLI import scriptre és a hozzájuk tartozó API
+route-okra, három rétegben: statikus ellenőrzés → élő forrásproba írás nélkül →
+szűkített hatókörű éles futtatás előtte/utána sorszám-diffel.
+
+- [x] **Statikus réteg** – `npx tsc --noEmit` 0 hiba, `npx eslint` 0 error
+  (7 korábbi warning). A 6 route-ból hivatkozott script mind létezik; a
+  `lib/run-script.ts` spawn wrapper és a `hunbasket-round-import` env-átadása
+  (12 `HUNBASKET_*` változó) helyes.
+- [x] **Olvasó forrásproba (12/12 OK)** – a scriptek pontos szelektoraival, éles
+  oldalakon, DB-írás nélkül: hunbasket menetrend x2526 és x2627 (182–182 sor),
+  box-score meccslinkek + játékostábla (2 tábla, 23 sor, >=32 oszlop), tabella,
+  `ajax/film.php` dobástérkép (118 esemény), kosarstat `season_games` és a meccs
+  aloldalai, valamint a valós `parseSeasonPlayers` egy szezonos kereten.
+  **Mind a 14 csapatnév feloldható** a `teams` tábla ellen mindkét szezonban –
+  a H3-ban bevezetett `TEAM_NAME_ALIASES` élesben is működik
+  (`"Endo Plus Service-Honvéd" -> "Budapesti Honvéd Sportegyesület"`).
+- [x] **Éles futtatás szűkített hatókörrel** – `hunbasket:fixtures` (182 upsert),
+  `hunbasket:standings`, `hunbasket:import` (`HUNBASKET_ROUND_FILTER=1`, 7 meccs),
+  `hunbasket:rosters` (1 csapat, 13 frissítve), `kosarstat:pbp`
+  (`KOSARSTAT_GAME_LIMIT=1`, 9 oldal), `kosarstat:team-players` (1 csapat, dry-run
+  és élesben is), `hunbasket:shotchart:assign` (359 meccs, 45 168 esemény, 0 hiba),
+  `kosarstat:backfill-links` (**353 új linkelés**, 24 nem párosítható, 0 ütközés).
+  A `hunbasket:shotchart` teljes futása maradt el (nincs benne limit opció), de az
+  írási útvonala a box-score importon keresztül lefedett
+  (`Dobasterkep mentve: 133–147 event` meccsenként).
+- [x] **Sorszám-diff** – 16 táblából 14 változatlan. `players` +2 (két új
+  játékossor a 2025/26-os 1. fordulóból; névsorrend-független duplikátum-ellenőrzés
+  a szezon 412 játékosán: **0 találat**). `player_game_stats_2025_2026` −14: a
+  parser szándékosan kihagyja a 0 perces (DNP) sorokat
+  (`scrape-hunbasket.ts`: `minutes === 0` → `continue`), az újraimport tehát
+  eldobta az 1. forduló 14 legacy DNP sorát. Nem adatvesztés, de a szezonban
+  **maradt 48 ilyen legacy 0 perces sor 21 meccsen** – ezek egy korábbi import
+  útvonalról származnak, és csak újraimportáláskor tűnnek el.
+
+**A talált valódi hiba – tabella-duplikáció:**
+
+A hunbasket tabella oldal ugyanazt a 14 csapatsort **kétszer** rendereli egyetlen
+`<table>`-ben (asztali + mobil változat), így a `table tbody tr` szelektor 28 sort
+ad. A `scrape-hunbasket-standings.ts` dedup nélkül mentette mind a 28-at a
+`standings.data` JSON tömbbe, a `StandingsView` pedig nem deduplikál
+(`getRowId={(r) => r.position}`), tehát a tabella nézet duplán listázta a csapatokat.
+
+- [x] **`scrape-hunbasket-standings.ts` – `dedupeByPosition()`** a parse után:
+  pozíció szerint deduplikál, az első előfordulás nyer, és logolja az eldobott
+  sorokat. Ha ugyanaz a pozíció **más** csapattal jön elő, az nem a kétszeres
+  renderelés, hanem szerkezetváltozás → **írás előtt kivételt dob** (a H3-ban
+  bevezetett „üres/hibás forrás = hiba" elv folytatása).
+- [x] **`archive/fix-standings-duplicates.ts`** – egyszeri adattisztító a korábban
+  mentett rekordokhoz, alapból dry-run (`STANDINGS_FIX_APPLY=1` az íráshoz).
+  Lefuttatva: a 16 `standings` rekordból 2 volt duplikált (28 sor), javítva.
+  Ellenőrzés után mind a 16 rekord 14 soros.
+- [x] **Ellenőrzés**: a javított script újrafuttatva →
+  `Duplikált tabellasorok eldobva: 28 → 14`, `Tabella import kész: 14 csapat`.
+  `npm run build` és `npx eslint` tiszta.
+
+**Megfigyelések (nem javítva, külön döntés kell):**
+
+1. A `hunbasket:shotchart` az egyetlen script **limit/szűrő opció nélkül** –
+   mindig a teljes szezon 182 meccsét dolgozza fel.
+2. A `kosarstat:pbp` `⚠️ nincs párosítható games sor` figyelmeztetést adott; a
+   `kosarstat:backfill-links` ezután **353 hiányzó linket** pótolt. Érdemes lehet
+   a backfillt a rendszeres futásba kötni.
+3. A 2025/26-os szezonban **16 meccsnek 15-nél több stat sora van** (max 22, két
+   csapat játékosaival egy `game_id` alatt) – legacy adat, a mostani script tiszta
+   (8–12 sor/meccs). Külön adattisztítás kérdése.
 
 ---
 

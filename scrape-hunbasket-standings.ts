@@ -1,6 +1,6 @@
 import { chromium, type Page } from 'playwright';
 import * as dotenv from 'dotenv';
-import { createScriptClient } from './scrape-utils';
+import { createScriptClient, normalizeName } from './scrape-utils';
 
 dotenv.config({ path: '.env.local' });
 
@@ -102,6 +102,36 @@ const resolveSeasonId = async (): Promise<string> => {
   return data.id;
 };
 
+/**
+ * A hunbasket tabella oldal ugyanazt a 14 csapatsort KÉTSZER rendereli egyetlen
+ * <table>-ben (asztali + mobil változat), ezért a `table tbody tr` szelektor 28
+ * sort ad vissza. Dedup nélkül a standings.data JSON minden csapatot duplán
+ * tartalmaz, és a tabella nézet is duplán listázza őket.
+ *
+ * Pozíció szerint deduplikálunk, az első előfordulás nyer. Ha ugyanaz a pozíció
+ * MÁS csapattal is előjön, az nem a kétszeres renderelés – akkor a szerkezet
+ * változott meg, és írás előtt leállunk.
+ */
+const dedupeByPosition = (rows: StandingRow[]): StandingRow[] => {
+  const byPosition = new Map<number, StandingRow>();
+
+  for (const row of rows) {
+    const existing = byPosition.get(row.position);
+    if (!existing) {
+      byPosition.set(row.position, row);
+      continue;
+    }
+    if (normalizeName(existing.team) !== normalizeName(row.team)) {
+      throw new Error(
+        `A tabella ${row.position}. helyén két különböző csapat szerepel ("${existing.team}" és "${row.team}") – ` +
+          'a forrásoldal szerkezete megváltozott, az import leáll.'
+      );
+    }
+  }
+
+  return [...byPosition.values()];
+};
+
 const scrapeStandings = async (page: Page): Promise<StandingRow[]> => {
   await page.goto(HUNBASKET_STANDINGS_URL, { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(2500);
@@ -136,8 +166,13 @@ const scrapeStandings = async (page: Page): Promise<StandingRow[]> => {
     })
     .filter((row): row is StandingRow => Boolean(row?.team));
 
-  standings.sort((a, b) => a.position - b.position);
-  return standings;
+  const unique = dedupeByPosition(standings);
+  if (unique.length !== standings.length) {
+    console.log(`  ℹ️ Duplikált tabellasorok eldobva: ${standings.length} → ${unique.length}`);
+  }
+
+  unique.sort((a, b) => a.position - b.position);
+  return unique;
 };
 
 const resolveMatchday = (rows: StandingRow[]) => {
