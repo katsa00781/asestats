@@ -137,11 +137,8 @@ Használat és élesítés: `HOWTO-player-movements.md`.
   SELECT-eredményt helyettesítő HTTP-válaszokkal: ASE 4 érkező/9 távozó,
   14 csapatos liganézet, szűrőváltási verseny, hibás/üres adatforrás,
   olvasói jogosultság, mobil overflow és sidebar perzisztencia. Konzolkivétel: 0.
-  Lint: 0 error, 7 korábbi warning. A teljes build/tsc korábbi Deno–Next
-  ütközésének javításához a védett tsconfig-fájl módosításának jóváhagyása függőben.
-  Újraellenőrizve `npm install` után is: minden függőség telepítve, a fordítás
-  sikeres, de a TypeScript-ellenőrzés a `live-scan/index.ts:36` Deno-importjánál
-  (`npm:@supabase/supabase-js@2`) megáll; csomagtelepítés nem oldja meg.
+  Lint: 0 error, 7 korábbi warning. A Deno–Next tsconfig-ütközés javítva
+  (lásd Hotfixek / H4): `npm run build` végigfut, `npm run lint` 0 error.
 - [ ] **Éles view/RLS és dashboard ellenőrzés** a kézi view-migráció után.
 
 **Tudatosan v1-en kívül hagyva** (döntés dokumentálva, nem hiányosság):
@@ -209,6 +206,23 @@ Felderítés – a 26/27-es menetrend 15 egyedi csapatneve: 11 pontos találat, 
 A 25/26-os 235 = 182 alapszakasz + 53 playoff; a 14 „következő" mind a `hun_ply` playoff oldalról jön, kiírt de le nem játszott párharc-meccsek (rövidebben eldőlt sorozatok) – nem hiba.
 
 ---
+
+**H4 – `npm run build` elszáll a Supabase Edge Function Deno-importján ✓ (2026-09-21)**
+
+Tünet: a fordítás sikeres, de a `Running TypeScript` lépés megáll:
+`./supabase/functions/live-scan/index.ts:36 – Cannot find module 'npm:@supabase/supabase-js@2' or its corresponding type declarations.`
+
+Ok: a `supabase/functions/` alatti kód **Deno** runtime-ra készült (`npm:` és `.ts`
+kiterjesztésű importok), a `tsconfig.json` `include` viszont `**/*.ts`-sel a teljes
+repót behúzta, így a Next.js build a Deno-fájlokat Node-modulfeloldással
+típusellenőrizte. Csomagtelepítéssel nem oldható meg: az Edge Function nem is a
+Next.js bundle része.
+
+- [x] **`tsconfig.json` – `exclude` bővítve `"supabase/functions"`-nel.** Csak az
+  `exclude` tömb változott; a `compilerOptions` (köztük a `strict: true`) érintetlen,
+  az app- és scraper-kód típusellenőrzése változatlan szigorúságú.
+- [x] **Ellenőrzés**: `npm run build` végigfut (Compiled successfully + TypeScript
+  check + 16 route), `npm run lint` 0 error / 7 korábbi warning.
 
 ---
 
