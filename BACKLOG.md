@@ -122,8 +122,8 @@ országot – ez a UI-ban következtetésként (nem tényként) jelenik meg. Ter
   VIEW (`LAG`/`LEAD` ablakfüggvények szezononként/játékosonként: érkezett/távozott,
   hazai célcsapat vagy ismeretlen/külföld, kihagyás utáni visszatérés) – csak
   valós scraped adat után írható meg (validációhoz kell)
-- [ ] `app/api/kosarstat-team-players-import/route.ts` + npm script
-  (`kosarstat:team-players`) + `components/LeaguePlayerMovementsImport.tsx`
+- [ ] `app/api/kosarstat-team-players-import/route.ts` (npm script már kész:
+  `kosarstat:team-players`) + `components/LeaguePlayerMovementsImport.tsx`
   az admin Import tabba
 - [ ] `hooks/usePlayerMovements.ts` + `components/LeaguePlayerMovements.tsx`
   (StatCard sor + DataTable, Dark Command Center tokenek) + új nav item
