@@ -63,15 +63,21 @@ play-by-play eseményekből, nem csak állás. Részletek: `HOWTO-live-scan.md`.
   Next.js `lib/`-et
 - [x] `HOWTO-live-scan.md` – deploy, `pg_cron`+`pg_net` ütemezés, a forrásból
   bizonyítottan tudott vs. élő meccsen validálandó pontok listája
-- [ ] **Migráció lefuttatása** a Supabase SQL Editorban (kézzel, a projekt
-  konvenciója szerint – lásd `HOWTO-live-scan.md` 1. pont)
-- [ ] **`pg_cron`/`pg_net` extension ellenőrzése/engedélyezése** a Supabase
-  projekten – ez blokkolja az ütemezést, ha hiányzik
+- [x] **Migráció lefuttatása ✓ (ellenőrizve 2026-09-21)** – a `live_games`,
+  `live_player_lines` és `live_quarter_scores` tábla mind létezik az éles
+  adatbázisban (jelenleg 0 sor, a szezon még nem indult).
+- [x] **`pg_cron`/`pg_net` extension ✓ (ellenőrizve 2026-09-21)** – mindkettő
+  telepítve: `pg_cron` 1.6 (`pg_catalog`), `pg_net` 0.14.0 (`extensions`).
+  Nem blokkolja az ütemezést.
 - [x] **Edge Function deploy** – 2026-09-04, `supabase functions deploy
   live-scan --use-api` (Management API bundle, **nem** Docker; a `--use-api`
   megkerüli a lokális Docker-igényt a régi CLI-n is). Projekt linkelve:
   `iipcpjczjjkwwifwzmut`. Verify_jwt = true (alapértelmezett).
 - [ ] **`pg_cron` job létrehozása** a Supabase SQL Editorban (HOWTO 3. pont)
+  – **2026-09-21: a `cron.job` tábla ÜRES, egyetlen ütemezés sincs.** Az Edge
+  Function deployolva és aktív (`live-scan`, v4), az extensionök megvannak, a
+  táblák megvannak – ez az egyetlen hiányzó láncszem az élő gyűjtéshez. Az első
+  bajnoki 2026-09-25, tehát ezt addig létre kell hozni.
 - [ ] **Éles validáció** az első 2026/27-es bajnokin (2026-09-25, a szezon
   ekkor indul) – lásd `HOWTO-live-scan.md` 5. pontja: `/elo` szerkezet, óra
   viselkedése, csapatnév-egyezés
@@ -344,8 +350,8 @@ Felderítés kimutatta, hogy az SQL-oldali munka nagyrészt már készen volt (`
 - [x] **`components/Updates.tsx`** – a hardcoded `player_game_stats_2025_2026` lekérdezés lecserélve: a `seasons` táblából kiolvasott `is_current` szezon nevéből `getSeasonStatsTable()`-lel derivált táblanévre. Szezonváltáskor kód-módosítás nélkül naprakész marad.
 - [x] **`HOWTO-uj-szezon.md`** – teljesen újraírva, hogy a valódi migráció (7 lépés: tábla+FK, RLS, UNION view, 3 INSTEAD OF trigger, aggregált view-k, seasons sor, ellenőrzés) lépéseit tükrözze; a korábbi verzió elavult egyszerűsítést tartalmazott (trigger-frissítés és RLS teljesen hiányzott belőle). Új szakasz az RBAC-kompatibilis RLS-ről és egy külön "Szezonkezdési checklist"-ről (is_current váltás + CI repo variables + első import).
 - [x] `npx tsc --noEmit` tiszta.
-- [ ] **Hátralévő kézi lépés (felhasználó)**: `migrations/add-player-game-stats-2026-2027.sql` futtatása a Supabase SQL Editorban, ha még nem történt meg – enélkül a `lib/season-tables.ts` mappingben szereplő 2026/2027 bejegyzés "üres" hivatkozás.
-- [ ] **Szezonkezdéskor** (nem most): `is_current` átbillentés + GitHub Actions repo variables (`HUNBASKET_SEASON_SLUG`/`HUNBASKET_SEASON_NAME`/`KOSARSTAT_SEASON_NAME`) átállítása – lásd `HOWTO-uj-szezon.md` checklist.
+- [x] **Hátralévő kézi lépés ✓ (ellenőrizve 2026-09-21)**: a `player_game_stats_2026_2027` tábla létezik az éles adatbázisban (0 sor), a `lib/season-tables.ts` mapping tehát valós táblára mutat. A 2026/2027-es `league_fixtures` is fel van töltve (182 sor, első forduló 2026-09-25).
+- [ ] **Szezonkezdéskor – MOST ESEDÉKES (első forduló: 2026-09-25)**: `is_current` átbillentés (2026-09-21-én még a 2025/2026 az aktuális) + GitHub Actions repo variables (`HUNBASKET_SEASON_SLUG=x2627`, `HUNBASKET_SEASON_NAME=2026/2027`, `KOSARSTAT_SEASON_CODE=2627`, `KOSARSTAT_SEASON_NAME=2026/2027`) átállítása + a 2026/2027-es keretek importja (`npm run hunbasket:rosters`, jelenleg 0 `players` sor erre a szezonra) – lásd `HOWTO-uj-szezon.md` checklist.
 
 ---
 
