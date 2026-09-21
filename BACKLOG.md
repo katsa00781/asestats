@@ -440,8 +440,8 @@ Teljes kódbázis-audit alapján futó sprint: duplikációk megszüntetése, im
 - [x] **Fázis 3 – Kód-dedup** (2026-07-18): `lib/supabase-admin.ts` (9 route), `lib/player-stat-mapping.ts` (2 hook), `lib/stat-formulas.ts` (6 formula-másolat helyett; useFilterData TS/eFG súlyozási hibája is javítva), `scrape-utils.ts` (5 szkript), `lib/run-script.ts` (3 route)
 - [x] **Fázis 4 – Import auth + automatizálás** (2026-07-18): `lib/api-auth.ts` requireAuth guard mind a 14 API route-on + `lib/api-fetch.ts` authFetch a kliensen (23 hívási hely); npm scriptek rendezve (deprecated hunbasket:pbp törölve, hunbasket:standings + kosarstat:backfill-links felvéve); `.github/workflows/scrape.yml` ütemezett import (secretek beállítása szükséges!)
 - [x] **Fázis 5 – Dokumentáció-szinkron** (2026-07-18): CLAUDE.md táblanevek + lib lista + scraping szekció; architecture.md storage/auth/invariánsok
-- [ ] **(Backlogra tolva) SeasonComparison 18k soros monolit szétbontása** – típusok → lib parsing → hook → tab-komponensek, a `lib/kosarstat-clutch-parse.ts` kiemelés mintájára
-- [ ] **(Backlogra tolva) Közvetlen Supabase query-k hookba szervezése** – 26 fájl kerüli meg a hookokat (seasons 6, teams 7 helyen)
+- [ ] **(Sprintként felvéve 2026-09-21 – lásd „Tervezett sprint – SeasonComparison szétbontása")** SeasonComparison 18k soros monolit szétbontása – típusok → lib parsing → hook → tab-komponensek, a `lib/kosarstat-clutch-parse.ts` kiemelés mintájára
+- [ ] **(Sprintként felvéve 2026-09-21 – lásd „Tervezett sprint – Adatlekérés hookokba")** Közvetlen Supabase query-k hookba szervezése
 
 ---
 
@@ -648,6 +648,81 @@ A mobil app adatrétegének építése közben derült ki (2026-09-01), éles ad
 3. Megkeresni, mi hozta létre őket – valószínűsíthetően egy import/scraper futás az új szezon slugjával a régi menetrenden (`HUNBASKET_SEASON_SLUG` / `KOSARSTAT_SEASON_NAME` repo variable átállítása körül). Amíg ez nincs meg, a javítás után újra megismétlődhet. Érdemes hozzá egy védelem: a `games.date` essen a `seasons.start_date`–`end_date` közé, vagy legalább egy unique constraint `(season_id, date, our_team_id, opponent)` hármasra.
 
 **Addig:** a mobil app csak olvas, tehát a kevert listát mutatja – lásd `asestatMobile/docs/feature-tasks.md` munkanapló (2026-08-31 `useGameData`, 2026-09-01 `usePlayerData`).
+
+---
+
+## Tervezett sprint – SeasonComparison szétbontása
+
+**Miért**: a `components/SeasonComparison.tsx` **18 072 sor**, 40 top-level
+típusdefinícióval, 280 hook-hívással és 38 közvetlen Supabase lekérdezéssel. A
+`npm run build` Babel-figyelmeztetést ad rá (`exceeds the max of 500KB`), az
+ESLint 4 warningja is innen jön, és a fájl mérete miatt bármilyen módosítás
+kockázatos. Ez az egyetlen fájl a komponensek összes közvetlen DB-hívásának
+közel harmadát adja.
+
+**Nem cél**: viselkedésváltozás. A tabok, a megjelenített adatok és az
+interakciós flow változatlan – ez tisztán szerkezeti bontás.
+
+**Javasolt lépéssor** (a már bevált `lib/kosarstat-clutch-parse.ts` kiemelés
+mintájára, egy lépés = egy commit, mindegyik után `tsc` + `eslint` + vizuális
+ellenőrzés):
+
+1. **Típusok kiemelése** → `lib/season-comparison-types.ts`. A 40 `type`
+   deklarációból a Kosarstat-blokk (`KosarstatLineupTableRow` …
+   `KosarstatParsedClutchGame`, a fájl 160–324. sora) és a shot-chart blokk
+   (`ShotRawRow` … `ShotProfileSummary`, 1403–1452.) önállóan mozdítható.
+   Tiszta, nulla kockázatú első lépés.
+2. **Parser/számoló függvények kiemelése** → `lib/season-comparison-*.ts`
+   modulokba (lineup, shot-profile, pregame baseline). Ezek tiszta függvények,
+   unit-tesztelhetők – a `scrape-utils` szűrőihez írt 19 teszt mintájára
+   érdemes hozzájuk is ellenőrzőket írni.
+3. **Adatlekérés hookba** → `hooks/useSeasonComparisonData.ts`. A 38
+   `supabase.from()` hívás ide költözik; ezzel ez a fájl a lenti
+   „Adatlekérés hookokba" sprint legnagyobb tételét is megoldja.
+4. **Tab-komponensek szétbontása** → `components/season-comparison/` mappa,
+   tabonként egy fájl. A shell csak a tab-váltást és a közös state-et tartja.
+5. **Záró ellenőrzés**: a Babel 500KB warning eltűnése, a 4 ESLint warning
+   megszűnése (`Database` unused, 3 db `exhaustive-deps`), build + lint tiszta.
+
+**Kockázat**: közepes. A fájl mérete miatt a lépéseket nem szabad összevonni;
+minden lépés után külön commit kell, hogy egy regresszió visszakereshető legyen.
+
+---
+
+## Tervezett sprint – Adatlekérés hookokba
+
+**Miért**: **16 komponens 125 közvetlen `supabase.from()` hívást** futtat,
+megkerülve a `hooks/` réteget. Jelenleg 3 hook létezik (`useGameData`,
+`useFilterData`, `usePlayerMovements`), de a komponensek nagy része nem
+használja őket. Következmények: a szezon/csapat szűrés logikája szét van szórva,
+a hibakezelés komponensenként eltérő (több helyen csak `console.error`), és
+ugyanaz a lekérdezés többször is lefut egy oldalbetöltés alatt.
+
+**A legnagyobb tételek**: `SeasonComparison` (38 – a fenti sprintben oldódik
+meg), `PlayersManagement` (22), `JsonImport` (19), `GameDetails` (9),
+`PlayersImport` (7), `GameManagement` (6).
+
+**Javasolt lépéssor**:
+
+1. **`useSeasons()` / `useTeams()` bevezetése** – a `seasons` és `teams`
+   törzsadatot jelenleg **7 komponens** kéri le külön-külön
+   (`PlayersManagement`, `JsonImport`, `GameManagement`, `Updates`,
+   `TeamSelector`, `SeasonSelector`, `GameQuickImport`). Ez a legolcsóbb és
+   leglátványosabb nyereség: kevés hívási hely, triviális adat, azonnali
+   duplikált-lekérdezés megtakarítás.
+2. **Admin nézetek hookja** – `usePlayersAdmin()` a `PlayersManagement` +
+   `PlayersImport` közös lekérdezéseire (29 hívás együtt).
+3. **`GameDetails` adatrétege** → `useGameDetails(gameId)`.
+4. **Import nézetek** (`JsonImport`, `GameManagement`, `GameQuickImport`) –
+   ezek írnak is, nem csak olvasnak, ezért **külön döntés kell**, hogy a
+   mutációk is hookba kerüljenek-e, vagy maradjanak a komponensben.
+5. **Egységes hibakezelés** – a hookok adjanak `{ data, loading, error }`
+   hármast, a komponensek pedig a meglévő `.skeleton-shimmer` osztállyal
+   jelezzék a töltést (ez a „Error boundary és loading state-ek" backlog
+   tételt is lezárja).
+
+**Kockázat**: alacsony–közepes. Az 1. lépés önmagában is értékes és
+visszafordítható; a 4. lépés előtt architektúrális döntés szükséges.
 
 ---
 
