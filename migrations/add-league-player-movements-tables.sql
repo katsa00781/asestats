@@ -9,10 +9,11 @@
 -- csapatokon átívelő igazolás-történetet tesz lehetővé anélkül, hogy a
 -- meglévő stat-workflow-t érintené.
 --
--- Forrás: kosarstat.hu/teams/team/team_players/?team=<ID> oldalak, a
--- scrape-kosarstat-team-players.ts szkript tölti fel. A `kosarstat_team_map`
--- a kosarstat csapat-ID -> teams.id leképezést tárolja, automatikusan
--- (fuzzy név-match), nem kézi seed.
+-- Forrás: kosarstat.hu/teams/team/boxstats/?team=<ID>&season=<kód>, a
+-- scrape-kosarstat-team-players.ts szkript pontos szezonos névsorokat tölt fel.
+-- A `kosarstat_team_map` a kosarstat csapat-ID -> teams.id leképezést tárolja,
+-- forrásoldali klubnév-aliasok és egyértelmű névegyezés alapján;
+-- a korábban rögzített kézi leképezés elsőbbséget élvez.
 --
 -- Író: csak a scraper (service role, megkerüli az RLS-t). Kliens oldalról
 -- csak SELECT megy – ugyanaz a minta, mint az add-live-match-tables.sql-ben.
@@ -54,8 +55,8 @@ CREATE TABLE IF NOT EXISTS league_player_team_seasons (
   -- táblára (pl. formátum-eltérés) – a nyers label akkor is megmarad,
   -- a sor nem vész el, később kézzel javítható.
   season_id UUID REFERENCES seasons(id) ON DELETE SET NULL,
-  -- Nyers forrás-label (pl. "2023-24") – a scraper a team_players oldal
-  -- stint-tartományait (pl. "2008-09" - "2012-13") bontja ki egy sorra/szezonra.
+  -- Szezonjelölés (pl. "2023-24") – kizárólag az adott szezon boxstats
+  -- névsorában ténylegesen szereplő tagság, archív időtartomány-kibontás nélkül.
   kosarstat_season_label TEXT NOT NULL,
   status_at_time TEXT CHECK (status_at_time IN ('hazai', 'legios', 'honositott')),
   imported_at TIMESTAMPTZ NOT NULL DEFAULT now(),

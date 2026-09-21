@@ -84,4 +84,6 @@ npm run build
 
 A böngészős ellenőrzéshez a view SELECT valódi eredményét használtuk
 helyettesített HTTP-válaszként; az éles view/RLS végső ellenőrzése a kézi
-migráció után végezhető el.
+migráció után végezhető el. Az alaptáblák RLS-ellenőrzése READ ONLY
+tranzakcióban már sikeres: `authenticated` szereppel a besorolás SELECT-je
+726 mozgást ad, `anon` szereppel 0 tagság látható.

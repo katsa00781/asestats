@@ -64,6 +64,9 @@ Update this file after every meaningful implementation change.
   késői válasz eldobása, üres és hiányzó-view állapot, mobil overflow,
   sidebar perzisztencia. Valódi SELECT-eredményt helyettesítő HTTP-válaszok,
   0 böngészős kivétel. Hátra: kézi view-migráció és éles view/RLS ellenőrzés.
+  Az alaptáblák RLS-e külön READ ONLY szerepkörteszten megfelelt:
+  `authenticated` alatt a besorolás SELECT-je 726 mozgást ad, `anon` alatt
+  0 tagság látható. A nézet még nem létezik az adatbázisban.
   A buildhez a Deno-mappa tsconfig-kizárásának jóváhagyása függőben.
 - **Élő mérkőzés-gyűjtő (2026-09-04)** – a mobil app (`asestatmobile`) élő
   meccs nézetéhez a backend fele: `migrations/add-live-match-tables.sql`

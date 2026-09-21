@@ -103,7 +103,7 @@ Használat és élesítés: `HOWTO-player-movements.md`.
   (kosarstat csapat-ID → `teams.id`, önjavító fuzzy match-csel töltve),
   `league_players` (stabil kosarstat player-ID törzsadat), `league_player_team_seasons`
   (játékos–csapat–szezon tényadat); RLS: authenticated SELECT, írás csak service_role
-- [x] **Alaptáblák létrejötte ellenőrizve (2026-09-21)** – a három tábla elérhető; a szezonos import feltöltötte. Ebben a munkamenetben éles migrációt nem futtattunk.
+- [x] **Alaptáblák és RLS ellenőrizve (2026-09-21)** – a három tábla elérhető; a szezonos import feltöltötte. READ ONLY tranzakcióban az `authenticated` szerep a besorolás SELECT-jével 726 mozgást lát, az `anon` szerep 0 tagságot. Ebben a munkamenetben éles migrációt nem futtattunk.
 - [x] **Szezonos scraper és éles import ✓ (2026-09-21)** – `scrape-kosarstat-team-players.ts`
   + `lib/kosarstat-movement-source.ts`: pontos `boxstats` keretek; teljes
   DataTables-adat; a legújabb menetrend 14 csapata; forrásból olvasott
