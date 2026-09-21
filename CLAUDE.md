@@ -86,6 +86,7 @@ asestats/
 │   │   ├── hunbasket-round-import/
 │   │   ├── kosarstat-pbp-cleanup/
 │   │   ├── kosarstat-pbp-import/
+│   │   ├── kosarstat-team-players-import/
 │   │   ├── player-text-report/
 │   │   └── save-manual-report/
 │   ├── favicon.ico
@@ -175,6 +176,8 @@ A komponensek **funkcionalitása változatlan**, csak a vizuális réteg (osztá
 | `SeasonSelector.tsx`, `TeamSelector.tsx` | Globális szűrők |
 | `LoginForm.tsx` | Bejelentkezési form (Dark Command Center stílus) |
 | `Updates.tsx` | Frissítések nézet |
+| `LeaguePlayerMovements.tsx` | Igazolások: szezonos érkezők/távozók, csapat- és liganézet |
+| `LeaguePlayerMovementsImport.tsx` | Admin Import tab: 3–4 szezon pontos Kosarstat kereteinek frissítése |
 
 ### Új közös komponensek
 
@@ -204,6 +207,18 @@ A komponensek **funkcionalitása változatlan**, csak a vizuális réteg (osztá
 | `game_text_reports` | AI generált pregame/postgame riportok (RLS engedélyezve) |
 | `team_text_reports` | AI generált csapat szezon riportok (RLS engedélyezve) |
 | `player_season_stats_by_season` | **VIEW**: aggregált szezon statisztikák |
+| `kosarstat_team_map` | Kosarstat klubazonosító → meglévő csapat; kézi javítás elsőbbséggel |
+| `league_players` | Stabil Kosarstat játékosazonosító és törzsadat |
+| `league_player_team_seasons` | Valós szezonos keret-tagságok; külön a box-score `players` táblától |
+| `league_player_movements` | **VIEW**: célszezonra számolt érkezés/távozás, hazai váltás és visszatérés |
+
+**Igazolások feature (2026-09-21, külön funkcionális sprint):** önálló 13.
+nav item, `usePlayerMovements` szezon/csapat szerint szűrt, lapozott
+lekérdezéssel. Ezen a tabon a `TeamSelector` „Összes követett csapat” opciót
+is ad; más tabon az alapcsapat áll vissza. A scraper a szezonos
+`teams/team/boxstats/?team=<ID>&season=<kód>` névsorát használja (a felhasználó
+jóváhagyta); az archívum első–utolsó évéből nem képez folytonos tagságot.
+Részletek és kézi migráció: `HOWTO-player-movements.md`.
 
 **Dedup kulcsok (DB-szinten kikényszerítve):**
 - `games`: UNIQUE `(season_id, our_team_id, date)` – `migrations/add-games-unique-constraint.sql`; minden games-író erre a kulcsra upsertel
@@ -426,6 +441,7 @@ npm run hunbasket:shotchart        # Shot chart
 npm run hunbasket:shotchart:assign # Shot események játékoshoz rendelése
 npm run kosarstat:pbp              # Kosarstat PBP (a games.kosarstat_game_id linkeket is írja)
 npm run kosarstat:backfill-links   # Egyszeri kosarstat_game_id backfill régi adatokra
+npm run kosarstat:team-players     # Játékosmozgás: a jelenlegi élvonal utolsó 3–4 szezonos kerete
 ```
 
 Konvenciók:
@@ -439,7 +455,7 @@ Konvenciók:
 
 **Automatizálás**: `.github/workflows/scrape.yml` – ütemezett (hétvége esti) + kézzel indítható (workflow_dispatch) GitHub Actions futás, amely a CLI szkripteket hajtja végre (`checkout@v5` + `setup-node@v5` + Node 22). Szükséges repo secretek: `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` – az `Env ellenőrzés` lépés a scrape előtt `exit 1`-gyel jelzi, ha hiányoznak. Opcionális repo variables a szezonhoz: `HUNBASKET_SEASON_SLUG`, `HUNBASKET_SEASON_NAME`, `KOSARSTAT_SEASON_CODE`, `KOSARSTAT_SEASON_NAME`. Setup és hibakeresés: `HOWTO-auto-import.md`.
 
-**API auth**: mind a 14 `app/api/*` route a `lib/api-auth.ts` **`requireAdmin()`** guardot futtatja (Supabase access token a `Authorization: Bearer` fejlécben + `user_metadata.role === 'admin'`; hiánya esetén 403). Minden route mutáló, ezért admin-only – az RBAC sprint óta a `requireAuth()` megmaradt jövőbeli olvasó route-okhoz, de **jelenleg egyetlen route sem hívja**. Kliens oldalon a `lib/api-fetch.ts` `authFetch()` helyettesíti a nyers `fetch`-et.
+**API auth**: mind a 15 `app/api/*` route a `lib/api-auth.ts` **`requireAdmin()`** guardot futtatja (Supabase access token a `Authorization: Bearer` fejlécben + `user_metadata.role === 'admin'`; hiánya esetén 403). Minden route mutáló, ezért admin-only – az RBAC sprint óta a `requireAuth()` megmaradt jövőbeli olvasó route-okhoz, de **jelenleg egyetlen route sem hívja**. Kliens oldalon a `lib/api-fetch.ts` `authFetch()` helyettesíti a nyers `fetch`-et.
 
 > A riportok **olvasása** nem API route-on megy: a kliens közvetlen Supabase `SELECT`-tel éri el a `game_text_reports` / `team_text_reports` / `player_text_reports` táblákat (RLS: SELECT minden bejelentkezettnek).
 

@@ -59,6 +59,9 @@ Az ASEStats egy magyar kosárlabda statisztikai és elemzési platform, amelyet 
 - Játékos kezelés (PlayersManagement), hozzáadás/szerkesztés/törlés
 - Meccs kezelés törlési funkciókkal (GameManagement)
 - Szezon és csapat szűrők (SeasonSelector, TeamSelector)
+- Igazolások: a jelenlegi élvonal játékosmozgása az utolsó 3–4 szezonban,
+  csapatonkénti érkező/távozó táblákkal és liganézettel. Ismeretlen irányból
+  nem következtetünk biztos külföldi klubra; a szezonon belüli sorrend nem része a v1-nek.
 
 ### Auth
 

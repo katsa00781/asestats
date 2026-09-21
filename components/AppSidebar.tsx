@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useSyncExternalStore } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import {
   LayoutDashboard,
@@ -16,6 +16,7 @@ import {
   Trash2,
   DatabaseZap,
   ChevronLeft,
+  ArrowLeftRight,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -53,6 +54,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { key: 'standings', label: 'Tabella', icon: Trophy },
       { key: 'games', label: 'Mérkőzések', icon: Calendar },
       { key: 'gamelog', label: 'Meccs Log', icon: ClipboardList },
+      { key: 'movements', label: 'Igazolások', icon: ArrowLeftRight },
       { key: 'updates', label: 'Frissítések', icon: RefreshCw },
     ],
   },
@@ -70,6 +72,21 @@ export const NAV_GROUPS: NavGroup[] = [
 ];
 
 const COLLAPSE_STORAGE_KEY = 'ase.sidebar.collapsed';
+const COLLAPSE_EVENT = 'ase.sidebar.collapsed.change';
+const getCollapsedSnapshot = () => window.localStorage.getItem(COLLAPSE_STORAGE_KEY) === '1';
+const getServerCollapsedSnapshot = () => false;
+const subscribeCollapsed = (notify: () => void) => {
+  window.addEventListener('storage', notify);
+  window.addEventListener(COLLAPSE_EVENT, notify);
+  return () => {
+    window.removeEventListener('storage', notify);
+    window.removeEventListener(COLLAPSE_EVENT, notify);
+  };
+};
+const toggleCollapsed = () => {
+  window.localStorage.setItem(COLLAPSE_STORAGE_KEY, getCollapsedSnapshot() ? '0' : '1');
+  window.dispatchEvent(new Event(COLLAPSE_EVENT));
+};
 
 interface AppSidebarProps {
   activeTab: string;
@@ -81,11 +98,9 @@ interface AppSidebarProps {
 }
 
 export function AppSidebar({ activeTab, onTabChange, isAdmin, userEmail, onCollapsedChange, navMeta }: AppSidebarProps) {
-  const [collapsed, setCollapsed] = useState(false);
-
-  useEffect(() => {
-    setCollapsed(window.localStorage.getItem(COLLAPSE_STORAGE_KEY) === '1');
-  }, []);
+  // Külső böngészős állapot: hidratálásbiztos feliratkozás, effectből
+  // indított szinkron setState nélkül (React 19 lint-szabály).
+  const collapsed = useSyncExternalStore(subscribeCollapsed, getCollapsedSnapshot, getServerCollapsedSnapshot);
 
   useEffect(() => {
     onCollapsedChange?.(collapsed);
@@ -95,24 +110,12 @@ export function AppSidebar({ activeTab, onTabChange, isAdmin, userEmail, onColla
     const handleKeyDown = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'b') {
         event.preventDefault();
-        setCollapsed(prev => {
-          const next = !prev;
-          window.localStorage.setItem(COLLAPSE_STORAGE_KEY, next ? '1' : '0');
-          return next;
-        });
+        toggleCollapsed();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
-
-  const toggleCollapsed = () => {
-    setCollapsed(prev => {
-      const next = !prev;
-      window.localStorage.setItem(COLLAPSE_STORAGE_KEY, next ? '1' : '0');
-      return next;
-    });
-  };
 
   const visibleGroups = NAV_GROUPS.filter(group => !group.adminOnly || isAdmin);
   const avatarLetter = userEmail.charAt(0).toUpperCase() || '?';

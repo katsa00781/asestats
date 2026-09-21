@@ -1,6 +1,6 @@
 # BACKLOG.md – ASEStats Projekt
 
-_Utoljára frissítve: 2026-09-21 (játékosmozgás sprint: import API és admin felület)_
+_Utoljára frissítve: 2026-09-21 (játékosmozgás sprint: import és dashboard kész, view élesítésre vár)_
 
 ---
 
@@ -92,15 +92,12 @@ távozott, hazai csapatváltás vagy külföld irányába/onnan. Felhasználói
 scope-döntések: utolsó 3-4 szezon, csak a jelenlegi élvonal (~14 csapat, a
 meglévő `teams` tábla), önálló 13. nav item az `AppSidebar.tsx`-ben.
 
-**Felderítési lelet, amire a terv épül:** a kosarstat.hu-nak van
-csapat-archívum oldala (`teams/team/team_players/?team=<ID>`), amely minden
-csapatra listázza az összes valaha ott szereplő játékost, hazai/légiós/
-honosított státusszal és első–utolsó szezon (stint) tartománnyal, stabil
-opak player-ID-vel (`players/player/?player=<id>`). Ez élőben megerősítve
-(WebFetch, raw `curl` 403-at ad – Playwright kell hozzá, mint a többi
-scraperhez). Kosarstat nem mondja meg explicit a külföldi célklubot/
-országot – ez a UI-ban következtetésként (nem tényként) jelenik meg. Terv:
-`~/.claude/plans/olvasd-el-a-claude-md-playful-crystal.md`.
+**Jóváhagyott adatforrás:** a Kosarstat szezonos csapatoldalai
+(`teams/team/boxstats/?team=<ID>&season=<kód>`), stabil opak player-ID-vel.
+A 2026-09-21-i élő ellenőrzés bizonyította, hogy a csapatarchívum első/utolsó
+éve nem folytonos stint; a felhasználó ezért jóváhagyta a pontos szezonos
+névsorra váltást. A külföldi célklubot/országot a forrás nem bizonyítja.
+Használat és élesítés: `HOWTO-player-movements.md`.
 
 - [x] `migrations/add-league-player-movements-tables.sql` – `kosarstat_team_map`
   (kosarstat csapat-ID → `teams.id`, önjavító fuzzy match-csel töltve),
@@ -118,8 +115,7 @@ országot – ez a UI-ban következtetésként (nem tényként) jelenik meg. Ter
   Írás nélküli ellenőrzés: `KOSARSTAT_MOVEMENT_DRY_RUN=1 npm run kosarstat:team-players`.
 - [x] `migrations/add-league-player-movements-view.sql` – `league_player_movements`
   VIEW (`LAG`/`LEAD` ablakfüggvények szezononként/játékosonként: érkezett/távozott,
-  hazai célcsapat vagy ismeretlen/külföld, kihagyás utáni visszatérés) – csak
-  valós scraped adat után elkészült. READ ONLY PostgreSQL-teszttel ellenőrizve:
+  hazai célcsapat vagy ismeretlen, kihagyás utáni visszatérés). READ ONLY PostgreSQL-teszttel ellenőrizve:
   hazai váltás, visszatérés, több csapat/szezon, folyamatos tagság, időablakhatárok.
   Valós ASE-példák: Yasiin Joseph Alba → ASE; Jay Jay Chandler egy kihagyott
   szezon után visszatér. `security_invoker` + authenticated SELECT.
@@ -130,21 +126,24 @@ országot – ez a UI-ban következtetésként (nem tényként) jelenik meg. Ter
   `kosarstat:team-players`) + `components/LeaguePlayerMovementsImport.tsx`
   az admin Import tabba
 
-**2026-09-21-es forráskorrekció (felhasználó jóváhagyta):** a csapatarchívum
-első/utolsó szezonja nem folytonos stint (Eilingsfeld: 2012/13–2025/26,
-de csak 12 szezon), a DOM pedig alapból csak 25 játékost tartalmaz. A szezonos
-tényadat forrása ezért `teams/team/boxstats/?team=<ID>&season=<kód>` lesz,
-teljes táblakiolvasással. Egyedi játékosprofilokat továbbra sem járunk be.
-Az import API validálja a 3/4 szezonos időtávot és a csapatszűrőt, admin
-guarddal, párhuzamos futás elleni zárral és időkorláttal működik. A felület
-sikertelen futásnál is megőrzi a diagnosztikát.
-- [ ] `hooks/usePlayerMovements.ts` + `components/LeaguePlayerMovements.tsx`
-  (StatCard sor + DataTable, Dark Command Center tokenek) + új nav item
-  (`AppSidebar.tsx`) + `TabsContent` (`app/page.tsx`)
+- [x] `hooks/usePlayerMovements.ts` + `components/LeaguePlayerMovements.tsx`
+  – öt StatCard, csapatonkénti érkező/távozó DataTable, profil-linkek;
+  szezon/csapat szerint szűrt és lapozott olvasás, válaszvalidáció, késői
+  válaszok eldobása, loading/error/empty állapot és újrapróbálás.
+  Új **Igazolások** nav item; ezen a tabon a globális csapatszűrőben
+  **Összes követett csapat** opció is elérhető.
+- [x] **Lokális ellenőrzések** – parser- és válaszvalidációs tesztek;
+  SQL READ ONLY tesztek valós és szintetikus adatokkal; böngészőben valódi
+  SELECT-eredményt helyettesítő HTTP-válaszokkal: ASE 4 érkező/9 távozó,
+  14 csapatos liganézet, szűrőváltási verseny, hibás/üres adatforrás,
+  olvasói jogosultság, mobil overflow és sidebar perzisztencia. Konzolkivétel: 0.
+  Lint: 0 error, 7 korábbi warning. A teljes build/tsc korábbi Deno–Next
+  ütközésének javításához a védett tsconfig-fájl módosításának jóváhagyása függőben.
+- [ ] **Éles view/RLS és dashboard ellenőrzés** a kézi view-migráció után.
 
 **Tudatosan v1-en kívül hagyva** (döntés dokumentálva, nem hiányosság):
-egyedi kosarstat player-profil oldalak bejárása (a 14 csapat `team_players`
-oldala elég ehhez a scope-hoz, a `profile_url` mezőben mentjük a linket
+egyedi kosarstat player-profil oldalak bejárása (a szezonos csapatoldalakat
+használjuk, a `profile_url` mezőben mentjük a linket
 kézi ellenőrzéshez); szezonon belüli (mid-season) átigazolás tiszta
 elkülönítése a `LAG`/`LEAD` modellben; automatikus cron-be kötés
 (`.github/workflows/scrape.yml`) – külön döntés, nem automatikus.

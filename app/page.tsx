@@ -32,6 +32,7 @@ import { RosterImport } from '@/components/RosterImport';
 import { FixturesImport } from '@/components/FixturesImport';
 import { KosarstatPbpImport } from '@/components/KosarstatPbpImport';
 import { LeaguePlayerMovementsImport } from '@/components/LeaguePlayerMovementsImport';
+import { LeaguePlayerMovements } from '@/components/LeaguePlayerMovements';
 import { SituationalAnalysis } from '@/components/SituationalAnalysis';
 import { useFilterData } from '@/hooks/useFilterData';
 import { useGameData } from '@/hooks/useGameData';
@@ -143,6 +144,7 @@ export default function Home() {
               <TeamSelector
                 selectedTeamId={selectedTeamId}
                 onTeamChange={setSelectedTeamId}
+                allowAll={activeTab === 'movements'}
               />
             </div>
           </div>
@@ -286,6 +288,15 @@ export default function Home() {
 
           <TabsContent value="updates">
             <Updates />
+          </TabsContent>
+
+          <TabsContent value="movements">
+            <LeaguePlayerMovements
+              seasonId={selectedSeasonId}
+              teamId={selectedTeamId}
+              seasonName={allSeasons.find(season => season.id === selectedSeasonId)?.name}
+              teamName={allTeams.find(team => team.id === selectedTeamId)?.name}
+            />
           </TabsContent>
 
           {isAdmin && (

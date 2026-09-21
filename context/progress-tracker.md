@@ -48,7 +48,7 @@ Update this file after every meaningful implementation change.
   első–utolsó éve nem folytonos stint, így a régi kibontás téves adatot adna.
   A teljes buildet egy korábban meglévő Deno/Next TypeScript ütközés
   (`supabase/functions/live-scan/index.ts`, `npm:` import) blokkolja;
-  a teljes lintben meglévő AppSidebar effect-hiba és 7 warning van.
+  a sidebar korábbi effect-hibája javítva; a lintben 0 error és 7 meglévő warning maradt.
 
 - **Játékosmozgás scraper ✓ (2026-09-21)** – a jóváhagyott szezonos
   `boxstats` forrásból importál, nem az archívum első–utolsó éve közötti
@@ -58,7 +58,13 @@ Update this file after every meaningful implementation change.
   és célzott lint sikeres. A Database típus tartalmazza az alaptáblákat.
   Classification view elkészült, PostgreSQL READ ONLY tesztekkel ellenőrizve
   (szintetikus szélső esetek + valódi Joseph/Chandler ASE-példa).
-  Hátra: dashboard, végső ellenőrzés és a view-migráció kézi futtatása.
+  A dashboard elkészült: Igazolások nav item, öt KPI, két iránytábla,
+  liganézet, szűrés/lapozás, hibakezelés és újrapróbálás. Böngészőben
+  ellenőrizve: olvasói elérés, ASE 4 érkező/9 távozó, 14 csapatos liganézet,
+  késői válasz eldobása, üres és hiányzó-view állapot, mobil overflow,
+  sidebar perzisztencia. Valódi SELECT-eredményt helyettesítő HTTP-válaszok,
+  0 böngészős kivétel. Hátra: kézi view-migráció és éles view/RLS ellenőrzés.
+  A buildhez a Deno-mappa tsconfig-kizárásának jóváhagyása függőben.
 - **Élő mérkőzés-gyűjtő (2026-09-04)** – a mobil app (`asestatmobile`) élő
   meccs nézetéhez a backend fele: `migrations/add-live-match-tables.sql`
   (`live_games`/`live_player_lines`/`live_quarter_scores` + RLS) és
@@ -74,6 +80,10 @@ Update this file after every meaningful implementation change.
 - (A javítási sprint kódmunkája kész; a 3 migráció kézi futtatására és a GitHub Actions secretek beállítására vár – lásd „Manuális teendők")
 
 ## Manuális teendők (a sprint lezárásához)
+
+- **Játékosmozgás:** `migrations/add-league-player-movements-view.sql`
+  futtatása a Supabase SQL Editorban. Az alaptáblák és a teljes adatimport
+  már készen vannak. Részletes sorrend: `HOWTO-player-movements.md`.
 
 1. **Supabase SQL Editorban futtatandó (ebben a sorrendben!):**
    - `migrations/add-player-game-stats-2026-2027.sql` (2026/27 szezon tábla – a többi migráció hivatkozik rá; 2026-07-18-án javítva: érvénytelen `ADD CONSTRAINT IF NOT EXISTS` szintaxis → DO blokk, policy-k idempotensek)

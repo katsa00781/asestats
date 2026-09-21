@@ -330,6 +330,14 @@ Fókusz: `.nav-item:focus-visible`, `.sb-toggle:focus-visible` → `outline: 2px
 
 ### Navigáció modellje
 
+**Igazolások (2026-09-21):** a Csapat csoport 13. nav itemje (`movements`,
+`ArrowLeftRight`). Öt meglévő `StatCard` + csapatonként két `DataTable`
+(érkezők/távozók); nincs új token vagy alapkomponens. Ezen a tabon a globális
+csapatszűrő az „Összes követett csapat” opcióval liganézetet is ad. Betöltéskor
+skeleton, hibánál újrapróbálás, adathiánynál magyarázó üres állapot jelenik meg.
+A sidebar localStorage állapotát hidratálásbiztos `useSyncExternalStore`
+feliratkozás követi; a gomb, Cmd/Ctrl+B és perzisztencia viselkedése megmarad.
+
 A `NAV_GROUPS` konstans a `components/AppSidebar.tsx`-ben él, és az `AppTopbar.tsx` is innen importálja a breadcrumb-hoz. **A tab-váltás state-alapú** (`useState('overview')` az `app/page.tsx`-ben), nem URL-alapú – nincs router, nincs deep link, frissítés után mindig az `overview` tab töltődik.
 
 A sidebar összecsukott állapota `localStorage`-ban perzisztál (`ase.sidebar.collapsed`), a **Cmd/Ctrl+B** billentyű kapcsolja.

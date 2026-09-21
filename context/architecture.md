@@ -44,6 +44,23 @@
   - `kosarstat_game_pages_raw` + `kosarstat_game_page_tables` + `kosarstat_game_quarter_stats` + `kosarstat_game_team_metrics` — Kosarstat play-by-play nyers oldalak és kinyert statisztikák; a `games.kosarstat_game_id` linkeket az import automatikusan írja (dátum + csapatnév match)
   - `game_text_reports` — AI által generált pregame/postgame szöveges riportok
   - Views: `player_season_stats_by_season` — aggregált szezon statisztikák mező-szintű összesítéssel
+  - Játékosmozgás külön adatkör: `kosarstat_team_map`, `league_players`,
+    `league_player_team_seasons` — stabil Kosarstat játékos-ID; a meglévő
+    `players` és statisztika-FK-k változatlanok. A tagság a **szezonos
+    boxstats keret** tényadata, nem első–utolsó év interpolációja.
+  - `league_player_movements` — `security_invoker` VIEW, a szezonváltás
+    célszezonjához rendelt érkezők és távozók. A LAG/LEAD szezononként
+    összegzett csapathalmazokra fut, így több klub esetén sem talál ki
+    sorrendet. Az első importált szezon alap; hiányzó következő szezon
+    nem eredményez tömeges távozást. `unknown` nem bizonyított külföldi út.
+    RLS: bejelentkezett olvasás, scraper-írás service role-lal.
+
+Játékosmozgás-adatfolyam: legújabb megkezdett szezon menetrendje → követett
+csapatok → Kosarstat név-aliasok és szezonos keretek → validáció az első
+írás előtt → upsert → view → `usePlayerMovements` → Igazolások tab.
+A teljes import ad teljes liga-összehasonlítást. A scraper nem töröl
+forrásból visszavont tagságot, a három upsert nem közös tranzakció;
+DB-hiba után teljes újrafuttatás kell. Új időzített futás nincs.
 
 - **Statikus adatok** (`public/data/`):
   - `games.json` — historikus meccsadatok (fallback / archív célra)

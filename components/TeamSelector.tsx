@@ -18,7 +18,8 @@ type Team = {
 
 type TeamSelectorProps = {
   selectedTeamId: string | null;
-  onTeamChange: (teamId: string) => void;
+  onTeamChange: (teamId: string | null) => void;
+  allowAll?: boolean;
 };
 
 const shouldSkipTeam = (name?: string | null) => {
@@ -26,7 +27,7 @@ const shouldSkipTeam = (name?: string | null) => {
   return name.trim().toLowerCase() === 'ase';
 };
 
-export function TeamSelector({ selectedTeamId, onTeamChange }: TeamSelectorProps) {
+export function TeamSelector({ selectedTeamId, onTeamChange, allowAll = false }: TeamSelectorProps) {
   const [teams, setTeams] = useState<Team[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -43,10 +44,6 @@ export function TeamSelector({ selectedTeamId, onTeamChange }: TeamSelectorProps
       const filteredTeams = (teamsData ?? []).filter(team => !shouldSkipTeam(team.name));
       setTeams(filteredTeams);
 
-      if (!selectedTeamId && filteredTeams.length > 0) {
-        const primary = filteredTeams.find((t: Team) => t.is_primary) || filteredTeams[0];
-        onTeamChange(primary.id);
-      }
     } catch (error) {
       console.error('Csapatok betöltési hiba:', error);
     } finally {
@@ -56,8 +53,15 @@ export function TeamSelector({ selectedTeamId, onTeamChange }: TeamSelectorProps
 
   useEffect(() => {
     loadTeams();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    // Az Igazolások liga-nézete engedi az üres csapatszűrőt. Más tabra
+    // visszalépve a megszokott alapcsapatot választjuk ki.
+    if (!allowAll && !selectedTeamId && teams.length > 0) {
+      onTeamChange((teams.find(team => team.is_primary) || teams[0]).id);
+    }
+  }, [allowAll, selectedTeamId, teams, onTeamChange]);
 
   if (loading) {
     return <div className="w-full md:w-64 h-10 bg-surface-2 animate-pulse rounded-md" />;
@@ -73,11 +77,12 @@ export function TeamSelector({ selectedTeamId, onTeamChange }: TeamSelectorProps
 
   return (
     <div className="w-full md:w-64">
-      <Select value={selectedTeamId || undefined} onValueChange={onTeamChange}>
+      <Select value={selectedTeamId || (allowAll ? 'all' : undefined)} onValueChange={value => onTeamChange(value === 'all' ? null : value)}>
         <SelectTrigger className="w-full">
           <SelectValue placeholder="Válassz csapatot" />
         </SelectTrigger>
         <SelectContent>
+          {allowAll && <SelectItem value="all">Összes követett csapat</SelectItem>}
           {teams.map(team => (
             <SelectItem key={team.id} value={team.id}>
               {team.name}
