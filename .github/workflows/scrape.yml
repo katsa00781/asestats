@@ -90,3 +90,16 @@ jobs:
 
       - name: Kosarstat play-by-play import
         run: npm run kosarstat:pbp
+
+      # A pbp import csak az ÁLTALA feldolgozott meccsekre írja a
+      # games.kosarstat_game_id linket. Ami kimarad (korábbi import, átugrott
+      # meccs), az a dashboardon a round-mapping fallbackre szorul – ez a lépés
+      # pótolja. Idempotens: a már linkelt sorokat átugorja, a nem párosítható
+      # meccseket csak jelenti, nem hibázik el tőlük.
+      - name: Kosarstat meccs-linkek pótlása (backfill)
+        run: |
+          if [ -n "$KOSARSTAT_SEASON_NAME" ]; then
+            npm run kosarstat:backfill-links -- --season "$KOSARSTAT_SEASON_NAME"
+          else
+            npm run kosarstat:backfill-links
+          fi

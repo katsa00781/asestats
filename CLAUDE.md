@@ -440,7 +440,7 @@ npm run hunbasket:standings        # Tabella
 npm run hunbasket:shotchart        # Shot chart
 npm run hunbasket:shotchart:assign # Shot események játékoshoz rendelése
 npm run kosarstat:pbp              # Kosarstat PBP (a games.kosarstat_game_id linkeket is írja)
-npm run kosarstat:backfill-links   # Egyszeri kosarstat_game_id backfill régi adatokra
+npm run kosarstat:backfill-links   # games.kosarstat_game_id pótlása (a scrape.yml minden futásban lefuttatja)
 npm run kosarstat:team-players     # Játékosmozgás: a jelenlegi élvonal utolsó 3–4 szezonos kerete
 ```
 
@@ -453,7 +453,7 @@ Konvenciók:
 - Klub átnevezésekor a régi nevet fel kell venni a `scrape-utils.ts` `TEAM_NAME_ALIASES` térképébe, különben a korábbi szezonok újraimportálása duplikált teams sort termel
 - A menetrend import a `seasons.start_date`/`end_date` ellen ellenőrzi a beolvasott dátumokat: rossz slug/szezon párosításnál írás előtt leáll
 
-**Automatizálás**: `.github/workflows/scrape.yml` – ütemezett (hétvége esti) + kézzel indítható (workflow_dispatch) GitHub Actions futás, amely a CLI szkripteket hajtja végre (`checkout@v5` + `setup-node@v5` + Node 22). Szükséges repo secretek: `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` – az `Env ellenőrzés` lépés a scrape előtt `exit 1`-gyel jelzi, ha hiányoznak. Opcionális repo variables a szezonhoz: `HUNBASKET_SEASON_SLUG`, `HUNBASKET_SEASON_NAME`, `KOSARSTAT_SEASON_CODE`, `KOSARSTAT_SEASON_NAME`. Setup és hibakeresés: `HOWTO-auto-import.md`.
+**Automatizálás**: `.github/workflows/scrape.yml` – ütemezett (hétvége esti) + kézzel indítható (workflow_dispatch) GitHub Actions futás, amely 5 CLI szkriptet hajt végre sorban (fixtures → standings → box score → kosarstat pbp → kosarstat link-backfill) (`checkout@v5` + `setup-node@v5` + Node 22). Szükséges repo secretek: `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` – az `Env ellenőrzés` lépés a scrape előtt `exit 1`-gyel jelzi, ha hiányoznak. Opcionális repo variables a szezonhoz: `HUNBASKET_SEASON_SLUG`, `HUNBASKET_SEASON_NAME`, `KOSARSTAT_SEASON_CODE`, `KOSARSTAT_SEASON_NAME`. Setup és hibakeresés: `HOWTO-auto-import.md`.
 
 **API auth**: mind a 15 `app/api/*` route a `lib/api-auth.ts` **`requireAdmin()`** guardot futtatja (Supabase access token a `Authorization: Bearer` fejlécben + `user_metadata.role === 'admin'`; hiánya esetén 403). Minden route mutáló, ezért admin-only – az RBAC sprint óta a `requireAuth()` megmaradt jövőbeli olvasó route-okhoz, de **jelenleg egyetlen route sem hívja**. Kliens oldalon a `lib/api-fetch.ts` `authFetch()` helyettesíti a nyers `fetch`-et.
 
