@@ -111,6 +111,102 @@ export const findTeamByNameFuzzy = <T extends ScrapeTeamRecord>(
   );
 };
 
+/* ---------------------------------------------------------------------------
+ * Menetrend-szűrők
+ *
+ * A forduló-, dátum- és csapatszűrés korábban csak a box-score importban
+ * (scrape-hunbasket.ts) létezett, így a dobástérkép-import nem volt szűkíthető.
+ * Itt egyetlen példányban él, hogy a szkriptek azonos szintaxist fogadjanak el.
+ * ------------------------------------------------------------------------- */
+
+export type RoundFilter = { rounds: Set<number>; stages: Set<string> };
+
+/**
+ * Forduló-szűrő bemenet: számok, tartományok és szöveges körök vegyesen,
+ * vesszővel elválasztva – pl. `"3-5,12,negyeddöntő"`.
+ */
+export const parseRoundFilter = (value: string): RoundFilter => {
+  const rounds = new Set<number>();
+  const stages = new Set<string>();
+
+  value
+    .split(',')
+    .map(part => part.trim())
+    .filter(Boolean)
+    .forEach(token => {
+      const rangeMatch = token.match(/^(\d+)\s*-\s*(\d+)$/);
+      if (rangeMatch) {
+        const start = parseInt(rangeMatch[1], 10);
+        const end = parseInt(rangeMatch[2], 10);
+        if (!Number.isNaN(start) && !Number.isNaN(end)) {
+          const [min, max] = start <= end ? [start, end] : [end, start];
+          for (let current = min; current <= max; current += 1) {
+            rounds.add(current);
+          }
+        }
+        return;
+      }
+
+      const parsed = parseInt(token, 10);
+      if (!Number.isNaN(parsed)) {
+        rounds.add(parsed);
+        return;
+      }
+
+      // Ugyanaz a normalizálás, mint az illesztésnél – így a többszörös
+      // szóköz sem akadályozza meg a találatot.
+      const normalizedStage = normalizeName(token);
+      if (normalizedStage) {
+        stages.add(normalizedStage);
+      }
+    });
+
+  return { rounds, stages };
+};
+
+export const isRoundFilterEmpty = (filter: RoundFilter) =>
+  filter.rounds.size === 0 && filter.stages.size === 0;
+
+export const matchesRound = (filter: RoundFilter, round?: number | null) => {
+  if (isRoundFilterEmpty(filter)) return true;
+  if (typeof round !== 'number' || Number.isNaN(round)) return false;
+  return filter.rounds.has(round);
+};
+
+/**
+ * Szöveges kör illesztése substring alapon, hogy a "negyeddonto 1" is
+ * illeszkedjen a "negyeddöntő" szűrőre (és fordítva).
+ */
+export const matchesStage = (filter: RoundFilter, stage?: string | null) => {
+  if (isRoundFilterEmpty(filter)) return true;
+  const normalized = normalizeName(stage || '');
+  if (!normalized) return false;
+  for (const filterStage of filter.stages) {
+    if (normalized.includes(filterStage) || filterStage.includes(normalized)) return true;
+  }
+  return false;
+};
+
+/** ISO dátum (YYYY-MM-DD) inkluzív tartomány-szűrése; üres határ = nincs korlát. */
+export const matchesDateRange = (date: string, from: string, to: string) => {
+  if (!from && !to) return true;
+  if (from && date < from) return false;
+  if (to && date > to) return false;
+  return true;
+};
+
+/** Vesszős csapatlista normalizált tömbbé; üres bemenet = nincs szűrés. */
+export const parseTeamFilter = (value: string): string[] =>
+  value
+    .split(',')
+    .map(team => normalizeName(team.trim()))
+    .filter(Boolean);
+
+export const matchesTeamFilter = (normalizedFilters: string[], teamName: string) => {
+  if (normalizedFilters.length === 0) return true;
+  return normalizedFilters.includes(normalizeName(teamName));
+};
+
 /** Supabase hibaobjektum olvasható stringgé alakítása CLI loghoz. */
 export const formatSupabaseError = (error: unknown): string => {
   if (error instanceof Error) return error.message;

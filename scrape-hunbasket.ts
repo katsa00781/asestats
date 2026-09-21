@@ -23,6 +23,13 @@ import {
   cleanTeamName,
   findTeamByNameFuzzy,
   createScriptClient,
+  parseRoundFilter,
+  parseTeamFilter,
+  matchesRound,
+  matchesStage,
+  matchesDateRange,
+  matchesTeamFilter,
+  isRoundFilterEmpty,
 } from './scrape-utils';
 
 dotenv.config({ path: '.env.local' });
@@ -35,53 +42,8 @@ const HUNBASKET_SCHEDULE_URL =
   process.env.HUNBASKET_SCHEDULE_URL ||
   `https://hunbasket.hu/menetrend-teljes/ferfi/${HUNBASKET_SEASON_SLUG}/${HUNBASKET_LEAGUE_CODE}`;
 const HUNBASKET_FILM_API_URL = 'https://hunbasket.hu/ajax/film.php';
-const TEAM_FILTER = (process.env.HUNBASKET_TEAM_FILTER || '')
-  .split(',')
-  .map(team => team.trim())
-  .filter(Boolean);
-const parseRoundFilterInput = (value: string) => {
-  const rounds = new Set<number>();
-  const stages = new Set<string>();
-  const normalizeStage = (input: string) =>
-    input
-      .toLowerCase()
-      .normalize('NFD')
-      .replace(/\p{Diacritic}/gu, '')
-      .replace(/[^a-z0-9\s-]/g, '')
-      .trim();
-  value
-    .split(',')
-    .map(part => part.trim())
-    .filter(Boolean)
-    .forEach(token => {
-      const rangeMatch = token.match(/^(\d+)\s*-\s*(\d+)$/);
-      if (rangeMatch) {
-        const start = parseInt(rangeMatch[1], 10);
-        const end = parseInt(rangeMatch[2], 10);
-        if (!Number.isNaN(start) && !Number.isNaN(end)) {
-          const [min, max] = start <= end ? [start, end] : [end, start];
-          for (let current = min; current <= max; current += 1) {
-            rounds.add(current);
-          }
-        }
-        return;
-      }
-
-      const parsed = parseInt(token, 10);
-      if (!Number.isNaN(parsed)) {
-        rounds.add(parsed);
-        return;
-      }
-
-      const normalizedStage = normalizeStage(token);
-      if (normalizedStage) {
-        stages.add(normalizedStage);
-      }
-    });
-
-  return { rounds, stages };
-};
-const ROUND_FILTER = parseRoundFilterInput(process.env.HUNBASKET_ROUND_FILTER || '');
+const TEAM_FILTER_NORMALIZED = parseTeamFilter(process.env.HUNBASKET_TEAM_FILTER || '');
+const ROUND_FILTER = parseRoundFilter(process.env.HUNBASKET_ROUND_FILTER || '');
 const HUNBASKET_DATE_FROM = process.env.HUNBASKET_DATE_FROM || '';
 const HUNBASKET_DATE_TO = process.env.HUNBASKET_DATE_TO || '';
 const HEADLESS = process.env.HUNBASKET_HEADLESS === 'false' ? false : true;
@@ -231,38 +193,11 @@ const parseMinutes = (value: string) => {
   return parseInt(minutes || '0', 10) || 0;
 };
 
-const TEAM_FILTER_NORMALIZED = TEAM_FILTER.map(normalizeName).filter(Boolean);
 
-const matchesDateFilter = (date: string) => {
-  if (!HUNBASKET_DATE_FROM && !HUNBASKET_DATE_TO) return true;
-  if (HUNBASKET_DATE_FROM && date < HUNBASKET_DATE_FROM) return false;
-  if (HUNBASKET_DATE_TO && date > HUNBASKET_DATE_TO) return false;
-  return true;
-};
-
-const matchesRoundFilter = (round?: number | null) => {
-  if (ROUND_FILTER.rounds.size === 0 && ROUND_FILTER.stages.size === 0) return true;
-  if (typeof round !== 'number' || Number.isNaN(round)) return false;
-  return ROUND_FILTER.rounds.has(round);
-};
-
-const matchesStageFilter = (stage?: string | null) => {
-  if (ROUND_FILTER.rounds.size === 0 && ROUND_FILTER.stages.size === 0) return true;
-  const normalized = normalizeName(stage || '');
-  if (!normalized) return false;
-  // Use substring matching so "negyeddonto 1" matches filter "negyeddonto",
-  // and exact match still works when there is no suffix.
-  for (const filterStage of ROUND_FILTER.stages) {
-    if (normalized.includes(filterStage) || filterStage.includes(normalized)) return true;
-  }
-  return false;
-};
-
-const matchesFilter = (teamName: string) => {
-  if (TEAM_FILTER_NORMALIZED.length === 0) return true;
-  const normalized = normalizeName(teamName);
-  return TEAM_FILTER_NORMALIZED.includes(normalized);
-};
+const matchesDateFilter = (date: string) => matchesDateRange(date, HUNBASKET_DATE_FROM, HUNBASKET_DATE_TO);
+const matchesRoundFilter = (round?: number | null) => matchesRound(ROUND_FILTER, round);
+const matchesStageFilter = (stage?: string | null) => matchesStage(ROUND_FILTER, stage);
+const matchesFilter = (teamName: string) => matchesTeamFilter(TEAM_FILTER_NORMALIZED, teamName);
 
 let cachedTeams: TeamRecord[] = [];
 
@@ -437,7 +372,7 @@ const getGameLinks = async (page: Page): Promise<GameLink[]> => {
     return matchesFilter(game.homeTeam) || matchesFilter(game.awayTeam);
   });
 
-  const hasRoundFilter = ROUND_FILTER.rounds.size > 0 || ROUND_FILTER.stages.size > 0;
+  const hasRoundFilter = !isRoundFilterEmpty(ROUND_FILTER);
   const roundFilterLabel = hasRoundFilter
     ? ` (${ROUND_FILTER.rounds.size} számozott + ${ROUND_FILTER.stages.size} szöveges kör szűrve)`
     : '';

@@ -1,6 +1,33 @@
+/**
+ * HUNBASKET DOBÁSTÉRKÉP IMPORT – az ajax/film.php nyers dobásesemény-listája
+ *
+ * Opcionális környezeti változók:
+ * - HUNBASKET_SEASON_SLUG (alapértelmezett: x2526)
+ * - HUNBASKET_SEASON_NAME / HUNBASKET_SEASON_ID
+ * - HUNBASKET_SCHEDULE_URL (egyedi menetrend URL, pl. rájátszás: .../hun_ply)
+ * - HUNBASKET_ROUND_FILTER (pl. "5" vagy "3-5,12" vagy "negyeddöntő")
+ * - HUNBASKET_TEAM_FILTER (vesszővel elválasztott csapatlista)
+ * - HUNBASKET_DATE_FROM / HUNBASKET_DATE_TO (YYYY-MM-DD, inkluzív)
+ * - HUNBASKET_SHOT_GAME_LIMIT (a feldolgozott meccsek maximális száma)
+ * - HUNBASKET_HEADLESS=false (látható böngésző)
+ *
+ * Szűrő nélkül a teljes szezon minden lejátszott meccsét feldolgozza.
+ */
+
 import { chromium, type Page } from 'playwright';
 import * as dotenv from 'dotenv';
-import { cleanTeamName, findTeamByNameStrict, createScriptClient } from './scrape-utils';
+import {
+  cleanTeamName,
+  findTeamByNameStrict,
+  createScriptClient,
+  parseRoundFilter,
+  parseTeamFilter,
+  matchesRound,
+  matchesStage,
+  matchesDateRange,
+  matchesTeamFilter,
+  isRoundFilterEmpty,
+} from './scrape-utils';
 
 dotenv.config({ path: '.env.local' });
 
@@ -14,10 +41,19 @@ const HUNBASKET_SCHEDULE_URL =
   process.env.HUNBASKET_SCHEDULE_URL || `https://hunbasket.hu/menetrend-teljes/ferfi/${HUNBASKET_SEASON_SLUG}/${HUNBASKET_LEAGUE_CODE}`;
 const HEADLESS = process.env.HUNBASKET_HEADLESS === 'false' ? false : true;
 
+// Szűkítő opciók – ugyanaz a szintaxis, mint a box-score importnál
+// (scrape-hunbasket.ts). Nélkülük a szkript mindig a teljes szezont dolgozza fel.
+const ROUND_FILTER = parseRoundFilter(process.env.HUNBASKET_ROUND_FILTER || '');
+const TEAM_FILTER_NORMALIZED = parseTeamFilter(process.env.HUNBASKET_TEAM_FILTER || '');
+const HUNBASKET_DATE_FROM = process.env.HUNBASKET_DATE_FROM || '';
+const HUNBASKET_DATE_TO = process.env.HUNBASKET_DATE_TO || '';
+const GAME_LIMIT = parseInt(process.env.HUNBASKET_SHOT_GAME_LIMIT || '0', 10);
+
 const API_URL = 'https://hunbasket.hu/ajax/film.php';
 
 type ScheduleGame = {
   round: number | null;
+  stage: string | null;
   date: string;
   homeTeam: string;
   awayTeam: string;
@@ -163,6 +199,7 @@ const scrapePlayedGames = async (page: Page): Promise<ScheduleGame[]> => {
 
         return {
           round: roundMatch ? parseInt(roundMatch[0], 10) : null,
+          stage: roundText || null,
           date: `${dateMatch[1]}-${dateMatch[2].padStart(2, '0')}-${dateMatch[3].padStart(2, '0')}`,
           homeTeam,
           awayTeam,
@@ -175,11 +212,46 @@ const scrapePlayedGames = async (page: Page): Promise<ScheduleGame[]> => {
       .filter((item): item is NonNullable<typeof item> => item !== null);
   });
 
-  return rows.map(row => ({
+  const games = rows.map(row => ({
     ...row,
     homeTeam: cleanTeamName(row.homeTeam),
     awayTeam: cleanTeamName(row.awayTeam),
   }));
+
+  return applyFilters(games);
+};
+
+/**
+ * A menetrend-sorok szűkítése forduló / dátum / csapat szerint, végül a
+ * darabszám korlátozása. A menetrend-oldalon a kör szövege és a sorszáma
+ * ugyanabban a cellában van, ezért a szám- és a szöveges illesztés VAGY
+ * kapcsolatban áll – pontosan úgy, mint a box-score importban.
+ */
+const applyFilters = (games: ScheduleGame[]): ScheduleGame[] => {
+  const filtered = games.filter(game => {
+    if (!matchesDateRange(game.date, HUNBASKET_DATE_FROM, HUNBASKET_DATE_TO)) return false;
+    if (!matchesRound(ROUND_FILTER, game.round) && !matchesStage(ROUND_FILTER, game.stage)) return false;
+    return (
+      matchesTeamFilter(TEAM_FILTER_NORMALIZED, game.homeTeam) ||
+      matchesTeamFilter(TEAM_FILTER_NORMALIZED, game.awayTeam)
+    );
+  });
+
+  const hasFilter =
+    !isRoundFilterEmpty(ROUND_FILTER) ||
+    TEAM_FILTER_NORMALIZED.length > 0 ||
+    Boolean(HUNBASKET_DATE_FROM || HUNBASKET_DATE_TO);
+
+  if (hasFilter) {
+    console.log(`Filters applied: ${games.length} -> ${filtered.length} games`);
+  }
+
+  if (GAME_LIMIT > 0 && filtered.length > GAME_LIMIT) {
+    console.log(`Game limit active: ${filtered.length} -> ${GAME_LIMIT} games`);
+    return filtered.slice(0, GAME_LIMIT);
+  }
+
+  return filtered;
 };
 
 const fetchShotchart = async (gameCode: string): Promise<ShotEvent[]> => {
