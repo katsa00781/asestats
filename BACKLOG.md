@@ -1,6 +1,6 @@
 # BACKLOG.md – ASEStats Projekt
 
-_Utoljára frissítve: 2026-09-21 (játékosmozgás sprint: import és dashboard kész, view élesítésre vár)_
+_Utoljára frissítve: 2026-09-22 (H6 hotfix: Vercel build konfiguráció – npm cache ENOENT javítás)_
 
 ---
 
@@ -357,6 +357,30 @@ valós teljesítményeket semmisítene meg.
   bármi mást meghagy és jelez. A végrehajtást a Claude Code auto mode
   „mass delete" védelme blokkolta, ezért **kézzel futtatandó**:
   `DNP_FIX_APPLY=1 npx tsx archive/fix-empty-dnp-stat-rows.ts`
+
+**H6 – Vercel import: `npm error ENOENT ... mkdir '/home/sbx_user…'` ✓ (2026-09-22)**
+
+Tünet: a Vercel projekt importálásakor az `npm install` már az első csomag
+(`tsx`) letöltésénél elhasalt `ENOENT: no such file or directory, mkdir
+'/home/sbx_user1051'` hibával, és még a hibalogot sem tudta kiírni. Ok: az npm
+a `$HOME/.npm` alá tenné a cache-t és a logot, a build-sandbox home könyvtára
+viszont nem létezik / nem írható. Nem kódhiba – a `tsx` csak az ábécé szerinti
+első letöltés volt, nem a kiváltó ok.
+
+- [x] **`vercel.json`** (új) – `installCommand` a `/tmp/.npm` cache-re
+  (`npm install --cache /tmp/.npm --prefer-offline --no-audit --no-fund`), a
+  `/tmp` a build sandboxban mindig írható. A `buildCommand` pedig
+  `NEXT_TELEMETRY_DISABLED=1 next build`, mert a Next telemetria ugyanígy a
+  home könyvtárba írna. `framework: "nextjs"` explicitté téve.
+- [x] **`HOWTO-vercel-deploy.md`** (új) – a hiba magyarázata, a repó oldali
+  javítás, a Vercel dashboardon ellenőrizendő 4 pont (saját `HOME` /
+  `NPM_CONFIG_CACHE` env változó, kézi Install Command override, build cache
+  nélküli redeploy, Node 22), a kötelező env változók listája, és ami
+  serverlessben eleve nem működik (a 4 spawn-alapú import route).
+- [x] Ellenőrizve: az install parancs `--dry-run`-ja átmegy (lockfile szinkron),
+  a `NEXT_TELEMETRY_DISABLED=1 next build` lokálisan zöld.
+
+**Funkcionális változás nincs** – csak build/deploy konfiguráció.
 
 ---
 
