@@ -1,6 +1,6 @@
 # BACKLOG.md – ASEStats Projekt
 
-_Utoljára frissítve: 2026-09-22 (H6 hotfix: Vercel build konfiguráció – npm cache ENOENT javítás)_
+_Utoljára frissítve: 2026-09-22 (Igazolások: view-migráció hiánya újra megerősítve)_
 
 ---
 
@@ -154,7 +154,10 @@ Használat és élesítés: `HOWTO-player-movements.md`.
   4 egymást követő szezonra van keretadat (2023/24: 222, 2024/25: 204,
   2025/26: 233, 2026/27: 188 tagság). Teendő: a
   `migrations/add-league-player-movements-view.sql` lefuttatása a Supabase
-  SQL Editorban.
+  SQL Editorban. **2026-09-22: újra ellenőrizve, változatlan** – az adatimport
+  sikeres (473 `league_players`, 847 `league_player_team_seasons` sor), de a
+  view sem service role, sem anon kulccsal nem érhető el (42P01), tehát a
+  migráció továbbra is futtatásra vár.
 
 **Tudatosan v1-en kívül hagyva** (döntés dokumentálva, nem hiányosság):
 egyedi kosarstat player-profil oldalak bejárása (a szezonos csapatoldalakat
