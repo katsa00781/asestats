@@ -1,6 +1,6 @@
 # BACKLOG.md – ASEStats Projekt
 
-_Utoljára frissítve: 2026-09-22 (Mobil: P15 Igazolások design prompt)_
+_Utoljára frissítve: 2026-09-22 (Mobil: P15 Igazolások prompt átemelve az asestatmobile repóba)_
 
 ---
 
@@ -14,14 +14,21 @@ Felhasználói döntések: **Expo / React Native** (nem PWA, nem Capacitor, nem 
 - [x] **`context/mobile/mobile-architecture.md`** – izolált `mobile/` Expo projekt npm workspace **nélkül** (indoklással: hoisting-ütközés a web React 19 és az Expo pinnelt React-je között + 30+ fájl mozgatása); Metro `watchFolders` + `extraNodeModules` `@core` alias a gyökér `lib/`-re; RN Supabase kliens AsyncStorage adapterrel; lusta betöltési stratégia.
 - [x] **`context/mobile/mobile-ui-context.md`** – teljes token-híd a `globals.css`-ből szó szerint; **új mobil tokenek** (44pt tap target, pt-alapú típusskála, 4pt spacing rács); glow **rétegzéssel**, nem shadow-val (RN korlát); hover → pressed leképezés; StatCard → **StatTile**, DataTable → **StackedRow + StatMatrix** (fagyasztott első oszlop).
 - [x] **`context/mobile/mobile-design-prompts.md`** – **16 prompt** (P0 style tile + P1–P15 képernyők), közös `DS-BLOKK` kontextussal, valós magyar mintaadattal, lefedettség-ellenőrző táblázattal és elfogadási checklistával.
-- [x] **P15 · Igazolások (2026-09-22)** – a webes Igazolások feature mobil design promptja. Felhasználói IA-döntés: a **Tabella tab második szegmense** (TABELLA · IGAZOLÁSOK), mert mindkét nézet liga-szintű és ez az egyetlen egy-mélységű tab; a tab bar címkéje marad „Tabella", a nagy cím az aktív szegmenst követi. A prompt mintaadata a `league_player_team_seasons` valós 2025/26 → 2026/27 keretkülönbségéből számolt (ASE: 4 érkező / 9 távozó · liga: 95 érkező / 140 távozó, 14 csapat). A `mobile-overview.md` scope- és IA-táblája ezzel együtt frissült: 9 fogyasztói nézet.
+- [x] **P15 · Igazolások (2026-09-22)** – a webes Igazolások feature mobil design promptja. Felhasználói IA-döntés: a **Tabella tab második szegmense** (TABELLA · IGAZOLÁSOK), mert mindkét nézet liga-szintű és ez az egyetlen egy-mélységű tab; a tab bar címkéje marad „Tabella", a nagy cím az aktív szegmenst követi. A prompt mintaadata a `league_player_team_seasons` valós 2025/26 → 2026/27 keretkülönbségéből számolt (ASE: 4 érkező / 9 távozó · liga: 95 érkező / 140 távozó, 14 csapat). A `mobile-overview.md` scope- és IA-táblája ezzel együtt frissült: 9 fogyasztói nézet. **Átemelve az `asestatmobile` repóba** (2026-09-22): `docs/design-prompts.md` (P15 + DS-BLOKK) és `docs/feature-tasks.md` (S9 feladatszakasz, munkanapló, D-110 döntés) – kizárólag kiegészítésként, törlés nélkül.
 
 **Felderítési leletek, amikre a terv épül:**
 
 - **A `lib/` elemző mag bizonyítottan tiszta** – 15 modul (~9 500 sor: `stat-formulas`, `positions`, `terminology`, `style-vocabulary`, `dashboard-types`, `player-stat-mapping`, `season-tables`, `fetch-all-rows`, `situational-analysis`, `kosarstat-clutch-parse`, `postgame-report`, `player-analysis`, `player-postgame`, `pregame-scouting`, `team-analysis`) **nulla külső importtal** – se React, se Next, se DOM, se Supabase. Módosítás nélkül futtatható RN alatt. (A `situational-analysis.ts` naiv DOM-grepen fals pozitívot ad: a 260. sorban `window` nevű **lokális** változó van.)
 - **Az AI riportok olvasása nem igényel API route-ot** – a kliens közvetlen `supabase.from('game_text_reports' | 'team_text_reports' | 'player_text_reports')` SELECT-tel olvas. Mind a 14 `app/api/*` route `requireAdmin`-t futtat és mutáló → a fogyasztói scope-on kívül.
 
-**Következő lépések (még nem indultak):**
+> **ELAVULT SZAKASZ (2026-09-22).** Az alábbi „még nem indult" lista a 2026-08-30-i
+> állapotot tükrözi. A mobil implementáció azóta **külön repóban fut**:
+> `/Users/kacsorzsolt/Developer/Projektek/asestatmobile` (S3–S8 kész, élő
+> mérkőzés-követésig; saját `docs/feature-tasks.md` munkanaplóval és
+> döntésnaplóval). Ez a szakasz historikus, a mobil aktuális állapotát a másik
+> repo backlogja mondja meg.
+
+**Következő lépések (a 2026-08-30-i terv szerint):**
 
 - [ ] **S2 – Vizuális validáció (felhasználói lépés)**: P0, majd P2 és P8 lefuttatása a választott eszközben. Ha a design nyelv nem áll össze, a `mobile-ui-context.md` módosul, és csak utána megy a maradék 11 prompt.
 - [ ] **S3 – Expo váz**: `mobile/` létrehozása, Metro/tsconfig alias, NativeWind config a tokenekkel, `expo-font`, Supabase kliens, auth + login. **Első feladat: `@core/stat-formulas` import füstteszt** – ha a Metro alias nem működik, fallback az npm workspace-re promotálás.
