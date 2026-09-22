@@ -1,6 +1,6 @@
 # BACKLOG.md – ASEStats Projekt
 
-_Utoljára frissítve: 2026-09-22 (Igazolások: view-migráció hiánya újra megerősítve)_
+_Utoljára frissítve: 2026-09-22 (Mobil: P15 Igazolások design prompt)_
 
 ---
 
@@ -13,7 +13,8 @@ Felhasználói döntések: **Expo / React Native** (nem PWA, nem Capacitor, nem 
 - [x] **`context/mobile/mobile-overview.md`** – termékdefiníció, miért nem elég a reszponzív web (7 konkrét blokkoló felsorolva), a 8 fogyasztói nézet scope-ja, az „Elemzés" tab pontos határa, iOS információs architektúra: **8 web tab → 5 iOS tab** (Ma / Játékosok / Meccsek / Tabella / Elemzés), tudatos funkcionális eltérések a webtől.
 - [x] **`context/mobile/mobile-architecture.md`** – izolált `mobile/` Expo projekt npm workspace **nélkül** (indoklással: hoisting-ütközés a web React 19 és az Expo pinnelt React-je között + 30+ fájl mozgatása); Metro `watchFolders` + `extraNodeModules` `@core` alias a gyökér `lib/`-re; RN Supabase kliens AsyncStorage adapterrel; lusta betöltési stratégia.
 - [x] **`context/mobile/mobile-ui-context.md`** – teljes token-híd a `globals.css`-ből szó szerint; **új mobil tokenek** (44pt tap target, pt-alapú típusskála, 4pt spacing rács); glow **rétegzéssel**, nem shadow-val (RN korlát); hover → pressed leképezés; StatCard → **StatTile**, DataTable → **StackedRow + StatMatrix** (fagyasztott első oszlop).
-- [x] **`context/mobile/mobile-design-prompts.md`** – **15 prompt** (P0 style tile + P1–P14 képernyők), közös `DS-BLOKK` kontextussal, valós magyar mintaadattal, lefedettség-ellenőrző táblázattal és elfogadási checklistával.
+- [x] **`context/mobile/mobile-design-prompts.md`** – **16 prompt** (P0 style tile + P1–P15 képernyők), közös `DS-BLOKK` kontextussal, valós magyar mintaadattal, lefedettség-ellenőrző táblázattal és elfogadási checklistával.
+- [x] **P15 · Igazolások (2026-09-22)** – a webes Igazolások feature mobil design promptja. Felhasználói IA-döntés: a **Tabella tab második szegmense** (TABELLA · IGAZOLÁSOK), mert mindkét nézet liga-szintű és ez az egyetlen egy-mélységű tab; a tab bar címkéje marad „Tabella", a nagy cím az aktív szegmenst követi. A prompt mintaadata a `league_player_team_seasons` valós 2025/26 → 2026/27 keretkülönbségéből számolt (ASE: 4 érkező / 9 távozó · liga: 95 érkező / 140 távozó, 14 csapat). A `mobile-overview.md` scope- és IA-táblája ezzel együtt frissült: 9 fogyasztói nézet.
 
 **Felderítési leletek, amikre a terv épül:**
 

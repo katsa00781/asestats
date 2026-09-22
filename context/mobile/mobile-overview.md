@@ -1,6 +1,6 @@
 # ASEStats Mobile – Termékdefiníció és scope
 
-_Létrehozva: 2026-08-30 · Státusz: terv (S1), implementáció még nem indult_
+_Létrehozva: 2026-08-30 · Bővítve: 2026-09-22 (Igazolások) · Státusz: terv (S1), implementáció még nem indult_
 
 ---
 
@@ -32,9 +32,9 @@ Ezek nem apró csiszolások: a **DataTable és a StatCard – vagyis a termék l
 
 ## Scope: fogyasztói nézetek
 
-A 12 web tabból 4 admin-only (`manage`, `playersimport`, `delete`, `import`). Ezek **nem kerülnek mobilra** – formnehéz, hosszú futású import- és adminfelületek, amiket úgyis gépnél végez a felhasználó, és mind admin-only `app/api/*` route-okra épülnek.
+A 13 web tabból 4 admin-only (`manage`, `playersimport`, `delete`, `import`). Ezek **nem kerülnek mobilra** – formnehéz, hosszú futású import- és adminfelületek, amiket úgyis gépnél végez a felhasználó, és mind admin-only `app/api/*` route-okra épülnek.
 
-Marad **8 fogyasztói nézet**, ezek kerülnek át:
+Marad **9 fogyasztói nézet**, ezek kerülnek át:
 
 | Web tab | Komponens | Mobil sors |
 |---|---|---|
@@ -43,6 +43,7 @@ Marad **8 fogyasztói nézet**, ezek kerülnek át:
 | `games` | `GamesList` | **Meccsek** tab |
 | `gamelog` | `GameLog` | **Meccsek** tab (szűrő/szegmens) |
 | `standings` | `StandingsView` | **Tabella** tab |
+| `movements` | `LeaguePlayerMovements` | **Tabella** tab (szegmens) |
 | `comparison` | `SeasonComparison` (18 072 sor) | **Elemzés** tab – részhalmaz, lásd lentebb |
 | `situational` | `SituationalAnalysis` | **Elemzés** tab → Szituációk |
 | `updates` | `Updates` | Beállítás-sheet „Utolsó adatfrissítés" blokkja |
@@ -83,7 +84,7 @@ A `SeasonComparison.tsx` 18 072 sor, és a webes AI-munkafolyamat teljes felüle
 | **Ma** | `LayoutDashboard` | Következő meccs, csapat KPI-k, forma, utolsó eredmény | 1 |
 | **Játékosok** | `Users` | Lista → részletek → összehasonlítás | 3 |
 | **Meccsek** | `Calendar` | Következő/Lejátszott → meccs részletek → vizualizációk | 3 |
-| **Tabella** | `Trophy` | Bajnoki tabella | 1 |
+| **Tabella** | `Trophy` | Bajnoki tabella · Igazolások (szegmens) | 1 |
 | **Elemzés** | `Sparkles` (AI tónus) | Riport-hub → riportolvasó / szituációk / scouting | 2 |
 
 ### Globális szűrő
