@@ -1,6 +1,12 @@
 # BACKLOG.md – ASEStats Projekt
 
-_Utoljára frissítve: 2026-09-22 (Mobil: P15 Igazolások prompt átemelve az asestatmobile repóba)_
+_Utoljára frissítve: 2026-09-23 (Munkafolyamat: mobil szinkron jegyzet szabály a CLAUDE.md-ben)_
+
+---
+
+## Munkafolyamat – Web → mobil szinkron jegyzetek
+
+- [x] **CLAUDE.md „Mobil app szinkron” szakasz (2026-09-23)** – ha egy művelet funkcionálisan, adatbázis-szinten, `@core` modulon, auth/API-n vagy scrapingen keresztül a mobil appot (`asestatmobile`) is érinti, kötelező egy `mobile-sync/YYYY-MM-DD-<slug>.md` követő jegyzet (sablon a CLAUDE.md-ben, `NYITOTT` → `ÁTVEZETVE` állapottal), ugyanabban a commitban.
 
 ---
 

@@ -137,6 +137,7 @@ asestats/
 │   ├── useGameData.ts
 │   └── useFilterData.ts
 ├── migrations/                 # SQL migrációs fájlok – csak Supabase SQL Editorban futtatni
+├── mobile-sync/                # Web → mobil változásnapló (lásd „Mobil app szinkron”)
 ├── scripts/                    # Node.js adatbázis segédeszközök
 ├── archive/                    # Egyszeri diagnosztikai szkriptek (fix-*, check-*, delete-*)
 ├── public/                     # Statikus fájlok
@@ -461,6 +462,48 @@ Konvenciók:
 
 ---
 
+## Mobil app szinkron – kötelező követő jegyzet
+
+A projekt egyszerre fut webes (ez a repó) és mobil (iOS Expo, külön repó: `/Users/kacsorzsolt/Developer/Projektek/asestatmobile`) verzióban, **közös Supabase adatbázison**. Ha egy művelet a mobil verziót is érinti, **kötelező egy követő MD fájlt létrehozni** a `mobile-sync/` mappában, még a commit előtt, és azt ugyanabba a commitba tenni.
+
+**Mikor kell (bármelyik elég):**
+- **Adatbázis változás**: új/módosított tábla, oszlop, view, index, constraint, RLS policy, trigger, új szezon tábla (`migrations/*.sql`)
+- **Adattartalom változás**, ami a mobil olvasást befolyásolja: tömeges javítás, újraimport, dedup, adat törlése/átírása
+- **`@core` modul változás**: a mobil `core/` mappába tükrözött `lib/` fájlok bármelyike (`stat-formulas`, `positions`, `terminology`, `style-vocabulary`, `dashboard-types`, `player-stat-mapping`, `season-tables`, `fetch-all-rows`, `situational-analysis`, `kosarstat-clutch-parse`, `postgame-report`, `player-analysis`, `player-postgame`, `pregame-scouting`, `team-analysis`) → a mobilban `npm run sync:core` szükséges
+- **Funkcionális változás**: új feature/nézet, módosított üzleti logika, számítás, szűrés vagy megjelenítési szabály, amit a mobil fogyasztói nézeteinek is követnie kell
+- **Auth / jogosultság / API változás**: szerepkör, RLS, `requireAdmin`/`requireAuth`, olyan API route, amit a mobil hív
+- **Scraping / import változás**, ami új adatot, új mezőt vagy más adatformát eredményez
+
+**Mikor NEM kell:** tisztán webes stílus/UI változás (Dark Command Center osztályok, layout), webes admin/import felület, amit a mobil nem használ, dokumentáció, belső refaktor viselkedésváltozás nélkül. Kétes esetben inkább készüljön jegyzet.
+
+**Fájl:** `mobile-sync/YYYY-MM-DD-<rovid-slug>.md` (pl. `mobile-sync/2026-09-23-league-player-movements-view.md`). Minden érintett művelethez külön fájl, meglévőt nem írunk felül.
+
+**Kötelező tartalom:**
+```markdown
+# <Rövid cím>
+
+- **Dátum:** YYYY-MM-DD
+- **Webes commit:** <hash vagy „ez a commit”>
+- **Típus:** adatbázis | adattartalom | @core | funkcionális | auth/API | scraping
+- **Állapot a mobilban:** NYITOTT
+
+## Mi változott
+<tömören, fájl- / tábla- / oszlopnevekkel>
+
+## Hatás a mobil appra
+<mely mobil nézet, hook, típus, lekérdezés érintett; törhet-e a mostani mobil build>
+
+## Teendő a mobil repóban
+- [ ] <konkrét lépés, pl. `npm run sync:core`, típus frissítése, új lekérdezés>
+
+## Kézi lépések
+<SQL migráció futtatva-e már a Supabase SQL Editorban, újraimport stb.; ha nincs: „nincs”>
+```
+
+A mobil repóban való átvezetés után az `Állapot` → `ÁTVEZETVE (YYYY-MM-DD, mobil commit <hash>)`. A jegyzetet nem töröljük – ez a web → mobil változásnapló.
+
+---
+
 ## Kommunikáció
 
 Tömören kommunikálok. Minden változás után jelzem:
@@ -470,6 +513,7 @@ Tömören kommunikálok. Minden változás után jelzem:
 - Ha új design tokent vagy animációt vezetnék be, megkérdezem
 - Ha egy stílus-feladat funkcionális változtatást igényelne, jelzem és külön döntést kérek
 - Ha `context/progress-tracker.md`-t frissítettem
+- Ha a változás a mobil appot is érinti: a létrehozott `mobile-sync/` jegyzet nevét
 - A részműveletek és a műveletek végén a Backlog.md fájlt frissítsd, hogy mindig a legaktuálisabb legyen minden.
 
 ---
