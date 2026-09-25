@@ -5,10 +5,10 @@ Ez a funkció a mobil app "élő mérkőzés" nézetét szolgálja ki. Három ú
 Function (`live-scan`), ami percenként lekérdezi az MKOSZ élő jegyzőkönyvét
 és beírja az aktuális állást, negyedeket és box score-t.
 
-**Egyik lépés sincs élesítve.** A migráció és az Edge Function elkészült, de
-sem az SQL nem futott le a Supabase-ben, sem a függvény nincs deployolva –
-ez a CLI-hez és a Supabase projekthez hozzáféréssel rendelkező embernek a
-feladata (lásd lent).
+**Státusz (2026-09-25): mindhárom lépés élesítve** a `iipcpjczjjkwwifwzmut`
+projekten – a táblák léteznek, a `live-scan` függvény deployolva (v4), és a
+`live-scan-every-minute` `pg_cron` job percenként hívja. Élő meccsen még nem
+futott – az 5. pont kérdései nyitottak.
 
 ---
 
@@ -96,6 +96,17 @@ select cron.schedule(
   $$
 );
 ```
+
+> **Státusz:** 2026-09-25-én ütemezve (`cron.job` id 2), `timeout_milliseconds
+> := 30000`-rel (a `pg_net` alap 5 mp-es időkorlátja kevés: egy üres futás is
+> ~4 mp). **A Bearer token a publikus anon kulcs, nem a service role kulcs.**
+> A `verify_jwt` csak a JWT aláírását ellenőrzi, a szerepkört nem, a függvény
+> pedig a hívó tokenjét nem használja (az írás a platform-injektált service
+> role kulccsal megy). Az anon kulcs tehát ugyanúgy átjut, és mivel már eddig
+> is publikus volt (a mobil bundle-ben), a `cron.job` szövegében sem titok.
+> A service role kulcs így nem kerül be a `cron.job` táblába. Ugyanebből
+> következik, hogy a függvényt bárki meghívhatja, akinél az anon kulcs
+> megvan. Ez eddig is így volt, és a futás idempotens.
 
 A függvény saját maga dönti el, hogy van-e teendő (ha nincs `is_current`
 szezon vagy nincs élő mérkőzés az `/elo` oldalon, gyorsan visszatér) – ezért
