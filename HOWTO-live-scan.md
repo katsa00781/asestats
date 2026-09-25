@@ -10,6 +10,14 @@ projekten – a táblák léteznek, a `live-scan` függvény deployolva (v4), é
 `live-scan-every-minute` `pg_cron` job percenként hívja. Élő meccsen még nem
 futott – az 5. pont kérdései nyitottak.
 
+**IPv6 blokk (2026-09-25):** a `netcasting*.webpont.com` az Edge Function IPv6
+forráscíméről érkező kapcsolatot bontja (`Connection reset by peer`), IPv4-ről
+és az adatbázis `pg_net`-jéből kiszolgál. A `fetchText()` hálózati hiba esetén
+a `fetchTextOverIpv4()`-re esik vissza: A rekord → `Deno.connect` →
+`Deno.startTls` a valódi hostnévvel → kézi HTTP/1.1 GET. A
+`Deno.createHttpClient({ localAddress: '0.0.0.0' })` itt hatástalan volt. A
+javítás óta (16:34 UTC) a két esti meccs `processed: 2`-vel fut.
+
 ---
 
 ## 1. Migráció futtatása

@@ -41,6 +41,7 @@ import { findTeamByName, type LiveTeamRecord } from '../_shared/team-match.ts';
 const ELO_URL = 'https://hunbasket.hu/elo';
 const USER_AGENT = 'Mozilla/5.0 (compatible; ASEStatsLiveScan/1.0; +https://asestats.hu)';
 const FINAL_RETENTION_HOURS = 6;
+
 /** alkodok – a dobás-altípus (1–5) pontértéke, a forrás saját térképe. */
 const SHOT_POINTS: Record<number, number> = { 1: 2, 2: 2, 3: 3, 4: 1, 5: 2 };
 /** Csak a férfi NB I. A csoport kódjai (nem kupa/utánpótlás/női). */
@@ -142,9 +143,87 @@ function createServiceClient(): SupabaseClient {
 }
 
 async function fetchText(url: string): Promise<string> {
-  const response = await fetch(url, { headers: { 'User-Agent': USER_AGENT } });
+  let response: Response;
+  try {
+    response = await fetch(url, { headers: { 'User-Agent': USER_AGENT } });
+  } catch (error) {
+    // Hálózati hiba (nem HTTP státusz): IPv4-en újrapróbáljuk, lásd fetchTextOverIpv4.
+    console.warn(`live-scan: ${url} fetch hiba, IPv4 újrapróba`, error);
+    return fetchTextOverIpv4(url);
+  }
   if (!response.ok) throw new Error(`${url} → HTTP ${response.status}`);
   return response.text();
+}
+
+/**
+ * Egyszerű HTTPS GET kényszerített IPv4-en. A netcasting szerver (webpont.com)
+ * az Edge Function IPv6 forráscíméről érkező kapcsolatot bontja ("Connection
+ * reset by peer"), IPv4-ről viszont kiszolgál (2026-09-25). A `fetch` nem
+ * választható IPv4-re (a `Deno.createHttpClient({ localAddress })` itt
+ * hatástalan volt), ezért a TCP kapcsolat az A rekord címére nyílik, a TLS
+ * pedig a valódi hostnévvel indul – a tanúsítvány-ellenőrzés így változatlan.
+ * Csak a netcasting statikus válaszát kezeli: `Content-Length` vagy EOF-ig
+ * olvasott törzs, chunked/tömörített válasz nélkül.
+ */
+async function fetchTextOverIpv4(url: string): Promise<string> {
+  const { hostname, pathname, search, protocol } = new URL(url);
+  if (protocol !== 'https:') throw new Error(`${url} → csak https támogatott IPv4 újrapróbánál`);
+
+  const [address] = await Deno.resolveDns(hostname, 'A');
+  if (!address) throw new Error(`${hostname} → nincs A rekord`);
+
+  const tcp = await Deno.connect({ hostname: address, port: 443 });
+  const conn = await Deno.startTls(tcp, { hostname });
+  try {
+    const request =
+      `GET ${pathname}${search} HTTP/1.1\r\n` +
+      `Host: ${hostname}\r\n` +
+      `User-Agent: ${USER_AGENT}\r\n` +
+      'Accept: */*\r\n' +
+      'Connection: close\r\n\r\n';
+    await conn.write(new TextEncoder().encode(request));
+    const raw = new Uint8Array(await new Response(conn.readable).arrayBuffer());
+    return parseHttpResponse(url, raw);
+  } finally {
+    try {
+      conn.close();
+    } catch {
+      // A readable végigolvasása már lezárhatta – ez nem hiba.
+    }
+  }
+}
+
+function parseHttpResponse(url: string, raw: Uint8Array): string {
+  const separator = findHeaderEnd(raw);
+  if (separator < 0) throw new Error(`${url} → hiányos HTTP válasz`);
+
+  const head = new TextDecoder().decode(raw.subarray(0, separator));
+  const [statusLine, ...headerLines] = head.split('\r\n');
+  const status = Number(statusLine.split(' ')[1]);
+  if (status < 200 || status >= 300) throw new Error(`${url} → HTTP ${status} (IPv4)`);
+
+  const headers = new Map(
+    headerLines.map((line) => {
+      const colon = line.indexOf(':');
+      return [line.slice(0, colon).trim().toLowerCase(), line.slice(colon + 1).trim()] as const;
+    }),
+  );
+  if (headers.get('transfer-encoding')?.toLowerCase().includes('chunked')) {
+    throw new Error(`${url} → chunked válasz, az IPv4 olvasó nem kezeli`);
+  }
+
+  let body = raw.subarray(separator + 4);
+  const length = Number(headers.get('content-length'));
+  if (Number.isFinite(length) && length >= 0) body = body.subarray(0, length);
+  return new TextDecoder().decode(body);
+}
+
+/** Az első `\r\n\r\n` indexe a nyers válaszban, vagy -1. */
+function findHeaderEnd(raw: Uint8Array): number {
+  for (let i = 0; i + 3 < raw.length; i++) {
+    if (raw[i] === 13 && raw[i + 1] === 10 && raw[i + 2] === 13 && raw[i + 3] === 10) return i;
+  }
+  return -1;
 }
 
 // --- 1. Élő meccs-linkek a /elo oldalról ---------------------------------
