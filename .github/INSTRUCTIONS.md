@@ -32,7 +32,7 @@
    - Used for edge cases or quick edits.
 4. **Hunbasket Scraper (`scrape-hunbasket.ts`)**
   - Headless Playwright script that végigmegy a teljes szezon menetrendjén, letölti a statisztika táblákat mindkét csapathoz, és közvetlenül tölti a `games` + `player_game_stats` táblákat.
-  - Futtatás: `npm run hunbasket:import` (előtte `npx playwright install chromium`). Alapértelmezés szerint az `x2526` szezon (2025/2026) importja történik, de `HUNBASKET_*` környezeti változókkal testre szabható.
+  - Futtatás: `npm run hunbasket:import` (előtte `npx playwright install chromium`). Alapértelmezés szerint az `x2627` szezon (2026/2027) importja történik, de `HUNBASKET_*` környezeti változókkal testre szabható.
   - A script automatikusan létrehozza a hiányzó csapatokat és játékosokat, majd kihagyja azokat a meccseket, amelyek már szerepelnek `(season_id, our_team_id, opponent, date)` alapján.
 
 ## 4. Working With Seasons & Teams

@@ -49,8 +49,16 @@ Ha a `migrations/add-rbac-rls.sql` már le van futtatva (admin-only INSERT/UPDAT
 
 - [ ] `UPDATE seasons SET is_current = false WHERE name = '<előző szezon>';`
 - [ ] `UPDATE seasons SET is_current = true WHERE name = '<új szezon>';`
-- [ ] GitHub Actions repo variables átállítása: `HUNBASKET_SEASON_SLUG`, `HUNBASKET_SEASON_NAME`, `KOSARSTAT_SEASON_NAME` (`.github/workflows/scrape.yml`)
+- [ ] Az importáló szkriptek `|| '<szezon>'` tartalék értékei (`scrape-hunbasket*.ts`, `process-hunbasket-shotchart-events.ts`, `scrape-kosarstat-playbyplay.ts`) az új szezonra
+- [ ] GitHub Actions repo variables átállítása: `HUNBASKET_SEASON_SLUG`, `HUNBASKET_SEASON_NAME`, `KOSARSTAT_SEASON_CODE`, `KOSARSTAT_SEASON_NAME` (`.github/workflows/scrape.yml`) – vagy törlése, ha a tartalék értékek már jók
 - [ ] Első kör import: `npm run hunbasket:fixtures`, majd `npm run hunbasket:import`
+
+> **2026/2027 státusz (2026-09-25):** az `is_current` átállítva, a szkriptek
+> tartalék értékei `x2627` / `2627` / `2026/2027`-re cserélve. A `live-scan`
+> gyűjtő az `is_current` szezont használja, tehát már a 2026/2027-be ír. A
+> GitHub repo variables állapota ellenőrizetlen (a `gh` CLI nem volt
+> bejelentkezve) – ha régi értékkel be vannak állítva, felülírják a tartalék
+> értéket. Az első kör import még hátravan.
 
 ---
 

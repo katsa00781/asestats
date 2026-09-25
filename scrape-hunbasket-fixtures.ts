@@ -6,8 +6,8 @@ dotenv.config({ path: '.env.local' });
 
 const supabase = createScriptClient();
 
-const HUNBASKET_SEASON_SLUG = process.env.HUNBASKET_SEASON_SLUG || 'x2526';
-const HUNBASKET_SEASON_NAME = process.env.HUNBASKET_SEASON_NAME || '2025/2026';
+const HUNBASKET_SEASON_SLUG = process.env.HUNBASKET_SEASON_SLUG || 'x2627';
+const HUNBASKET_SEASON_NAME = process.env.HUNBASKET_SEASON_NAME || '2026/2027';
 const HUNBASKET_SEASON_ID = process.env.HUNBASKET_SEASON_ID;
 const HUNBASKET_SCHEDULE_URL =
   process.env.HUNBASKET_SCHEDULE_URL || `https://hunbasket.hu/menetrend-teljes/ferfi/${HUNBASKET_SEASON_SLUG}/hun`;

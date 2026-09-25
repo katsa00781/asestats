@@ -7,7 +7,7 @@
  * 3. npx tsx scrape-hunbasket.ts
  *
  * Opcionális környezeti változók:
- * - HUNBASKET_SEASON_SLUG (alapértelmezett: x2526)
+ * - HUNBASKET_SEASON_SLUG (alapértelmezett: x2627)
  * - HUNBASKET_SEASON_NAME (például: 2025/2026)
  * - HUNBASKET_SEASON_ID (ha megadod, nem keresünk név alapján)
  * - HUNBASKET_SCHEDULE_URL (egyedi menetrend URL, pl. rájátszás: .../hun_ply)
@@ -34,8 +34,8 @@ import {
 
 dotenv.config({ path: '.env.local' });
 
-const HUNBASKET_SEASON_SLUG = process.env.HUNBASKET_SEASON_SLUG || 'x2526';
-const HUNBASKET_SEASON_NAME = process.env.HUNBASKET_SEASON_NAME || '2025/2026';
+const HUNBASKET_SEASON_SLUG = process.env.HUNBASKET_SEASON_SLUG || 'x2627';
+const HUNBASKET_SEASON_NAME = process.env.HUNBASKET_SEASON_NAME || '2026/2027';
 const HUNBASKET_SEASON_ID = process.env.HUNBASKET_SEASON_ID;
 const HUNBASKET_LEAGUE_CODE = process.env.HUNBASKET_LEAGUE_CODE || 'hun';
 const HUNBASKET_SCHEDULE_URL =

@@ -53,8 +53,8 @@ const CLI_DATE_FROM = readCliArg('--date-from') || readCliArg('--from-date') || 
 const CLI_DATE_TO = readCliArg('--date-to') || readCliArg('--to-date') || readCliArg('--to');
 
 const KOSARSTAT_BASE = 'https://kosarstat.hu';
-const KOSARSTAT_SEASON_CODE = process.env.KOSARSTAT_SEASON_CODE || '2526';
-const KOSARSTAT_SEASON_NAME = process.env.KOSARSTAT_SEASON_NAME || '2025/2026';
+const KOSARSTAT_SEASON_CODE = process.env.KOSARSTAT_SEASON_CODE || '2627';
+const KOSARSTAT_SEASON_NAME = process.env.KOSARSTAT_SEASON_NAME || '2026/2027';
 const KOSARSTAT_SEASON_ID = process.env.KOSARSTAT_SEASON_ID || process.env.HUNBASKET_SEASON_ID || '';
 const KOSARSTAT_HEADLESS = process.env.KOSARSTAT_HEADLESS === 'false' ? false : true;
 const KOSARSTAT_GAME_LIMIT = parseInt(process.env.KOSARSTAT_GAME_LIMIT || '0', 10);

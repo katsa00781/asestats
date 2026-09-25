@@ -2,7 +2,7 @@
  * HUNBASKET DOBÁSTÉRKÉP IMPORT – az ajax/film.php nyers dobásesemény-listája
  *
  * Opcionális környezeti változók:
- * - HUNBASKET_SEASON_SLUG (alapértelmezett: x2526)
+ * - HUNBASKET_SEASON_SLUG (alapértelmezett: x2627)
  * - HUNBASKET_SEASON_NAME / HUNBASKET_SEASON_ID
  * - HUNBASKET_SCHEDULE_URL (egyedi menetrend URL, pl. rájátszás: .../hun_ply)
  * - HUNBASKET_ROUND_FILTER (pl. "5" vagy "3-5,12" vagy "negyeddöntő")
@@ -33,8 +33,8 @@ dotenv.config({ path: '.env.local' });
 
 const supabase = createScriptClient();
 
-const HUNBASKET_SEASON_SLUG = process.env.HUNBASKET_SEASON_SLUG || 'x2526';
-const HUNBASKET_SEASON_NAME = process.env.HUNBASKET_SEASON_NAME || '2025/2026';
+const HUNBASKET_SEASON_SLUG = process.env.HUNBASKET_SEASON_SLUG || 'x2627';
+const HUNBASKET_SEASON_NAME = process.env.HUNBASKET_SEASON_NAME || '2026/2027';
 const HUNBASKET_SEASON_ID = process.env.HUNBASKET_SEASON_ID;
 const HUNBASKET_LEAGUE_CODE = process.env.HUNBASKET_LEAGUE_CODE || 'hun';
 const HUNBASKET_SCHEDULE_URL =

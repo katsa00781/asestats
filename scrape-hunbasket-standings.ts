@@ -12,8 +12,8 @@ function parseOptionalInt(value?: string) {
   return Number.isNaN(parsed) ? null : parsed;
 }
 
-const HUNBASKET_SEASON_SLUG = process.env.HUNBASKET_SEASON_SLUG || 'x2526';
-const HUNBASKET_SEASON_NAME = process.env.HUNBASKET_SEASON_NAME || '2025/2026';
+const HUNBASKET_SEASON_SLUG = process.env.HUNBASKET_SEASON_SLUG || 'x2627';
+const HUNBASKET_SEASON_NAME = process.env.HUNBASKET_SEASON_NAME || '2026/2027';
 const HUNBASKET_SEASON_ID = process.env.HUNBASKET_SEASON_ID;
 const HUNBASKET_LEAGUE_CODE = process.env.HUNBASKET_LEAGUE_CODE || 'hun';
 const HUNBASKET_STANDINGS_URL =
