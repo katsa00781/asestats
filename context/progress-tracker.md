@@ -108,6 +108,8 @@ Update this file after every meaningful implementation change.
 
 ## Completed (legutóbbi)
 
+- **Hotfix H7 – keret frissítés `teams_short_name_key` ütközés** (2026-09-26): a 2026/2027-es szponzornév-drift miatt a roster scraper új csapatot próbált felvenni (`OSE Lions` → `short_name` ütközés `MVM-OSE Lions`-szal). `scrape-utils.ts` `TEAM_NAME_ALIASES` +3 bejegyzés (OSE Lions, Délút-SZTE-Szedeák, Falco KC Szombathely → meglévő `teams` sorok); a tabella mind a 14 csapata feloldódik, DB-írás nem történt. Nyitott: `teams.name` átírása az új nevekre (döntés), roster scraper átállítása a H3-as névdrift-szabályra. Részletek: `BACKLOG.md` H7.
+
 - **Javítási sprint Fázis 2–5** (2026-07-18):
   - **Adat-dedup**: 3 új migráció (games unique, players unique, szezon-view fix); mindhárom games-író közös kulcsra upsertel; JsonImport `.single()` hibája javítva; kosarstat scraper írja a `games.kosarstat_game_id`-t (+ backfill script); ensureTeam névdrift-védelem (`HUNBASKET_ALLOW_NEW_TEAMS=1` kapcsoló)
   - **Kód-dedup**: `lib/supabase-admin.ts` (9 route admin-bootstrapje), `lib/player-stat-mapping.ts` (a 2 hook 85 soros duplikált mappingje – a useFilterData hibás TS/eFG súlyozása is javítva: összegzett dobásokból számol), `lib/stat-formulas.ts` (TS%/eFG%/VAL 6 másolat helyett + egységes formatPercent 1 tizedessel), `scrape-utils.ts` (4× duplikált normalizeName/findTeamInCache/kliens-bootstrap), `lib/run-script.ts` (spawn wrapper 3 route-ból)

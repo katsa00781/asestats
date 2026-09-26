@@ -50,6 +50,11 @@ const tokenizeNormalized = (normalized: string) =>
 export const TEAM_NAME_ALIASES: Record<string, string> = {
   // 2026/2027-től az "Endo Plus Service" szponzornév kikerült a klub nevéből.
   'endo plus service-honved': 'budapesti honved sportegyesulet',
+  // 2026/2027-es szponzornév-változások: a hunbasket tabella az új nevet
+  // mutatja, a teams sor (és a korábbi szezonok adatai) a régit viseli.
+  'ose lions': 'mvm-ose lions',
+  'delut-szte-szedeak': 'szte-szedeak',
+  'falco kc szombathely': 'falco-vulcano energia kc szombathely',
 };
 
 const applyTeamNameAlias = (normalized: string) => TEAM_NAME_ALIASES[normalized] || normalized;

@@ -401,6 +401,42 @@ első letöltés volt, nem a kiváltó ok.
 
 ---
 
+**H7 – Keret frissítés: `duplicate key value violates unique constraint "teams_short_name_key"` ✓ (2026-09-26)**
+
+Tünet: a `hunbasket:rosters` (2026/2027, `x2627`) a 4. csapatnál elszállt:
+`Csapat létrehozási hiba (OSE Lions)`. Ok: a H3-ban a menetrend importot
+fuzzy matchingre és „nincs auto-létrehozás" szabályra állítottuk, a
+`scrape-hunbasket-rosters.ts` viszont maradt a szigorú
+`findTeamByNameStrict` + automatikus `teams` insert kombinációnál. A 26/27-es
+szponzornév-drift így új csapatot próbált felvenni, a `short_name: "OSE"` pedig
+a `"MVM-OSE Lions"` sorral ütközött.
+
+Felderítés (a tabella 14 csapata a szigorú matcher ellen): 11 találat, **3
+drift** – `"OSE Lions"`, `"Falco KC Szombathely"` (ez is `short_name`
+ütközésre futott volna) és `"Délút-SZTE-Szedeák"`. Utóbbi a veszélyesebb: a
+`"Délút-SZTE-Szedeák"` short_name nem ütközik semmivel, így **csendben
+duplikált `teams` sort** hozott volna létre, a keret egy üres új csapat alá
+került volna.
+
+- [x] **`scrape-utils.ts` – `TEAM_NAME_ALIASES` +3 bejegyzés** a meglévő
+  `teams` sorokra: `ose lions → mvm-ose lions`, `delut-szte-szedeak →
+  szte-szedeak`, `falco kc szombathely → falco-vulcano energia kc szombathely`.
+  A közös belépési ponton old fel, így mind a 4 scraper örökli. DB-írás,
+  sémamódosítás nem történt; a `teams` sorok neve változatlan.
+- [x] **Ellenőrzés**: a 26/27-es tabella mind a 14 csapatneve feloldódik
+  strict és fuzzy matcherrel is; duplikált `teams` sor nem keletkezett (a
+  megszakadt futás az OSE-nél, írás előtt állt meg). `npx tsc --noEmit` tiszta.
+- [ ] **Nyitott döntés**: a `teams.name` átírása az új szponzornevekre (mint a
+  Honvédnál a H3-ban) – ez adattartalom-változás, a mobil is megjelenítené,
+  ezért csak felhasználói jóváhagyással. Ha megtörténik, az aliasok iránya
+  megfordul (régi név → új név).
+- [ ] **Nyitott (strukturális)**: a roster scraper is álljon át a H3-as
+  szabályra (`findTeamByNameFuzzy`, auto-létrehozás csak
+  `HUNBASKET_ALLOW_NEW_TEAMS=1`-gyel, előellenőrzés írás előtt), hogy a
+  következő névdrift ne az import közepén derüljön ki.
+
+---
+
 ## Lezárt sprint – Funkcionális backlog tételek ✓ (2026-07-19)
 
 A négy sprintes terv (RBAC → 2026/2027 szezon-előkészület → design konzisztencia → funkcionális backlog) utolsó, funkcionális egysége. Az "élő adat" jellegű tételek (automatikus adatfrissítés ütemezés) kimaradtak, mert a `.github/workflows/scrape.yml` már ütemezett és kézzel indítható – nem volt hozzá új munka.
