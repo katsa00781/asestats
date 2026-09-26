@@ -499,9 +499,14 @@ került volna.
     2025-09-27 (az incidens sora).
   - [x] Mentés: `archive/backups/2026-09-26-szolnok-team-merge.json` (lokális,
     nincs commitolva).
-  - [ ] Összevonó SQL (egy tranzakciós DO blokk, előfeltétel- és
-    maradék-ellenőrzéssel) – a fájl megírása jogosultsági okból elakadt,
-    felhasználói döntésre vár.
+  - [x] Összevonó SQL: `migrations/fix-merge-duplicate-szolnok-team.sql` –
+    egy tranzakciós DO blokk; előfeltétel-ellenőrzés (csapatnevek, az ütköző
+    meccs állapota, 13/13 egyértelmű játékospár, minden link KEEP megfelelője),
+    a végén maradék-DUP-hivatkozás = 0 nélkül nem töröl; bármely hibánál teljes
+    visszagörgetés. Mobil jegyzet: `mobile-sync/2026-09-26-szolnok-team-merge.md`.
+  - [ ] **Kézi lépés: az SQL futtatása a Supabase SQL Editorban.** Várt
+    eredmény: 1 Szolnok sor, 82 saját meccs (72 + 11 − 1 ütköző). Utána
+    ellenőrzés: 25/26 ellenfél-párosítás 721/721.
 - [ ] **Nyitott (strukturális)**: a roster scraper is álljon át a H3-as
   szabályra (`findTeamByNameFuzzy`, auto-létrehozás csak
   `HUNBASKET_ALLOW_NEW_TEAMS=1`-gyel, előellenőrzés írás előtt), hogy a
