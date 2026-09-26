@@ -3,7 +3,7 @@
 - **Dátum:** 2026-09-26
 - **Webes commit:** ez a commit (a migráció és a deploy kézi lépés, lásd lent)
 - **Típus:** adatbázis + scraping
-- **Állapot a mobilban:** NYITOTT
+- **Állapot a mobilban:** ÁTVEZETVE (2026-09-26, mobil commit 61f8613)
 
 ## Mi változott
 - Új tábla: `live_team_stats` (`migrations/add-live-team-stats-table.sql`).
@@ -32,11 +32,11 @@
 - Az oszlopnevek a `live_player_lines`-éit követik (D-107): a 2P a `close_* + mid_*` összege, ahogy a `toBoxScore()`-ban.
 
 ## Teendő a mobil repóban
-- [ ] `types/live.ts`: új `LiveTeamStats` típus és `teamStats` mező a `LiveGameDetails`-ben (saját/ellenfél).
-- [ ] `hooks/useLiveGame.ts` `fetchLiveDetails()`: harmadik párhuzamos lekérdezés
+- [x] `types/live.ts`: új `LiveTeamStats` típus és `teamStats` mező a `LiveGameDetails`-ben (saját/ellenfél).
+- [x] `hooks/useLiveGame.ts` `fetchLiveDetails()`: harmadik párhuzamos lekérdezés
   `live_team_stats`-ra (`.eq('live_game_id', summary.id)`), és `toTeamStats()`
   mapper a `team_side` + `homeAway` alapján, rendszerhatár-validációval.
-- [ ] Élő nézet: meccsstatisztika szekció (saját vs. ellenfél). Üres állapot, ha még nincs sor, mert a migráció vagy a deploy előtt nem jön adat.
+- [x] Élő nézet: meccsstatisztika szekció (saját vs. ellenfél). Üres állapot, ha még nincs sor, mert a migráció vagy a deploy előtt nem jön adat.
 
 ## Kézi lépések
 - A `migrations/add-live-team-stats-table.sql` futtatása a Supabase SQL Editorban – a jegyzet írásakor még NEM futott.
