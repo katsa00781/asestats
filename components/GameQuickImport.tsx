@@ -289,6 +289,7 @@ export function GameQuickImport({ onImportComplete, selectedSeasonId }: GameQuic
         const gameData = {
           date: parsedData.date,
           opponent: opponentName,
+          opponent_team_id: ourTeamIsHome ? awayTeamId : homeTeamId,
           home_away: ourTeamIsHome ? 'home' : 'away',
           our_score: ourScore,
           opp_score: oppScore,

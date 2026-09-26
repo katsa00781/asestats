@@ -81,6 +81,7 @@ export type Database = {
           id: string
           date: string
           opponent: string
+          opponent_team_id: string | null
           home_away: 'home' | 'away'
           our_score: number
           opp_score: number
@@ -92,6 +93,7 @@ export type Database = {
         Insert: {
           date: string
           opponent: string
+          opponent_team_id?: string | null
           home_away: 'home' | 'away'
           our_score: number
           opp_score: number

@@ -884,6 +884,7 @@ const importGame = async (date: string, seasonId: string, teamGame: TeamGameImpo
         season_id: seasonId,
         our_team_id: team.id,
         opponent: opponent.name,
+        opponent_team_id: opponent.id,
         home_away: teamGame.homeAway,
         our_score: teamGame.ourScore,
         opp_score: teamGame.oppScore,

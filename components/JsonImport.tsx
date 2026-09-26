@@ -698,6 +698,7 @@ export function JsonImport({ onImportComplete, lastImportedGame, selectedSeasonI
             .insert({
               date: gameData.date,
               opponent: opponentTeamName,
+              opponent_team_id: opponentTeamId || null,
               home_away: importingTeamIsHome ? 'home' : 'away',
               our_score: ourScoreNum,
               opp_score: oppScoreNum,
@@ -755,7 +756,8 @@ export function JsonImport({ onImportComplete, lastImportedGame, selectedSeasonI
         const ourScoreNum = importingTeamIsHome ? homeScoreNum : awayScoreNum;
         const oppScoreNum = importingTeamIsHome ? awayScoreNum : homeScoreNum;
         const result = ourScoreNum > oppScoreNum ? 'win' : 'loss';
-        const opponentTeamName = teams.find(t => t.id === (importingTeamIsHome ? awayTeamId : homeTeamId))?.name || 'Ismeretlen';
+        const opponentTeamId = importingTeamIsHome ? awayTeamId : homeTeamId;
+        const opponentTeamName = teams.find(t => t.id === opponentTeamId)?.name || 'Ismeretlen';
 
         // 2. Ellenőrizzük, létezik-e már ilyen meccs erre a csapatra ezen a dátumon.
         // maybeSingle: a korábbi .single() hibára futott, ha nem volt találat.
@@ -812,6 +814,7 @@ export function JsonImport({ onImportComplete, lastImportedGame, selectedSeasonI
             .insert({
               date: gameDate,
               opponent: opponentTeamName,
+              opponent_team_id: opponentTeamId || null,
               home_away: importingTeamIsHome ? 'home' : 'away',
               our_score: ourScoreNum,
               opp_score: oppScoreNum,

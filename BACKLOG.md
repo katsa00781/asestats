@@ -451,12 +451,18 @@ került volna.
   a régi Honvéd név aliasa). Előzetes elemzés: mind az **1086** meccs
   feloldható (1017 pontos név + 69 alias). Mobil jegyzet:
   `mobile-sync/2026-09-26-games-opponent-team-id.md`.
-- [ ] **C/1 kézi lépés – a migráció futtatása a Supabase SQL Editorban.**
-  Az ellenőrző lekérdezésnek 0 sort kell adnia. **A C/2 előfeltétele**: amíg
-  az oszlop nem létezik, az új mezőt író import elszállna.
-- [ ] **C/2 – írók**: `scrape-hunbasket.ts` (az `ensureTeam` már ad
-  `opponent.id`-t), `GameQuickImport.tsx`, `JsonImport.tsx` töltse az
-  `opponent_team_id`-t; `lib/supabase.ts` `games` típus frissítése.
+- [x] **C/1 kézi lépés – migráció lefuttatva (2026-09-26)**, ellenőrizve:
+  1086/1086 sor kitöltve, 0 NULL, 0 önmagára mutató; a 69 régi nevű Honvéd
+  meccs a `Budapesti Honvéd Sportegyesület` sorra került.
+- [x] **C/2 – írók**: `scrape-hunbasket.ts` (`opponent.id` az `ensureTeam`-ből),
+  `GameQuickImport.tsx`, `JsonImport.tsx` (mindkét insert ág) tölti az
+  `opponent_team_id`-t; `lib/supabase.ts` `games` típus frissítve. A
+  `GamesList` szerkesztője csak a megjelenítési nevet írja (az ID marad); a
+  `scripts/migrate-json-to-supabase.ts` szezon/csapat nélküli legacy szkript,
+  nem módosítva. Ellenőrzés: `tsc` + `eslint` tiszta; éles
+  `hunbasket:import` a 25/26-os 1. fordulón (`HUNBASKET_ROUND_FILTER=1`) –
+  14 upsert, mind a 14 sor `opponent_team_id`-je egyezik a névvel. Mobil
+  jegyzet: `mobile-sync/2026-09-26-games-opponent-team-id-writers.md`.
 - [ ] **C/3 – olvasók**: `hooks/useGameData.ts` (151/161/296) és
   `components/TeamComparison.tsx:225` `opponent_team_id` alapján párosítson
   (NULL esetén név fallback); `context/architecture.md` invariáns frissítése.
