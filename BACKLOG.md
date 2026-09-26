@@ -1064,6 +1064,7 @@ A mobil felderítés során derült ki, hogy két doksi elavult tokeneket ír le
     2. GitHub repo **Variables** (Actions → Variables fül): `HUNBASKET_SEASON_SLUG=x2627`, `HUNBASKET_SEASON_NAME=2026/2027`, `KOSARSTAT_SEASON_CODE=2627`, `KOSARSTAT_SEASON_NAME=2026/2027`. (A `x2627` slug ellenőrizve – a 2026/2027 menetrend fent van a hunbasket.hu-n.)
     3. Amikor az első forduló lejátszódott: `is_current` flip (`HOWTO-uj-szezon.md` szezonkezdési checklist).
   - [ ] Külön döntés: `continue-on-error` a kosarstat lépésen, hiba-értesítés (Issue/e-mail).
+- [ ] **Csendes dobástérkép-hiba a box-score importban** (H9 nyomán, 2026-09-26) – a `scrape-hunbasket.ts` a meccsenkénti dobástérkép-mentés hibáját csak `console.warn`-nal jelzi, így a `scrape.yml` futás zöld marad akkor is, ha egy meccsnek nem lesz dobástérképe. Döntendő: futás végi összesítő (hány meccs dobástérképe bukott el) vagy nem nulla kilépési kód, esetleg a kettő együtt. Kapcsolódik a fenti hiba-értesítés tételhez.
 
 ### Funkcionális backlog (UX átstrukturálástól független)
 
