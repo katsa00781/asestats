@@ -39,10 +39,13 @@ const tokenizeNormalized = (normalized: string) =>
     .filter(token => token.length >= 2);
 
 /**
- * Klub-átnevezések. A régebbi szezonok scrapelt oldalain még a korábbi név
- * szerepel, a teams sor viszont már az aktuálisat viseli – a fuzzy matching
- * ezt nem tudja kitalálni (nincs elég közös token). Kulcs és érték is
- * normalizált alak (lásd normalizeName).
+ * Klub-átnevezések: `régi név → mai név`, mindkettő normalizált alakban (lásd
+ * normalizeName). A forrásoldalak hol a régi, hol az új nevet mutatják, amit a
+ * fuzzy matching nem tud kitalálni (nincs elég közös token).
+ *
+ * Az egyeztetés a párokat **egyenértékű névcsoportként** kezeli (lásd
+ * teamNameVariants): a teams sor a csoport bármelyik nevét viselheti, így a
+ * `teams.name` átnevezése előtt és után is ugyanarra a sorra talál.
  *
  * Klub átnevezésekor ide kell felvenni a régi nevet, különben a korábbi
  * szezonok újraimportálása duplikált teams sort termel.
@@ -50,17 +53,80 @@ const tokenizeNormalized = (normalized: string) =>
 export const TEAM_NAME_ALIASES: Record<string, string> = {
   // 2026/2027-től az "Endo Plus Service" szponzornév kikerült a klub nevéből.
   'endo plus service-honved': 'budapesti honved sportegyesulet',
-  // 2026/2027-es szponzornév-változások: a hunbasket tabella az új nevet
-  // mutatja, a teams sor (és a korábbi szezonok adatai) a régit viseli.
-  'ose lions': 'mvm-ose lions',
-  'delut-szte-szedeak': 'szte-szedeak',
-  'falco kc szombathely': 'falco-vulcano energia kc szombathely',
+  // 2026/2027-es szponzornév-változások (hunbasket tabella, BACKLOG H7).
+  'mvm-ose lions': 'ose lions',
+  'szte-szedeak': 'delut-szte-szedeak',
+  'falco-vulcano energia kc szombathely': 'falco kc szombathely',
   // A hunbasket a 25/26-os oldalakat már szponzornév nélkül mutatja; ebből
   // keletkezett a 2026-04-19-i duplikált teams sor (összevonva: BACKLOG H7).
   'szolnoki olajbanyasz': 'nhsz-szolnoki olajbanyasz',
 };
 
-const applyTeamNameAlias = (normalized: string) => TEAM_NAME_ALIASES[normalized] || normalized;
+/** Név → az alias-csoport összes tagja (tranzitívan összefűzve). */
+const TEAM_NAME_GROUPS: Map<string, string[]> = (() => {
+  const groups = new Map<string, Set<string>>();
+  for (const [from, to] of Object.entries(TEAM_NAME_ALIASES)) {
+    const merged = new Set([from, to, ...(groups.get(from) ?? []), ...(groups.get(to) ?? [])]);
+    merged.forEach(name => groups.set(name, merged));
+  }
+  return new Map([...groups].map(([name, members]) => [name, [...members]]));
+})();
+
+/** A normalizált név és alias-csoportjának többi tagja – a saját név elöl. */
+const teamNameVariants = (normalized: string) => [
+  normalized,
+  ...(TEAM_NAME_GROUPS.get(normalized) ?? []).filter(variant => variant !== normalized),
+];
+
+type TeamNamePredicate<T> = (team: T, target: string) => boolean;
+
+/**
+ * A lépéseket sorrendben próbálja; egy lépésen belül előbb a saját névvel,
+ * aztán az alias-változatokkal. Így egy pontos névegyezés mindig megelőzi a
+ * lazább (short_name, substring, rövidítés) találatokat.
+ */
+const findByNameSteps = <T extends ScrapeTeamRecord>(
+  teams: T[],
+  name: string,
+  steps: TeamNamePredicate<T>[]
+): T | undefined => {
+  const normalized = normalizeName(name);
+  if (!normalized) return undefined;
+  const variants = teamNameVariants(normalized);
+
+  for (const step of steps) {
+    for (const variant of variants) {
+      const hit = teams.find(team => step(team, variant));
+      if (hit) return hit;
+    }
+  }
+  return undefined;
+};
+
+const matchesExactName = <T extends ScrapeTeamRecord>(team: T, target: string) =>
+  normalizeName(team.name) === target;
+
+const matchesShortName = <T extends ScrapeTeamRecord>(team: T, target: string) =>
+  Boolean(team.short_name) && normalizeName(team.short_name as string) === target;
+
+const matchesAbbreviation = <T extends ScrapeTeamRecord>(team: T, target: string) => {
+  const teamAbbr = buildAbbreviation(normalizeName(team.name));
+  return Boolean(teamAbbr) && teamAbbr === buildAbbreviation(target);
+};
+
+const matchesSubstring = <T extends ScrapeTeamRecord>(team: T, target: string) => {
+  const normalizedTeamName = normalizeName(team.name);
+  return normalizedTeamName.includes(target) || target.includes(normalizedTeamName);
+};
+
+const matchesTokenOverlap = <T extends ScrapeTeamRecord>(team: T, target: string) => {
+  const targetTokens = tokenizeNormalized(target);
+  if (targetTokens.length === 0) return false;
+  const teamTokens = tokenizeTeamName(team.name);
+  if (teamTokens.length === 0) return false;
+  const overlap = targetTokens.filter(token => teamTokens.includes(token)).length;
+  return overlap >= Math.min(2, targetTokens.length);
+};
 
 export const cleanTeamName = (value: string) =>
   value
@@ -72,52 +138,21 @@ export const cleanTeamName = (value: string) =>
 export const findTeamByNameStrict = <T extends ScrapeTeamRecord>(
   teams: T[],
   name: string
-): T | undefined => {
-  const normalizedTarget = applyTeamNameAlias(normalizeName(name));
-  if (!normalizedTarget) return undefined;
-
-  return (
-    teams.find(team => normalizeName(team.name) === normalizedTarget) ||
-    teams.find(team => team.short_name && normalizeName(team.short_name) === normalizedTarget) ||
-    teams.find(team => {
-      const teamAbbr = buildAbbreviation(normalizeName(team.name));
-      const targetAbbr = buildAbbreviation(normalizedTarget);
-      return Boolean(teamAbbr) && teamAbbr === targetAbbr;
-    })
-  );
-};
+): T | undefined =>
+  findByNameSteps(teams, name, [matchesExactName, matchesShortName, matchesAbbreviation]);
 
 /** Fuzzy matching: a szigorú lépések + substring és token-átfedés. */
 export const findTeamByNameFuzzy = <T extends ScrapeTeamRecord>(
   teams: T[],
   name: string
-): T | undefined => {
-  const normalizedTarget = applyTeamNameAlias(normalizeName(name));
-  if (!normalizedTarget) return undefined;
-
-  const targetTokens = tokenizeNormalized(normalizedTarget);
-
-  return (
-    teams.find(team => normalizeName(team.name) === normalizedTarget) ||
-    teams.find(team => team.short_name && normalizeName(team.short_name) === normalizedTarget) ||
-    teams.find(team => {
-      const normalizedTeamName = normalizeName(team.name);
-      return normalizedTeamName.includes(normalizedTarget) || normalizedTarget.includes(normalizedTeamName);
-    }) ||
-    teams.find(team => {
-      if (targetTokens.length === 0) return false;
-      const teamTokens = tokenizeTeamName(team.name);
-      if (teamTokens.length === 0) return false;
-      const overlap = targetTokens.filter(token => teamTokens.includes(token)).length;
-      return overlap >= Math.min(2, targetTokens.length);
-    }) ||
-    teams.find(team => {
-      const teamAbbr = buildAbbreviation(normalizeName(team.name));
-      const targetAbbr = buildAbbreviation(normalizedTarget);
-      return Boolean(teamAbbr) && teamAbbr === targetAbbr;
-    })
-  );
-};
+): T | undefined =>
+  findByNameSteps(teams, name, [
+    matchesExactName,
+    matchesShortName,
+    matchesSubstring,
+    matchesTokenOverlap,
+    matchesAbbreviation,
+  ]);
 
 /* ---------------------------------------------------------------------------
  * Menetrend-szűrők

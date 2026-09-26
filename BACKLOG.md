@@ -426,7 +426,14 @@ került volna.
 - [x] **Ellenőrzés**: a 26/27-es tabella mind a 14 csapatneve feloldódik
   strict és fuzzy matcherrel is; duplikált `teams` sor nem keletkezett (a
   megszakadt futás az OSE-nél, írás előtt állt meg). `npx tsc --noEmit` tiszta.
-- [ ] **Nyitott döntés**: a `teams.name` átírása az új szponzornevekre (mint a
+- [x] **Előkészítés – alias névcsoportok (2026-09-26)**: `scrape-utils.ts`
+  `findTeamByNameStrict`/`Fuzzy` az aliasokat egyenértékű névcsoportként
+  kezeli (saját név elsőbbséggel, lépésenként), a párok `régi → mai` irányba
+  írva. Így a matcher a `teams.name` átnevezése előtt és után is ugyanarra a
+  sorra talál – nincs olyan ablak, amikor az import elszállna. Ellenőrzés: a
+  régi és új matcher 28 név × 2 módon 0 eltérés; szimulált átnevezés után 0
+  eltérés; `tsc` + `eslint` tiszta.
+- [ ] **Döntés: igen (2026-09-26)** – a `teams.name` átírása az új szponzornevekre (mint a
   Honvédnál a H3-ban) – ez adattartalom-változás, a mobil is megjelenítené,
   ezért csak felhasználói jóváhagyással. Ha megtörténik, az aliasok iránya
   megfordul (régi név → új név). **Hatáselemzés (2026-09-26):** az igazolások
