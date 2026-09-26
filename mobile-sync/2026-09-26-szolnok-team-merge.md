@@ -20,4 +20,4 @@
 - [ ] Ellenőrizni, hogy tárolt (AsyncStorage) csapat-id nem mutat-e a törölt `f9b17624-ce30-4195-be7d-e86f073d9722`-re; ha igen, az érvénytelen id-t kezelje (alapcsapat).
 
 ## Kézi lépések
-- A `migrations/fix-merge-duplicate-szolnok-team.sql` futtatása a Supabase SQL Editorban (a jegyzet írásakor még NEM futott). Mentés: `archive/backups/2026-09-26-szolnok-team-merge.json` (lokális).
+- A `migrations/fix-merge-duplicate-szolnok-team.sql` **lefuttatva 2026-09-26-án** a Supabase SQL Editorban, ellenőrizve (0 maradék hivatkozás, NHSZ alatt 82 meccs). Mentés: `archive/backups/2026-09-26-szolnok-team-merge.json` (lokális).

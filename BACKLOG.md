@@ -471,7 +471,7 @@ került volna.
   a hook párosítási logikájának szimulációja az összes meccsen: párosított
   ellenfél-meccs 24/25 **314 → 366/366**, 25/26 **634 → 720/721**. Mobil
   jegyzet: `mobile-sync/2026-09-26-games-opponent-team-id-readers.md`.
-- [ ] **Szolnok duplikátum – döntésre vár.** A `teams`-ben két sor:
+- [x] **Szolnok duplikátum – összevonva ✓ (2026-09-26).** A `teams`-ben két sor:
   `NHSZ-Szolnoki Olajbányász` (72 saját meccs, 49 játékos) és a 2026-04-19-i
   playoff importból keletkezett `Szolnoki Olajbányász` (11 saját meccs, 13
   játékos, a 2026. ápr–máj. playoff meccsek). A 25/26 egyetlen párosítatlan
@@ -504,9 +504,12 @@ került volna.
     meccs állapota, 13/13 egyértelmű játékospár, minden link KEEP megfelelője),
     a végén maradék-DUP-hivatkozás = 0 nélkül nem töröl; bármely hibánál teljes
     visszagörgetés. Mobil jegyzet: `mobile-sync/2026-09-26-szolnok-team-merge.md`.
-  - [ ] **Kézi lépés: az SQL futtatása a Supabase SQL Editorban.** Várt
-    eredmény: 1 Szolnok sor, 82 saját meccs (72 + 11 − 1 ütköző). Utána
-    ellenőrzés: 25/26 ellenfél-párosítás 721/721.
+  - [x] **SQL lefuttatva (2026-09-26), ellenőrizve:** DUP `teams` sor törölve,
+    0 maradék hivatkozás; NHSZ alatt 82 saját meccs, 49 játékos (0 név-duplikátum),
+    3509 dobás (2837 + 672), dobástérkép home 29 / away 27; a kaposvári sor
+    ellenfele visszaállt, az incidens meccssora törölve. `teams`: 16 sor,
+    `games`: 1086, 0 NULL `opponent_team_id`. Ellenfél-párosítás:
+    **24/25 366/366, 25/26 720/720**. Az incidens ezzel lezárva.
 - [ ] **Nyitott (strukturális)**: a roster scraper is álljon át a H3-as
   szabályra (`findTeamByNameFuzzy`, auto-létrehozás csak
   `HUNBASKET_ALLOW_NEW_TEAMS=1`-gyel, előellenőrzés írás előtt), hogy a
