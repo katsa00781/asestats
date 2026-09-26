@@ -444,7 +444,26 @@ került volna.
   (43 régi + 11 új). Javítási opciók, döntésre vár: (a) a hook névfeloldása
   aliasokkal, (b) a `games.opponent` adatjavítása az aktuális névre,
   (c) hosszú távon `games.opponent_team_id` oszlop (séma). Mindhárom a mobilt is
-  érinti → `mobile-sync/` jegyzet kell.
+  érinti → `mobile-sync/` jegyzet kell. **Döntés (2026-09-26): (c).**
+- [x] **C/1 – migráció**: `migrations/add-games-opponent-team-id.sql` – új
+  nullable `games.opponent_team_id` (FK → `teams`, `ON DELETE SET NULL`) +
+  index `(season_id, opponent_team_id)` + idempotens backfill (pontos név +
+  a régi Honvéd név aliasa). Előzetes elemzés: mind az **1086** meccs
+  feloldható (1017 pontos név + 69 alias). Mobil jegyzet:
+  `mobile-sync/2026-09-26-games-opponent-team-id.md`.
+- [ ] **C/1 kézi lépés – a migráció futtatása a Supabase SQL Editorban.**
+  Az ellenőrző lekérdezésnek 0 sort kell adnia. **A C/2 előfeltétele**: amíg
+  az oszlop nem létezik, az új mezőt író import elszállna.
+- [ ] **C/2 – írók**: `scrape-hunbasket.ts` (az `ensureTeam` már ad
+  `opponent.id`-t), `GameQuickImport.tsx`, `JsonImport.tsx` töltse az
+  `opponent_team_id`-t; `lib/supabase.ts` `games` típus frissítése.
+- [ ] **C/3 – olvasók**: `hooks/useGameData.ts` (151/161/296) és
+  `components/TeamComparison.tsx:225` `opponent_team_id` alapján párosítson
+  (NULL esetén név fallback); `context/architecture.md` invariáns frissítése.
+- [ ] **Mellékelet (nem része a C-nek)**: a `teams`-ben két Szolnok-sor van –
+  `NHSZ-Szolnoki Olajbányász` (72 meccs) és `Szolnoki Olajbányász`
+  (10 meccs, short_name `Szolnoki`) –, valószínűleg névdrift-duplikátum.
+  Összevonás csak felhasználói döntéssel.
 - [ ] **Nyitott (strukturális)**: a roster scraper is álljon át a H3-as
   szabályra (`findTeamByNameFuzzy`, auto-létrehozás csak
   `HUNBASKET_ALLOW_NEW_TEAMS=1`-gyel, előellenőrzés írás előtt), hogy a

@@ -109,6 +109,7 @@ Update this file after every meaningful implementation change.
 ## Completed (legutóbbi)
 
 - **Hotfix H7 – keret frissítés `teams_short_name_key` ütközés** (2026-09-26): a 2026/2027-es szponzornév-drift miatt a roster scraper új csapatot próbált felvenni (`OSE Lions` → `short_name` ütközés `MVM-OSE Lions`-szal). `scrape-utils.ts` `TEAM_NAME_ALIASES` +3 bejegyzés (OSE Lions, Délút-SZTE-Szedeák, Falco KC Szombathely → meglévő `teams` sorok); a tabella mind a 14 csapata feloldódik, DB-írás nem történt. Nyitott: `teams.name` átírása az új nevekre (döntés), roster scraper átállítása a H3-as névdrift-szabályra. Részletek: `BACKLOG.md` H7.
+  - **C/1 (2026-09-26)**: `migrations/add-games-opponent-team-id.sql` – `games.opponent_team_id` (FK) + backfill; az átnevezés a régi meccsek ellenfél-párosítását ne törhesse el. **Kézzel futtatandó** az SQL Editorban; utána C/2 (írók) és C/3 (olvasók). Mobil jegyzet: `mobile-sync/2026-09-26-games-opponent-team-id.md`.
 
 - **Javítási sprint Fázis 2–5** (2026-07-18):
   - **Adat-dedup**: 3 új migráció (games unique, players unique, szezon-view fix); mindhárom games-író közös kulcsra upsertel; JsonImport `.single()` hibája javítva; kosarstat scraper írja a `games.kosarstat_game_id`-t (+ backfill script); ensureTeam névdrift-védelem (`HUNBASKET_ALLOW_NEW_TEAMS=1` kapcsoló)
