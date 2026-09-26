@@ -433,7 +433,14 @@ került volna.
   sorra talál – nincs olyan ablak, amikor az import elszállna. Ellenőrzés: a
   régi és új matcher 28 név × 2 módon 0 eltérés; szimulált átnevezés után 0
   eltérés; `tsc` + `eslint` tiszta.
-- [ ] **Döntés: igen (2026-09-26)** – a `teams.name` átírása az új szponzornevekre (mint a
+- [x] **Átnevező SQL (2026-09-26)**: `migrations/rename-teams-2026-2027-sponsor-names.sql`
+  – `MVM-OSE Lions → OSE Lions`, `SZTE-Szedeák → Délút-SZTE-Szedeák`,
+  `Falco-Vulcano Energia KC Szombathely → Falco KC Szombathely`; id és
+  short_name marad, `games.opponent` szándékosan nem változik; egy tranzakció,
+  régi-név és foglalt-név ellenőrzéssel. Mobil jegyzet:
+  `mobile-sync/2026-09-26-teams-sponsor-rename.md`.
+- [ ] **Kézi lépés: az átnevező SQL futtatása a Supabase SQL Editorban.**
+- [x] **Döntés: igen (2026-09-26)** – a `teams.name` átírása az új szponzornevekre (mint a
   Honvédnál a H3-ban) – ez adattartalom-változás, a mobil is megjelenítené,
   ezért csak felhasználói jóváhagyással. Ha megtörténik, az aliasok iránya
   megfordul (régi név → új név). **Hatáselemzés (2026-09-26):** az igazolások
