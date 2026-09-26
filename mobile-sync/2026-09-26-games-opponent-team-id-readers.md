@@ -3,7 +3,7 @@
 - **Dátum:** 2026-09-26
 - **Webes commit:** ez a commit (C/3 – olvasók; előzmények: `2026-09-26-games-opponent-team-id.md`, `2026-09-26-games-opponent-team-id-writers.md`)
 - **Típus:** funkcionális
-- **Állapot a mobilban:** NYITOTT
+- **Állapot a mobilban:** ÁTVEZETVE (2026-09-26, mobil commit c83925e)
 
 ## Mi változott
 - `hooks/useGameData.ts`: az ellenfél csapat-azonosítója `games.opponent_team_id` (név csak fallback ID nélküli sorra); az ellenfél saját meccssorának lekérdezése `.eq('opponent', teamName)` helyett `.eq('opponent_team_id', selectedTeamId)`. Így áll elő a `TeamGame.opponentGameId`.
@@ -16,8 +16,8 @@
 - Ha a mobil ugyanígy név szerint párosít, ott ugyanezek a meccsek most is ellenfél-oldal nélkül jelennek meg (meccsrészletek, egymás elleni mérleg).
 
 ## Teendő a mobil repóban
-- [ ] Az ellenfél-meccs párosítás és az egymás elleni szűrés átállítása `opponent_team_id`-re, a webes mintával azonos név-fallbackkel.
-- [ ] Együtt vezetendő át a két előző `games-opponent-team-id` jegyzettel.
+- [x] Az ellenfél-meccs párosítás és az egymás elleni szűrés átállítása `opponent_team_id`-re, a webes mintával azonos név-fallbackkel.
+- [x] Együtt vezetendő át a két előző `games-opponent-team-id` jegyzettel.
 
 ## Kézi lépések
 nincs

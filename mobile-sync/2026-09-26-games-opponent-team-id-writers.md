@@ -3,7 +3,7 @@
 - **Dátum:** 2026-09-26
 - **Webes commit:** ez a commit (C/2 – írók; előzmény: `2026-09-26-games-opponent-team-id.md`)
 - **Típus:** scraping
-- **Állapot a mobilban:** NYITOTT
+- **Állapot a mobilban:** ÁTVEZETVE (2026-09-26, mobil commit c83925e)
 
 ## Mi változott
 - `scrape-hunbasket.ts` (box-score import, hétvégi `scrape.yml`), `components/GameQuickImport.tsx`, `components/JsonImport.tsx`: minden új vagy frissített `games` sorba bekerül az `opponent_team_id`.
@@ -14,7 +14,7 @@
 - Nem törik semmi. A mobil ezentúl bízhat abban, hogy a scrapelt meccseknél az `opponent_team_id` ki van töltve.
 
 ## Teendő a mobil repóban
-- [ ] Az előző jegyzet (`2026-09-26-games-opponent-team-id.md`) teendőivel együtt vezetendő át; önálló lépés nem kell.
+- [x] Az előző jegyzet (`2026-09-26-games-opponent-team-id.md`) teendőivel együtt vezetendő át; önálló lépés nem kell.
 
 ## Kézi lépések
 nincs (a migráció már lefutott, ellenőrizve: 0 NULL sor)
