@@ -3,7 +3,7 @@
 - **Dátum:** 2026-09-26
 - **Webes commit:** ez a commit (az SQL futtatása kézi lépés, lásd lent)
 - **Típus:** adattartalom
-- **Állapot a mobilban:** NYITOTT
+- **Állapot a mobilban:** ÁTVEZETVE (2026-09-26, mobil commit 8bd81da)
 
 ## Mi változott
 - `teams.name` (id és `short_name` változatlan):
@@ -20,8 +20,8 @@
 - Ha a mobil csapatnevet hardcode-ol (pl. szűrő, szín, logó térkép), a régi nevet frissíteni kell.
 
 ## Teendő a mobil repóban
-- [ ] A `games-opponent-team-id` jegyzetek átvezetése (előfeltétel).
-- [ ] Keresés a három régi névre a mobil kódban; ha hardcode-olt, cserélni.
+- [x] A `games-opponent-team-id` jegyzetek átvezetése (előfeltétel).
+- [x] Keresés a három régi névre a mobil kódban; ha hardcode-olt, cserélni.
 
 ## Kézi lépések
 - A `migrations/rename-teams-2026-2027-sponsor-names.sql` futtatása a Supabase SQL Editorban (a jegyzet írásakor még NEM futott).
