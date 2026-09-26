@@ -429,7 +429,22 @@ került volna.
 - [ ] **Nyitott döntés**: a `teams.name` átírása az új szponzornevekre (mint a
   Honvédnál a H3-ban) – ez adattartalom-változás, a mobil is megjelenítené,
   ezért csak felhasználói jóváhagyással. Ha megtörténik, az aliasok iránya
-  megfordul (régi név → új név).
+  megfordul (régi név → új név). **Hatáselemzés (2026-09-26):** az igazolások
+  (`league_player_movements`), a `league_fixtures` és a `players` `team_id`-vel
+  kötnek, azokat nem rontja el (a régi szezonok igazolásai is az új nevet
+  mutatnák). A `standings.data` a scrapelt név pillanatképe, érintetlen.
+  **Törne viszont** a `hooks/useGameData.ts:151/296`: a `games.opponent`
+  szöveget pontos névegyezéssel keresi a `teams`-ben (ellenfél box score
+  párosítás, `opponentGameId`) – az átnevezés után a régi meccseknél nincs
+  találat. Ezért az átnevezés előfeltétele a lenti hiba javítása.
+- [ ] **Talált meglévő hiba (a H3-as Honvéd átnevezés mellékhatása)**:
+  **69 meccs** (`games.opponent = 'Endo Plus Service-Honvéd'`, 24/25: 26,
+  25/26: 43) opponent-szövegéhez nincs `teams` sor, így ezeknél az ellenfél
+  meccs-párosítás (`opponentGameId`) üres. A 25/26-on belül vegyes a név
+  (43 régi + 11 új). Javítási opciók, döntésre vár: (a) a hook névfeloldása
+  aliasokkal, (b) a `games.opponent` adatjavítása az aktuális névre,
+  (c) hosszú távon `games.opponent_team_id` oszlop (séma). Mindhárom a mobilt is
+  érinti → `mobile-sync/` jegyzet kell.
 - [ ] **Nyitott (strukturális)**: a roster scraper is álljon át a H3-as
   szabályra (`findTeamByNameFuzzy`, auto-létrehozás csak
   `HUNBASKET_ALLOW_NEW_TEAMS=1`-gyel, előellenőrzés írás előtt), hogy a
