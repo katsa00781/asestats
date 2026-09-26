@@ -463,13 +463,30 @@ került volna.
   `hunbasket:import` a 25/26-os 1. fordulón (`HUNBASKET_ROUND_FILTER=1`) –
   14 upsert, mind a 14 sor `opponent_team_id`-je egyezik a névvel. Mobil
   jegyzet: `mobile-sync/2026-09-26-games-opponent-team-id-writers.md`.
-- [ ] **C/3 – olvasók**: `hooks/useGameData.ts` (151/161/296) és
-  `components/TeamComparison.tsx:225` `opponent_team_id` alapján párosítson
-  (NULL esetén név fallback); `context/architecture.md` invariáns frissítése.
-- [ ] **Mellékelet (nem része a C-nek)**: a `teams`-ben két Szolnok-sor van –
-  `NHSZ-Szolnoki Olajbányász` (72 meccs) és `Szolnoki Olajbányász`
-  (10 meccs, short_name `Szolnoki`) –, valószínűleg névdrift-duplikátum.
-  Összevonás csak felhasználói döntéssel.
+- [x] **C/3 – olvasók**: `hooks/useGameData.ts` (ellenfél-ID feloldás +
+  ellenfél-meccs lekérdezés `opponent_team_id`-re), `components/TeamComparison.tsx`
+  (head-to-head szűrés, mindkét `games` select), `components/JsonImport.tsx`
+  (meglévő meccs kiválasztása) – név csak ID nélküli sorra fallback.
+  `context/architecture.md` 11. invariáns. Ellenőrzés: `tsc` + `eslint` tiszta;
+  a hook párosítási logikájának szimulációja az összes meccsen: párosított
+  ellenfél-meccs 24/25 **314 → 366/366**, 25/26 **634 → 720/721**. Mobil
+  jegyzet: `mobile-sync/2026-09-26-games-opponent-team-id-readers.md`.
+- [ ] **Szolnok duplikátum – döntésre vár.** A `teams`-ben két sor:
+  `NHSZ-Szolnoki Olajbányász` (72 saját meccs, 49 játékos) és a 2026-04-19-i
+  playoff importból keletkezett `Szolnoki Olajbányász` (11 saját meccs, 13
+  játékos, a 2026. ápr–máj. playoff meccsek). A 25/26 egyetlen párosítatlan
+  meccse is ebből fakad.
+  **Incidens (2026-09-26, a C/2 ellenőrző importja okozta):** a hunbasket a
+  25/26-os 1. fordulót ma már `Szolnoki Olajbányász` néven mutatja, ez pontosan
+  a duplikátum sorra illeszkedik, így a `HUNBASKET_ROUND_FILTER=1` futás a
+  2025-09-27-i Szolnok–Kaposvár meccsre **duplikált `games` sort** írt a
+  duplikátum csapat alá (`d32cd3d5…`, 9 stat sor), a kaposvári sor ellenfelét
+  átírta rá, 1 új játékossort hozott létre (Vrabac Adin #77), és a
+  `hun_122719` dobástérkép 74 szolnoki eseményét a duplikátum csapatra kötötte.
+  Az eredeti NHSZ meccssor és 9 stat sora érintetlen. Javítás felhasználói
+  jóváhagyásra vár (csak a mai kár visszaállítása, vagy a két csapatsor teljes
+  összevonása). **Addig a 25/26 box-score újraimportja kerülendő** (a 26/27-es
+  hétvégi import nem érintett: ott a tabella `NHSZ-Szolnoki Olajbányász`-t mutat).
 - [ ] **Nyitott (strukturális)**: a roster scraper is álljon át a H3-as
   szabályra (`findTeamByNameFuzzy`, auto-létrehozás csak
   `HUNBASKET_ALLOW_NEW_TEAMS=1`-gyel, előellenőrzés írás előtt), hogy a

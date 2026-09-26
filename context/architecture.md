@@ -33,7 +33,7 @@
 ## Storage Model
 
 - **Supabase PostgreSQL** (elsődleges adattár):
-  - `games` — mérkőzések (dátum, ellenfél, eredmény, szezon, csapat); **UNIQUE (season_id, our_team_id, date)** – minden író erre a kulcsra upsertel (`migrations/add-games-unique-constraint.sql`); az `opponent` szabad szöveg, szándékosan NEM része a dedup kulcsnak
+  - `games` — mérkőzések (dátum, ellenfél, eredmény, szezon, csapat); **UNIQUE (season_id, our_team_id, date)** – minden író erre a kulcsra upsertel (`migrations/add-games-unique-constraint.sql`); az `opponent` szabad szöveg (import kori megjelenítési név), szándékosan NEM része a dedup kulcsnak; az ellenfél azonosítása a nullable **`opponent_team_id`** FK-n megy (`migrations/add-games-opponent-team-id.sql`)
   - `players` — játékos alapadatok (név, szám, pozíció, szezon, csapat, aktív státusz); **partial unique index (season_id, team_id, lower(trim(name)))** (`migrations/add-players-unique-index.sql`) – a mezszám nem része a kulcsnak
   - `player_game_stats_YYYY_YYYY` — meccsenkénti játékos statisztikák szezononként külön táblában (`player_game_stats_2023_2024`, `player_game_stats_2024_2025`, `player_game_stats_2025_2026`); a `player_game_stats` UNION view INSTEAD OF triggerekkel biztosítja a visszafelé kompatibilitást; JS-kód `lib/season-tables.ts` segítségével érje el a helyes táblát
   - `seasons` — szezonok (id, név, start/end dátum)
@@ -113,3 +113,4 @@ Hunbasket.hu / Kosarstat.hu
 8. **TypeScript strict mode mindig be van kapcsolva** — `any` típus nem használható; minden külső adat interfészen vagy narrowing-on keresztül kerül felhasználásra
 9. **A games/players írások a DB dedup-kulcsokra upsertelnek** — games: `(season_id, our_team_id, date)`; players: név-alapú partial unique index; új író kód nem térhet el ezektől a kulcsoktól
 10. **A kanonikus stat-formulák a `lib/stat-formulas.ts`-ben élnek** — TS%/eFG%/valuation képletet tilos újra implementálni; a százalékok mindig összegzett dobásokból számolódnak, nem meccsenkénti százalékok átlagából
+11. **Az ellenfél-csapat azonosítása `games.opponent_team_id` alapján történik** — a `games.opponent` szöveget `teams.name`-mel párosítani csak ID nélküli sorokra szabad fallbackként; klub-átnevezés után a név már nem egyezik

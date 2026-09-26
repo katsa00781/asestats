@@ -64,6 +64,7 @@ type TeamGameRow = {
 	id: string;
 	date: string;
 	opponent: string;
+	opponent_team_id: string | null;
 	round?: number | null;
 	season_id: string;
 	our_team_id: string;
@@ -221,8 +222,14 @@ const buildStrengthReport = (team: TeamProfile, opponent?: TeamProfile): Strengt
 };
 
 const calculateHeadToHead = (teamA: TeamProfile, teamB: TeamProfile): HeadToHeadSummary | null => {
+	// ID alapján párosít; a név csak az ID nélküli sorokra fallback (klub-átnevezés után a
+	// games.opponent szöveg eltér a teams.name-től).
 	const opponentName = normalizeName(teamB.teamName);
-	const games = teamA.games.filter((game) => normalizeName(game.opponent) === opponentName);
+	const games = teamA.games.filter((game) =>
+		game.opponent_team_id
+			? game.opponent_team_id === teamB.teamId
+			: normalizeName(game.opponent) === opponentName,
+	);
 	if (!games.length) return null;
 
 	const wins = games.filter((game) => game.result === 'win').length;
@@ -328,7 +335,7 @@ export function TeamComparison({ allSeasons, allTeams, currentSeasonId, currentT
 			try {
 				let query = supabase
 					.from('games')
-					.select('id, date, round, opponent, season_id, our_team_id, our_score, opp_score, result')
+					.select('id, date, round, opponent, opponent_team_id, season_id, our_team_id, our_score, opp_score, result')
 					.order('date', { ascending: true });
 
 				if (filterSeasonId !== 'all') {
@@ -413,7 +420,7 @@ export function TeamComparison({ allSeasons, allTeams, currentSeasonId, currentT
 
 						const { data: games, error: gamesError } = await supabase
 							.from('games')
-							.select('id, date, round, opponent, season_id, our_team_id, our_score, opp_score, result')
+							.select('id, date, round, opponent, opponent_team_id, season_id, our_team_id, our_score, opp_score, result')
 							.eq('our_team_id', summary.teamId)
 							.eq('season_id', summary.seasonId)
 							.order('date', { ascending: true });

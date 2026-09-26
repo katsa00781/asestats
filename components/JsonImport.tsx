@@ -39,6 +39,7 @@ type ExistingGameSummary = {
   our_score: number;
   opp_score: number;
   opponent: string;
+  opponent_team_id: string | null;
 };
 
 type ParsedPlayerData = {
@@ -176,6 +177,7 @@ export function JsonImport({ onImportComplete, lastImportedGame, selectedSeasonI
         our_score: game.our_score,
         opp_score: game.opp_score,
         opponent: game.opponent,
+        opponent_team_id: game.opponent_team_id ?? null,
       }));
 
       setExistingGames(formattedGames);
@@ -218,16 +220,16 @@ export function JsonImport({ onImportComplete, lastImportedGame, selectedSeasonI
         setHomeTeamId(game.our_team_id);
         setHomeScore(game.our_score.toString());
         setAwayScore(game.opp_score.toString());
-        // Vendég csapatot név alapján keressük
-        const awayTeam = teams.find(t => t.name === game.opponent);
-        if (awayTeam) setAwayTeamId(awayTeam.id);
+        // Vendég csapat: opponent_team_id, ID nélküli sornál név alapján
+        const awayTeamId = game.opponent_team_id ?? teams.find(t => t.name === game.opponent)?.id;
+        if (awayTeamId) setAwayTeamId(awayTeamId);
       } else {
         setAwayTeamId(game.our_team_id);
         setAwayScore(game.our_score.toString());
         setHomeScore(game.opp_score.toString());
-        // Hazai csapatot név alapján keressük
-        const homeTeam = teams.find(t => t.name === game.opponent);
-        if (homeTeam) setHomeTeamId(homeTeam.id);
+        // Hazai csapat: opponent_team_id, ID nélküli sornál név alapján
+        const homeTeamId = game.opponent_team_id ?? teams.find(t => t.name === game.opponent)?.id;
+        if (homeTeamId) setHomeTeamId(homeTeamId);
       }
     }
   };

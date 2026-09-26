@@ -15,6 +15,7 @@ type SupabaseGame = {
   result: 'win' | 'loss';
   kosarstat_game_id?: string | null;
   our_team_id?: string;
+  opponent_team_id?: string | null;
 };
 
 export type SupabasePlayerGameStat = {
@@ -147,8 +148,13 @@ export function useGameData(
 
       const gameIds = gamesData?.map(g => g.id) || [];
       const teamName = allTeams.find(team => team.id === selectedTeamId)?.name;
+      // Az ellenfél azonosítása az opponent_team_id-n megy; a név csak
+      // fallback az ID nélküli (régi / kézi) sorokra – klub-átnevezés után a
+      // games.opponent szöveg már nem egyezik a teams.name-mel.
+      const resolveOpponentTeamId = (g: SupabaseGame) =>
+        g.opponent_team_id ?? allTeams.find(team => team.name === g.opponent)?.id;
       const opponentIds = (gamesData || [])
-        .map(g => allTeams.find(team => team.name === g.opponent)?.id)
+        .map(resolveOpponentTeamId)
         .filter((id): id is string => Boolean(id));
       const gameDates = (gamesData || []).map(g => g.date);
       let opponentGamesData: SupabaseGame[] = [];
@@ -156,9 +162,9 @@ export function useGameData(
       if (teamName && opponentIds.length > 0 && gameDates.length > 0) {
         const { data: opponentGames, error: opponentError } = await supabase
           .from('games')
-          .select('id, date, opponent, our_team_id, home_away, our_score, opp_score, result')
+          .select('id, date, opponent, opponent_team_id, our_team_id, home_away, our_score, opp_score, result')
           .eq('season_id', selectedSeasonId)
-          .eq('opponent', teamName)
+          .eq('opponent_team_id', selectedTeamId)
           .in('our_team_id', opponentIds)
           .in('date', gameDates);
 
@@ -293,7 +299,7 @@ export function useGameData(
         });
 
       const gamesConverted: TeamGame[] = (gamesData || []).map((g: SupabaseGame) => {
-        const opponentTeamId = allTeams.find(team => team.name === g.opponent)?.id;
+        const opponentTeamId = resolveOpponentTeamId(g);
         const opponentGameId = opponentTeamId
           ? opponentGameMap.get(`${g.date}::${opponentTeamId}`)
           : undefined;
