@@ -3,7 +3,7 @@
 - **Dátum:** 2026-09-26
 - **Webes commit:** ez a commit (csak dokumentáció, webes kódváltozás nincs)
 - **Típus:** funkcionális
-- **Állapot a mobilban:** NYITOTT
+- **Állapot a mobilban:** ÁTVEZETVE (2026-09-26, mobil commit 1e86c39; a webes összevetés és az eszközös ellenőrzés nyitott)
 
 ## Mi változott
 
@@ -391,24 +391,24 @@ döntés és feladat**, ne a mobilban implementáld újra.
 
 ## Teendő a mobil repóban
 
-- [ ] Helydöntés: alroute (`games/[id]/postgame`) vagy szekció a meccs
+- [x] Helydöntés: alroute (`games/[id]/postgame`) vagy szekció a meccs
       részletein. Rögzítsd döntésként a `docs/feature-tasks.md`-ben.
-- [ ] `hooks/usePostgameAnalysis.ts`:
+- [x] `hooks/usePostgameAnalysis.ts`:
   - saját és ellenfél box score (ellenfél `games` sor a 2.3 szerint);
   - `useTeamSeasonData` a liga-mezőnyhöz;
   - opcionális shot-context (2.5) és `player_game_text_reports`.
   - A számítás `useMemo`-ban fusson, a cache kulcsa `gameId`.
-- [ ] `lib/postgame-view.ts` (tiszta modul, a `roles-view` mintájára):
+- [x] `lib/postgame-view.ts` (tiszta modul, a `roles-view` mintájára):
   - magyar feliratok;
   - delta-tónus (TO rate fordítva);
   - `isNegativeDecisiveLabel`;
   - döntő-tényező csoportosítás;
   - `plainText`;
   - formázott sorok.
-- [ ] UI szekciók a 3. pont (v1) szerint, meglévő komponensekkel:
+- [x] UI szekciók a 3. pont (v1) szerint, meglévő komponensekkel:
   `StatTile`, `SplitMetricRow`, `MeterList`, `PointList`, `GlowCard`,
   `StackedRow`.
-- [ ] Üres és hibaállapotok: nincs saját box score, nincs szezonadat, nincs
+- [x] Üres és hibaállapotok: nincs saját box score, nincs szezonadat, nincs
       ellenfél, nincs shot chart.
 - [ ] Ellenőrzés a 6. pont szerint.
 

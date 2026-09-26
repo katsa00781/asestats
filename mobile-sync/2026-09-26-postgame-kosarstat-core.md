@@ -3,7 +3,7 @@
 - **Dátum:** 2026-09-26
 - **Webes commit:** ez a commit
 - **Típus:** @core
-- **Állapot a mobilban:** NYITOTT
+- **Állapot a mobilban:** ÁTVEZETVE (2026-09-26, mobil commit 1e86c39; a webes összevetés és az eszközös ellenőrzés nyitott)
 
 ## Mi változott
 
@@ -49,8 +49,8 @@ A lineup-elemzés továbbra is kimarad.
 
 ## Teendő a mobil repóban
 
-- [ ] `npm run sync:core`.
-- [ ] A post-game hookban az `analyzePostGameReport` után:
+- [x] `npm run sync:core`.
+- [x] A post-game hookban az `analyzePostGameReport` után:
   ```ts
   const context = game.kosarstatGameId
     ? buildKosarstatPostgameContext({
@@ -65,7 +65,7 @@ A lineup-elemzés továbbra is kimarad.
     : buildKosarstatPostgameContext(null);
   const report = mergeKosarstatPostgameContext(baseReport, context);
   ```
-- [ ] Nyers sorok: a `useGameDetails` a negyedeket és a metrikákat most
+- [x] Nyers sorok: a `useGameDetails` a negyedeket és a metrikákat most
       rögtön `QuarterScore` / `FourFactorRow` alakra képezi le. A post-game
       számításhoz a nyers sorok kellenek a rendszerhatáron validálva, és
       bővebb oszloplista kell:
@@ -77,18 +77,18 @@ A lineup-elemzés továbbra is kimarad.
   A `team_name` a tartalék párosításhoz kell, ha a `team_side` hiányzik. A
   web ugyanígy kérdez le. Két lehetőség van: a payload megtartja a nyers
   sorokat is, vagy a post-game hook újra lekéri őket (meccsenként ≤ 10 sor).
-- [ ] `extraNotes` és `clutchImportNote`: a web ide technikai
+- [x] `extraNotes` és `clutchImportNote`: a web ide technikai
       import-állapot üzeneteket tesz (pl. „Team advanced mutatók csatolva (2
       sor).”). A mobil fogyasztói nézetben ezek nem kellenek, ezért
       javaslat: `null` és üres tömb. Ekkor a kosarstat `insightNotes`-a
       marad a `dataNotes`-ban: negyed-összegzés, „team-metric blokk
       integrálva”, clutch-minta.
-- [ ] A kontextus `quarterDiffRows`, `ownMetrics`, `oppMetrics` mezője a
+- [x] A kontextus `quarterDiffRows`, `ownMetrics`, `oppMetrics` mezője a
       meglévő negyed- és four-factors panelek helyett **nem** kell. Azok
       maradnak, a kontextusból csak a szövegsorok számítanak.
-- [ ] A szövegek `→`/`≈` nélküliek, de a `plainText` továbbra is kötelező a
+- [x] A szövegek `→`/`≈` nélküliek, de a `plainText` továbbra is kötelező a
       teljes riportra (D-064).
-- [ ] A clutch-szöveg a web szerint „Clutch (utolsó 5 perc, <=5 pont)”. A
+- [x] A clutch-szöveg a web szerint „Clutch (utolsó 5 perc, <=5 pont)”. A
       mobil D-089 döntése szerint a kosarstat clutch nem fix 5 perces
       ablak. Ha ez zavaró, a feliratot a `@core`-ban kell javítani külön
       webes commitban, nem a mobilban felülírni.
