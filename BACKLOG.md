@@ -517,10 +517,14 @@ került volna.
     ellenfele visszaállt, az incidens meccssora törölve. `teams`: 16 sor,
     `games`: 1086, 0 NULL `opponent_team_id`. Ellenfél-párosítás:
     **24/25 366/366, 25/26 720/720**. Az incidens ezzel lezárva.
-- [ ] **Nyitott (strukturális)**: a roster scraper is álljon át a H3-as
-  szabályra (`findTeamByNameFuzzy`, auto-létrehozás csak
-  `HUNBASKET_ALLOW_NEW_TEAMS=1`-gyel, előellenőrzés írás előtt), hogy a
-  következő névdrift ne az import közepén derüljön ki.
+- [x] **Keret import a H3-as szabályon ✓ (2026-09-26)**:
+  `scrape-hunbasket-rosters.ts` – `findTeamByNameFuzzy`, új csapat csak
+  `HUNBASKET_ALLOW_NEW_TEAMS=1`-gyel, `resolveTeams` előellenőrzés a keretek
+  letöltése és bármilyen írás előtt (az összes ismeretlen nevet egyszerre
+  jelenti). Ellenőrzés: `tsc` + `eslint` tiszta; olvasó próba a 26/27-es
+  tabellán – 14/14 feloldva, egy kitalált új klubnévnél leállna. Éles
+  keretfrissítés nem futott (a felhasználó indítja). CLAUDE.md scraping
+  konvenció frissítve.
 
 ---
 

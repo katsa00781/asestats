@@ -450,8 +450,8 @@ Konvenciók:
 - `dotenv` a `.env.local` betöltéséhez
 - Közös segédfüggvények: `scrape-utils.ts` (normalizeName, cleanTeamName, findTeamByName*, createScriptClient) – ne duplikáld őket a szkriptekben
 - Minden szkript naplózza a progresszt (`console.log`) és a hibákat (`console.error`)
-- A box-score import (`scrape-hunbasket.ts`) és a menetrend import (`scrape-hunbasket-fixtures.ts`) alapból NEM hoz létre új teams sort (névdrift-védelem) – új csapathoz `HUNBASKET_ALLOW_NEW_TEAMS=1`
-- Klub átnevezésekor a régi nevet fel kell venni a `scrape-utils.ts` `TEAM_NAME_ALIASES` térképébe, különben a korábbi szezonok újraimportálása duplikált teams sort termel
+- A box-score import (`scrape-hunbasket.ts`), a menetrend import (`scrape-hunbasket-fixtures.ts`) és a keret import (`scrape-hunbasket-rosters.ts`) alapból NEM hoz létre új teams sort (névdrift-védelem, írás előtti névfeloldással) – új csapathoz `HUNBASKET_ALLOW_NEW_TEAMS=1`
+- Klub átnevezésekor a régi nevet fel kell venni a `scrape-utils.ts` `TEAM_NAME_ALIASES` térképébe (`régi → mai`; a matcher a párokat egyenértékű névcsoportként kezeli, így a `teams.name` átírása előtt és után is működik), különben a korábbi szezonok újraimportálása duplikált teams sort termel
 - A menetrend import a `seasons.start_date`/`end_date` ellen ellenőrzi a beolvasott dátumokat: rossz slug/szezon párosításnál írás előtt leáll
 
 **Automatizálás**: `.github/workflows/scrape.yml` – ütemezett (hétvége esti) + kézzel indítható (workflow_dispatch) GitHub Actions futás, amely 5 CLI szkriptet hajt végre sorban (fixtures → standings → box score → kosarstat pbp → kosarstat link-backfill) (`checkout@v5` + `setup-node@v5` + Node 22). Szükséges repo secretek: `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` – az `Env ellenőrzés` lépés a scrape előtt `exit 1`-gyel jelzi, ha hiányoznak. Opcionális repo variables a szezonhoz: `HUNBASKET_SEASON_SLUG`, `HUNBASKET_SEASON_NAME`, `KOSARSTAT_SEASON_CODE`, `KOSARSTAT_SEASON_NAME`. Setup és hibakeresés: `HOWTO-auto-import.md`.

@@ -1,6 +1,6 @@
 import { chromium, type Page } from 'playwright';
 import * as dotenv from 'dotenv';
-import { normalizeName, cleanTeamName, findTeamByNameStrict, createScriptClient } from './scrape-utils';
+import { normalizeName, cleanTeamName, findTeamByNameFuzzy, createScriptClient } from './scrape-utils';
 
 dotenv.config({ path: '.env.local' });
 
@@ -96,13 +96,18 @@ const refreshTeamCache = async () => {
   cachedTeams = data || [];
 };
 
-const findTeamInCache = (name: string) => findTeamByNameStrict(cachedTeams, name);
+// A menetrend- és box-score importtal azonos fuzzy matching: a szponzornév-
+// drift (pl. "MVM-OSE Lions" -> "OSE Lions") ne termeljen duplikált teams sort.
+const findTeamInCache = (name: string) => findTeamByNameFuzzy(cachedTeams, name);
 
-const ensureTeam = async (name: string): Promise<TeamRecord> => {
-  const cleanedName = cleanTeamName(name);
-  const existing = findTeamInCache(cleanedName);
-  if (existing) return existing;
+// Névdrift-védelem – ugyanaz a szabály, mint a menetrend és a box-score
+// importban: alapból NEM hozunk létre új csapatot. A korábbi automatikus
+// létrehozás a 2026/2027-es szponzornév-változásoknál short_name ütközéssel
+// szállt el, egy esetben pedig csendben duplikált csapatot hozott volna
+// létre (BACKLOG H7). Valóban új csapathoz: HUNBASKET_ALLOW_NEW_TEAMS=1.
+const ALLOW_NEW_TEAMS = process.env.HUNBASKET_ALLOW_NEW_TEAMS === '1';
 
+const createTeam = async (cleanedName: string): Promise<TeamRecord> => {
   const shortName = cleanedName.split(' ')[0] || cleanedName;
   const { data, error } = await supabase
     .from('teams')
@@ -121,6 +126,48 @@ const ensureTeam = async (name: string): Promise<TeamRecord> => {
   cachedTeams.push(data);
   console.log(`    🆕 Új csapat felvéve: ${data.name}`);
   return data;
+};
+
+/**
+ * Előellenőrzés: minden csapatnevet feloldunk MIELŐTT bármelyik keretet
+ * letöltenénk vagy írnánk. Egyetlen ismeretlen név így nem az import közepén
+ * robban, és egyszerre jelenti az összes problémás nevet.
+ */
+const resolveTeams = async (teamLinks: TeamLink[]): Promise<Map<string, TeamRecord>> => {
+  const resolved = new Map<string, TeamRecord>();
+  const unknown: string[] = [];
+
+  for (const teamLink of teamLinks) {
+    const cleanedName = cleanTeamName(teamLink.name);
+    const existing = findTeamInCache(cleanedName);
+
+    if (existing) {
+      if (existing.name !== cleanedName) {
+        console.log(`  Névdrift feloldva: "${cleanedName}" -> "${existing.name}"`);
+      }
+      resolved.set(teamLink.name, existing);
+      continue;
+    }
+
+    if (!ALLOW_NEW_TEAMS) {
+      unknown.push(cleanedName);
+      continue;
+    }
+
+    resolved.set(teamLink.name, await createTeam(cleanedName));
+  }
+
+  if (unknown.length > 0) {
+    const knownNames = cachedTeams.map(team => team.name).join(', ');
+    throw new Error(
+      `Ismeretlen csapatnév a tabellán (${unknown.length} db): ${unknown.map(item => `"${item}"`).join(', ')}. ` +
+        'Névdrift-védelem miatt nem hozok létre új csapatot. Ha tényleg új csapatok, futtasd ' +
+        'HUNBASKET_ALLOW_NEW_TEAMS=1 mellett. Ha csak névváltozás, vedd fel a régi nevet a ' +
+        `scrape-utils.ts TEAM_NAME_ALIASES térképébe. Ismert csapatok: ${knownNames}`
+    );
+  }
+
+  return resolved;
 };
 
 const resolveSeasonId = async (): Promise<string> => {
@@ -468,6 +515,8 @@ const main = async () => {
       return;
     }
 
+    const teams = await resolveTeams(teamLinks);
+
     for (const [index, teamLink] of teamLinks.entries()) {
       console.log(`\n[${index + 1}/${teamLinks.length}] ${teamLink.name}`);
       const roster = await scrapeRoster(page, teamLink.url);
@@ -476,7 +525,8 @@ const main = async () => {
         continue;
       }
 
-      const team = await ensureTeam(teamLink.name);
+      const team = teams.get(teamLink.name);
+      if (!team) throw new Error(`Feloldatlan csapat: ${teamLink.name}`);
       const summary = await syncRosterWithSupabase(team, seasonId, roster);
 
       console.log(
