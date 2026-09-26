@@ -1482,86 +1482,72 @@ const getGameMissingState = async (seasonId: string, gameId: string) => {
   };
 };
 
+// A meccsoldal fejléce táblacellákból áll, ezért a body innerText-jében tabulátorral
+// tagolt: „Hazai\t–\tVendég”, „100\t–\t82”, majd „2026-2027 | Szakasz | 2026.09.25. |”.
+// 2026 szeptembere óta a body elején CMP-dialógus („KosarStat.hu - Do Not Process…”)
+// és breadcrumb („Sopron-DEAC - 2026.09.25”) is áll szóközös „ - ” elválasztóval, a
+// fejlécben pedig en dash (–) szerepel kötőjel helyett – ezért csak a tabos sort fogadjuk el.
+const HEADER_TEAMS_LINE = /^([^\t]+)\t[-\u2013]\t([^\t]+)$/;
+const HEADER_SCORE_LINE = /^(\d{1,3})\t[-\u2013]\t(\d{1,3})$/;
+const HEADER_SEASON_LABEL = /^\d{4}\s*[-/\u2013]\s*\d{4}$/;
+
 const parseRawPageMetadata = (rawText: string): RawPageMetadata => {
   const lines = String(rawText || '')
     .split('\n')
     .map(line => line.replace(/\u00A0/g, ' ').trim())
     .filter(Boolean);
 
-  let competitionSeasonLabel: string | null = null;
-  let competitionPhase: string | null = null;
-  let matchDate: string | null = null;
-  let homeTeamName: string | null = null;
-  let awayTeamName: string | null = null;
-  let homeScore: number | null = null;
-  let awayScore: number | null = null;
+  const metadata: RawPageMetadata = {
+    competitionSeasonLabel: null,
+    competitionPhase: null,
+    matchDate: null,
+    homeTeamName: null,
+    awayTeamName: null,
+    homeScore: null,
+    awayScore: null,
+  };
 
   for (const line of lines) {
-    const compact = line.replace(/\s+/g, ' ').trim();
-    if (!compact) continue;
+    if (metadata.homeScore === null) {
+      const scoreMatch = HEADER_SCORE_LINE.exec(line);
+      if (scoreMatch) {
+        metadata.homeScore = Number.parseInt(scoreMatch[1], 10);
+        metadata.awayScore = Number.parseInt(scoreMatch[2], 10);
+        continue;
+      }
+    }
 
-    if (!competitionSeasonLabel || !competitionPhase || !matchDate) {
-      const pipeParts = compact
+    if (metadata.homeTeamName === null) {
+      const teamMatch = HEADER_TEAMS_LINE.exec(line);
+      if (teamMatch && !HEADER_SCORE_LINE.test(line)) {
+        metadata.homeTeamName = teamMatch[1].trim();
+        metadata.awayTeamName = teamMatch[2].trim();
+        continue;
+      }
+    }
+
+    if (metadata.competitionSeasonLabel === null) {
+      const pipeParts = line
+        .replace(/\s+/g, ' ')
         .split('|')
         .map(part => part.trim())
         .filter(Boolean);
-
-      if (pipeParts.length >= 3) {
-        if (!competitionSeasonLabel && /^\d{4}\s*[-/]\s*\d{4}$/.test(pipeParts[0])) {
-          competitionSeasonLabel = pipeParts[0].replace(/\s+/g, '');
-        }
-
-        if (!competitionPhase) {
-          competitionPhase = pipeParts[1] || null;
-        }
-
-        if (!matchDate) {
-          const dateMatch = /(\d{4})\.(\d{2})\.(\d{2})/.exec(pipeParts[2]);
-          if (dateMatch) {
-            matchDate = `${dateMatch[1]}-${dateMatch[2]}-${dateMatch[3]}`;
-          }
+      if (pipeParts.length >= 3 && HEADER_SEASON_LABEL.test(pipeParts[0])) {
+        metadata.competitionSeasonLabel = pipeParts[0].replace(/\s+/g, '').replace(/\u2013/g, '-');
+        metadata.competitionPhase = pipeParts[1] || null;
+        const dateMatch = /(\d{4})\.(\d{2})\.(\d{2})/.exec(pipeParts[2]);
+        if (dateMatch) {
+          metadata.matchDate = `${dateMatch[1]}-${dateMatch[2]}-${dateMatch[3]}`;
         }
       }
     }
 
-    if ((!homeTeamName || !awayTeamName) && compact.includes(' - ') && !/(\d{1,3})\s*-\s*(\d{1,3})/.test(compact)) {
-      const teamMatch = /^(.+?)\s+-\s+(.+)$/.exec(compact);
-      if (teamMatch) {
-        const left = teamMatch[1]?.trim() || '';
-        const right = teamMatch[2]?.trim() || '';
-        if (left && right) {
-          homeTeamName = left;
-          awayTeamName = right;
-        }
-      }
-    }
-
-    if (homeScore === null || awayScore === null) {
-      const scoreMatch = /(^|\D)(\d{1,3})\s*-\s*(\d{1,3})(\D|$)/.exec(compact);
-      if (scoreMatch) {
-        const parsedHome = Number.parseInt(scoreMatch[2], 10);
-        const parsedAway = Number.parseInt(scoreMatch[3], 10);
-        if (Number.isFinite(parsedHome) && Number.isFinite(parsedAway)) {
-          homeScore = parsedHome;
-          awayScore = parsedAway;
-        }
-      }
-    }
-
-    if (competitionSeasonLabel && competitionPhase && matchDate && homeTeamName && awayTeamName && homeScore !== null && awayScore !== null) {
+    if (metadata.competitionSeasonLabel !== null && metadata.homeTeamName !== null && metadata.homeScore !== null) {
       break;
     }
   }
 
-  return {
-    competitionSeasonLabel,
-    competitionPhase,
-    matchDate,
-    homeTeamName,
-    awayTeamName,
-    homeScore,
-    awayScore,
-  };
+  return metadata;
 };
 
 const extractTables = async (page: Page): Promise<ExtractedTable[]> => {
@@ -2039,7 +2025,8 @@ const main = async () => {
         for (const url of urls) {
           try {
             const result = await importOneGamePage(page, seasonId, gameId, url, {
-              preserveExistingRaw: alreadyImported,
+              // Force reimportnál a nyers oldal metaadata is felülíródik (hibás parse javítása).
+              preserveExistingRaw: alreadyImported && !KOSARSTAT_FORCE_REIMPORT,
             });
             gamePages += 1;
             importedPages += 1;

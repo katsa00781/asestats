@@ -78,6 +78,12 @@ Update this file after every meaningful implementation change.
   `aggregateTeamStats()`/`upsertTeamStats()`, a csapatszintű (2xxx) eseményekkel
   együtt. Valós meccsen ellenőrizve. **Kézi lépések: migráció, majd deploy**
   (ebben a sorrendben). Mobil jegyzet: `mobile-sync/2026-09-26-live-team-stats.md`.
+- **Kosarstat metaadat-parser hotfix ✓ (2026-09-26, BACKLOG H8)** – a
+  Kosarstat CMP dialógusa és en dash fejléce miatt a 09-25-i meccsek nem
+  linkelődtek. A `parseRawPageMetadata()` már csak a tabos fejlécsorokat
+  fogadja el; a force reimport a nyers metaadatot is frissíti. A 3 meccs
+  élesben javítva, 6/6 `games` link. Mobil jegyzet:
+  `mobile-sync/2026-09-26-kosarstat-cmp-link-fix.md`.
 - **Élő mérkőzés-gyűjtő (2026-09-04)** – a mobil app (`asestatmobile`) élő
   meccs nézetéhez a backend fele: `migrations/add-live-match-tables.sql`
   (`live_games`/`live_player_lines`/`live_quarter_scores` + RLS) és

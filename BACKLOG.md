@@ -547,6 +547,37 @@ került volna.
   keretfrissítés nem futott (a felhasználó indítja). CLAUDE.md scraping
   konvenció frissítve.
 
+**H8 – Kosarstat link: „nincs párosítható games sor (…, KosarStat.hu vs Do Not Process My Personal Information)” ✓ (2026-09-26)**
+
+Tünet: a `kosarstat:pbp` a 2026-09-25-i három meccsnél (`20260925101140`,
+`20260925163119`, `20260925169155`) nem találta a `games` sort. Ok: a
+Kosarstat oldalszerkezete változott – a `body` elejére CMP adatvédelmi
+dialógus került (`KosarStat.hu - Do Not Process My Personal Information`),
+új breadcrumb jelent meg (`Sopron-DEAC - 2026.09.25`), a fejlécben pedig en
+dash (`–`) áll kötőjel helyett. A `parseRawPageMetadata()` az első ` - `
+sort vette csapatpárnak, az eredményt pedig a `Mérleg: 1-0` sorból olvasta.
+Következmény: hibás nyers metaadat, `team_side = unknown` a negyed- és
+csapatmetrika sorokon, 6 `games` sor link nélkül.
+
+- [x] **`scrape-kosarstat-playbyplay.ts` – `parseRawPageMetadata()`**: csak a
+  táblacellás, **tabulátorral tagolt** fejlécsorokat fogadja el
+  (`Hazai\t–\tVendég`, `100\t–\t82`), `-` és `–` elválasztóval is; a szezon |
+  szakasz | dátum sor en dash-t is kezel. Ha nincs ilyen sor, `null`
+  (önjavító), nem szemét.
+- [x] **`KOSARSTAT_FORCE_REIMPORT=true`** mostantól a nyers oldal metaadatát is
+  felülírja (eddig a hibás, de kitöltött metaadat „kész” volt, és nem frissült).
+- [x] **Regresszió** mind az 1428 tárolt nyers oldalon: 0 eltérő nem-null
+  érték; ahol a régi parse más volt, ott a régi érték szemét volt (`ON | OFF
+  STAT.`, `Clutch statisztikák`, `2025 | 2026…`), vagy a csonka oldal
+  donor-backfillből kapta.
+- [x] **Javítás élesben**: force reimport a 3 meccsre – helyes metaadat,
+  `team_side` home/away, mind a 6 `games.kosarstat_game_id` beállítva.
+  `tsc` (a meglévő Deno-hibán kívül) és `eslint` tiszta.
+  Mobil jegyzet: `mobile-sync/2026-09-26-kosarstat-cmp-link-fix.md`.
+- Megjegyzés: a `game_quarters` nyers sor metaadata régóta `null`: a
+  `/game_quarters/` URL üres oldal, a negyedstatisztika a `/game_qrts/`-ből
+  jön. Ez nem hiba, és nem is változott.
+
 ---
 
 ## Lezárt sprint – Funkcionális backlog tételek ✓ (2026-07-19)
