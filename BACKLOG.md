@@ -487,6 +487,21 @@ került volna.
   jóváhagyásra vár (csak a mai kár visszaállítása, vagy a két csapatsor teljes
   összevonása). **Addig a 25/26 box-score újraimportja kerülendő** (a 26/27-es
   hétvégi import nem érintett: ott a tabella `NHSZ-Szolnoki Olajbányász`-t mutat).
+  **Döntés (2026-09-26): teljes összevonás.** Előkészítve:
+  - [x] `scrape-utils.ts` alias `szolnoki olajbanyasz → nhsz-szolnoki olajbanyasz`
+    – mostantól minden import az NHSZ-sort használja (strict + fuzzy
+    ellenőrizve); összevonás után ez akadályozza meg a DUP újra-létrehozását.
+  - [x] Feltérképezés: DUP hivatkozások – `games` 11 saját + 11 ellenfél,
+    `players` 13 (mind 1:1 névpár az NHSZ alatt, ugyanabban a szezonban),
+    stat 25/26 105 + legacy 78, `hunbasket_player_links` 13 (mind ütközik NHSZ
+    kóddal → törlendő), `hunbasket_shotchart_raw` 11, `hunbasket_shot_events`
+    672, `game_text_reports` 1; minden más tábla 0. Egyetlen `games` ütközés:
+    2025-09-27 (az incidens sora).
+  - [x] Mentés: `archive/backups/2026-09-26-szolnok-team-merge.json` (lokális,
+    nincs commitolva).
+  - [ ] Összevonó SQL (egy tranzakciós DO blokk, előfeltétel- és
+    maradék-ellenőrzéssel) – a fájl megírása jogosultsági okból elakadt,
+    felhasználói döntésre vár.
 - [ ] **Nyitott (strukturális)**: a roster scraper is álljon át a H3-as
   szabályra (`findTeamByNameFuzzy`, auto-létrehozás csak
   `HUNBASKET_ALLOW_NEW_TEAMS=1`-gyel, előellenőrzés írás előtt), hogy a

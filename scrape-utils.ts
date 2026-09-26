@@ -55,6 +55,9 @@ export const TEAM_NAME_ALIASES: Record<string, string> = {
   'ose lions': 'mvm-ose lions',
   'delut-szte-szedeak': 'szte-szedeak',
   'falco kc szombathely': 'falco-vulcano energia kc szombathely',
+  // A hunbasket a 25/26-os oldalakat már szponzornév nélkül mutatja; ebből
+  // keletkezett a 2026-04-19-i duplikált teams sor (összevonva: BACKLOG H7).
+  'szolnoki olajbanyasz': 'nhsz-szolnoki olajbanyasz',
 };
 
 const applyTeamNameAlias = (normalized: string) => TEAM_NAME_ALIASES[normalized] || normalized;
