@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import * as dotenv from 'dotenv';
+import { dedupeShotEvents } from './scrape-utils';
 
 dotenv.config({ path: '.env.local' });
 
@@ -210,7 +211,10 @@ const processRawGame = async (
   playersByTeam: Map<string, Array<PlayerRow & { nameNorm: string }>>,
   playerLinks: Map<string, string | null>
 ) => {
-  const rawEvents = Array.isArray(game.shotchart_data) ? (game.shotchart_data as ShotEvent[]) : [];
+  // Ismétlődő események nélkül, különben a UNIQUE kulcs a teljes insertet elbuktatja.
+  const rawEvents = Array.isArray(game.shotchart_data)
+    ? dedupeShotEvents(game.shotchart_data as ShotEvent[])
+    : [];
 
   const { error: deleteError } = await supabase
     .from('hunbasket_shot_events')

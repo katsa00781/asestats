@@ -30,6 +30,7 @@ import {
   matchesDateRange,
   matchesTeamFilter,
   isRoundFilterEmpty,
+  dedupeShotEvents,
 } from './scrape-utils';
 
 dotenv.config({ path: '.env.local' });
@@ -670,8 +671,15 @@ const importShotChartForGame = async (seasonId: string, game: ScrapedGame) => {
     playerLinkMap.set(`${row.team_id}|${row.hunbasket_player_code}`, row.player_id || null);
   }
 
+  // A nyers tábla a teljes választ őrzi, az események táblába csak az egyedi
+  // események kerülnek (lásd dedupeShotEvents).
+  const uniqueShotEvents = dedupeShotEvents(shotEvents);
+  if (uniqueShotEvents.length < shotEvents.length) {
+    console.log(`    ℹ️ Dobasterkep: ${shotEvents.length - uniqueShotEvents.length} ismetlodo event kiszurve`);
+  }
+
   const insertRows: Array<Record<string, unknown>> = [];
-  for (const event of shotEvents) {
+  for (const event of uniqueShotEvents) {
     const shotSide = event.side === '0' ? 'away' : 'home';
     const teamId = shotSide === 'home' ? homeTeam.id : awayTeam.id;
     const playerCode = (event.playercode || event.playercode2 || '').trim();

@@ -250,6 +250,38 @@ export const matchesTeamFilter = (normalizedFilters: string[], teamName: string)
   return normalizedFilters.includes(normalizeName(teamName));
 };
 
+/** A Hunbasket getShootchart esemény azon mezői, amik a dedup kulcsot adják. */
+export type ShotEventKeyFields = {
+  period?: unknown;
+  event_order?: unknown;
+  playercode?: unknown;
+  playercode2?: unknown;
+  x?: unknown;
+  y?: unknown;
+  is_successfull?: unknown;
+};
+
+/**
+ * Ismétlődő dobásesemények kiszűrése beszúrás előtt. A Hunbasket egyes
+ * meccseknél ugyanazt az eseményt 2–3-szor is visszaadja (pl. hun_134749:
+ * 309 elem, 125 egyedi), a `hunbasket_shot_events` UNIQUE kulcsa (period,
+ * event_order, játékoskód, x, y, is_successful) miatt pedig ilyenkor a teljes
+ * batch insert elbukik, és a meccsnek nem lesz dobástérképe. Az első előfordulás
+ * marad meg.
+ */
+export const dedupeShotEvents = <T extends ShotEventKeyFields>(events: T[]): T[] => {
+  const seen = new Set<string>();
+  return events.filter(event => {
+    const playerCode = String(event.playercode || event.playercode2 || '').trim();
+    const key = [event.period, event.event_order, playerCode, event.x, event.y, event.is_successfull]
+      .map(part => String(part ?? ''))
+      .join('|');
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+};
+
 /** Supabase hibaobjektum olvasható stringgé alakítása CLI loghoz. */
 export const formatSupabaseError = (error: unknown): string => {
   if (error instanceof Error) return error.message;

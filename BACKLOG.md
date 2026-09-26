@@ -1,6 +1,6 @@
 # BACKLOG.md – ASEStats Projekt
 
-_Utoljára frissítve: 2026-09-26 (Post-game kosarstat-kiegészítés kiszervezve a `@core`-ba – `lib/postgame-report.ts`)_
+_Utoljára frissítve: 2026-09-26 (H9 – dobásesemények deduplikálása, hiányzó ASE–Pécs dobástérkép javítva)_
 
 ---
 
@@ -581,6 +581,35 @@ csapatmetrika sorokon, 6 `games` sor link nélkül.
 - Megjegyzés: a `game_quarters` nyers sor metaadata régóta `null`: a
   `/game_quarters/` URL üres oldal, a negyedstatisztika a `/game_qrts/`-ből
   jön. Ez nem hiba, és nem is változott.
+
+**H9 – Hiányzó dobástérkép az ASE–Pécs (2026-09-26) post-game elemzésében ✓ (2026-09-26)**
+
+Tünet: a GitHub scrape lefutott, de a meccs post-game elemzésében nem jelent
+meg a dobástérkép. Ok: a Hunbasket `getShootchart` válasza erre a meccsre
+(`hun_134749`) **309 elemet** adott, ebből csak **125 egyedi**: minden dobás
+bájtra azonosan 2–3-szor szerepelt. A `hunbasket_shot_events` UNIQUE kulcsa
+(period, event_order, játékoskód, x, y, is_successful) miatt a teljes batch
+insert elbukott. A box-score import ezt csak `console.warn`-nal jelzi, így a
+meccs 0 eseménnyel maradt, a `report.shotMap.available` pedig `false` lett.
+Érintett meccs: csak ez az egy (a 2025/26-os 359 és a 2026/27-es többi 6 meccs
+nyers/esemény száma egyezik).
+
+- [x] **`scrape-utils.ts` – `dedupeShotEvents()`**: a UNIQUE kulccsal azonos
+  mezőkön szűri az ismétlődő eseményeket, az első előfordulás marad.
+- [x] **`scrape-hunbasket.ts` (`importShotChartForGame`) és
+  `process-hunbasket-shotchart-events.ts`** beszúrás előtt deduplikál. A
+  nyers tábla (`hunbasket_shotchart_raw.shotchart_data`) továbbra is a teljes
+  választ őrzi.
+- [x] **Javítás élesben**: `HUNBASKET_SEASON_NAME=2026/2027 npm run
+  hunbasket:shotchart:assign` (7 meccs, 902 esemény, 0 hiba, 0 feloldatlan
+  játékos). A `hun_134749` meccsnek most 125 eseménye van, az ASE-nak 73 dobása
+  (36 sikeres). A webes post-game lekérdezési útvonalon ellenőrizve.
+  `tsc` és `eslint` tiszta. Mobil jegyzet:
+  `mobile-sync/2026-09-26-shotchart-dedup-fix.md`.
+- [ ] **Nyitott (döntés)**: a box-score importban a dobástérkép-hiba csak
+  figyelmeztetés, ezért a GitHub Actions futás zöld marad akkor is, ha egy
+  meccs dobástérképe nem mentődik. Megfontolandó a futás végi összesítő vagy
+  hibakód.
 
 ---
 
