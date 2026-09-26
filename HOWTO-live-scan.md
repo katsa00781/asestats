@@ -1,9 +1,25 @@
 # HOWTO – Élő mérkőzés-gyűjtő (`live-scan`)
 
-Ez a funkció a mobil app "élő mérkőzés" nézetét szolgálja ki. Három új tábla
-(`live_games`, `live_player_lines`, `live_quarter_scores`) + egy Supabase Edge
-Function (`live-scan`), ami percenként lekérdezi az MKOSZ élő jegyzőkönyvét
-és beírja az aktuális állást, negyedeket és box score-t.
+Ez a funkció a mobil app "élő mérkőzés" nézetét szolgálja ki. Négy tábla
+(`live_games`, `live_player_lines`, `live_quarter_scores`, `live_team_stats`)
++ egy Supabase Edge Function (`live-scan`), ami percenként lekérdezi az MKOSZ
+élő jegyzőkönyvét és beírja az aktuális állást, negyedeket, box score-t és a
+csapatszintű meccsstatisztikát.
+
+**Csapatstatisztika (2026-09-26, `live_team_stats`):** egy sor meccsenként
+és oldalanként, a netcasting „Statisztikák" panel tartalmával (dobások
+vödrönként, támadó/védő/összes lepattanó, assist, szerzett és eladott labda,
+blokk, elkövetett és kiharcolt fault, időkérés, VAL). A csapatszintű
+eseményeket (2002–2007, 2020, 2011) is beszámolja, ezért nem egyenlő a
+játékos sorok összegével. A `team_rebounds`/`team_turnovers` a csapatszintű
+részt külön mutatja. A 2026-09-25-i Alba–Körmend meccsen ellenőrizve: a
+pontok egyeznek a végeredménnyel (96–77).
+
+**Élesítés sorrendje – kötelező:** előbb a
+`migrations/add-live-team-stats-table.sql` fusson le az SQL Editorban, csak
+utána a `supabase functions deploy live-scan --use-api`. Fordított sorrendben
+a `live_team_stats` upsert hibát dob, a meccs a `skipped` listába kerül, és a
+`finalizeMissingMatches()` a futó meccset `final`-ra állítja.
 
 **Státusz (2026-09-25): mindhárom lépés élesítve** a `iipcpjczjjkwwifwzmut`
 projekten – a táblák léteznek, a `live-scan` függvény deployolva (v4), és a
@@ -29,6 +45,8 @@ Editorban** fut, nem a kódbázisból (lásd `CLAUDE.md`).
 2. Másold be a `migrations/add-live-match-tables.sql` teljes tartalmát
 3. Futtasd le
 4. Ellenőrzés: `select * from live_games limit 1;` nem ad hibát (üres eredmény oké)
+5. Ugyanígy a `migrations/add-live-team-stats-table.sql` (2026-09-26) –
+   ellenőrzés: `select * from live_team_stats limit 1;`
 
 ## 2. Az Edge Function deploy-olása
 
@@ -147,6 +165,12 @@ kliens saját `js/1.n6.js` fájljából (`filmCode2Text.hun`, `alkodok`,
   1009=blokk, 1020=technikai fault.
 - **Dobás-altípus és pontérték** (a `"6"` mező, `alkodok` térkép):
   1=közeli(2), 2=középtávoli(2), 3=hárompontos(3), 4=büntető(1), 5=zsákolás(2).
+- **Csapatszintű események** (játékoskód nélkül, a forrás „Csapat" sora,
+  `kod2onev` térkép): 2002=csapat védőlepattanó, 2003=csapat támadólepattanó,
+  2004=csapat szerzett labda, 2005=csapat eladott labda, 2006=csapat
+  kiharcolt fault, 2007/2020=csapat fault, 2011=időkérés. A
+  `filmCode2Text.hun` a 2006/2007 feliratot felcserélve adja. A mérvadó a
+  `kod2onev` (és az, hogy a forrás a 2007-re növeli a csapatfault-számlálót).
 - **Csapatoldal**: a `"1"` mező (`"1"` = hazai, minden más = vendég).
 - **Játékoskód**: a `"3"` mező, feloldható a `players.home`/`players.away`
   roster-tömbre (`Jatekos` kód → `nev`, `mez`).

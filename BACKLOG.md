@@ -1,6 +1,6 @@
 # BACKLOG.md – ASEStats Projekt
 
-_Utoljára frissítve: 2026-09-23 (Munkafolyamat: mobil szinkron jegyzet szabály a CLAUDE.md-ben)_
+_Utoljára frissítve: 2026-09-26 (Élő mérkőzés-gyűjtő: csapatszintű meccsstatisztika – `live_team_stats`)_
 
 ---
 
@@ -95,6 +95,20 @@ play-by-play eseményekből, nem csak állás. Részletek: `HOWTO-live-scan.md`.
 - [ ] **Éles validáció** az első 2026/27-es bajnokin (2026-09-25, a szezon
   ekkor indul) – lásd `HOWTO-live-scan.md` 5. pontja: `/elo` szerkezet, óra
   viselkedése, csapatnév-egyezés
+
+- [x] **Csapatszintű meccsstatisztika – kód (2026-09-26)** – a gyűjtő eddig
+  csak játékos sorokat és negyedeket írt, a meccs (csapat) statisztikát nem.
+  Felhasználói döntés: új `live_team_stats` tábla (egy sor/meccs/oldal), a
+  netcasting „Statisztikák" panel tartalmával (dobások, támadó/védő
+  lepattanó, assist, szerzett/eladott labda, blokk, fault, kiharcolt fault,
+  időkérés, VAL). A csapatszintű eseményeket (2002–2007, 2020, 2011) is
+  számolja, amiket a játékos sorok nem tartalmaznak. `migrations/add-live-team-stats-table.sql`
+  + `live-scan/index.ts` `aggregateTeamStats()`/`upsertTeamStats()`. A
+  2026-09-25-i Alba–Körmend meccsen ellenőrizve (96–77 egyezik).
+- [ ] **`live_team_stats` migráció futtatása** az SQL Editorban (kézi lépés)
+- [ ] **`live-scan` újradeployolása** (`supabase functions deploy live-scan --use-api`)
+  – CSAK a migráció után, különben a futó meccsek `final`-ra ugranak
+- [ ] **Mobil átvezetés** – `mobile-sync/2026-09-26-live-team-stats.md`
 
 **Tudatosan v1-en kívül hagyva** (dokumentálva a HOWTO-ban, nem elfelejtve):
 percek (`minutes`) számítása csereesemény-párosításból (v1: mindig 0),

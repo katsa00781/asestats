@@ -43,6 +43,7 @@
   - `hunbasket_shotchart_raw` + `hunbasket_shot_events` — Hunbasket shot chart nyers oldalak és dobás-események; koordináta-konvenció: 0–100-as skála, normalizálás után minden dobás a bal palánk felé támad, a kosár (x≈6, y=50)
   - `kosarstat_game_pages_raw` + `kosarstat_game_page_tables` + `kosarstat_game_quarter_stats` + `kosarstat_game_team_metrics` — Kosarstat play-by-play nyers oldalak és kinyert statisztikák; a `games.kosarstat_game_id` linkeket az import automatikusan írja (dátum + csapatnév match)
   - `game_text_reports` — AI által generált pregame/postgame szöveges riportok
+  - `live_games` + `live_player_lines` + `live_quarter_scores` + `live_team_stats` — élő mérkőzés közbeni állapot (a mobil app élő nézetéhez); író: `supabase/functions/live-scan` Edge Function (`pg_cron`, percenként); a lezárt meccs 6 óra után CASCADE-dal törlődik, a végleges adat a heti scrape-ből jön. A `live_team_stats` a csapatszintű (játékoskód nélküli) eseményekkel együtt számolt csapat-összesítő, ezért nem egyenlő a játékos sorok összegével (`HOWTO-live-scan.md`)
   - Views: `player_season_stats_by_season` — aggregált szezon statisztikák mező-szintű összesítéssel
   - Játékosmozgás külön adatkör: `kosarstat_team_map`, `league_players`,
     `league_player_team_seasons` — stabil Kosarstat játékos-ID; a meglévő

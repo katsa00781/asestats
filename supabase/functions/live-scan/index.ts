@@ -22,7 +22,16 @@
 //   1020 = technikai fault (faultként számoljuk)
 //   1006 (kiharcolt fault), 1010 (kapott blokk), 1011 (csere), 1100 (óra
 //   ketyegés), 1101 (negyed vége), 2xxx (csapatszintű, nincs játékoskód)
-//   – nincs megfelelő oszlop a box score-ban, szándékosan kimaradnak.
+//   – nincs megfelelő oszlop a játékos box score-ban, ott kimaradnak.
+//
+// A csapat-összesítő (`live_team_stats`) a forrás `addEvent()` + `kod2onev`
+// logikáját követi: a játékos események mellé a csapatszintű „Csapat" sor
+// eseményei is beszámítanak – 2002 csapat védőlepattanó, 2003 csapat
+// támadólepattanó, 2004 csapat szerzett labda, 2005 csapat eladott labda,
+// 2006 csapat kiharcolt fault, 2007/2020 csapat fault –, továbbá 1006
+// (kiharcolt fault) és 2011 (időkérés). A kódok jelentését a `kod2onev`
+// térkép adja (2006 → 'fa' kiharcolt, 2007 → 'f' elkövetett), nem a
+// `filmCode2Text.hun` szöveg, ami a 2006/2007 feliratot felcserélve tartalmazza.
 //
 // Amit NEM tudunk biztosan (élő meccsen validálandó – lásd HOWTO-live-scan.md):
 //   - a percek (minutes) kiszámítása csereesemény-párosításból still nyitott,
@@ -369,6 +378,7 @@ async function processMatch(
 
   await upsertPlayerLines(supabase, liveGameId, events, roster);
   await upsertQuarterScores(supabase, liveGameId, events);
+  await upsertTeamStats(supabase, liveGameId, events);
 
   return true;
 }
@@ -692,7 +702,206 @@ async function upsertQuarterScores(
   if (error) throw new Error(`live_quarter_scores upsert sikertelen: ${error.message}`);
 }
 
-// --- 7. Lezárás és takarítás -------------------------------------------------
+// --- 7. Csapatszintű meccsstatisztika ---------------------------------------
+
+interface TeamAgg {
+  points: number;
+  closeMade: number;
+  closeAttempted: number;
+  midMade: number;
+  midAttempted: number;
+  threeMade: number;
+  threeAttempted: number;
+  ftMade: number;
+  ftAttempted: number;
+  offensiveRebounds: number;
+  defensiveRebounds: number;
+  teamRebounds: number;
+  assists: number;
+  steals: number;
+  blocks: number;
+  turnovers: number;
+  teamTurnovers: number;
+  foulsCommitted: number;
+  foulsDrawn: number;
+  timeouts: number;
+}
+
+function emptyTeamAgg(): TeamAgg {
+  return {
+    points: 0,
+    closeMade: 0,
+    closeAttempted: 0,
+    midMade: 0,
+    midAttempted: 0,
+    threeMade: 0,
+    threeAttempted: 0,
+    ftMade: 0,
+    ftAttempted: 0,
+    offensiveRebounds: 0,
+    defensiveRebounds: 0,
+    teamRebounds: 0,
+    assists: 0,
+    steals: 0,
+    blocks: 0,
+    turnovers: 0,
+    teamTurnovers: 0,
+    foulsCommitted: 0,
+    foulsDrawn: 0,
+    timeouts: 0,
+  };
+}
+
+/**
+ * A két csapat teljes összesítője (játékos + csapatszintű esemény). A dobások
+ * vödrei ugyanazok, mint a játékos box score-ban (`aggregateBoxScore`).
+ */
+function aggregateTeamStats(events: Array<Record<string, string>>): Record<TeamSide, TeamAgg> {
+  const totals: Record<TeamSide, TeamAgg> = { home: emptyTeamAgg(), away: emptyTeamAgg() };
+
+  for (const event of events) {
+    const code = Number(event['2']);
+    if (!Number.isFinite(code)) continue;
+    const team = totals[event['1'] === '1' ? 'home' : 'away'];
+    const subtype = Number(event['6']);
+
+    switch (code) {
+      case 1000: {
+        team.points += SHOT_POINTS[subtype] ?? 0;
+        if (subtype === 3) {
+          team.threeMade++;
+          team.threeAttempted++;
+        } else if (subtype === 4) {
+          team.ftMade++;
+          team.ftAttempted++;
+        } else if (subtype === 2) {
+          team.midMade++;
+          team.midAttempted++;
+        } else {
+          team.closeMade++;
+          team.closeAttempted++;
+        }
+        break;
+      }
+      case 1001: {
+        if (subtype === 3) team.threeAttempted++;
+        else if (subtype === 4) team.ftAttempted++;
+        else if (subtype === 2) team.midAttempted++;
+        else team.closeAttempted++;
+        break;
+      }
+      case 1002:
+        team.defensiveRebounds++;
+        break;
+      case 2002:
+        team.defensiveRebounds++;
+        team.teamRebounds++;
+        break;
+      case 1003:
+        team.offensiveRebounds++;
+        break;
+      case 2003:
+        team.offensiveRebounds++;
+        team.teamRebounds++;
+        break;
+      case 1004:
+      case 2004:
+        team.steals++;
+        break;
+      case 1005:
+        team.turnovers++;
+        break;
+      case 2005:
+        team.turnovers++;
+        team.teamTurnovers++;
+        break;
+      case 1006:
+      case 2006:
+        team.foulsDrawn++;
+        break;
+      case 1007:
+      case 1020:
+      case 2007:
+      case 2020:
+        team.foulsCommitted++;
+        break;
+      case 1008:
+        team.assists++;
+        break;
+      case 1009:
+        team.blocks++;
+        break;
+      case 2011:
+        team.timeouts++;
+        break;
+      default:
+        break;
+    }
+  }
+
+  return totals;
+}
+
+async function upsertTeamStats(
+  supabase: SupabaseClient,
+  liveGameId: string,
+  events: Array<Record<string, string>>,
+): Promise<void> {
+  const totals = aggregateTeamStats(events);
+  const updatedAt = new Date().toISOString();
+
+  const rows = (['home', 'away'] as const).map((side) => {
+    const team = totals[side];
+    const totalRebounds = team.offensiveRebounds + team.defensiveRebounds;
+    return {
+      live_game_id: liveGameId,
+      team_side: side,
+      points: team.points,
+      close_made: team.closeMade,
+      close_attempted: team.closeAttempted,
+      mid_made: team.midMade,
+      mid_attempted: team.midAttempted,
+      three_made: team.threeMade,
+      three_attempted: team.threeAttempted,
+      free_throw_made: team.ftMade,
+      free_throw_attempted: team.ftAttempted,
+      offensive_rebounds: team.offensiveRebounds,
+      defensive_rebounds: team.defensiveRebounds,
+      total_rebounds: totalRebounds,
+      team_rebounds: team.teamRebounds,
+      assists: team.assists,
+      steals: team.steals,
+      blocks: team.blocks,
+      turnovers: team.turnovers,
+      team_turnovers: team.teamTurnovers,
+      fouls_committed: team.foulsCommitted,
+      fouls_drawn: team.foulsDrawn,
+      timeouts: team.timeouts,
+      // Ugyanaz a kanonikus képlet, mint a játékos soroknál – a csapatszintű
+      // lepattanó és labdaeladás is beszámít, ahogy a forrás VAL-jában.
+      valuation: simpleValuation({
+        points: team.points,
+        rebounds: totalRebounds,
+        assists: team.assists,
+        steals: team.steals,
+        blocks: team.blocks,
+        fgMade: team.closeMade + team.midMade + team.threeMade,
+        fgAttempted: team.closeAttempted + team.midAttempted + team.threeAttempted,
+        ftMade: team.ftMade,
+        ftAttempted: team.ftAttempted,
+        turnovers: team.turnovers,
+      }),
+      updated_at: updatedAt,
+    };
+  });
+
+  const { error } = await supabase
+    .from('live_team_stats')
+    .upsert(rows, { onConflict: 'live_game_id,team_side' });
+  if (error) throw new Error(`live_team_stats upsert sikertelen: ${error.message}`);
+}
+
+// --- 8. Lezárás és takarítás -------------------------------------------------
 
 /**
  * Minden `live`/`halftime` sor, ami ebben a futásban NEM szerepelt az élő
