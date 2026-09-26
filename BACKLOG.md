@@ -1,6 +1,6 @@
 # BACKLOG.md – ASEStats Projekt
 
-_Utoljára frissítve: 2026-09-26 (Post-game elemzés mobil specifikáció – `mobile-sync/2026-09-26-postgame-analysis-spec.md`)_
+_Utoljára frissítve: 2026-09-26 (Post-game kosarstat-kiegészítés kiszervezve a `@core`-ba – `lib/postgame-report.ts`)_
 
 ---
 
@@ -9,7 +9,8 @@ _Utoljára frissítve: 2026-09-26 (Post-game elemzés mobil specifikáció – `
 - [x] **CLAUDE.md „Mobil app szinkron” szakasz (2026-09-23)** – ha egy művelet funkcionálisan, adatbázis-szinten, `@core` modulon, auth/API-n vagy scrapingen keresztül a mobil appot (`asestatmobile`) is érinti, kötelező egy `mobile-sync/YYYY-MM-DD-<slug>.md` követő jegyzet (sablon a CLAUDE.md-ben, `NYITOTT` → `ÁTVEZETVE` állapottal), ugyanabban a commitban.
 - [x] **Post-game elemzés specifikáció a mobilnak (2026-09-26)** – `mobile-sync/2026-09-26-postgame-analysis-spec.md`: a számított post-game nézet (`analyzePostGameReport`) bemenetei (box score → `TeamGameStat`/`PlayerGameStat`, ellenfél-meccs párosítás, liga-benchmark, Hunbasket shot-context, opcionális pregame X-faktor), szekciónkénti megjelenítés v1/v2 bontásban, formázási szabályok. Webes kódváltozás nincs, a `@core` már szinkronban.
 - [ ] **Mobil átvezetés** – post-game elemzés nézet a mobilban (a jegyzet szerint)
-- [ ] **(Opcionális, webes)** a `SeasonComparison.tsx` kosarstat-kiegészítésének (negyed-trend, kosarstat eFG/TO%/ORB%, clutch, TO-típusok → strengths/problems/nextFocus) kiszervezése a `lib/postgame-report.ts`-be, hogy a mobil is `@core`-ból kapja – külön döntés
+- [x] **Post-game kosarstat-kiegészítés a `@core`-ban (2026-09-26)** – a `SeasonComparison.tsx` negyed-trend / kosarstat eFG·TO%·ORB% / clutch / TO-típus szabályai és a `mergeUnique` összefűzés átkerült a `lib/postgame-report.ts`-be (`buildKosarstatPostgameContext`, `mergeKosarstatPostgameContext`, `KosarstatQuarterStatRow`, `KosarstatTeamMetricRow`, `PostgameClutchInput`). Webes viselkedés változatlan; a lineup-elemzés webes maradt. Mobil jegyzet: `mobile-sync/2026-09-26-postgame-kosarstat-core.md`
+- [ ] **Mobil átvezetés** – `npm run sync:core` + kosarstat-kontextus a mobil post-game hookban (`mobile-sync/2026-09-26-postgame-kosarstat-core.md`)
 
 ---
 

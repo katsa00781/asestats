@@ -1875,3 +1875,374 @@ export const analyzePostGameReport = (
     ),
   };
 };
+
+// ---------------------------------------------------------------------------
+// Kosarstat-kiegészítés
+//
+// A kosarstat importból (negyedek, csapatmetrikák, clutch) szabályalapú
+// erősség / probléma / fókusz sorok és adatmegjegyzések készülnek, amelyeket a
+// `mergeKosarstatPostgameContext` fűz rá az `analyzePostGameReport` riportjára.
+// Tiszta függvények: a lekérdezés a hívó (web / mobil) dolga.
+// ---------------------------------------------------------------------------
+
+export type KosarstatTeamSide = 'home' | 'away' | 'unknown' | null;
+
+export type KosarstatQuarterStatRow = {
+  team_name?: string | null;
+  team_side?: KosarstatTeamSide;
+  quarter?: number | null;
+  points?: number | null;
+  cumulative_points?: number | null;
+};
+
+export type KosarstatTeamMetricRow = {
+  team_name?: string | null;
+  team_side?: KosarstatTeamSide;
+  poss?: number | null;
+  ortg?: number | null;
+  efg?: number | null;
+  tov_pct?: number | null;
+  orb_pct?: number | null;
+  ftm_rate?: number | null;
+};
+
+/**
+ * A clutch-blokkból a szabályokhoz szükséges minimum. A
+ * `kosarstat-clutch-parse` `KosarstatGameClutch` típusa kielégíti, és a webes
+ * bővebb clutch-alak is – a generikus paraméter megőrzi a hívó típusát.
+ */
+export type PostgameClutchInput = {
+  available: boolean;
+  sampleLabel: string;
+  ownPoints: number;
+  oppPoints: number;
+  diff: number;
+  ownTurnovers: number;
+  oppTurnovers: number;
+};
+
+export type PostgameTurnoverType = { type: string; count: number };
+
+export type PostgameQuarterDiffRow = {
+  quarter: number;
+  ownPoints: number;
+  oppPoints: number;
+  diff: number;
+  cumulativeDiff: number | null;
+};
+
+export type KosarstatPostgameInput<C extends PostgameClutchInput = PostgameClutchInput> = {
+  /** A saját csapat oldala a kosarstat sorokban (`games.home_away` alapján). */
+  ownSide: 'home' | 'away';
+  /** A saját csapat neve – tartalék párosítás, ha a `team_side` hiányzik. */
+  teamName?: string | null;
+  quarterStats: KosarstatQuarterStatRow[];
+  teamMetrics: KosarstatTeamMetricRow[];
+  clutch?: C | null;
+  turnoverTypes?: PostgameTurnoverType[];
+  /** Import-állapot megjegyzés, ha nincs értelmezhető clutch blokk. */
+  clutchImportNote?: string | null;
+};
+
+export type KosarstatPostgameContext<C extends PostgameClutchInput = PostgameClutchInput> = {
+  quarterDiffRows: PostgameQuarterDiffRow[];
+  ownMetrics: KosarstatTeamMetricRow | null;
+  oppMetrics: KosarstatTeamMetricRow | null;
+  clutch: C | null;
+  turnoverTypes: PostgameTurnoverType[];
+  strengths: string[];
+  problems: string[];
+  nextFocus: string[];
+  insightNotes: string[];
+};
+
+const normalizeKosarstatTeamKey = (value: string) =>
+  value
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const finiteOrNull = (value: unknown) => {
+  const num = Number(value);
+  return Number.isFinite(num) ? num : null;
+};
+
+export const buildKosarstatPostgameContext = <C extends PostgameClutchInput = PostgameClutchInput>(
+  input: KosarstatPostgameInput<C> | null
+): KosarstatPostgameContext<C> => {
+  if (!input) {
+    return {
+      quarterDiffRows: [],
+      ownMetrics: null,
+      oppMetrics: null,
+      clutch: null,
+      turnoverTypes: [],
+      strengths: [],
+      problems: [],
+      nextFocus: [],
+      insightNotes: [],
+    };
+  }
+
+  const ownSide = input.ownSide;
+  const oppSide = ownSide === 'home' ? 'away' : 'home';
+  const ownNeedle = normalizeKosarstatTeamKey(input.teamName || '');
+
+  const bySideOrName = <T extends { team_side?: KosarstatTeamSide; team_name?: string | null }>(
+    rows: T[],
+    side: 'home' | 'away'
+  ) => {
+    const bySide = rows.filter(row => row.team_side === side);
+    if (bySide.length > 0) return bySide;
+    if (!ownNeedle) return [] as T[];
+    return rows.filter(row => normalizeKosarstatTeamKey(String(row.team_name || '')).includes(ownNeedle));
+  };
+
+  const quarterRows = Array.isArray(input.quarterStats)
+    ? input.quarterStats.filter(row => Number.isFinite(Number(row.quarter)) && Number(row.quarter) >= 1 && Number(row.quarter) <= 4)
+    : [];
+  const ownQuarterRows = bySideOrName(quarterRows, ownSide);
+  const oppQuarterRowsBySide = quarterRows.filter(row => row.team_side === oppSide);
+  const ownQuarterSet = new Set(
+    ownQuarterRows.map(row => normalizeKosarstatTeamKey(String(row.team_name || ''))).filter(Boolean)
+  );
+  const oppQuarterRows = oppQuarterRowsBySide.length > 0
+    ? oppQuarterRowsBySide
+    : quarterRows.filter(row => {
+        const nameKey = normalizeKosarstatTeamKey(String(row.team_name || ''));
+        return nameKey && !ownQuarterSet.has(nameKey);
+      });
+
+  const firstByQuarter = (rows: KosarstatQuarterStatRow[]) => {
+    const map = new Map<number, KosarstatQuarterStatRow>();
+    rows.forEach(row => {
+      const quarter = Number(row.quarter);
+      if (!Number.isFinite(quarter) || map.has(quarter)) return;
+      map.set(quarter, row);
+    });
+    return map;
+  };
+  const ownByQuarter = firstByQuarter(ownQuarterRows);
+  const oppByQuarter = firstByQuarter(oppQuarterRows);
+
+  const quarterDiffRows = [1, 2, 3, 4]
+    .map(quarter => {
+      const ownRow = ownByQuarter.get(quarter);
+      const oppRow = oppByQuarter.get(quarter);
+      const ownPoints = Number(ownRow?.points);
+      const oppPoints = Number(oppRow?.points);
+      if (!Number.isFinite(ownPoints) || !Number.isFinite(oppPoints)) return null;
+
+      const ownCumulative = Number(ownRow?.cumulative_points);
+      const oppCumulative = Number(oppRow?.cumulative_points);
+      const cumulativeDiff = Number.isFinite(ownCumulative) && Number.isFinite(oppCumulative)
+        ? round(ownCumulative - oppCumulative, 0)
+        : null;
+
+      return {
+        quarter,
+        ownPoints: round(ownPoints, 0),
+        oppPoints: round(oppPoints, 0),
+        diff: round(ownPoints - oppPoints, 0),
+        cumulativeDiff,
+      };
+    })
+    .filter((row): row is PostgameQuarterDiffRow => Boolean(row));
+
+  const bestQuarter = quarterDiffRows.reduce<{ quarter: number; diff: number } | null>((best, row) => {
+    if (!best || row.diff > best.diff) return { quarter: row.quarter, diff: row.diff };
+    return best;
+  }, null);
+  const worstQuarter = quarterDiffRows.reduce<{ quarter: number; diff: number } | null>((worst, row) => {
+    if (!worst || row.diff < worst.diff) return { quarter: row.quarter, diff: row.diff };
+    return worst;
+  }, null);
+  const secondHalfDiff = quarterDiffRows
+    .filter(row => row.quarter >= 3)
+    .reduce((sum, row) => sum + row.diff, 0);
+
+  const metricRows = Array.isArray(input.teamMetrics) ? input.teamMetrics : [];
+  const ownMetric = bySideOrName(metricRows, ownSide)[0] ?? null;
+  const oppMetric = metricRows.find(row => row.team_side === oppSide)
+    ?? metricRows.find(row => {
+      const nameKey = normalizeKosarstatTeamKey(String(row.team_name || ''));
+      const ownName = normalizeKosarstatTeamKey(String(ownMetric?.team_name || ''));
+      return nameKey && (!ownName || nameKey !== ownName);
+    })
+    ?? null;
+
+  const strengths: string[] = [];
+  const problems: string[] = [];
+  const nextFocus: string[] = [];
+  const insightNotes: string[] = [];
+
+  if (bestQuarter && bestQuarter.diff >= 6) {
+    strengths.push(`Negyed-szintű trend: a Q${bestQuarter.quarter} szakaszt ${bestQuarter.diff > 0 ? '+' : ''}${bestQuarter.diff} ponttal nyertük.`);
+  }
+  if (worstQuarter && worstQuarter.diff <= -6) {
+    problems.push(`Negyed-szintű trend: a Q${worstQuarter.quarter} szakaszban ${worstQuarter.diff} pontos visszaesés jött.`);
+    nextFocus.push(`Q${worstQuarter.quarter} szakasz kontrollja: azonnali válaszcsomag a rosszabb periódusokra.`);
+  }
+
+  if (quarterDiffRows.length >= 4) {
+    if (secondHalfDiff <= -8) {
+      problems.push(`Második félidős trend: Q3-Q4 összesítésben ${secondHalfDiff} pontot veszítettünk.`);
+      nextFocus.push('Második félidős ritmus: rotáció és timeout időzítés stabilizálása.');
+    } else if (secondHalfDiff >= 8) {
+      strengths.push(`Második félidős trend: Q3-Q4 összesítésben ${secondHalfDiff > 0 ? '+' : ''}${secondHalfDiff} pontot nyertünk.`);
+    }
+  }
+
+  const ownEfg = finiteOrNull(ownMetric?.efg);
+  const oppEfg = finiteOrNull(oppMetric?.efg);
+  if (ownEfg !== null && oppEfg !== null) {
+    const diff = round(ownEfg - oppEfg, 1);
+    if (diff >= 4) {
+      strengths.push(`Kosarstat eFG különbség: ${diff > 0 ? '+' : ''}${diff} pp előny.`);
+    } else if (diff <= -4) {
+      problems.push(`Kosarstat eFG különbség: ${diff} pp hátrány.`);
+      nextFocus.push('Dobásminőség: jobb spacing és magasabb minőségű első opciós dobások.');
+    }
+  }
+
+  const ownTov = finiteOrNull(ownMetric?.tov_pct);
+  const oppTov = finiteOrNull(oppMetric?.tov_pct);
+  if (ownTov !== null && oppTov !== null) {
+    const diff = round(ownTov - oppTov, 1);
+    if (diff <= -2) {
+      strengths.push(`Labdabiztonság előny: TO% különbség ${diff} pp.`);
+    } else if (diff >= 2) {
+      problems.push(`Labdabiztonság hátrány: TO% különbség +${diff} pp.`);
+      nextFocus.push('Labdavesztés-kontroll: első passzok és handoff döntések egyszerűsítése.');
+    }
+  }
+
+  const ownOrb = finiteOrNull(ownMetric?.orb_pct);
+  const oppOrb = finiteOrNull(oppMetric?.orb_pct);
+  if (ownOrb !== null && oppOrb !== null) {
+    const diff = round(ownOrb - oppOrb, 1);
+    if (diff >= 5) {
+      strengths.push(`Második esély: ORB% különbség +${diff} pp.`);
+    } else if (diff <= -5) {
+      problems.push(`Lepattanó hátrány: ORB% különbség ${diff} pp.`);
+      nextFocus.push('Védőlepattanó zárás: gyűrű alatti első kontakt és boxout fegyelem.');
+    }
+  }
+
+  if (quarterDiffRows.length > 0) {
+    const rowLabel = quarterDiffRows
+      .map(row => `Q${row.quarter}: ${row.ownPoints}-${row.oppPoints}`)
+      .join(', ');
+    insightNotes.push(`Kosarstat negyedek: ${rowLabel}.`);
+  }
+  if (ownMetric || oppMetric) {
+    insightNotes.push('Kosarstat team-metric blokk integrálva (POSS/ORTG/eFG/TO%/ORB%/FTM rate).');
+  }
+
+  const clutch = input.clutch ?? null;
+  const turnoverTypes = input.turnoverTypes ?? [];
+
+  if (!clutch?.available && input.clutchImportNote) {
+    insightNotes.push(input.clutchImportNote);
+  }
+
+  if (clutch?.available) {
+    if (clutch.diff >= 3) {
+      strengths.push(`Clutch (utolsó 5 perc, <=5 pont): ${clutch.diff > 0 ? '+' : ''}${clutch.diff} pont.`);
+    } else if (clutch.diff <= -3) {
+      problems.push(`Clutch (utolsó 5 perc, <=5 pont): ${clutch.diff} pont.`);
+      nextFocus.push('Clutch execution: utolsó 5 percben első opció és spacing előkészítése.');
+    }
+
+    if (clutch.ownTurnovers >= 2 && clutch.ownTurnovers > clutch.oppTurnovers) {
+      problems.push(`Clutch labdaeladás: ${clutch.ownTurnovers}-${clutch.oppTurnovers} TO arány.`);
+      nextFocus.push('Clutch labdakezelés: biztonsági első passz és handoff-szabályok.');
+    }
+
+    insightNotes.push(
+      `Clutch minta: ${clutch.ownPoints}-${clutch.oppPoints} pont, TO ${clutch.ownTurnovers}-${clutch.oppTurnovers} (${clutch.sampleLabel}).`
+    );
+  }
+
+  if (turnoverTypes.length > 0) {
+    const label = turnoverTypes
+      .slice(0, 3)
+      .map(item => `${item.type} (${item.count})`)
+      .join(', ');
+    insightNotes.push(`TO típusbontás: ${label}.`);
+
+    const top = turnoverTypes[0];
+    if (top && top.count >= 2) {
+      problems.push(`Visszatérő TO típus: ${top.type} (${top.count}).`);
+      nextFocus.push(`TO célfókusz: ${top.type} helyzetek egyszerűsítése.`);
+    }
+  }
+
+  return {
+    quarterDiffRows,
+    ownMetrics: ownMetric,
+    oppMetrics: oppMetric,
+    clutch,
+    turnoverTypes,
+    strengths,
+    problems,
+    nextFocus,
+    insightNotes,
+  };
+};
+
+/** Sorrendtartó összefűzés, kis-/nagybetűre és szóközre érzéketlen dedup-pal. */
+const mergeUniqueLines = (base: string[], extra: string[]) => {
+  const out: string[] = [];
+  const seen = new Set<string>();
+
+  [...base, ...extra].forEach(item => {
+    const normalized = item.trim().toLowerCase();
+    if (!normalized || seen.has(normalized)) return;
+    seen.add(normalized);
+    out.push(item);
+  });
+
+  return out;
+};
+
+/**
+ * A kosarstat-kiegészítés ráfűzése az `analyzePostGameReport` riportjára.
+ * `extraNotes`: a hívó import-állapot megjegyzései (a `dataNotes` elé kerülnek
+ * a kontextus `insightNotes`-a előtt). `lineupInsights`: a webes lineup-elemzés
+ * eredménye, ha van. Ha nincs mit hozzáadni, a riport változatlanul tér vissza.
+ */
+export const mergeKosarstatPostgameContext = (
+  report: PostGameReport,
+  context: KosarstatPostgameContext,
+  options: {
+    extraNotes?: string[];
+    lineupInsights?: PostGameReport['lineupInsights'];
+  } = {}
+): PostGameReport => {
+  const extraNotes = options.extraNotes ?? [];
+  const lineupInsights = options.lineupInsights;
+
+  if (
+    extraNotes.length === 0 &&
+    !lineupInsights &&
+    context.strengths.length === 0 &&
+    context.problems.length === 0 &&
+    context.nextFocus.length === 0 &&
+    context.insightNotes.length === 0
+  ) {
+    return report;
+  }
+
+  return {
+    ...report,
+    dataNotes: mergeUniqueLines(report.dataNotes, [...extraNotes, ...context.insightNotes]),
+    strengths: mergeUniqueLines(report.strengths, context.strengths),
+    problems: mergeUniqueLines(report.problems, context.problems),
+    nextFocus: mergeUniqueLines(report.nextFocus, context.nextFocus),
+    lineupInsights,
+  };
+};

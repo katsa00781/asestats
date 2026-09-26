@@ -354,6 +354,10 @@ javaslok mobilon v1-ben:
 
 ## 5. Tudatosan kihagyva a mobil v1-ből
 
+> **Frissítés (2026-09-26):** a Kosarstat-kiegészítés (első pont) azóta a
+> `@core`-ban van, és bekerülhet a mobil v1-be. Lásd:
+> `2026-09-26-postgame-kosarstat-core.md`.
+
 Ezek a webes kiegészítések a `SeasonComparison.tsx` komponensben élnek, nem a
 `@core`-ban. Mobilon csak duplikált logikával lennének meg:
 

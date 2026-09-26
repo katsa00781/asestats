@@ -59,6 +59,10 @@ import {
   type TeamGameStat,
   type TeamSeasonStat as PostgameTeamSeasonStat,
   type PostGameReport,
+  type KosarstatQuarterStatRow,
+  type KosarstatTeamMetricRow,
+  buildKosarstatPostgameContext,
+  mergeKosarstatPostgameContext,
 } from '@/lib/postgame-report';
 
 type SeasonComparisonProps = {
@@ -231,25 +235,6 @@ type KosarstatLineupAnalysis = {
   selectedTeam: KosarstatTeamLineupAnalysis | null;
   homeTeam: KosarstatTeamLineupAnalysis | null;
   awayTeam: KosarstatTeamLineupAnalysis | null;
-};
-
-type KosarstatQuarterStatRow = {
-  team_name?: string | null;
-  team_side?: 'home' | 'away' | 'unknown' | null;
-  quarter?: number | null;
-  points?: number | null;
-  cumulative_points?: number | null;
-};
-
-type KosarstatTeamMetricRow = {
-  team_name?: string | null;
-  team_side?: 'home' | 'away' | 'unknown' | null;
-  poss?: number | null;
-  ortg?: number | null;
-  efg?: number | null;
-  tov_pct?: number | null;
-  orb_pct?: number | null;
-  ftm_rate?: number | null;
 };
 
 type PostgamePbpContext = {
@@ -9007,230 +8992,17 @@ export function SeasonComparison({
 
   const kosarstatPostgameContext = useMemo(() => {
     const targetGame = selectedGameForPostgame;
-    const teamName = selectedTeamNameForPostgame || '';
-    if (!targetGame) {
-      return {
-        quarterDiffRows: [] as Array<{ quarter: number; ownPoints: number; oppPoints: number; diff: number; cumulativeDiff: number | null }>,
-        ownMetrics: null as KosarstatTeamMetricRow | null,
-        oppMetrics: null as KosarstatTeamMetricRow | null,
-        clutch: null as PostgamePbpContext['clutch'] | null,
-        turnoverTypes: [] as Array<{ type: string; count: number }>,
-        strengths: [] as string[],
-        problems: [] as string[],
-        nextFocus: [] as string[],
-        insightNotes: [] as string[],
-      };
-    }
+    if (!targetGame) return buildKosarstatPostgameContext<PostgamePbpContext['clutch']>(null);
 
-    const ownSide = targetGame.homeAway === 'away' ? 'away' : 'home';
-    const oppSide = ownSide === 'home' ? 'away' : 'home';
-    const ownNeedle = normalizeTeamKey(teamName);
-
-    const bySideOrName = <T extends { team_side?: 'home' | 'away' | 'unknown' | null; team_name?: string | null }>(
-      rows: T[],
-      side: 'home' | 'away'
-    ) => {
-      const bySide = rows.filter(row => row.team_side === side);
-      if (bySide.length > 0) return bySide;
-      if (!ownNeedle) return [] as T[];
-      return rows.filter(row => normalizeTeamKey(String(row.team_name || '')).includes(ownNeedle));
-    };
-
-    const quarterRows = Array.isArray(kosarstatQuarterStats)
-      ? kosarstatQuarterStats.filter(row => Number.isFinite(Number(row.quarter)) && Number(row.quarter) >= 1 && Number(row.quarter) <= 4)
-      : [];
-    const ownQuarterRows = bySideOrName(quarterRows, ownSide);
-    const oppQuarterRowsBySide = quarterRows.filter(row => row.team_side === oppSide);
-    const ownQuarterSet = new Set(ownQuarterRows.map(row => normalizeTeamKey(String(row.team_name || ''))).filter(Boolean));
-    const oppQuarterRows = oppQuarterRowsBySide.length > 0
-      ? oppQuarterRowsBySide
-      : quarterRows.filter(row => {
-          const nameKey = normalizeTeamKey(String(row.team_name || ''));
-          return nameKey && !ownQuarterSet.has(nameKey);
-        });
-
-    const ownByQuarter = new Map<number, KosarstatQuarterStatRow>();
-    ownQuarterRows.forEach(row => {
-      const quarter = Number(row.quarter);
-      if (!Number.isFinite(quarter) || ownByQuarter.has(quarter)) return;
-      ownByQuarter.set(quarter, row);
+    return buildKosarstatPostgameContext<PostgamePbpContext['clutch']>({
+      ownSide: targetGame.homeAway === 'away' ? 'away' : 'home',
+      teamName: selectedTeamNameForPostgame,
+      quarterStats: kosarstatQuarterStats,
+      teamMetrics: kosarstatTeamMetrics,
+      clutch: postgamePbpContext?.clutch ?? null,
+      turnoverTypes: postgamePbpContext?.turnoverTypes ?? [],
+      clutchImportNote: kosarstatClutchImportNote,
     });
-    const oppByQuarter = new Map<number, KosarstatQuarterStatRow>();
-    oppQuarterRows.forEach(row => {
-      const quarter = Number(row.quarter);
-      if (!Number.isFinite(quarter) || oppByQuarter.has(quarter)) return;
-      oppByQuarter.set(quarter, row);
-    });
-
-    const quarterDiffRows = [1, 2, 3, 4]
-      .map(quarter => {
-        const ownRow = ownByQuarter.get(quarter);
-        const oppRow = oppByQuarter.get(quarter);
-        const ownPoints = Number(ownRow?.points);
-        const oppPoints = Number(oppRow?.points);
-        if (!Number.isFinite(ownPoints) || !Number.isFinite(oppPoints)) return null;
-
-        const ownCumulative = Number(ownRow?.cumulative_points);
-        const oppCumulative = Number(oppRow?.cumulative_points);
-        const cumulativeDiff = Number.isFinite(ownCumulative) && Number.isFinite(oppCumulative)
-          ? roundValue(ownCumulative - oppCumulative, 0)
-          : null;
-
-        return {
-          quarter,
-          ownPoints: roundValue(ownPoints, 0),
-          oppPoints: roundValue(oppPoints, 0),
-          diff: roundValue(ownPoints - oppPoints, 0),
-          cumulativeDiff,
-        };
-      })
-      .filter((row): row is { quarter: number; ownPoints: number; oppPoints: number; diff: number; cumulativeDiff: number | null } => Boolean(row));
-
-    const bestQuarter = quarterDiffRows.reduce<{ quarter: number; diff: number } | null>((best, row) => {
-      if (!best || row.diff > best.diff) return { quarter: row.quarter, diff: row.diff };
-      return best;
-    }, null);
-    const worstQuarter = quarterDiffRows.reduce<{ quarter: number; diff: number } | null>((worst, row) => {
-      if (!worst || row.diff < worst.diff) return { quarter: row.quarter, diff: row.diff };
-      return worst;
-    }, null);
-    const secondHalfDiff = quarterDiffRows
-      .filter(row => row.quarter >= 3)
-      .reduce((sum, row) => sum + row.diff, 0);
-
-    const metricRows = Array.isArray(kosarstatTeamMetrics) ? kosarstatTeamMetrics : [];
-    const ownMetric = bySideOrName(metricRows, ownSide)[0] ?? null;
-    const oppMetric = metricRows.find(row => row.team_side === oppSide)
-      ?? metricRows.find(row => {
-        const nameKey = normalizeTeamKey(String(row.team_name || ''));
-        const ownName = normalizeTeamKey(String(ownMetric?.team_name || ''));
-        return nameKey && (!ownName || nameKey !== ownName);
-      })
-      ?? null;
-
-    const strengths: string[] = [];
-    const problems: string[] = [];
-    const nextFocus: string[] = [];
-    const insightNotes: string[] = [];
-
-    if (bestQuarter && bestQuarter.diff >= 6) {
-      strengths.push(`Negyed-szintű trend: a Q${bestQuarter.quarter} szakaszt ${bestQuarter.diff > 0 ? '+' : ''}${bestQuarter.diff} ponttal nyertük.`);
-    }
-    if (worstQuarter && worstQuarter.diff <= -6) {
-      problems.push(`Negyed-szintű trend: a Q${worstQuarter.quarter} szakaszban ${worstQuarter.diff} pontos visszaesés jött.`);
-      nextFocus.push(`Q${worstQuarter.quarter} szakasz kontrollja: azonnali válaszcsomag a rosszabb periódusokra.`);
-    }
-
-    if (quarterDiffRows.length >= 4) {
-      if (secondHalfDiff <= -8) {
-        problems.push(`Második félidős trend: Q3-Q4 összesítésben ${secondHalfDiff} pontot veszítettünk.`);
-        nextFocus.push('Második félidős ritmus: rotáció és timeout időzítés stabilizálása.');
-      } else if (secondHalfDiff >= 8) {
-        strengths.push(`Második félidős trend: Q3-Q4 összesítésben ${secondHalfDiff > 0 ? '+' : ''}${secondHalfDiff} pontot nyertünk.`);
-      }
-    }
-
-    const asNumber = (value: unknown) => {
-      const num = Number(value);
-      return Number.isFinite(num) ? num : null;
-    };
-
-    const ownEfg = asNumber(ownMetric?.efg);
-    const oppEfg = asNumber(oppMetric?.efg);
-    if (ownEfg !== null && oppEfg !== null) {
-      const diff = roundValue(ownEfg - oppEfg, 1);
-      if (diff >= 4) {
-        strengths.push(`Kosarstat eFG különbség: ${diff > 0 ? '+' : ''}${diff} pp előny.`);
-      } else if (diff <= -4) {
-        problems.push(`Kosarstat eFG különbség: ${diff} pp hátrány.`);
-        nextFocus.push('Dobásminőség: jobb spacing és magasabb minőségű első opciós dobások.');
-      }
-    }
-
-    const ownTov = asNumber(ownMetric?.tov_pct);
-    const oppTov = asNumber(oppMetric?.tov_pct);
-    if (ownTov !== null && oppTov !== null) {
-      const diff = roundValue(ownTov - oppTov, 1);
-      if (diff <= -2) {
-        strengths.push(`Labdabiztonság előny: TO% különbség ${diff} pp.`);
-      } else if (diff >= 2) {
-        problems.push(`Labdabiztonság hátrány: TO% különbség +${diff} pp.`);
-        nextFocus.push('Labdavesztés-kontroll: első passzok és handoff döntések egyszerűsítése.');
-      }
-    }
-
-    const ownOrb = asNumber(ownMetric?.orb_pct);
-    const oppOrb = asNumber(oppMetric?.orb_pct);
-    if (ownOrb !== null && oppOrb !== null) {
-      const diff = roundValue(ownOrb - oppOrb, 1);
-      if (diff >= 5) {
-        strengths.push(`Második esély: ORB% különbség +${diff} pp.`);
-      } else if (diff <= -5) {
-        problems.push(`Lepattanó hátrány: ORB% különbség ${diff} pp.`);
-        nextFocus.push('Védőlepattanó zárás: gyűrű alatti első kontakt és boxout fegyelem.');
-      }
-    }
-
-    if (quarterDiffRows.length > 0) {
-      const rowLabel = quarterDiffRows
-        .map(row => `Q${row.quarter}: ${row.ownPoints}-${row.oppPoints}`)
-        .join(', ');
-      insightNotes.push(`Kosarstat negyedek: ${rowLabel}.`);
-    }
-    if (ownMetric || oppMetric) {
-      insightNotes.push('Kosarstat team-metric blokk integrálva (POSS/ORTG/eFG/TO%/ORB%/FTM rate).');
-    }
-
-    const clutch = postgamePbpContext?.clutch ?? null;
-    const turnoverTypes = postgamePbpContext?.turnoverTypes ?? [];
-
-    if (!clutch?.available && kosarstatClutchImportNote) {
-      insightNotes.push(kosarstatClutchImportNote);
-    }
-
-    if (clutch?.available) {
-      if (clutch.diff >= 3) {
-        strengths.push(`Clutch (utolsó 5 perc, <=5 pont): ${clutch.diff > 0 ? '+' : ''}${clutch.diff} pont.`);
-      } else if (clutch.diff <= -3) {
-        problems.push(`Clutch (utolsó 5 perc, <=5 pont): ${clutch.diff} pont.`);
-        nextFocus.push('Clutch execution: utolsó 5 percben első opció és spacing előkészítése.');
-      }
-
-      if (clutch.ownTurnovers >= 2 && clutch.ownTurnovers > clutch.oppTurnovers) {
-        problems.push(`Clutch labdaeladás: ${clutch.ownTurnovers}-${clutch.oppTurnovers} TO arány.`);
-        nextFocus.push('Clutch labdakezelés: biztonsági első passz és handoff-szabályok.');
-      }
-
-      insightNotes.push(
-        `Clutch minta: ${clutch.ownPoints}-${clutch.oppPoints} pont, TO ${clutch.ownTurnovers}-${clutch.oppTurnovers} (${clutch.sampleLabel}).`
-      );
-    }
-
-    if (turnoverTypes.length > 0) {
-      const label = turnoverTypes
-        .slice(0, 3)
-        .map(item => `${item.type} (${item.count})`)
-        .join(', ');
-      insightNotes.push(`TO típusbontás: ${label}.`);
-
-      const top = turnoverTypes[0];
-      if (top && top.count >= 2) {
-        problems.push(`Visszatérő TO típus: ${top.type} (${top.count}).`);
-        nextFocus.push(`TO célfókusz: ${top.type} helyzetek egyszerűsítése.`);
-      }
-    }
-
-    return {
-      quarterDiffRows,
-      ownMetrics: ownMetric,
-      oppMetrics: oppMetric,
-      clutch,
-      turnoverTypes,
-      strengths,
-      problems,
-      nextFocus,
-      insightNotes,
-    };
   }, [kosarstatClutchImportNote, kosarstatQuarterStats, kosarstatTeamMetrics, postgamePbpContext, selectedGameForPostgame, selectedTeamNameForPostgame]);
 
   const postgameReport = useMemo<PostGameReport | null>(() => {
@@ -9471,39 +9243,10 @@ export function SeasonComparison({
       };
     })();
 
-    const mergeUnique = (base: string[], extra: string[]) => {
-      const out: string[] = [];
-      const seen = new Set<string>();
-
-      [...base, ...extra].forEach(item => {
-        const normalized = item.trim().toLowerCase();
-        if (!normalized || seen.has(normalized)) return;
-        seen.add(normalized);
-        out.push(item);
-      });
-
-      return out;
-    };
-
-    if (
-      kosarstatPostgameNotes.length === 0 &&
-      !lineupInsights &&
-      kosarstatPostgameContext.strengths.length === 0 &&
-      kosarstatPostgameContext.problems.length === 0 &&
-      kosarstatPostgameContext.nextFocus.length === 0 &&
-      kosarstatPostgameContext.insightNotes.length === 0
-    ) {
-      return baseReport;
-    }
-
-    return {
-      ...baseReport,
-      dataNotes: mergeUnique(baseReport.dataNotes, [...kosarstatPostgameNotes, ...kosarstatPostgameContext.insightNotes]),
-      strengths: mergeUnique(baseReport.strengths, kosarstatPostgameContext.strengths),
-      problems: mergeUnique(baseReport.problems, kosarstatPostgameContext.problems),
-      nextFocus: mergeUnique(baseReport.nextFocus, kosarstatPostgameContext.nextFocus),
+    return mergeKosarstatPostgameContext(baseReport, kosarstatPostgameContext, {
+      extraNotes: kosarstatPostgameNotes,
       lineupInsights,
-    };
+    });
   }, [kosarstatLineupAnalysis, kosarstatPostgameContext, kosarstatPostgameNotes, league, playerGameStats, postgameBenchmarks, postgameShotContext, pregameReport, rolesByPlayerId, seasonPlayers, selectedGame, resolvedTeamId, selectedTeamStats]);
 
   const activeKosarstatTeamAnalysis = useMemo(() => {
