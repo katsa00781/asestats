@@ -8,6 +8,18 @@ function fmtPct(made: number, attempted: number): string {
   return attempted > 0 ? `${((made / attempted) * 100).toFixed(1)}%` : '-';
 }
 
+/**
+ * Szezon / liga fejlécsor a riport MD-khez. A riportobjektum `season` mezője a
+ * szezon azonosítója (UUID), ezért a megjelenítendő nevet a hívó adja át; a
+ * webes hívó `league` értéke a szezon neve, ezt nem írjuk ki kétszer.
+ */
+function seasonLeagueLine(league: string, seasonId: string, seasonName?: string): string {
+  const season = seasonName ?? seasonId;
+  return league && league !== season
+    ? `**Szezon:** ${season} | **Liga:** ${league}`
+    : `**Szezon:** ${season}`;
+}
+
 function sign(v: number): string {
   return v >= 0 ? `+${v.toFixed(1)}` : `${v.toFixed(1)}`;
 }
@@ -517,11 +529,11 @@ export function teamStatsToMd(
   return lines.join('\n');
 }
 
-export function pregameReportToMd(report: ScoutingReport): string {
+export function pregameReportToMd(report: ScoutingReport, seasonName?: string): string {
   const lines: string[] = [
     `# Pregame scouting: ${report.ownTeamName} vs ${report.opponentTeamName}`,
     ``,
-    `**Liga:** ${report.league} | **Szezon:** ${report.season}`,
+    seasonLeagueLine(report.league, report.season, seasonName),
     ``,
     `## Győzelmi valószínűség`,
     ``,
@@ -664,7 +676,7 @@ export function pregameReportToMd(report: ScoutingReport): string {
   return lines.join('\n');
 }
 
-export function postgameReportToMd(report: PostGameReport): string {
+export function postgameReportToMd(report: PostGameReport, seasonName?: string): string {
   const result = report.result === 'win' ? 'Győzelem' : 'Vereség';
   const margin = report.metrics.margin;
   const marginStr = margin > 0 ? `+${margin}` : `${margin}`;
@@ -678,7 +690,7 @@ export function postgameReportToMd(report: PostGameReport): string {
   const lines: string[] = [
     `# Postgame elemzés: ${report.teamName} vs ${report.opponentName}`,
     ``,
-    `**Szezon:** ${report.season} | **Liga:** ${report.league}`,
+    seasonLeagueLine(report.league, report.season, seasonName),
     `**Eredmény:** ${result} ${report.metrics.pointsFor}–${report.metrics.pointsAgainst} (különbség: ${marginStr})`,
     `**Referencia:** ${baselineLabel}`,
   ];

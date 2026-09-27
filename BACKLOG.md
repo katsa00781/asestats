@@ -670,8 +670,12 @@ a nézőpont nem hiba.
 - [ ] **Nyitott (adat)**: a `teams` táblában egyetlen `is_primary = true` sor
   sincs, ezért a `TeamSelector` alapcsapata ábécé szerint az „Alba Fehérvár”.
   Az ASE `is_primary` visszaállítása adattartalom-változás – jóváhagyás kell.
-- [ ] **Nyitott (kicsi)**: az MD fejléc „Szezon” mezője a szezon UUID-ját
-  mutatja (a `TeamSeasonStat.season` szezon-azonosító), nem a nevét.
+- [x] **MD fejléc szezon mező (2026-09-27)**: a „Szezon” a szezon UUID-ját,
+  a „Liga” a szezon nevét mutatta (a `SeasonComparison` `league` értéke a
+  szezonnév). A `postgameReportToMd` / `pregameReportToMd` opcionális
+  `seasonName` paramétert kap, a fejléc közös `seasonLeagueLine()` segéddel
+  „Szezon: 2026/2027” – a Liga csak akkor jelenik meg, ha különbözik. Csak
+  webes MD export, mobil jegyzet nem kell.
 
 ---
 

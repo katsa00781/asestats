@@ -4461,6 +4461,12 @@ export function SeasonComparison({
     return seasonName ?? 'NB I/A';
   }, [allSeasons, resolvedSeasonId]);
 
+  // Az MD exportok fejlécéhez: a riportok `season` mezője a szezon UUID-ja.
+  const resolvedSeasonName = useMemo(
+    () => allSeasons.find(season => String(season.id) === String(resolvedSeasonId))?.name,
+    [allSeasons, resolvedSeasonId]
+  );
+
   const seasonPlayers = useMemo(() => {
     if (!resolvedSeasonId) return [];
     return allPlayers.filter(player => {
@@ -13671,7 +13677,7 @@ export function SeasonComparison({
                 size="sm"
                 className="border-border-subtle hover:bg-surface-2 text-cyan shrink-0"
                 onClick={() => {
-                  const md = pregameReportToMd(pregameReport);
+                  const md = pregameReportToMd(pregameReport, resolvedSeasonName);
                   const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
                   const url = URL.createObjectURL(blob);
                   const a = document.createElement('a');
@@ -15485,7 +15491,7 @@ export function SeasonComparison({
                 size="sm"
                 className="border-border-subtle hover:bg-surface-2 text-cyan shrink-0 ml-auto"
                 onClick={() => {
-                  const md = pregameReportToMd(pregameReport);
+                  const md = pregameReportToMd(pregameReport, resolvedSeasonName);
                   const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
                   const url = URL.createObjectURL(blob);
                   const a = document.createElement('a');
@@ -15551,7 +15557,7 @@ export function SeasonComparison({
                 size="sm"
                 className="border-border-subtle hover:bg-surface-2 text-cyan shrink-0"
                 onClick={() => {
-                  const md = postgameReportToMd(postgameReport);
+                  const md = postgameReportToMd(postgameReport, resolvedSeasonName);
                   const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
                   const url = URL.createObjectURL(blob);
                   const a = document.createElement('a');
@@ -17172,7 +17178,7 @@ export function SeasonComparison({
                 size="sm"
                 className="border-border-subtle hover:bg-surface-2 text-cyan shrink-0 ml-auto"
                 onClick={() => {
-                  const md = postgameReportToMd(postgameReport);
+                  const md = postgameReportToMd(postgameReport, resolvedSeasonName);
                   const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
                   const url = URL.createObjectURL(blob);
                   const a = document.createElement('a');
