@@ -667,9 +667,13 @@ a nézőpont nem hiba.
   Javítás: névnormalizálás a scraperben (`toLocaleUpperCase('hu-HU')`,
   `\p{Lu}` / `u` flag) + a meglévő sorok javítása (adattartalom → mobil jegyzet).
   Döntés kell: csupa nagy vezetéknév maradjon, vagy „Buglyó Barna Gergő” alak.
-- [ ] **Nyitott (adat)**: a `teams` táblában egyetlen `is_primary = true` sor
-  sincs, ezért a `TeamSelector` alapcsapata ábécé szerint az „Alba Fehérvár”.
-  Az ASE `is_primary` visszaállítása adattartalom-változás – jóváhagyás kell.
+- [x] **ASE alapcsapat (2026-09-27, jóváhagyva)**: a `teams` táblában egyetlen
+  `is_primary = true` sor sem volt (az ASE sor 2026-01-29-én `false`-szal
+  jött létre), ezért a `TeamSelector` alapcsapata az „Alba Fehérvár” lett.
+  `migrations/fix-set-ase-primary-team.sql` lefuttatva (`scripts/run-sql.sh`,
+  `UPDATE 0` + `UPDATE 1`); az `is_primary`-t a scraperek csak olvassák, a
+  logikájuk nem függ tőle. Mobil jegyzet:
+  `mobile-sync/2026-09-27-ase-primary-team.md`.
 - [x] **MD fejléc szezon mező (2026-09-27)**: a „Szezon” a szezon UUID-ját,
   a „Liga” a szezon nevét mutatta (a `SeasonComparison` `league` értéke a
   szezonnév). A `postgameReportToMd` / `pregameReportToMd` opcionális
