@@ -1,6 +1,6 @@
 # BACKLOG.md – ASEStats Projekt
 
-_Utoljára frissítve: 2026-09-27 (H10 – post-game riport: kis minta referencia, célértékek, ratingek, ellenfél-bizonyíték, címkék)_
+_Utoljára frissítve: 2026-09-27 (H11 – a 2026/27-es `games` sorokon hiányzó `opponent_team_id`)_
 
 ---
 
@@ -685,6 +685,34 @@ a nézőpont nem hiba.
   `seasonName` paramétert kap, a fejléc közös `seasonLeagueLine()` segéddel
   „Szezon: 2026/2027” – a Liga csak akkor jelenik meg, ha különbözik. Csak
   webes MD export, mobil jegyzet nem kell.
+
+**H11 – A 2026/2027-es `games` sorokon nincs `opponent_team_id` (2026-09-27)**
+
+Tünet: a mobil post-game nézet a 2026/27-es meccseken nem találta az
+ellenfél box score-t („Ellenfél” név, OREB% 100%). Ellenőrzés a DB-ben: a
+szezon mind a **14** `games` sorában `NULL` az `opponent_team_id`, a 25/26-ban
+0/720.
+
+Ok: a C/2 (`fa0a719`, az importok írják az `opponent_team_id`-t) csak
+helyben volt commitolva. Az `origin/master` 2026-09-23-án állt, a helyi
+`master` 30 committal járt előtte. A GitHub Actions ütemezett scrape-je
+(`scrape.yml`) az `origin` régi kódját futtatja. A 14 sor 2026-09-26-án jött
+létre, és 2026-09-27 00:26 UTC-kor frissült; a régi upsert payloadban nincs
+`opponent_team_id`, ezért a sorok `NULL`-lal jöttek létre.
+
+- [x] **Push (2026-09-27, jóváhagyva)**: `git push origin master`
+  (`03e7ddd..64c732d`). A következő Actions futás már a C/2-es importkódot
+  használja.
+- [x] **Próbafuttatás (csak olvasás)**: mind a 14 sor pontos névegyezéssel
+  egyetlen `teams` sorra oldódik fel, és a párja (az ellenfél sora ugyanazon a
+  napon) kölcsönösen minket nevez meg. Alias nem kell.
+- [ ] **Kézi lépés – backfill**: a meglévő, idempotens
+  `migrations/add-games-opponent-team-id.sql` újrafuttatása az SQL Editorban
+  (csak a `NULL` sorokat tölti). Várt eredmény: `14 pontos név, 0 átnevezés,
+  0 feloldatlan`, az ellenőrző lekérdezés 0 sort ad.
+- Tanulság: az importkód javítása csak push után hat az ütemezett importra.
+  Import-író változásnál a push is része a lezárásnak.
+- Mobil jegyzet: `mobile-sync/2026-09-27-games-opponent-team-id-2026-2027-backfill.md`.
 
 ---
 
