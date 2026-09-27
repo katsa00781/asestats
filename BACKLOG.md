@@ -1,6 +1,6 @@
 # BACKLOG.md – ASEStats Projekt
 
-_Utoljára frissítve: 2026-09-26 (H9 – dobásesemények deduplikálása, hiányzó ASE–Pécs dobástérkép javítva)_
+_Utoljára frissítve: 2026-09-27 (H10 – post-game riport: kis minta referencia, célértékek, ratingek, ellenfél-bizonyíték, címkék)_
 
 ---
 
@@ -610,6 +610,68 @@ nyers/esemény száma egyezik).
   figyelmeztetés, ezért a GitHub Actions futás zöld marad akkor is, ha egy
   meccs dobástérképe nem mentődik. Megfontolandó a futás végi összesítő vagy
   hibakód.
+
+
+**H10 – Post-game riport-generátor hibái (Pécs–ASE 77–102, 2026-09-26) ✓ (2026-09-27)**
+
+Felhasználói hibalista a Pécs-nézőpontú MD riportra. Ellenőrzés a DB-ben: ASE
+nyert 102–77 hazai pályán; mindkét csapatnak van `games` sora, a riport a
+kiválasztott csapat (Pécs) szemszögéből készült. Ez szándékos: az elemzésnek
+**bármelyik csapatra generálhatónak kell lennie** (felhasználói megerősítés) –
+a nézőpont nem hiba.
+
+- [x] **Kis minta referencia** – `MIN_SEASON_BASELINE_GAMES = 3`; alatta a
+  `resolveBaseline()` a liga mediánt (P50) használja referenciának a
+  szezonátlag (= maga a meccs, minden delta 0) helyett. Új `report.baseline`
+  (`kind`, `seasonGames`, `smallSample`, `label`, `noun`); az MD fejléc
+  „Kis minta” jelzést és referencia-oszlopcímet kap, a webes kulcsmutató-kártya
+  és a hatékonyság-chart címkéje is a referenciát követi. Liga-referenciánál a
+  szezon-delta alapú („visszaesett”) erősség/probléma sorok kimaradnak, a
+  liga-percentilis sorok maradnak.
+- [x] **Célértékek** – a következő fókusz célja a referencia és a liga medián
+  közül a jobbik; ha egyik sem jobb a meccsértéknél, nincs önmagára mutató cél
+  („22,5% → 22,5%”), csak irány.
+- [x] **Rejtett hiba**: a fókusz-szabályok `problems.includes('…')` pontos
+  egyezést kerestek zárójeles számot tartalmazó sorokra → az eFG / assist /
+  3P / festék / OREB-erősség fókusz **soha nem aktiválódott**. Előtag-alapú
+  illesztésre javítva (`hasItemStartingWith`), a liga-alapú problémasorokra is.
+- [x] **„Visszaesés” → „Gyenge meccs”** – az underperformer szabály abszolút
+  meccsérték (VAL ≤ 3, TS ≤ 47%), játékos-bázis nélkül; a címke minden
+  kimenetben (MD, összefoglaló, interpretáció) átnevezve.
+- [x] **Címke/rangsor** – a sorrend és címke az impact score (VAL/36 45%, TS%
+  25%, usage 20%, St+Bl 10%) szerint megy; Moors 61,0 vs Punter 57,7 → a 0,95-ös
+  sáv és a 60-as küszöb miatt eltérő címke. Új: a 60-as küszöb a meccs
+  legjobbjára vonatkozik, a tőle ≤10%-ra lévők ugyanazt a vezető címkét kapják
+  (`TOP_PERFORMER_BAND = 0.9`). Az MD játékostábla VAL/36, Usage% és Impact
+  oszlopot + magyarázó sort kap.
+- [x] **ORtg / DRtg / Net** a kulcsmutatók közt és az összefoglalóban, „Fő ok”
+  sorral (támadás / védekezés / együtt). A ligabenchmark `ortg`/`drtg` kulccsal
+  bővült (0 = nincs adat, kiszűrve).
+- [x] **TO% vs pace** – a képlet marad (Oliver-féle TO% = LV / (FGA + 0,44·FTA
+  + LV), ugyanez a pregame/csapatelemzésben és a benchmarkokban); a riport
+  képlet-magyarázatot kap. A ratingek ugyanazt a saját birtoklásbecslést
+  használják, mint a tempó.
+- [x] **Ellenfél-bizonyíték** – új „Ellenfél dobás és kontroll” MD szekció
+  (`report.metrics.opponent`); a „Perimétervédekezési probléma” és a
+  „Lepattanózás gyenge” tényező zárójelben hozza a számot (pl. ellenfél 3P
+  10/26, 38,5%).
+- [x] Mellékjavítás: az X-faktor alapértelmezett mechanizmusa a szezon
+  **összes** pontját vetette össze a meccs pontjaival → meccsátlagra javítva.
+- Valós adaton ellenőrizve (Pécs és ASE nézőpont, 14 csapatos 2026/27
+  benchmark); `tsc`, `eslint` (csak korábbi figyelmeztetések), `npm run build`
+  tiszta. Mobil jegyzet: `mobile-sync/2026-09-27-postgame-baseline-ratings.md`.
+- [ ] **Külön egység – névformázás (scraping + adatjavítás)**: a Hunbasket 2026
+  januárja óta ASCII-nagybetűsített vezetékneveket ad („BUGLYó”, „RéVéSZ”,
+  „MEZőFI”), így kerülnek a `players` táblába (2026/27-ben 54/190 név; a 25/26
+  második fele is érintett, pl. `MEZőFI Márk` és `Mezőfi Márk` külön szezonban).
+  Javítás: névnormalizálás a scraperben (`toLocaleUpperCase('hu-HU')`,
+  `\p{Lu}` / `u` flag) + a meglévő sorok javítása (adattartalom → mobil jegyzet).
+  Döntés kell: csupa nagy vezetéknév maradjon, vagy „Buglyó Barna Gergő” alak.
+- [ ] **Nyitott (adat)**: a `teams` táblában egyetlen `is_primary = true` sor
+  sincs, ezért a `TeamSelector` alapcsapata ábécé szerint az „Alba Fehérvár”.
+  Az ASE `is_primary` visszaállítása adattartalom-változás – jóváhagyás kell.
+- [ ] **Nyitott (kicsi)**: az MD fejléc „Szezon” mezője a szezon UUID-ját
+  mutatja (a `TeamSeasonStat.season` szezon-azonosító), nem a nevét.
 
 ---
 

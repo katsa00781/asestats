@@ -261,6 +261,9 @@ const computeImpactScore = (player: PlayerGameStat, context: DerivedPlayerContex
   return round((normalizedVal * 0.45 + normalizedTs * 0.25 + normalizedUsage * 0.2 + normalizedStocks * 0.1) * 100, 1);
 };
 
+/** A meccs legjobb impact score-jához képest ezen belül „társvezető” a játékos. */
+const TOP_PERFORMER_BAND = 0.9;
+
 const classifyImpact = (
   score: number,
   context: DerivedPlayerContext,
@@ -274,7 +277,9 @@ const classifyImpact = (
 
   // Top performer in this game with sufficient minutes → MVP regardless of
   // starter status, so a dominant bench scorer isn't capped at 'engine'.
-  const isTopPerformer = maxScoreInGame > 0 && score >= maxScoreInGame * 0.95 && minutes >= 18 && score >= 60;
+  // A 60-as küszöb a meccs legjobbjára vonatkozik; a sávon belüli társvezetők
+  // ugyanazt a címkét kapják (különben pl. 61 vs 57,7 score más címkét adna).
+  const isTopPerformer = maxScoreInGame >= 60 && score >= maxScoreInGame * TOP_PERFORMER_BAND && minutes >= 18;
   if (isTopPerformer) return 'mvp';
 
   const eligibleForMvp = minutes >= 22 && (context.isStarter || context.minutesBucket === 'heavy');

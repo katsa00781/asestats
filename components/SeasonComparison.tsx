@@ -16208,7 +16208,7 @@ export function SeasonComparison({
               </div>
 
               <div>
-                <div className="text-sm text-secondary font-medium mb-2">Kulcs mutatók (meccs vs. szezon)</div>
+                <div className="text-sm text-secondary font-medium mb-2">Kulcs mutatók (meccs vs. {postgameReport.baseline?.label ?? 'szezon'})</div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   {postgameReport.metrics.keyStats.map(item => (
                     <div key={item.key} className="p-3 bg-surface-2/50 rounded-lg flex items-center justify-between">
@@ -16218,7 +16218,7 @@ export function SeasonComparison({
                           {formatPostgameValue(item.game, item.unit)}
                         </div>
                         <div className="text-xs text-muted">
-                          Szezon: {formatPostgameValue(item.season, item.unit)}
+                          {postgameReport.baseline?.kind === 'league' ? 'Referencia' : 'Szezon'}: {formatPostgameValue(item.season, item.unit)}
                           {Number.isFinite(item.leagueMedian) ? ` • Liga medián: ${formatPostgameValue(item.leagueMedian ?? 0, item.unit)}` : ''}
                         </div>
                       </div>
@@ -16250,7 +16250,7 @@ export function SeasonComparison({
                       />
                       <Legend wrapperStyle={{ color: CHART_AXIS.stroke }} />
                       <Bar dataKey="game" name="Meccs" fill={CHART_COLORS.cyan} radius={[6, 6, 0, 0]} />
-                      <Bar dataKey="season" name="Szezon" fill={CHART_COLORS.positive} radius={[6, 6, 0, 0]} />
+                      <Bar dataKey="season" name={postgameReport.baseline?.label ?? 'Szezon'} fill={CHART_COLORS.positive} radius={[6, 6, 0, 0]} />
                       {postgameReport.charts.efficiency.some(item => Number.isFinite(item.league)) && (
                         <Bar dataKey="league" name="Liga medián" fill={CHART_COLORS.ai} radius={[6, 6, 0, 0]} />
                       )}

@@ -668,26 +668,74 @@ export function postgameReportToMd(report: PostGameReport): string {
   const result = report.result === 'win' ? 'Győzelem' : 'Vereség';
   const margin = report.metrics.margin;
   const marginStr = margin > 0 ? `+${margin}` : `${margin}`;
-  const paceDeltaStr = { Higher: '↑ Szezon felett', Lower: '↓ Szezon alatt', Similar: '≈ Szezonátlag' }[report.context.paceDelta];
+  const baselineLabel = report.baseline?.label ?? 'Szezon átl.';
+  const ratings = report.metrics.ratings ?? null;
+  const signed1 = (v: number, suffix = '') => `${v >= 0 ? '+' : ''}${v.toFixed(1)}${suffix}`;
+  const refCell = (v: number | null | undefined) => (v !== null && v !== undefined ? v.toFixed(1) : '–');
+  const deltaCell = (game: number, ref: number | null | undefined) =>
+    ref !== null && ref !== undefined ? signed1(game - ref) : '–';
 
   const lines: string[] = [
     `# Postgame elemzés: ${report.teamName} vs ${report.opponentName}`,
     ``,
     `**Szezon:** ${report.season} | **Liga:** ${report.league}`,
     `**Eredmény:** ${result} ${report.metrics.pointsFor}–${report.metrics.pointsAgainst} (különbség: ${marginStr})`,
+    `**Referencia:** ${baselineLabel}`,
+  ];
+
+  if (report.baseline?.smallSample) {
+    lines.push(
+      ``,
+      `> **Kis minta:** a csapatnak ${report.baseline.seasonGames} meccse van a szezonban, a szezonátlag még nem értelmezhető viszonyítási alap.` +
+        (report.baseline.kind === 'league'
+          ? ' A deltaoszlop és a célértékek a liga mediánjához mérnek.'
+          : ' Liga benchmark sem érhető el, ezért a deltaoszlop tájékoztató jellegű.')
+    );
+  }
+
+  lines.push(
     ``,
     `## Kulcs mutatók`,
     ``,
-    `| Mutató | Meccs | Szezon átl. | Delta |`,
+    `| Mutató | Meccs | ${baselineLabel} | Delta |`,
     `|--------|-------|-------------|-------|`,
-    `| Tempó (poss.) | ${report.metrics.pace.toFixed(1)} | ${paceDeltaStr} | – |`,
-  ];
+    `| Birtoklás (tempó) | ${report.metrics.pace.toFixed(1)} | ${refCell(ratings?.refPossessions)} | ${deltaCell(report.metrics.pace, ratings?.refPossessions)} |`,
+  );
 
   for (const stat of report.metrics.keyStats) {
     const gameVal = stat.unit === 'pct' ? `${stat.game.toFixed(1)}%` : stat.game.toFixed(1);
     const seasonVal = stat.unit === 'pct' ? `${stat.season.toFixed(1)}%` : stat.season.toFixed(1);
-    const delta = stat.delta >= 0 ? `+${stat.delta.toFixed(1)}${stat.unit === 'pct' ? '%' : ''}` : `${stat.delta.toFixed(1)}${stat.unit === 'pct' ? '%' : ''}`;
+    const delta = signed1(stat.delta, stat.unit === 'pct' ? ' pp' : '');
     lines.push(`| ${stat.label} | ${gameVal} | ${seasonVal} | ${delta} |`);
+  }
+
+  if (ratings) {
+    lines.push(
+      `| ORtg | ${ratings.ortg.toFixed(1)} | ${refCell(ratings.refOrtg)} | ${deltaCell(ratings.ortg, ratings.refOrtg)} |`,
+      `| DRtg (alacsonyabb a jobb) | ${ratings.drtg.toFixed(1)} | ${refCell(ratings.refDrtg)} | ${deltaCell(ratings.drtg, ratings.refDrtg)} |`,
+      `| Net rating | ${signed1(ratings.net)} | ${ratings.refNet !== null ? signed1(ratings.refNet) : '–'} | ${deltaCell(ratings.net, ratings.refNet)} |`,
+    );
+  }
+
+  lines.push(
+    ``,
+    `*Birtoklás = FGA + 0,44·FTA + LV − T-lep (saját becslés). TO rate = LV / (FGA + 0,44·FTA + LV) – a lepattanó utáni új támadás nem új birtoklás, ezért tér el az LV / birtoklás aránytól. ORtg / DRtg = szerzett / kapott pont 100 birtoklásra ugyanabból a birtoklásbecslésből.*`
+  );
+
+  const opp = report.metrics.opponent;
+  if (opp) {
+    lines.push(
+      ``,
+      `## Ellenfél dobás és kontroll`,
+      ``,
+      `| Mutató | ${report.opponentName} |`,
+      `|--------|-------|`,
+      `| eFG% | ${opp.efg.toFixed(1)}% |`,
+      `| 3P (dobott/kísérlet) | ${opp.fgm3}/${opp.fga3} (${opp.fga3 > 0 ? `${opp.threePct.toFixed(1)}%` : '–'}) |`,
+      `| FT rate | ${opp.ftRate.toFixed(1)}% |`,
+      `| OREB% | ${opp.orebRate.toFixed(1)}% |`,
+      `| TO rate | ${opp.turnoverRate.toFixed(1)}% |`,
+    );
   }
 
   if (report.decisiveFactors.offense.length > 0 || report.decisiveFactors.defense.length > 0) {
@@ -704,12 +752,16 @@ export function postgameReportToMd(report: PostGameReport): string {
 
   if (report.playerReport.players.length > 0) {
     lines.push(``, `## Játékos bontás`, ``);
-    lines.push(`| Játékos | Poz | Perc | Pont | Lep | Gp | St+Bl | LV | TS% | VAL | Hatás |`);
-    lines.push(`|---------|-----|------|------|-----|----|-------|-----|-----|-----|-------|`);
+    lines.push(`| Játékos | Poz | Perc | Pont | Lep | Gp | St+Bl | LV | TS% | VAL | VAL/36 | Usage% | Impact | Hatás |`);
+    lines.push(`|---------|-----|------|------|-----|----|-------|-----|-----|-----|--------|--------|--------|-------|`);
     for (const p of report.playerReport.players) {
       const ts = p.hasShotAttempts ? `${p.tsPct.toFixed(1)}%` : '-';
-      lines.push(`| ${p.name} | ${p.position} | ${p.minutes} | ${p.points} | ${p.rebounds} | ${p.assists} | ${p.stocks} | ${p.turnovers} | ${ts} | ${p.val.toFixed(1)} | ${p.impactLabel} |`);
+      lines.push(`| ${p.name} | ${p.position} | ${p.minutes} | ${p.points} | ${p.rebounds} | ${p.assists} | ${p.stocks} | ${p.turnovers} | ${ts} | ${p.val.toFixed(1)} | ${p.valPer36.toFixed(1)} | ${(p.usageShare * 100).toFixed(1)}% | ${p.impactScore.toFixed(1)} | ${p.impactLabel} |`);
     }
+    lines.push(
+      ``,
+      `*Sorrend és címke az Impact score alapján (VAL/36 45%, TS% 25%, usage 20%, St+Bl 10%), nem a nyers VAL szerint. A meccs legjobbjától legfeljebb 10%-kal elmaradó játékosok ugyanazt a vezető címkét kapják.*`
+    );
   }
 
   if (report.strengths.length > 0) {
@@ -737,7 +789,7 @@ export function postgameReportToMd(report: PostGameReport): string {
     if (playerImpact.positive.length > 0)
       lines.push(`**Pozitív hatás (alacsony usage):** ${playerImpact.positive.join(', ')}`);
     if (playerImpact.underperformers.length > 0)
-      lines.push(`**Visszaesés:** ${playerImpact.underperformers.join(', ')}`);
+      lines.push(`**Gyenge meccs:** ${playerImpact.underperformers.join(', ')}`);
     if (playerImpact.negative.length > 0)
       lines.push(`**Limitált hatás (magas usage):** ${playerImpact.negative.join(', ')}`);
   }
