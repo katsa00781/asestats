@@ -3,7 +3,7 @@
 - **Dátum:** 2026-09-27
 - **Webes commit:** ez a commit
 - **Típus:** adattartalom
-- **Állapot a mobilban:** NYITOTT
+- **Állapot a mobilban:** ÁTVEZETVE (2026-09-27, mobil commit 7387ad9; a `findOpponentTeam` névtartalék döntése nyitott)
 
 ## Mi változott
 - A 2026/2027-es szezon mind a 14 `games` sorában `NULL` volt az
@@ -26,14 +26,17 @@
 - A mobil build nem törik.
 
 ## Teendő a mobil repóban
-- [ ] A backfill után a Pécs–ASE (2026-09-26) post-game harness újrafuttatása:
+- [x] A backfill után a Pécs–ASE (2026-09-26) post-game harness újrafuttatása:
       ellenfél box score megvan, az OREB% reális.
-- [ ] A `docs/feature-tasks.md` nyitott sorának lezárása („az ellenfél box
+- [x] A `docs/feature-tasks.md` nyitott sorának lezárása („az ellenfél box
       score névtartaléka…”). Döntés kell: a D-119 szerinti
       `findOpponentTeam` névtartalék a post-game-ben is legyen-e, védelemként
       a jövőbeli ID nélküli sorokra (pl. kézi JSON import).
 
 ## Kézi lépések
-- **Még NEM futott:** `migrations/add-games-opponent-team-id.sql`
-  újrafuttatása a Supabase SQL Editorban. Várt NOTICE: `14 pontos név, 0
-  átnevezés, 0 feloldatlan`. Az ellenőrző lekérdezés 0 sort ad.
+- **Lefuttatva (2026-09-27):** `migrations/add-games-opponent-team-id.sql`
+  újrafuttatása a Supabase SQL Editorban – 0 NULL / 1100 sor.
+- **Lefuttatva (2026-09-27):** `HUNBASKET_SEASON_NAME=2026/2027 npm run
+  hunbasket:shotchart:assign`. A régi kódú Actions futás elvesztette az
+  ASE–Pécs meccs 125 dobáseseményét (H9 regresszió), ez most helyreállt:
+  902 esemény.

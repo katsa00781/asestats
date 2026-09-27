@@ -686,7 +686,7 @@ a nézőpont nem hiba.
   „Szezon: 2026/2027” – a Liga csak akkor jelenik meg, ha különbözik. Csak
   webes MD export, mobil jegyzet nem kell.
 
-**H11 – A 2026/2027-es `games` sorokon nincs `opponent_team_id` (2026-09-27)**
+**H11 – A 2026/2027-es `games` sorokon nincs `opponent_team_id` ✓ (2026-09-27)**
 
 Tünet: a mobil post-game nézet a 2026/27-es meccseken nem találta az
 ellenfél box score-t („Ellenfél” név, OREB% 100%). Ellenőrzés a DB-ben: a
@@ -706,10 +706,19 @@ létre, és 2026-09-27 00:26 UTC-kor frissült; a régi upsert payloadban nincs
 - [x] **Próbafuttatás (csak olvasás)**: mind a 14 sor pontos névegyezéssel
   egyetlen `teams` sorra oldódik fel, és a párja (az ellenfél sora ugyanazon a
   napon) kölcsönösen minket nevez meg. Alias nem kell.
-- [ ] **Kézi lépés – backfill**: a meglévő, idempotens
-  `migrations/add-games-opponent-team-id.sql` újrafuttatása az SQL Editorban
-  (csak a `NULL` sorokat tölti). Várt eredmény: `14 pontos név, 0 átnevezés,
-  0 feloldatlan`, az ellenőrző lekérdezés 0 sort ad.
+- [x] **Kézi lépés – backfill lefuttatva (2026-09-27)**: a meglévő, idempotens
+  `migrations/add-games-opponent-team-id.sql` újrafuttatva az SQL Editorban.
+  Ellenőrizve: `games` 1100 sor, 0 `NULL`; a 26/27-es 14 sor ID-je egyezik a
+  névvel, önmagára mutató nincs.
+- [x] **Mellékkár – elveszett dobásesemények (2026-09-27)**: ugyanez az
+  Actions futás a H9 előtti kóddal (`dedupeShotEvents` nélkül) dolgozta fel
+  újra a `hun_134749` (ASE–Pécs) dobástérképét. A duplikált válasz miatt az
+  insert elbukott, és a meccs 125 eseménye elveszett (a szezonban 902 → 777).
+  Helyreállítás jóváhagyással: `HUNBASKET_SEASON_NAME=2026/2027 npm run
+  hunbasket:shotchart:assign` – 7 meccs, 902 esemény, 0 hiba, 0 feloldatlan.
+  Az ASE-nak ismét 73 dobása van.
+- Ellenőrzés a mobil post-game láncon (Pécs–ASE): ellenfél box score 11 sor,
+  OREB% 100 helyett 40,6, a dobástérkép 73 dobás.
 - Tanulság: az importkód javítása csak push után hat az ütemezett importra.
   Import-író változásnál a push is része a lezárásnak.
 - Mobil jegyzet: `mobile-sync/2026-09-27-games-opponent-team-id-2026-2027-backfill.md`.
