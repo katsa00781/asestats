@@ -3,7 +3,7 @@
 - **Dátum:** 2026-09-27
 - **Webes commit:** ez a commit
 - **Típus:** @core | funkcionális
-- **Állapot a mobilban:** NYITOTT
+- **Állapot a mobilban:** ÁTVEZETVE (2026-09-27, mobil commit 18a4876; a ratingek / ellenfél-dobás blokk opcionális része és az eszközös ellenőrzés nyitott)
 
 ## Mi változott
 - `lib/postgame-report.ts` (`analyzePostGameReport`):
@@ -23,10 +23,10 @@
 - Ha a mobil a `decisiveFactors` szövegeire pontos egyezéssel szűr (pl. `'Perimétervédekezési probléma'`), előtag-alapú egyezésre kell váltani.
 
 ## Teendő a mobil repóban
-- [ ] `npm run sync:core`
-- [ ] Post-game nézet: referencia felirat a `report.baseline` alapján, „Kis minta” jelzés `baseline.smallSample` esetén
+- [x] `npm run sync:core`
+- [x] Post-game nézet: referencia felirat a `report.baseline` alapján, „Kis minta” jelzés `baseline.smallSample` esetén
 - [ ] Opcionális: ORtg / DRtg / Net sor (`metrics.ratings`) és ellenfél-dobás blokk (`metrics.opponent`) megjelenítése
-- [ ] „Visszaesés” → „Gyenge meccs” saját címkékben, ha van
+- [x] „Visszaesés” → „Gyenge meccs” saját címkékben, ha van (a mobilban nincs ilyen saját címke)
 
 ## Kézi lépések
 nincs
