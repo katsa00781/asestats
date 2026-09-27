@@ -31,6 +31,7 @@ import {
   matchesTeamFilter,
   isRoundFilterEmpty,
   dedupeShotEvents,
+  cleanPlayerName,
 } from './scrape-utils';
 
 dotenv.config({ path: '.env.local' });
@@ -140,13 +141,6 @@ type TeamRecord = {
   short_name?: string | null;
   is_primary?: boolean | null;
 };
-
-const cleanPlayerName = (value: string) =>
-  value
-    .replace(/player avatar/gi, '')
-    .replace(/\*/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
 
 const shotEventPlayerName = (event: ShotChartEvent) => {
   if (event.wbname && event.wbname.trim().length > 0) return event.wbname.trim();

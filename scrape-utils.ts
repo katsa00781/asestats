@@ -23,6 +23,33 @@ export const normalizeName = (value: string) =>
     .replace(/\s+/g, ' ')
     .trim();
 
+/**
+ * A Hunbasket box-score / keret táblái a vezetéknevet ASCII-only
+ * nagybetűsítéssel adják (2026 januárja óta): „RéVéSZ Ádám”, „BUGLYó Barna
+ * Gergő”. Az a szótag hibás, amelyben nincs ASCII kisbetű, legalább két ASCII
+ * nagybetű van, de van (ékezetes) kisbetű – ezt magyar locale-lal
+ * nagybetűsítjük („RÉVÉSZ Ádám”). A rendes nevek („Ádám”, „McDonald”, „II”)
+ * változatlanok.
+ */
+const isAsciiUppercasedToken = (token: string) =>
+  !/[a-z]/.test(token) && /[A-Z].*[A-Z]/.test(token) && /\p{Ll}/u.test(token);
+
+export const fixAsciiUppercasedName = (value: string) =>
+  value
+    .split(' ')
+    .map(token => (isAsciiUppercasedToken(token) ? token.toLocaleUpperCase('hu-HU') : token))
+    .join(' ');
+
+/** Játékosnév a Hunbasket táblákból: avatar-szöveg, csillag, whitespace, nagybetűsítés. */
+export const cleanPlayerName = (value: string) =>
+  fixAsciiUppercasedName(
+    value
+      .replace(/player avatar/gi, '')
+      .replace(/\*/g, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+  );
+
 export const buildAbbreviation = (value: string) =>
   value
     .split(/[\s-]+/)

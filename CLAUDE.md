@@ -448,7 +448,8 @@ npm run kosarstat:team-players     # Játékosmozgás: a jelenlegi élvonal utol
 Konvenciók:
 - `browser.close()` mindig `finally` blokkban
 - `dotenv` a `.env.local` betöltéséhez
-- Közös segédfüggvények: `scrape-utils.ts` (normalizeName, cleanTeamName, findTeamByName*, createScriptClient) – ne duplikáld őket a szkriptekben
+- Közös segédfüggvények: `scrape-utils.ts` (normalizeName, cleanTeamName, cleanPlayerName, findTeamByName*, createScriptClient) – ne duplikáld őket a szkriptekben
+- A Hunbasket box-score / keret táblája a vezetéknevet ASCII-only nagybetűsítéssel adja („RéVéSZ”); játékosnevet mindig a `cleanPlayerName()`-en át ments (magyar locale-lal javítja: „RÉVÉSZ Ádám”)
 - Minden szkript naplózza a progresszt (`console.log`) és a hibákat (`console.error`)
 - A box-score import (`scrape-hunbasket.ts`), a menetrend import (`scrape-hunbasket-fixtures.ts`) és a keret import (`scrape-hunbasket-rosters.ts`) alapból NEM hoz létre új teams sort (névdrift-védelem, írás előtti névfeloldással) – új csapathoz `HUNBASKET_ALLOW_NEW_TEAMS=1`
 - Klub átnevezésekor a régi nevet fel kell venni a `scrape-utils.ts` `TEAM_NAME_ALIASES` térképébe (`régi → mai`; a matcher a párokat egyenértékű névcsoportként kezeli, így a `teams.name` átírása előtt és után is működik), különben a korábbi szezonok újraimportálása duplikált teams sort termel

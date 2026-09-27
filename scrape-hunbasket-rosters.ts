@@ -1,6 +1,6 @@
 import { chromium, type Page } from 'playwright';
 import * as dotenv from 'dotenv';
-import { normalizeName, cleanTeamName, findTeamByNameFuzzy, createScriptClient } from './scrape-utils';
+import { normalizeName, cleanTeamName, cleanPlayerName, findTeamByNameFuzzy, createScriptClient } from './scrape-utils';
 
 dotenv.config({ path: '.env.local' });
 
@@ -65,13 +65,6 @@ type SyncSummary = {
   reactivated: number;
   deactivated: number;
 };
-
-const cleanPlayerName = (value: string) =>
-  value
-    .replace(/player avatar/gi, '')
-    .replace(/\*/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
 
 const TEAM_FILTER_NORMALIZED = TEAM_FILTER.map(normalizeName).filter(Boolean);
 

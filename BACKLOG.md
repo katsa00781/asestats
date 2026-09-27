@@ -660,13 +660,18 @@ a nézőpont nem hiba.
 - Valós adaton ellenőrizve (Pécs és ASE nézőpont, 14 csapatos 2026/27
   benchmark); `tsc`, `eslint` (csak korábbi figyelmeztetések), `npm run build`
   tiszta. Mobil jegyzet: `mobile-sync/2026-09-27-postgame-baseline-ratings.md`.
-- [ ] **Külön egység – névformázás (scraping + adatjavítás)**: a Hunbasket 2026
-  januárja óta ASCII-nagybetűsített vezetékneveket ad („BUGLYó”, „RéVéSZ”,
-  „MEZőFI”), így kerülnek a `players` táblába (2026/27-ben 54/190 név; a 25/26
-  második fele is érintett, pl. `MEZőFI Márk` és `Mezőfi Márk` külön szezonban).
-  Javítás: névnormalizálás a scraperben (`toLocaleUpperCase('hu-HU')`,
-  `\p{Lu}` / `u` flag) + a meglévő sorok javítása (adattartalom → mobil jegyzet).
-  Döntés kell: csupa nagy vezetéknév maradjon, vagy „Buglyó Barna Gergő” alak.
+- [x] **Névformázás – scraping + adatjavítás (2026-09-27, jóváhagyva)**: a
+  Hunbasket box-score / keret táblája 2026 januárja óta ASCII-only
+  nagybetűsítéssel adja a vezetéknevet („RéVéSZ”, „BUGLYó”); a dobástérkép
+  nyers adataiban a nevek helyesek. `scrape-utils.ts`
+  `fixAsciiUppercasedName()` + közös `cleanPlayerName()` (a box-score és a
+  keret scraper duplikált példánya helyett). Formátum: a Hunbasket nagybetűs
+  vezetékneve marad, csak magyar locale-lal („RÉVÉSZ Ádám”) – a legkisebb
+  beavatkozás. `migrations/fix-hunbasket-uppercased-player-names.sql`
+  lefuttatva: 124 `players` sor (25/26: 69, 26/27: 55), 0 kulcsütközés, 0 hibás
+  maradt; idempotens. Más tábla nem érintett. Mobil jegyzet:
+  `mobile-sync/2026-09-27-hunbasket-player-name-casing.md`. A korábbi AI
+  szöveges riportok régi névalakja nem javított (historikus szöveg).
 - [x] **ASE alapcsapat (2026-09-27, jóváhagyva)**: a `teams` táblában egyetlen
   `is_primary = true` sor sem volt (az ASE sor 2026-01-29-én `false`-szal
   jött létre), ezért a `TeamSelector` alapcsapata az „Alba Fehérvár” lett.
