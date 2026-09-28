@@ -1589,6 +1589,13 @@ const SKILL_SCORE_HELPERS_HU: Record<string, string> = {
 };
 
 const RECENT_GAMES_WINDOW = 5;
+/**
+ * Lineup-rangsorok minimális együtt töltött ideje. 1–3 perces minták
+ * extrapolálva irreális Net/40-et adnak (pl. +666,7 vagy −324,3).
+ */
+const LINEUP_MIN_SAMPLE_SECONDS = 300;
+/** A játékostrend ennyi meccs alatt nem értelmezhető. */
+const PLAYER_TREND_MIN_GAMES = 3;
 const TEAM_FORM_WINDOW = 5;
 const TEAM_FORM_CHART_POINTS = 8;
 const TEAM_FORM_ROLLING_WINDOW = 3;
@@ -3546,7 +3553,9 @@ export function SeasonComparison({
               loadedClutchContext = parsedClutchContext;
               loadedClutchImportNote = parsedClutchContext.clutch.available
                 ? `Kosarstat clutch stat integrálva (${parsedClutchContext.clutch.sampleLabel} minta).`
-                : `Kosarstat clutch stat integrálva, de a minta rövid (${parsedClutchContext.clutch.sampleLabel}).`;
+                : parsedClutchContext.clutch.sampleSize > 0
+                  ? `Kosarstat clutch minta túl rövid az értékeléshez (${parsedClutchContext.clutch.sampleLabel}).`
+                  : 'Nem volt clutch szakasz (az utolsó 5 percben a különbség végig 5 pont felett volt).';
               break;
             }
           }
@@ -9257,9 +9266,8 @@ export function SeasonComparison({
         netPer40: stint.seconds > 0 ? roundValue((stint.plusMinus * 2400) / stint.seconds, 1) : 0,
       }));
 
-      const minSampleSeconds = 180;
-      const stableSample = withDerived.filter(stint => stint.seconds >= minSampleSeconds);
-      const topPool = stableSample.length > 0 ? stableSample : withDerived;
+      // Kis mintára nem esünk vissza: 5 percnél rövidebb ötösből nincs rangsor.
+      const topPool = withDerived.filter(stint => stint.seconds >= LINEUP_MIN_SAMPLE_SECONDS);
       const topLineup = [...topPool].sort((a, b) => b.netPer40 - a.netPer40 || b.seconds - a.seconds)[0] || null;
 
       const bottomCandidates = [...topPool]
@@ -9267,9 +9275,8 @@ export function SeasonComparison({
         .sort((a, b) => a.netPer40 - b.netPer40 || b.seconds - a.seconds);
       const bottomLineup = bottomCandidates[0] || null;
 
-      const pairPool = activeLineupTeam.pairStats.filter(item => item.seconds >= minSampleSeconds);
-      const topPairSource = (pairPool.length > 0 ? pairPool : activeLineupTeam.pairStats)
-        .slice()
+      const topPairSource = activeLineupTeam.pairStats
+        .filter(item => item.seconds >= LINEUP_MIN_SAMPLE_SECONDS)
         .sort((a, b) => b.netPer40 - a.netPer40 || b.seconds - a.seconds)[0] || null;
 
       const implications: string[] = [];
@@ -9290,6 +9297,9 @@ export function SeasonComparison({
       }
       if (totalMinutes < 12) {
         implications.push('A lineup minta korlátozott játékidőből áll össze, ezért az értékelés irányadó, de nem végleges ítélet.');
+      }
+      if (topPool.length === 0 && validStints.length > 0) {
+        implications.push('Egyik ötös sem töltött együtt legalább 5 percet, ezért ötös-rangsor nem készült.');
       }
 
       return {
@@ -9333,6 +9343,17 @@ export function SeasonComparison({
     if (!kosarstatLineupAnalysis) return null;
     return kosarstatLineupAnalysis.selectedTeam || kosarstatLineupAnalysis.homeTeam || kosarstatLineupAnalysis.awayTeam;
   }, [kosarstatLineupAnalysis]);
+
+  // Páros / hármas rangsor csak legalább 5 perces együttállásból.
+  const rankedComboStats = useMemo(() => {
+    if (!activeKosarstatTeamAnalysis) return { byNet: [] as KosarstatComboStat[], byDefense: [] as KosarstatComboStat[] };
+    const pool = (selectedComboSize === 2 ? activeKosarstatTeamAnalysis.pairStats : activeKosarstatTeamAnalysis.trioStats)
+      .filter(item => item.seconds >= LINEUP_MIN_SAMPLE_SECONDS);
+    return {
+      byNet: [...pool].sort((a, b) => b.netPer40 - a.netPer40 || b.seconds - a.seconds),
+      byDefense: [...pool].sort((a, b) => a.defPer40 - b.defPer40 || b.seconds - a.seconds),
+    };
+  }, [activeKosarstatTeamAnalysis, selectedComboSize]);
 
   const comboPlayerOptions = useMemo(() => {
     if (!activeKosarstatTeamAnalysis) return [] as string[];
@@ -10007,6 +10028,12 @@ export function SeasonComparison({
       valPer36: roundValue(player.valPer36, 1),
     }));
   }, [postgameReport]);
+
+  // A csapat szezonbeli meccsszáma a trendkártya megjelenítéséhez.
+  const teamTrendGameCount = useMemo(
+    () => (resolvedTeamId ? teamGamePlayerRows.get(resolvedTeamId)?.size ?? 0 : 0),
+    [resolvedTeamId, teamGamePlayerRows]
+  );
 
   const playerTrendSeries = useMemo(() => {
     if (!resolvedTeamId || !selectedTrendPlayerId) {
@@ -15728,7 +15755,9 @@ export function SeasonComparison({
                   {showKosarstatOnlyPostgame ? 'Kosarstat only: BE' : 'Kosarstat only: KI'}
                 </Button>
                 <span className="text-xs text-muted">
-                  Bekapcsolva csak a Kosarstat negyed + team metric insightok látszanak az erősség/probléma/fókusz blokkokban.
+                  {showKosarstatOnlyPostgame
+                    ? 'Az erősség/probléma/fókusz blokkokban csak a Kosarstat negyed- és csapatmutató-alapú sorok látszanak.'
+                    : 'Az erősség/probléma/fókusz blokkokban a box score és a Kosarstat sorok együtt látszanak.'}
                 </span>
               </div>
 
@@ -15870,7 +15899,7 @@ export function SeasonComparison({
                     );
                   })()}
 
-                  {(kosarstatPostgameContext.clutch || kosarstatPostgameContext.turnoverTypes.length > 0) && (
+                  {(kosarstatPostgameContext.clutch?.available || kosarstatPostgameContext.turnoverTypes.length > 0) && (
                     <div className="space-y-2">
                       <div className="text-xs text-secondary">Kosarstat clutch blokk</div>
 
@@ -15896,12 +15925,6 @@ export function SeasonComparison({
                             <div>TO%: {formatNullableNumber(kosarstatPostgameContext.clutch.tovPct, 1, '%')}</div>
                             <div>AST/TO: {formatNullableNumber(kosarstatPostgameContext.clutch.assistToTurnover, 2)}</div>
                           </div>
-                        </div>
-                      )}
-
-                      {kosarstatPostgameContext.clutch && !kosarstatPostgameContext.clutch.available && (
-                        <div className="rounded-md border border-border-subtle bg-surface-1/60 p-2 text-xs text-secondary">
-                          Kosarstat clutch minta rövid vagy nem elérhető ebben a meccsben.
                         </div>
                       )}
 
@@ -16248,13 +16271,16 @@ export function SeasonComparison({
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       <div>
-                        <div className="text-xs text-secondary mb-1">Leghatékonyabb együttállások (Net/40)</div>
+                        <div className="text-xs text-secondary mb-1">Leghatékonyabb együttállások (Net/40, min. 5 perc)</div>
                         <div className="space-y-1">
-                          {(selectedComboSize === 2 ? activeKosarstatTeamAnalysis.pairStats : activeKosarstatTeamAnalysis.trioStats)
+                          {rankedComboStats.byNet.length === 0 && (
+                            <div className="text-xs text-muted">Nincs legalább 5 perces együttállás.</div>
+                          )}
+                          {rankedComboStats.byNet
                             .slice(0, 5)
                             .map(item => (
                               <div key={`best-net-${item.key}`} className="text-xs bg-surface-1/60 rounded px-2 py-1 flex items-center justify-between">
-                                <span className="text-primary truncate pr-2">{item.players.join(' + ')}</span>
+                                <span className="text-primary truncate pr-2">{item.players.join(' + ')} <span className="text-muted">({item.minutesLabel})</span></span>
                                 <span className={item.netPer40 >= 0 ? 'text-positive' : 'text-negative'}>{item.netPer40 > 0 ? '+' : ''}{item.netPer40.toFixed(1)}</span>
                               </div>
                             ))}
@@ -16262,15 +16288,16 @@ export function SeasonComparison({
                       </div>
 
                       <div>
-                        <div className="text-xs text-secondary mb-1">Legjobb védekező együttállások (legalacsonyabb Def/40)</div>
+                        <div className="text-xs text-secondary mb-1">Legjobb védekező együttállások (legalacsonyabb Def/40, min. 5 perc)</div>
                         <div className="space-y-1">
-                          {(selectedComboSize === 2 ? activeKosarstatTeamAnalysis.pairStats : activeKosarstatTeamAnalysis.trioStats)
-                            .slice()
-                            .sort((a, b) => a.defPer40 - b.defPer40)
+                          {rankedComboStats.byDefense.length === 0 && (
+                            <div className="text-xs text-muted">Nincs legalább 5 perces együttállás.</div>
+                          )}
+                          {rankedComboStats.byDefense
                             .slice(0, 5)
                             .map(item => (
                               <div key={`best-def-${item.key}`} className="text-xs bg-surface-1/60 rounded px-2 py-1 flex items-center justify-between">
-                                <span className="text-primary truncate pr-2">{item.players.join(' + ')}</span>
+                                <span className="text-primary truncate pr-2">{item.players.join(' + ')} <span className="text-muted">({item.minutesLabel})</span></span>
                                 <span className="text-cyan">{item.defPer40.toFixed(1)}</span>
                               </div>
                             ))}
@@ -16817,9 +16844,9 @@ export function SeasonComparison({
                   )}
                 </div>
                 <div className="space-y-3">
+                  {opponentImpactChartData.length > 0 && (
                   <div className="rounded-lg border border-border-subtle bg-surface-1/60 p-3">
                     <div className="text-sm text-secondary font-medium mb-2" title="Megmutatja, hogy típusonként hány döntő faktor jelent meg a meccs képében.">Ellenfél-hatás faktoronként</div>
-                    {opponentImpactChartData.length > 0 ? (
                       <div className="h-52">
                         <ResponsiveContainer width="100%" height="100%">
                           <BarChart data={opponentImpactChartData} margin={{ top: 8, right: 10, left: 0, bottom: 8 }}>
@@ -16843,10 +16870,8 @@ export function SeasonComparison({
                           </BarChart>
                         </ResponsiveContainer>
                       </div>
-                    ) : (
-                      <div className="text-sm text-muted">Nincs elég faktor adat az ellenfél-hatás bontáshoz.</div>
-                    )}
                   </div>
+                  )}
 
                   <div className="rounded-lg border border-border-subtle bg-surface-1/60 p-3">
                     <div className="text-sm text-secondary font-medium mb-1">Kiválasztott faktor részletei</div>
@@ -17000,9 +17025,10 @@ export function SeasonComparison({
                       )}
                     </div>
 
+                    {teamTrendGameCount >= PLAYER_TREND_MIN_GAMES && (
                     <div className="rounded-lg border border-border-subtle bg-surface-1/60 p-3">
                       <div className="flex items-center justify-between gap-2 mb-2">
-                        <div className="text-sm text-secondary font-medium" title="Időbeli alakulás az utolsó 8 meccsen: TS%, Usage%, VAL/36.">Játékos trend (utolsó 8 meccs)</div>
+                        <div className="text-sm text-secondary font-medium" title="Időbeli alakulás az utolsó 8 meccsen: TS%, Usage%, VAL/36.">Játékos trend (utolsó {Math.min(teamTrendGameCount, 8)} meccs)</div>
                         <Select value={selectedTrendPlayerId} onValueChange={setSelectedTrendPlayerId}>
                           <SelectTrigger className="h-8 w-52 text-primary">
                             <SelectValue placeholder="Válassz játékost" />
@@ -17016,7 +17042,7 @@ export function SeasonComparison({
                           </SelectContent>
                         </Select>
                       </div>
-                      {playerTrendSeries.length > 0 ? (
+                      {playerTrendSeries.length >= PLAYER_TREND_MIN_GAMES ? (
                         <div className="h-64">
                           <ResponsiveContainer width="100%" height="100%">
                             <LineChart data={playerTrendSeries} margin={{ top: 8, right: 12, left: 0, bottom: 8 }}>
@@ -17042,9 +17068,10 @@ export function SeasonComparison({
                           </ResponsiveContainer>
                         </div>
                       ) : (
-                        <div className="text-sm text-muted">Nincs elég meccsadat trendgörbéhez.</div>
+                        <div className="text-sm text-muted">A játékosnak {playerTrendSeries.length} meccse van – a trendhez legalább {PLAYER_TREND_MIN_GAMES} kell.</div>
                       )}
                     </div>
+                    )}
                   </div>
 
                   <div className="flex items-center justify-between gap-2">

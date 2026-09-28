@@ -1,6 +1,6 @@
 # BACKLOG.md – ASEStats Projekt
 
-_Utoljára frissítve: 2026-09-28 (H12 – post-game riportgenerátor hibalista, A–D egység)_
+_Utoljára frissítve: 2026-09-28 (H12 – post-game riportgenerátor hibalista, A–E egység kész)_
 
 ---
 
@@ -686,7 +686,7 @@ a nézőpont nem hiba.
   „Szezon: 2026/2027” – a Liga csak akkor jelenik meg, ha különbözik. Csak
   webes MD export, mobil jegyzet nem kell.
 
-**H12 – Post-game riportgenerátor hibalista (ASE–Pécs, Szolnok–OSE) – folyamatban (2026-09-28)**
+**H12 – Post-game riportgenerátor hibalista (ASE–Pécs, Szolnok–OSE) ✓ (2026-09-28)** – a 18 pont kész; nyitott: 3 Kosarstat meccs force reimportja (lent)
 
 Felhasználói hibaösszesítő, 18 tétel (P1 szakmai következtetés, P2 adat-
 inkonzisztencia, P3 szöveg/UI). Valós adaton reprodukálva: a két meccsre a
@@ -790,11 +790,25 @@ egység zárja.
   push csak 09-27-én történt, mint a H11-nél). Teendő (jóváhagyással): a 3
   meccs force reimportja (`kosarstat:pbp` force), majd
   `kosarstat:backfill-links`.
-- [ ] **E – UI és szöveg (12, 14–18)**: lineup-rangsor percküszöb (a
-  `minSampleSeconds = 180` fallbackje ma a teljes mintára esik vissza);
-  „X győzött Y ellen”; a védekezési mondat referenciával; generikus fallback
-  szövegek; üres blokkok (clutch 00:00, 1 meccses trend, üres chart)
-  elrejtése; a „Kosarstat only” kapcsoló leírása állapotfüggő.
+- [x] **E – UI és szöveg (12, 14–18) ✓ (2026-09-28)**
+  - 12: lineup-rangsorok (post-game ötös/páros és a „Leghatékonyabb /
+    legjobb védekező együttállások” lista) csak legalább 5 perces mintából
+    (`LINEUP_MIN_SAMPLE_SECONDS`), a korábbi „ha nincs stabil minta, jöhet
+    bármi” visszaesés nélkül; a lista a perceket is mutatja.
+  - 14: „X győzött Y ellen” / „X vereséget szenvedett Y ellen”.
+  - 15: a védekezési mondat számokkal és referenciával (ellenfél eFG vs liga
+    medián); liga benchmark nélkül nincs viszonyítás (korábban a saját támadó
+    eFG volt a tartalék). Új `report.context.defense`.
+  - 16: az általános „Végrehajtás stabilizálása…” helyett adatvezérelt
+    tartalék-fókusz; az ellenfélprofil a referencia nevével, és nagy
+    különbségnél egy, egymást ki nem záró állítást ad.
+  - 17: a clutch blokk csak értelmezhető mintánál (clutch szakasz nélkül
+    megjegyzés: „Nem volt clutch szakasz…”), a játékostrend csak ≥ 3
+    meccsnél, az üres ellenfél-hatás chart rejtve.
+  - 18: a „Kosarstat only” kapcsoló leírása az aktuális állapotot írja le.
+  - `tsc`, `eslint` (korábbi 5 figyelmeztetés), `npm run build` tiszta;
+    a szövegek valós adaton ellenőrizve, böngészős ellenőrzés nem történt.
+    Mobil jegyzet: `mobile-sync/2026-09-28-postgame-texts-empty-blocks.md`.
 
 ---
 
