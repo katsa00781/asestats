@@ -714,10 +714,12 @@ export function postgameReportToMd(report: PostGameReport, seasonName?: string):
     `| Birtoklás (tempó) | ${report.metrics.pace.toFixed(1)} | ${refCell(ratings?.refPossessions)} | ${deltaCell(report.metrics.pace, ratings?.refPossessions)} |`,
   );
 
+  // Viszonyítási alap nélkül a referencia maga a meccs – nem írunk 0-s deltát.
+  const comparable = report.baseline?.comparable ?? true;
   for (const stat of report.metrics.keyStats) {
     const gameVal = stat.unit === 'pct' ? `${stat.game.toFixed(1)}%` : stat.game.toFixed(1);
-    const seasonVal = stat.unit === 'pct' ? `${stat.season.toFixed(1)}%` : stat.season.toFixed(1);
-    const delta = signed1(stat.delta, stat.unit === 'pct' ? ' pp' : '');
+    const seasonVal = !comparable ? '–' : stat.unit === 'pct' ? `${stat.season.toFixed(1)}%` : stat.season.toFixed(1);
+    const delta = comparable ? signed1(stat.delta, stat.unit === 'pct' ? ' pp' : '') : '–';
     lines.push(`| ${stat.label} | ${gameVal} | ${seasonVal} | ${delta} |`);
   }
 

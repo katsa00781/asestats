@@ -1,6 +1,6 @@
 # BACKLOG.md – ASEStats Projekt
 
-_Utoljára frissítve: 2026-09-27 (H11 – a 2026/27-es `games` sorokon hiányzó `opponent_team_id`)_
+_Utoljára frissítve: 2026-09-28 (H12 – post-game riportgenerátor hibalista, A egység: referencialogika)_
 
 ---
 
@@ -685,6 +685,57 @@ a nézőpont nem hiba.
   `seasonName` paramétert kap, a fejléc közös `seasonLeagueLine()` segéddel
   „Szezon: 2026/2027” – a Liga csak akkor jelenik meg, ha különbözik. Csak
   webes MD export, mobil jegyzet nem kell.
+
+**H12 – Post-game riportgenerátor hibalista (ASE–Pécs, Szolnok–OSE) – folyamatban (2026-09-28)**
+
+Felhasználói hibaösszesítő, 18 tétel (P1 szakmai következtetés, P2 adat-
+inkonzisztencia, P3 szöveg/UI). Valós adaton reprodukálva: a két meccsre a
+`analyzePostGameReport` a DB-ből épített bemenettel futtatva (ideiglenes
+harness, nem része a repónak). A javasolt sorrendet követjük, egységenként
+külön commit.
+
+**Megállapítás az 1. pontról:** a jelenlegi kód (H10, 2026-09-27) mindkét
+meccsnél liga-medián referenciát használ (1 szezonmeccs), és az „FT 23,7% →
+23,7%” önmagára mutató cél sem jön elő. A kapott riportok a H10 előtti
+kóddal készülhettek. A maradék rést (kis minta + nincs liga benchmark) az A
+egység zárja.
+
+- [x] **A – Referencialogika (1, 7, 11) ✓ (2026-09-28)**
+  - 11: a szezon- és liga-OREB% a saját lepattanókból számolt
+    (`T-lep / (T-lep + saját V-lep)`), a meccsérték az ellenfél V-lepből –
+    két definíció egy táblában. Új opcionális `TeamSeasonStat.oppDreb`; a
+    `SeasonComparison` a szezon meccsenkénti soraiból számolja
+    (`postgameOppDrebByTeam`). 2026/27 liga OREB medián: 28,5% → 26,3%.
+  - 7: a célérték a jelenlegi érték és a jobbik referencia közötti sávban,
+    meccsenkénti lépéskorláttal (`GOAL_MAX_STEP_PP`): ASE FT rate
+    `23.7% → 31.7% (referencia 42.1%)` a korábbi `→ 42.1%` helyett.
+  - 1 (maradék): `PostgameBaseline.comparable`; kis minta + liga benchmark
+    nélkül „Nincs referencia (kis minta)”, a szöveg és a ratingek nem
+    hivatkoznak referenciára, az MD / webes kártya nem ír 0-s deltát.
+  - `tsc`, `eslint` (csak a korábbi 5 figyelmeztetés), `npm run build`
+    tiszta. Mobil jegyzet: `mobile-sync/2026-09-28-postgame-reference-logic.md`.
+- [ ] **B – Faktorszelekció és előjel (2, 3)**: a döntő tényezők forrása az
+  ellenfél-különbség és a liga-delta, a szezon-delta másodlagos; a „Tripla-
+  volumen kockázat kontroll alatt” ág 35–42% közti ellenfél 3P%-nál is
+  pozitív címkét ad (valós adaton reprodukálva: Szolnok, 37,5%) – előjel,
+  küszöb (liga medián) és címke–mért érték összehangolása.
+- [ ] **C – Metrika-definíciók (4, 5, 8, 9)**: közös birtoklásszám
+  (`(poss_A + poss_B) / 2`) mindkét ratinghez; USG% perc-normalizált
+  képlettel (most csapatrészesedés, összege ≈ 100% – Molnár 3,8%); egy TO%
+  definíció jelölt képlettel (play-alapú vs. Kosarstat possession-alapú);
+  FT rate (FTA/FGA) vs. Kosarstat FTM rate jelölése. *Döntés kell: melyik
+  TO% / FT-mutató a megjelenített.*
+- [ ] **D – Adatvalidáció (6, 10, 13)**: box score ↔ Kosarstat névillesztés
+  (ID / alias, nem illeszkedő nevek naplózása); dobástérkép-dobásszám vs.
+  box score FGA figyelmeztetés; pozícióforrás egységesítése. *Döntés kell:
+  alias-tábla (sémaváltozás) vagy kódbeli alias.*
+- [ ] **E – UI és szöveg (12, 14–18)**: lineup-rangsor percküszöb (a
+  `minSampleSeconds = 180` fallbackje ma a teljes mintára esik vissza);
+  „X győzött Y ellen”; a védekezési mondat referenciával; generikus fallback
+  szövegek; üres blokkok (clutch 00:00, 1 meccses trend, üres chart)
+  elrejtése; a „Kosarstat only” kapcsoló leírása állapotfüggő.
+
+---
 
 **H11 – A 2026/2027-es `games` sorokon nincs `opponent_team_id` ✓ (2026-09-27)**
 

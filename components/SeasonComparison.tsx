@@ -8968,6 +8968,34 @@ export function SeasonComparison({
     ].map(item => ({ ...item, own: roundValue(item.own, 1), opponent: roundValue(item.opponent, 1) }));
   }, [pregameOpponentTeam, pregameOwnTeam]);
 
+  // Csapatonként az ellenfelek szezonos védő lepattanói: a postgame OREB% így
+  // ugyanazzal a nevezővel (T-lep + ellenfél V-lep) számol, mint a meccsérték.
+  const postgameOppDrebByTeam = useMemo(() => {
+    const playerToTeam = new Map<string, string>();
+    seasonPlayers.forEach(player => {
+      if (player.teamId) playerToTeam.set(player.id, player.teamId);
+    });
+
+    const drebByGame = new Map<string, Map<string, number>>();
+    playerGameStats.forEach(row => {
+      if (resolvedSeasonId && String(row.games?.season_id ?? '') !== String(resolvedSeasonId)) return;
+      const teamId = row.players?.team_id ?? playerToTeam.get(row.player_id);
+      if (!teamId) return;
+      if (!drebByGame.has(row.game_id)) drebByGame.set(row.game_id, new Map());
+      const byTeam = drebByGame.get(row.game_id)!;
+      byTeam.set(teamId, (byTeam.get(teamId) ?? 0) + (row.defensive_rebounds || 0));
+    });
+
+    const result = new Map<string, number>();
+    drebByGame.forEach(teamMap => {
+      const total = Array.from(teamMap.values()).reduce((sum, value) => sum + value, 0);
+      teamMap.forEach((dreb, teamId) => {
+        result.set(teamId, (result.get(teamId) ?? 0) + (total - dreb));
+      });
+    });
+    return result;
+  }, [playerGameStats, resolvedSeasonId, seasonPlayers]);
+
   const postgameBenchmarks = useMemo(() => {
     if (teamSeasonStats.length === 0) return null;
     const postTeams: PostgameTeamSeasonStat[] = teamSeasonStats.map(team => ({
@@ -8992,9 +9020,10 @@ export function SeasonComparison({
       blk: team.blk,
       fouls: team.fouls,
       val: team.val,
+      oppDreb: postgameOppDrebByTeam.get(team.teamId),
     }));
     return buildPostgameBenchmarks(postTeams);
-  }, [teamSeasonStats]);
+  }, [postgameOppDrebByTeam, teamSeasonStats]);
 
   const kosarstatPostgameContext = useMemo(() => {
     const targetGame = selectedGameForPostgame;
@@ -9153,6 +9182,7 @@ export function SeasonComparison({
       blk: selectedTeamStats.blk,
       fouls: selectedTeamStats.fouls,
       val: selectedTeamStats.val,
+      oppDreb: postgameOppDrebByTeam.get(selectedTeamStats.teamId),
     };
 
     const normalizedOpponentName = selectedGame.opponent?.toLowerCase() ?? '';
@@ -9253,7 +9283,7 @@ export function SeasonComparison({
       extraNotes: kosarstatPostgameNotes,
       lineupInsights,
     });
-  }, [kosarstatLineupAnalysis, kosarstatPostgameContext, kosarstatPostgameNotes, league, playerGameStats, postgameBenchmarks, postgameShotContext, pregameReport, rolesByPlayerId, seasonPlayers, selectedGame, resolvedTeamId, selectedTeamStats]);
+  }, [kosarstatLineupAnalysis, kosarstatPostgameContext, kosarstatPostgameNotes, league, playerGameStats, postgameBenchmarks, postgameOppDrebByTeam, postgameShotContext, pregameReport, rolesByPlayerId, seasonPlayers, selectedGame, resolvedTeamId, selectedTeamStats]);
 
   const activeKosarstatTeamAnalysis = useMemo(() => {
     if (!kosarstatLineupAnalysis) return null;
@@ -16224,13 +16254,17 @@ export function SeasonComparison({
                           {formatPostgameValue(item.game, item.unit)}
                         </div>
                         <div className="text-xs text-muted">
-                          {postgameReport.baseline?.kind === 'league' ? 'Referencia' : 'Szezon'}: {formatPostgameValue(item.season, item.unit)}
+                          {postgameReport.baseline?.comparable === false
+                            ? 'Nincs referencia (kis minta)'
+                            : `${postgameReport.baseline?.kind === 'league' ? 'Referencia' : 'Szezon'}: ${formatPostgameValue(item.season, item.unit)}`}
                           {Number.isFinite(item.leagueMedian) ? ` • Liga medián: ${formatPostgameValue(item.leagueMedian ?? 0, item.unit)}` : ''}
                         </div>
                       </div>
-                      <div className={`text-sm font-medium ${item.delta >= 0 ? 'text-positive' : 'text-negative'}`}>
-                        {formatPostgameDelta(item.delta, item.unit)}
-                      </div>
+                      {postgameReport.baseline?.comparable !== false && (
+                        <div className={`text-sm font-medium ${item.delta >= 0 ? 'text-positive' : 'text-negative'}`}>
+                          {formatPostgameDelta(item.delta, item.unit)}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
