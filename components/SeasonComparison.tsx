@@ -8968,29 +8968,41 @@ export function SeasonComparison({
     ].map(item => ({ ...item, own: roundValue(item.own, 1), opponent: roundValue(item.opponent, 1) }));
   }, [pregameOpponentTeam, pregameOwnTeam]);
 
-  // Csapatonként az ellenfelek szezonos védő lepattanói: a postgame OREB% így
-  // ugyanazzal a nevezővel (T-lep + ellenfél V-lep) számol, mint a meccsérték.
-  const postgameOppDrebByTeam = useMemo(() => {
+  // Csapatonként az ellenfelek szezonos védő lepattanói és birtoklásbecslése:
+  // a postgame OREB% (T-lep + ellenfél V-lep) és a közös birtoklásszám
+  // ugyanazzal a definícióval számol a referenciában, mint a meccsértéknél.
+  const postgameOpponentTotalsByTeam = useMemo(() => {
     const playerToTeam = new Map<string, string>();
     seasonPlayers.forEach(player => {
       if (player.teamId) playerToTeam.set(player.id, player.teamId);
     });
 
-    const drebByGame = new Map<string, Map<string, number>>();
+    type SideTotals = { dreb: number; possessions: number };
+    const byGame = new Map<string, Map<string, SideTotals>>();
     playerGameStats.forEach(row => {
       if (resolvedSeasonId && String(row.games?.season_id ?? '') !== String(resolvedSeasonId)) return;
       const teamId = row.players?.team_id ?? playerToTeam.get(row.player_id);
       if (!teamId) return;
-      if (!drebByGame.has(row.game_id)) drebByGame.set(row.game_id, new Map());
-      const byTeam = drebByGame.get(row.game_id)!;
-      byTeam.set(teamId, (byTeam.get(teamId) ?? 0) + (row.defensive_rebounds || 0));
+      if (!byGame.has(row.game_id)) byGame.set(row.game_id, new Map());
+      const byTeam = byGame.get(row.game_id)!;
+      const current = byTeam.get(teamId) ?? { dreb: 0, possessions: 0 };
+      const fga = (row.close_attempted || 0) + (row.mid_attempted || 0) + (row.three_attempted || 0);
+      current.dreb += row.defensive_rebounds || 0;
+      current.possessions += fga + 0.44 * (row.free_throw_attempted || 0) + (row.turnovers || 0) - (row.offensive_rebounds || 0);
+      byTeam.set(teamId, current);
     });
 
-    const result = new Map<string, number>();
-    drebByGame.forEach(teamMap => {
-      const total = Array.from(teamMap.values()).reduce((sum, value) => sum + value, 0);
-      teamMap.forEach((dreb, teamId) => {
-        result.set(teamId, (result.get(teamId) ?? 0) + (total - dreb));
+    const result = new Map<string, SideTotals>();
+    byGame.forEach(teamMap => {
+      // Csak a két csapatos meccs ad megbízható ellenfél-oldalt.
+      if (teamMap.size !== 2) return;
+      const sides = Array.from(teamMap.entries());
+      sides.forEach(([teamId], index) => {
+        const opponentSide = sides[1 - index][1];
+        const current = result.get(teamId) ?? { dreb: 0, possessions: 0 };
+        current.dreb += opponentSide.dreb;
+        current.possessions += Math.max(opponentSide.possessions, 0);
+        result.set(teamId, current);
       });
     });
     return result;
@@ -9020,10 +9032,11 @@ export function SeasonComparison({
       blk: team.blk,
       fouls: team.fouls,
       val: team.val,
-      oppDreb: postgameOppDrebByTeam.get(team.teamId),
+      oppDreb: postgameOpponentTotalsByTeam.get(team.teamId)?.dreb,
+      oppPossessions: postgameOpponentTotalsByTeam.get(team.teamId)?.possessions,
     }));
     return buildPostgameBenchmarks(postTeams);
-  }, [postgameOppDrebByTeam, teamSeasonStats]);
+  }, [postgameOpponentTotalsByTeam, teamSeasonStats]);
 
   const kosarstatPostgameContext = useMemo(() => {
     const targetGame = selectedGameForPostgame;
@@ -9182,7 +9195,8 @@ export function SeasonComparison({
       blk: selectedTeamStats.blk,
       fouls: selectedTeamStats.fouls,
       val: selectedTeamStats.val,
-      oppDreb: postgameOppDrebByTeam.get(selectedTeamStats.teamId),
+      oppDreb: postgameOpponentTotalsByTeam.get(selectedTeamStats.teamId)?.dreb,
+      oppPossessions: postgameOpponentTotalsByTeam.get(selectedTeamStats.teamId)?.possessions,
     };
 
     const normalizedOpponentName = selectedGame.opponent?.toLowerCase() ?? '';
@@ -9283,7 +9297,7 @@ export function SeasonComparison({
       extraNotes: kosarstatPostgameNotes,
       lineupInsights,
     });
-  }, [kosarstatLineupAnalysis, kosarstatPostgameContext, kosarstatPostgameNotes, league, playerGameStats, postgameBenchmarks, postgameOppDrebByTeam, postgameShotContext, pregameReport, rolesByPlayerId, seasonPlayers, selectedGame, resolvedTeamId, selectedTeamStats]);
+  }, [kosarstatLineupAnalysis, kosarstatPostgameContext, kosarstatPostgameNotes, league, playerGameStats, postgameBenchmarks, postgameOpponentTotalsByTeam, postgameShotContext, pregameReport, rolesByPlayerId, seasonPlayers, selectedGame, resolvedTeamId, selectedTeamStats]);
 
   const activeKosarstatTeamAnalysis = useMemo(() => {
     if (!kosarstatLineupAnalysis) return null;
@@ -15767,15 +15781,16 @@ export function SeasonComparison({
                       return `${roundValue(numeric, digits)}${suffix}`;
                     };
 
-                    const diffBadge = (label: string, ownValue: unknown, oppValue: unknown, suffix = '') => {
+                    const diffBadge = (label: string, ownValue: unknown, oppValue: unknown, suffix = '', lowerIsBetter = false) => {
                       const ownNum = Number(ownValue);
                       const oppNum = Number(oppValue);
                       if (!Number.isFinite(ownNum) || !Number.isFinite(oppNum)) return null;
                       const diff = roundValue(ownNum - oppNum, 1);
+                      const isGood = lowerIsBetter ? diff <= 0 : diff >= 0;
                       return (
                         <div key={`metric-diff-${label}`} className="rounded-md border border-border-subtle bg-surface-1/60 px-2 py-1 text-xs">
                           <span className="text-secondary">{label}: </span>
-                          <span className={diff >= 0 ? 'text-positive' : 'text-negative'}>
+                          <span className={isGood ? 'text-positive' : 'text-negative'}>
                             {diff > 0 ? '+' : ''}{diff}{suffix}
                           </span>
                         </div>
@@ -15784,7 +15799,7 @@ export function SeasonComparison({
 
                     return (
                       <div className="space-y-2">
-                        <div className="text-xs text-secondary">Team advanced mutatók</div>
+                        <div className="text-xs text-secondary">Kosarstat csapatmutatók (a Kosarstat saját definícióival)</div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
                           <div className="rounded-md border border-border-subtle bg-surface-1/60 p-2">
                             <div className="text-muted mb-1">Saját csapat ({own?.team_name || 'ismeretlen'})</div>
@@ -15792,9 +15807,9 @@ export function SeasonComparison({
                               <div>POSS: {fmt(own?.poss)}</div>
                               <div>ORTG: {fmt(own?.ortg)}</div>
                               <div>eFG: {fmt(own?.efg, 1, '%')}</div>
-                              <div>TO%: {fmt(own?.tov_pct, 1, '%')}</div>
+                              <div title="Kosarstat definíció: LV / birtoklás – eltér a riport Oliver-féle TO rate-jétől">TO% (LV/birt.): {fmt(own?.tov_pct, 1, '%')}</div>
                               <div>ORB%: {fmt(own?.orb_pct, 1, '%')}</div>
-                              <div>FTM rate: {fmt(own?.ftm_rate, 3)}</div>
+                              <div>FTM rate (FTM/FGA): {fmt(own?.ftm_rate, 3)}</div>
                             </div>
                           </div>
                           <div className="rounded-md border border-border-subtle bg-surface-1/60 p-2">
@@ -15803,9 +15818,9 @@ export function SeasonComparison({
                               <div>POSS: {fmt(opp?.poss)}</div>
                               <div>ORTG: {fmt(opp?.ortg)}</div>
                               <div>eFG: {fmt(opp?.efg, 1, '%')}</div>
-                              <div>TO%: {fmt(opp?.tov_pct, 1, '%')}</div>
+                              <div title="Kosarstat definíció: LV / birtoklás – eltér a riport Oliver-féle TO rate-jétől">TO% (LV/birt.): {fmt(opp?.tov_pct, 1, '%')}</div>
                               <div>ORB%: {fmt(opp?.orb_pct, 1, '%')}</div>
-                              <div>FTM rate: {fmt(opp?.ftm_rate, 3)}</div>
+                              <div>FTM rate (FTM/FGA): {fmt(opp?.ftm_rate, 3)}</div>
                             </div>
                           </div>
                         </div>
@@ -15814,7 +15829,7 @@ export function SeasonComparison({
                           {[
                             diffBadge('ORTG diff', own?.ortg, opp?.ortg),
                             diffBadge('eFG diff', own?.efg, opp?.efg, ' pp'),
-                            diffBadge('TO% diff', own?.tov_pct, opp?.tov_pct, ' pp'),
+                            diffBadge('TO% (LV/birt.) diff', own?.tov_pct, opp?.tov_pct, ' pp', true),
                             diffBadge('ORB% diff', own?.orb_pct, opp?.orb_pct, ' pp'),
                           ].filter(Boolean)}
                         </div>

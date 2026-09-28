@@ -733,7 +733,7 @@ export function postgameReportToMd(report: PostGameReport, seasonName?: string):
 
   lines.push(
     ``,
-    `*Birtoklás = FGA + 0,44·FTA + LV − T-lep (saját becslés). TO rate = LV / (FGA + 0,44·FTA + LV) – a lepattanó utáni új támadás nem új birtoklás, ezért tér el az LV / birtoklás aránytól. ORtg / DRtg = szerzett / kapott pont 100 birtoklásra ugyanabból a birtoklásbecslésből.*`
+    `*Birtoklás = a két csapat (FGA + 0,44·FTA + LV − T-lep) becslésének átlaga – ez a tempó és mindkét rating közös nevezője, így a DRtg megegyezik az ellenfél ORtg-jével. TO rate (Oliver) = LV / (FGA + 0,44·FTA + LV); a Kosarstat TO% (LV / birtoklás) ettől eltér, és csak a Kosarstat blokkban szerepel. FTM rate = értékesített büntető / FGA – a liga medián is erre vonatkozik. ORtg / DRtg = szerzett / kapott pont 100 közös birtoklásra.*`
   );
 
   const opp = report.metrics.opponent;
@@ -746,9 +746,9 @@ export function postgameReportToMd(report: PostGameReport, seasonName?: string):
       `|--------|-------|`,
       `| eFG% | ${opp.efg.toFixed(1)}% |`,
       `| 3P (dobott/kísérlet) | ${opp.fgm3}/${opp.fga3} (${opp.fga3 > 0 ? `${opp.threePct.toFixed(1)}%` : '–'}) |`,
-      `| FT rate | ${opp.ftRate.toFixed(1)}% |`,
+      `| FTM rate (FTM/FGA) | ${opp.ftRate.toFixed(1)}% |`,
       `| OREB% | ${opp.orebRate.toFixed(1)}% |`,
-      `| TO rate | ${opp.turnoverRate.toFixed(1)}% |`,
+      `| TO rate (Oliver) | ${opp.turnoverRate.toFixed(1)}% |`,
     );
   }
 

@@ -1,6 +1,6 @@
 # BACKLOG.md – ASEStats Projekt
 
-_Utoljára frissítve: 2026-09-28 (H12 – post-game riportgenerátor hibalista, A–B egység)_
+_Utoljára frissítve: 2026-09-28 (H12 – post-game riportgenerátor hibalista, A–B–C1 egység)_
 
 ---
 
@@ -732,16 +732,31 @@ egység zárja.
     faktor-részletező védekezési faktorhoz nem mutat saját (0-s) deltát.
   - `tsc`, `eslint` (korábbi 5 figyelmeztetés), `npm run build` tiszta.
     Mobil jegyzet: `mobile-sync/2026-09-28-postgame-decisive-factors.md`.
-- [ ] **C – Metrika-definíciók (4, 5, 8, 9)**: közös birtoklásszám
-  (`(poss_A + poss_B) / 2`) mindkét ratinghez; USG% perc-normalizált
-  képlettel (most csapatrészesedés, összege ≈ 100% – Molnár 3,8%); egy TO%
-  definíció jelölt képlettel (play-alapú vs. Kosarstat possession-alapú);
-  FT rate (FTA/FGA) vs. Kosarstat FTM rate jelölése. *Döntés kell: melyik
-  TO% / FT-mutató a megjelenített.*
+- **Döntések (felhasználó, 2026-09-28):** TO% = Oliver-féle
+  (`LV / (FGA + 0,44·FTA + LV)`), a Kosarstat TO% csak a Kosarstat blokkban;
+  FT-mutató = **FTM / FGA mindenhol** a riportban, a benchmark is; USG% =
+  standard perc-normalizált képlet, alacsony ≤ 15%, magas ≥ 25%;
+  névillesztés = kódbeli alias + naplózás (sémaváltozás nélkül).
+- [x] **C1 – Csapatmetrikák (4, 8, 9) ✓ (2026-09-28)**
+  - 4: közös birtoklásszám `(saját + ellenfél) / 2` a tempóhoz és mindkét
+    ratinghez; a szezon / liga-benchmark is (új `TeamSeasonStat.oppPossessions`,
+    `SeasonComparison` `postgameOpponentTotalsByTeam`). ASE–Pécs: birtoklás
+    75,5, ASE DRtg = Pécs ORtg = 102,0 (korábban 98,8 vs 105,3).
+  - 9: `ftRate` = FTM / FGA a riportban, a ligabenchmarkban és az
+    ellenfél-blokkban; címke `FTM rate`, küszöbök FTM-skálára igazítva.
+    ASE: 18,4% vs liga medián 31,4%.
+  - 8: `TO rate (Oliver)` címke és képlet-lábjegyzet; a Kosarstat TO%
+    (LV / birtoklás) kikerült a riport erősség / probléma / fókusz soraiból,
+    a Kosarstat nyers blokk feliratai jelöltek, a TO-különbség színe javítva.
+  - Nyitott: a pregame / csapatelemzés / `gameStatsToMd` továbbra is FTA / FGA
+    „FT rate”-et használ (jelölten) – az átállítás külön döntés.
+  - `tsc`, `eslint` (korábbi 5 figyelmeztetés), `npm run build` tiszta.
+    Mobil jegyzet: `mobile-sync/2026-09-28-postgame-metric-definitions.md`.
+- [ ] **C2 – USG% (5)**: standard perc-normalizált USG%, ≤ 15% / ≥ 25%
+  küszöbök, az Impact score usage-komponensének újraskálázása.
 - [ ] **D – Adatvalidáció (6, 10, 13)**: box score ↔ Kosarstat névillesztés
-  (ID / alias, nem illeszkedő nevek naplózása); dobástérkép-dobásszám vs.
-  box score FGA figyelmeztetés; pozícióforrás egységesítése. *Döntés kell:
-  alias-tábla (sémaváltozás) vagy kódbeli alias.*
+  (kódbeli alias + nem illeszkedő nevek naplózása – eldöntve); dobástérkép-
+  dobásszám vs. box score FGA figyelmeztetés; pozícióforrás egységesítése.
 - [ ] **E – UI és szöveg (12, 14–18)**: lineup-rangsor percküszöb (a
   `minSampleSeconds = 180` fallbackje ma a teljes mintára esik vissza);
   „X győzött Y ellen”; a védekezési mondat referenciával; generikus fallback

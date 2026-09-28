@@ -81,6 +81,11 @@ export type TeamSeasonStat = {
    * hiányában a saját lepattanókból számolt közelítés marad.
    */
   oppDreb?: number;
+  /**
+   * Az ellenfelek birtoklásbecslése a szezonban. Megadva a tempó és az
+   * ORtg / DRtg a két csapat átlagolt birtoklásszámából számol, mint a meccsen.
+   */
+  oppPossessions?: number;
 };
 
 export type BenchmarkPercentiles = {
@@ -120,7 +125,7 @@ export type PostgameBaseline = {
   noun: string;
 };
 
-/** Pont / 100 birtoklás – a birtoklás a `metrics.pace` saját becslése. */
+/** Pont / 100 birtoklás – a birtoklás a `metrics.pace` közös (két csapat átlaga) becslése. */
 export type PostgameRatings = {
   possessions: number;
   ortg: number;
@@ -512,6 +517,7 @@ export type NormalizedTeamStats = TeamSeasonStat & {
   twoRate: number;
   threeRate: number;
   threePct: number;
+  /** FTM / FGA (értékesített büntető / mezőnykísérlet). */
   ftRate: number;
   efg: number;
   valPerGame: number;
@@ -535,12 +541,22 @@ export type NormalizedGameStats = TeamGameStat & {
   efg: number;
 };
 
+/**
+ * Közös birtoklásszám: a két csapat becslésének átlaga. Egy meccsen a két
+ * csapat birtoklása ±1 lehet csak, ezért mindkét rating ugyanazzal a
+ * nevezővel számol (így a DRtg = az ellenfél ORtg-je).
+ */
+const sharedPossessions = (own: number, opponent: number) => (own + opponent) / 2;
+
 const normalizeTeamSeason = (raw: TeamSeasonStat): NormalizedTeamStats => {
   const games = raw.games || 1;
   const fga = raw.fga2 + raw.fga3;
   const fgm = raw.fgm2 + raw.fgm3;
   const tovDenominator = fga + 0.44 * raw.fta + raw.tov;
-  const totalPossessions = Math.max(tovDenominator - raw.oreb, 0);
+  const ownPossessions = Math.max(tovDenominator - raw.oreb, 0);
+  const totalPossessions = typeof raw.oppPossessions === 'number' && raw.oppPossessions > 0
+    ? sharedPossessions(ownPossessions, raw.oppPossessions)
+    : ownPossessions;
   const pace = totalPossessions / games;
   const ortg = totalPossessions > 0 ? (raw.pointsFor / totalPossessions) * 100 : 0;
   const drtg = totalPossessions > 0 ? (raw.pointsAgainst / totalPossessions) * 100 : 0;
@@ -553,7 +569,7 @@ const normalizeTeamSeason = (raw: TeamSeasonStat): NormalizedTeamStats => {
   const twoRate = fga > 0 ? raw.fga2 / fga : 0;
   const threeRate = fga > 0 ? raw.fga3 / fga : 0;
   const threePct = raw.fga3 > 0 ? (raw.fgm3 / raw.fga3) * 100 : 0;
-  const ftRate = fga > 0 ? raw.fta / fga : 0;
+  const ftRate = fga > 0 ? raw.ftm / fga : 0;
   const efg = fga > 0 ? ((fgm + 0.5 * raw.fgm3) / fga) * 100 : 0;
   const valPerGame = raw.val / games;
 
@@ -587,7 +603,7 @@ const normalizeTeamGame = (raw: TeamGameStat, opponent: TeamGameStat): Normalize
   const twoRate = fga > 0 ? raw.fga2 / fga : 0;
   const threeRate = fga > 0 ? raw.fga3 / fga : 0;
   const threePct = raw.fga3 > 0 ? (raw.fgm3 / raw.fga3) * 100 : 0;
-  const ftRate = fga > 0 ? raw.fta / fga : 0;
+  const ftRate = fga > 0 ? raw.ftm / fga : 0;
   const efg = fga > 0 ? ((fgm + 0.5 * raw.fgm3) / fga) * 100 : 0;
 
   return {
@@ -889,11 +905,11 @@ const buildDecisiveFactors = (
       });
     }
     const ftDiff = toPct(game.ftRate - opponent.ftRate, 1);
-    if (Math.abs(ftDiff) >= 10) {
+    if (Math.abs(ftDiff) >= 7) {
       add({
-        label: `${ftDiff > 0 ? 'Több' : 'Kevesebb'} kiharcolt büntető az ellenfélnél (FT rate ${toPct(game.ftRate, 1)}% vs ${toPct(opponent.ftRate, 1)}%, ${signedPp(ftDiff)})`,
+        label: `${ftDiff > 0 ? 'Több' : 'Kevesebb'} büntetőpont az ellenfélnél (FTM rate ${toPct(game.ftRate, 1)}% vs ${toPct(opponent.ftRate, 1)}%, ${signedPp(ftDiff)})`,
         axis: 'offense', type: 'Volumen', tone: ftDiff > 0 ? 'positive' : 'negative',
-        source: 'opponent', topic: 'ft', strength: Math.abs(ftDiff) / 10,
+        source: 'opponent', topic: 'ft', strength: Math.abs(ftDiff) / 7,
       });
     }
   }
@@ -925,8 +941,8 @@ const buildDecisiveFactors = (
     if (twoRateDelta >= 6) {
       reference('paint', twoRateDelta, 6, 'Volumen', `Festékfókusz erősebb a ${noun}nál`, '');
     }
-    reference('ft', toPct(game.ftRate - season.ftRate, 1), 6, 'Volumen',
-      `Több büntető a ${noun}nál (FT rate)`, `Kevés büntető a ${noun}hoz képest (FT rate)`);
+    reference('ft', toPct(game.ftRate - season.ftRate, 1), 5, 'Volumen',
+      `Több büntetőpont a ${noun}nál (FTM rate)`, `Kevés büntetőpont a ${noun}hoz képest (FTM rate)`);
     reference('assist', toPct(game.assistRate - season.assistRate, 1), 5, 'Hatékonyság',
       `Jobb labdajáratás a ${noun}nál`, `Labdajáratás akadozott a ${noun}hoz képest`);
     reference('to', toPct(game.turnoverRate - season.turnoverRate, 1), 5, 'Kontroll',
@@ -1083,7 +1099,7 @@ const getMechanismSignal = (
       const seasonTwoPct = season.fga2 > 0 ? (season.fgm2 / season.fga2) * 100 : 0;
       const twoPctDelta = round(gameTwoPct - seasonTwoPct, 1);
       if (twoDelta >= 5) return { realized: true, reason: `2P fókusz +${twoDelta} pp` };
-      if (ftDelta >= 8) return { realized: true, reason: `FT rate +${ftDelta} pp` };
+      if (ftDelta >= 6) return { realized: true, reason: `FTM rate +${ftDelta} pp` };
       if (twoPctDelta >= 6) return { realized: true, reason: `2P% +${twoPctDelta} pp` };
       break;
     }
@@ -1125,8 +1141,8 @@ const evaluateRiskFlag = (
   const lower = flag.toLowerCase();
   if (lower.includes('ft')) {
     const delta = toPct(game.ftRate - season.ftRate, 1);
-    return delta >= 5
-      ? `✓ ${flag} (+${delta} pp)`
+    return delta >= 4
+      ? `✓ ${flag} (FTM rate +${delta} pp)`
       : `✗ ${flag}`;
   }
   if (lower.includes('oreb')) {
@@ -1279,7 +1295,7 @@ const GOAL_MAX_STEP_PP: Record<string, number> = {
   three_pct: 5,
   assist_rate: 6,
   oreb_rate: 5,
-  ft_rate: 8,
+  ft_rate: 6,
 };
 
 /** Előtag-alapú keresés: a listaelemek zárójeles számot is tartalmaznak. */
@@ -1360,7 +1376,7 @@ const buildProblems = (
     if (threePctDelta <= -4) problems.push(`Gyenge 3P-hatékonyság (${threePctDelta} százalékpont)`);
     if (twoRateDelta <= -6) problems.push(`Festékbefejezések visszaestek (${twoRateDelta} százalékpont)`);
     if (orebRateDelta <= -6) problems.push(`Második esély volumen visszaesett (${orebRateDelta} százalékpont OREB)`);
-    if (ftRateDelta <= -8) problems.push(`Alacsony FT rate (${ftRateDelta} százalékpont)`);
+    if (ftRateDelta <= -6) problems.push(`Alacsony FTM rate (${ftRateDelta} százalékpont)`);
   }
 
   if (scoreAbove(benchmarks, season, 'turnover_rate', game.turnoverRate, 60)) {
@@ -1376,7 +1392,7 @@ const buildProblems = (
     problems.push('OREB volumen a liga alatt');
   }
   if (scoreBelow(benchmarks, season, 'ft_rate', game.ftRate, 40)) {
-    problems.push('FT rate a liga alatt');
+    problems.push('FTM rate a liga alatt');
   }
 
   if (shotMapComparison) {
@@ -1405,7 +1421,7 @@ const buildNextFocus = (
 
   const topicKey = (message: string) => {
     const lower = message.toLowerCase();
-    if (lower.includes('ft-rate') || lower.includes('ft rate') || lower.includes('büntető')) return 'ft';
+    if (lower.includes('ftm rate') || lower.includes('ft rate') || lower.includes('büntető')) return 'ft';
     if (lower.includes('to-rate') || lower.includes('to ') || lower.includes('turnover') || lower.includes('labda')) return 'to';
     if (lower.includes('oreb') || lower.includes('második esély') || lower.includes('lepattanó')) return 'oreb';
     if (lower.includes('periméter') || lower.includes('3p')) return 'perimeter';
@@ -1540,12 +1556,12 @@ const buildNextFocus = (
     );
   }
 
-  const hasFtProblem = problems.some(item => item.includes('FT rate') || item.includes('büntető'));
+  const hasFtProblem = problems.some(item => item.includes('FTM rate') || item.includes('büntető'));
   if (hasFtProblem) {
     addFocus(
       formatFocusPlan(
         'Büntetők növelése',
-        formatGoal('FT-rate', game.ftRate, season.ftRate, 'ft_rate', 100, 'higher'),
+        formatGoal('FTM rate', game.ftRate, season.ftRate, 'ft_rate', 100, 'higher'),
         'több kontaktkeresés az 1-3-asoktól és wedge setek'
       )
     );
@@ -1639,14 +1655,14 @@ const buildOpponentProfileSection = (
         const gameTwoPct = game.fga2 > 0 ? (game.fgm2 / game.fga2) * 100 : 0;
         const seasonTwoPct = season.fga2 > 0 ? (season.fgm2 / season.fga2) * 100 : 0;
         const twoPctDelta = gameTwoPct - seasonTwoPct;
-        const volumeSuppressed = twoDelta <= -0.05 || ftDelta <= -0.06;
+        const volumeSuppressed = twoDelta <= -0.05 || ftDelta <= -0.05;
         const efficiencyResisted = twoPctDelta <= 2;
         const realized = volumeSuppressed && efficiencyResisted;
         return {
           label,
           realized,
           expectation: `${label}: festékbe jutás és fault-kiharcolás csökkenése volt várható.`,
-          actual: `${label}: 2P arány ${toPct(season.twoRate, 1)}% → ${toPct(game.twoRate, 1)}% (${signedPct(twoDelta)}), 2P% ${seasonTwoPct.toFixed(1)}% → ${gameTwoPct.toFixed(1)}% (${signed(twoPctDelta)} pp), FT-rate ${toPct(season.ftRate, 1)}% → ${toPct(game.ftRate, 1)}% (${signedPct(ftDelta)}).`,
+          actual: `${label}: 2P arány ${toPct(season.twoRate, 1)}% → ${toPct(game.twoRate, 1)}% (${signedPct(twoDelta)}), 2P% ${seasonTwoPct.toFixed(1)}% → ${gameTwoPct.toFixed(1)}% (${signed(twoPctDelta)} pp), FTM rate ${toPct(season.ftRate, 1)}% → ${toPct(game.ftRate, 1)}% (${signedPct(ftDelta)}).`,
           verdict: realized ? 'realizálódott' : 'nem realizálódott',
         };
       }
@@ -1719,7 +1735,7 @@ const buildOpponentProfileSection = (
   const threeDelta = round(game.threePct - season.threePct, 1);
   if (threeDelta <= -4) descriptors.push(`periméter-limitálás (${game.threePct.toFixed(1)}% 3P vs ${season.threePct.toFixed(1)}%)`);
   const ftDelta = toPct(game.ftRate - season.ftRate, 1);
-  if (ftDelta <= -6) descriptors.push(`kontakt-limitálás (${toPct(game.ftRate, 1)}% FT-rate vs ${toPct(season.ftRate, 1)}%)`);
+  if (ftDelta <= -5) descriptors.push(`kontakt-limitálás (${toPct(game.ftRate, 1)}% FTM rate vs ${toPct(season.ftRate, 1)}%)`);
   const orebDelta = toPct(game.orebRate - season.orebRate, 1);
   if (orebDelta <= -6) descriptors.push(`lepattanó-kontroll (${toPct(game.orebRate, 1)}% OREB vs ${toPct(season.orebRate, 1)}%)`);
   const assistDelta = toPct(game.assistRate - season.assistRate, 1);
@@ -1991,7 +2007,7 @@ const interpretProblems = (problems: string[]) => {
     if (item.includes('Festék')) return 'festékből érkező befejezések minősége';
     if (item.includes('assziszt')) return 'labdajáratás folyamatossága';
     if (item.includes('második esély') || item.includes('OREB')) return 'második esély volumen és lepattanó kontroll';
-    if (item.includes('FT rate') || item.includes('büntető')) return 'büntető kiharcolási volumen és kontaktusmenedzsment';
+    if (item.includes('FTM rate') || item.includes('büntető')) return 'büntető kiharcolási volumen és kontaktusmenedzsment';
     return 'strukturális végrehajtási limitáció';
   });
   const unique = Array.from(new Set(mapped)).slice(0, 2);
@@ -2049,8 +2065,9 @@ export const interpretPostGameReport = (report: PostGameReport): PostGameInterpr
 };
 
 /**
- * ORtg / DRtg / Net a meccs saját birtoklásbecsléséből (`game.pace`), így a
- * tempó, a ratingek és a riport többi birtoklás-alapú mutatója egy nevezőn áll.
+ * ORtg / DRtg / Net a meccs közös birtoklásszámából (`game.pace`, a két csapat
+ * becslésének átlaga), így a tempó és mindkét rating egy nevezőn áll, és a
+ * DRtg megegyezik az ellenfél ORtg-jével.
  */
 const buildRatings = (
   game: NormalizedGameStats,
@@ -2130,9 +2147,9 @@ const buildPostgameMetrics = (
     metric('efg', 'eFG%', game.efg, season.efg, 'pct', 1),
     metric('three_pct', '3P%', game.threePct, season.threePct, 'pct', 1),
     metric('assist_rate', 'Assist%', game.assistRate, season.assistRate, 'pct', 100),
-    metric('turnover_rate', 'TO rate', game.turnoverRate, season.turnoverRate, 'pct', 100),
+    metric('turnover_rate', 'TO rate (Oliver)', game.turnoverRate, season.turnoverRate, 'pct', 100),
     metric('oreb_rate', 'OREB%', game.orebRate, season.orebRate, 'pct', 100),
-    metric('ft_rate', 'FT rate', game.ftRate, season.ftRate, 'pct', 100),
+    metric('ft_rate', 'FTM rate', game.ftRate, season.ftRate, 'pct', 100),
   ];
 
   const efficiency: PostGameChartDatum[] = keyStats.map(item => ({
@@ -2154,7 +2171,7 @@ const buildPostgameMetrics = (
       season: toPct(season.threeRate, 1),
     },
     {
-      label: 'FT arány',
+      label: 'FTM arány',
       game: toPct(game.ftRate, 1),
       season: toPct(season.ftRate, 1),
     },
@@ -2220,8 +2237,12 @@ export const analyzePostGameReport = (
     pointsAgainst: actualPointsFor,
   };
 
-  const game = normalizeTeamGame(calibratedTeamGame, calibratedOpponent);
-  const opponent = opponentGame ? normalizeTeamGame(calibratedOpponent, calibratedTeamGame) : null;
+  const ownGame = normalizeTeamGame(calibratedTeamGame, calibratedOpponent);
+  const opponentRaw = opponentGame ? normalizeTeamGame(calibratedOpponent, calibratedTeamGame) : null;
+  // Közös birtoklásszám mindkét oldalon: a tempó és mindkét rating nevezője.
+  const sharedPace = opponentRaw ? round(sharedPossessions(ownGame.pace, opponentRaw.pace), 2) : ownGame.pace;
+  const game: NormalizedGameStats = { ...ownGame, pace: sharedPace };
+  const opponent: NormalizedGameStats | null = opponentRaw ? { ...opponentRaw, pace: sharedPace } : null;
   // A `season` innentől a referencia: szezonátlag, vagy kis mintánál liga medián.
   const { reference: season, baseline } = resolveBaseline(normalizeTeamSeason(teamSeason), leagueBenchmarks);
 
@@ -2575,17 +2596,9 @@ export const buildKosarstatPostgameContext = <C extends PostgameClutchInput = Po
     }
   }
 
-  const ownTov = finiteOrNull(ownMetric?.tov_pct);
-  const oppTov = finiteOrNull(oppMetric?.tov_pct);
-  if (ownTov !== null && oppTov !== null) {
-    const diff = round(ownTov - oppTov, 1);
-    if (diff <= -2) {
-      strengths.push(`Labdabiztonság előny: TO% különbség ${diff} pp.`);
-    } else if (diff >= 2) {
-      problems.push(`Labdabiztonság hátrány: TO% különbség +${diff} pp.`);
-      nextFocus.push('Labdavesztés-kontroll: első passzok és handoff döntések egyszerűsítése.');
-    }
-  }
+  // A Kosarstat TO% (LV / birtoklás) szándékosan nem kerül a riport
+  // erősség/probléma soraiba: a riport egyetlen TO-definíciója az Oliver-féle
+  // LV / (FGA + 0,44·FTA + LV); a Kosarstat érték csak a nyers blokkban látszik.
 
   const ownOrb = finiteOrNull(ownMetric?.orb_pct);
   const oppOrb = finiteOrNull(oppMetric?.orb_pct);
@@ -2606,7 +2619,7 @@ export const buildKosarstatPostgameContext = <C extends PostgameClutchInput = Po
     insightNotes.push(`Kosarstat negyedek: ${rowLabel}.`);
   }
   if (ownMetric || oppMetric) {
-    insightNotes.push('Kosarstat team-metric blokk integrálva (POSS/ORTG/eFG/TO%/ORB%/FTM rate).');
+    insightNotes.push('Kosarstat team-metric blokk integrálva (POSS/ORTG/eFG/ORB%/FTM rate; a Kosarstat TO% = LV/birtoklás csak a nyers blokkban).');
   }
 
   const clutch = input.clutch ?? null;
