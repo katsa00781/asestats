@@ -1,6 +1,6 @@
 # BACKLOG.md – ASEStats Projekt
 
-_Utoljára frissítve: 2026-09-28 (H12 – post-game riportgenerátor hibalista, A–B–C1 egység)_
+_Utoljára frissítve: 2026-09-28 (H12 – post-game riportgenerátor hibalista, A–C egység)_
 
 ---
 
@@ -752,8 +752,13 @@ egység zárja.
     „FT rate”-et használ (jelölten) – az átállítás külön döntés.
   - `tsc`, `eslint` (korábbi 5 figyelmeztetés), `npm run build` tiszta.
     Mobil jegyzet: `mobile-sync/2026-09-28-postgame-metric-definitions.md`.
-- [ ] **C2 – USG% (5)**: standard perc-normalizált USG%, ≤ 15% / ≥ 25%
-  küszöbök, az Impact score usage-komponensének újraskálázása.
+- [x] **C2 – USG% (5) ✓ (2026-09-28)**: a `usageShare` mostantól standard,
+  perc-normalizált USG% (`computeUsgRate` / `computeUsageRates`, felső korlát
+  60%); tier: alacsony ≤ 15%, magas ≥ 25%; az Impact score usage-komponense
+  10–35% között skálázva; a `analyzePlayerImpact` és a webes játékostrend is
+  ezt használja. Valós adaton: Daniels 11,8% → 22,5%, Molnár 3,8% → 12,7%,
+  Chandler 34,0%. `tsc`, `eslint`, `npm run build` tiszta. Mobil jegyzet:
+  `mobile-sync/2026-09-28-postgame-usg-rate.md`.
 - [ ] **D – Adatvalidáció (6, 10, 13)**: box score ↔ Kosarstat névillesztés
   (kódbeli alias + nem illeszkedő nevek naplózása – eldöntve); dobástérkép-
   dobásszám vs. box score FGA figyelmeztetés; pozícióforrás egységesítése.

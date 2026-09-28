@@ -64,6 +64,7 @@ import {
   buildKosarstatPostgameContext,
   mergeKosarstatPostgameContext,
 } from '@/lib/postgame-report';
+import { computeUsgRate } from '@/lib/player-postgame';
 
 type SeasonComparisonProps = {
   allPlayers: PlayerStats[];
@@ -9991,11 +9992,14 @@ export function SeasonComparison({
         const target = players.find(item => item.player_id === selectedTrendPlayerId);
         if (!target) return null;
 
-        const usage = (target.close_attempted || 0) + (target.mid_attempted || 0) + (target.three_attempted || 0) + 0.44 * (target.free_throw_attempted || 0) + (target.turnovers || 0);
-        const totalUsage = players.reduce((sum, row) => {
-          const rowUsage = (row.close_attempted || 0) + (row.mid_attempted || 0) + (row.three_attempted || 0) + 0.44 * (row.free_throw_attempted || 0) + (row.turnovers || 0);
-          return sum + rowUsage;
-        }, 0);
+        const rowUsage = (row: typeof target) =>
+          (row.close_attempted || 0) + (row.mid_attempted || 0) + (row.three_attempted || 0) + 0.44 * (row.free_throw_attempted || 0) + (row.turnovers || 0);
+        // Standard, perc-normalizált USG% – ugyanaz a képlet, mint a post-game játékosbontásban.
+        const team = players.reduce(
+          (acc, row) => ({ usage: acc.usage + rowUsage(row), minutes: acc.minutes + (row.minutes || 0) }),
+          { usage: 0, minutes: 0 }
+        );
+        const usgRate = computeUsgRate({ usage: rowUsage(target), minutes: target.minutes || 0 }, team);
         const fga = (target.close_attempted || 0) + (target.mid_attempted || 0) + (target.three_attempted || 0);
         const tsDenominator = 2 * (fga + 0.44 * (target.free_throw_attempted || 0));
         const tsPct = tsDenominator > 0 ? (target.points || 0) / tsDenominator * 100 : 0;
@@ -10009,7 +10013,7 @@ export function SeasonComparison({
             ? new Date(target.games.date).toLocaleDateString('hu-HU', { month: 'short', day: 'numeric' })
             : 'Ismeretlen',
           tsPct: roundValue(tsPct, 1),
-          usagePct: totalUsage > 0 ? roundValue((usage / totalUsage) * 100, 1) : 0,
+          usagePct: roundValue(usgRate * 100, 1),
           valPer36: roundValue(valPer36, 1),
         };
       })
@@ -16874,7 +16878,7 @@ export function SeasonComparison({
                 <div className="space-y-3 rounded-lg border border-border-subtle bg-surface-2/40 p-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="text-sm text-secondary font-medium">Játékos post-game elemzés</div>
-                    <div className="text-xs text-muted">Usage% és TS% perc-normalizált • kattints a sorokra a részletekért</div>
+                    <div className="text-xs text-muted">Usage% = standard USG% (perc-normalizált, átlag ~20%) • kattints a sorokra a részletekért</div>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                     {(() => {

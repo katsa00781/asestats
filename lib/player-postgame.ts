@@ -13,6 +13,11 @@ export type PlayerPostGameBreakdown = {
   minutes: number;
   minutesBucket: PlayerMinutesBucket;
   roles: string[];
+  /**
+   * Standard, perc-normalizált USG% (0–1): a játékos pályán töltött idejében
+   * a csapat-befejezések (FGA + 0,44·FTA + LV) hányadát ő használta. Egy
+   * átlagos játékos ~0,20; az értékek összege nem 1. A név történeti.
+   */
   usageShare: number;
   usageTier: PlayerUsageTier;
   usageLabel: string;
@@ -96,20 +101,48 @@ export const computePlayerUsage = (player: PlayerGameStat) => {
   return fga + 0.44 * player.fta + player.tov;
 };
 
+/** A USG% felső korlátja: pár perces mintánál a képlet irreálisan nagyot adhat. */
+const MAX_USG_RATE = 0.6;
+
+/**
+ * Standard USG% (0–1): `usage · (csapatperc / 5) / (perc · csapat-usage)`,
+ * ahol usage = FGA + 0,44·FTA + LV. Perc vagy csapatadat nélkül 0.
+ */
+export const computeUsgRate = (
+  player: { usage: number; minutes: number },
+  team: { usage: number; minutes: number }
+) => {
+  if (!(player.minutes > 0) || !(team.usage > 0) || !(team.minutes > 0)) return 0;
+  return clamp((player.usage * (team.minutes / 5)) / (player.minutes * team.usage), 0, MAX_USG_RATE);
+};
+
+/** A meccs keretének USG%-a játékosonként (`playerId` → 0–1). */
+export const computeUsageRates = (players: PlayerGameStat[]) => {
+  const team = players.reduce(
+    (acc, player) => ({ usage: acc.usage + computePlayerUsage(player), minutes: acc.minutes + player.minutes }),
+    { usage: 0, minutes: 0 }
+  );
+  return new Map(
+    players.map(player => [
+      player.playerId,
+      computeUsgRate({ usage: computePlayerUsage(player), minutes: player.minutes }, team),
+    ])
+  );
+};
+
 const classifyMinutesBucket = (minutes: number): PlayerMinutesBucket => {
   if (minutes >= 26) return 'heavy';
   if (minutes >= 12) return 'rotation';
   return 'micro';
 };
 
-const classifyUsageTier = (usageShare: number, activePlayers: number): PlayerUsageTier => {
-  const safeActivePlayers = Math.max(activePlayers, 5);
-  const baselineShare = 1 / safeActivePlayers;
-  const highThreshold = Math.max(0.16, baselineShare * 1.35);
-  const balancedThreshold = Math.max(0.11, baselineShare * 0.95);
+/** USG% küszöbök (felhasználói döntés, 2026-09-28): alacsony ≤ 15%, magas ≥ 25%. */
+export const USG_LOW_MAX = 0.15;
+export const USG_HIGH_MIN = 0.25;
 
-  if (usageShare >= highThreshold) return 'high';
-  if (usageShare >= balancedThreshold) return 'balanced';
+const classifyUsageTier = (usgRate: number): PlayerUsageTier => {
+  if (usgRate >= USG_HIGH_MIN) return 'high';
+  if (usgRate > USG_LOW_MAX) return 'balanced';
   return 'low';
 };
 
@@ -256,7 +289,8 @@ const computeImpactScore = (player: PlayerGameStat, context: DerivedPlayerContex
   // being clamped to 1.0.
   const normalizedVal = clamp(context.valPer36 / 45, 0, 1);
   const normalizedTs = clamp((context.tsPct - 45) / 75, 0, 1);
-  const normalizedUsage = clamp(context.usageShare / 0.30, 0, 1);
+  // USG% 10–35% között skálázva (átlagos játékos ~20% → 0,4).
+  const normalizedUsage = clamp((context.usageShare - 0.1) / 0.25, 0, 1);
   const normalizedStocks = clamp((player.stl + player.blk) / 4, 0, 1);
   return round((normalizedVal * 0.45 + normalizedTs * 0.25 + normalizedUsage * 0.2 + normalizedStocks * 0.1) * 100, 1);
 };
@@ -312,7 +346,6 @@ export const buildPlayerPostGameReport = (
   players: PlayerGameStat[],
   shotMapContext?: PlayerShotMapContext
 ): PlayerPostGameReport => {
-  const activePlayers = players.filter(player => player.minutes > 0).length;
   const hasExplicitStarterInfo = players.some(player => typeof player.isStarter === 'boolean');
 
   const starterIds = new Set(
@@ -323,17 +356,16 @@ export const buildPlayerPostGameReport = (
       .map(player => player.playerId)
   );
 
+  const usageRates = computeUsageRates(players);
   const totals = players.reduce(
     (acc, player) => {
-      const usage = computePlayerUsage(player);
-      acc.usage += usage;
       acc.val += player.val;
       acc.rebounds += player.oreb + player.dreb;
       acc.assists += player.ast;
       acc.turnovers += player.tov;
       return acc;
     },
-    { usage: 0, val: 0, rebounds: 0, assists: 0, turnovers: 0 }
+    { val: 0, rebounds: 0, assists: 0, turnovers: 0 }
   );
 
   // Pass 1: derive contexts and compute raw impact scores so we can find the
@@ -354,8 +386,8 @@ export const buildPlayerPostGameReport = (
       : starterIds.has(player.playerId);
     const minutesBucket = classifyMinutesBucket(player.minutes);
     const usage = computePlayerUsage(player);
-    const usageShare = totals.usage > 0 ? usage / totals.usage : 0;
-    const usageTier = classifyUsageTier(usageShare, activePlayers);
+    const usageShare = usageRates.get(player.playerId) ?? 0;
+    const usageTier = classifyUsageTier(usageShare);
     const tsPct = computeTrueShooting(player);
     const valPer36 = player.minutes > 0 ? (player.val / player.minutes) * 36 : player.val;
     const reboundShare = totals.rebounds > 0 ? (player.oreb + player.dreb) / totals.rebounds : 0;

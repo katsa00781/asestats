@@ -121,7 +121,9 @@ Update this file after every meaningful implementation change.
 
 ## Completed (legutóbbi)
 
-- **Hotfix H12 / C1 – post-game metrika-definíciók** (2026-09-28): közös birtoklásszám `(saját + ellenfél) / 2` a tempóhoz és mindkét ratinghez (meccs, szezon, liga-benchmark; `TeamSeasonStat.oppPossessions`); FT-mutató FTM / FGA a riportban és a benchmarkban; egyetlen TO-definíció (Oliver), a Kosarstat TO% csak a nyers blokkban. Érintett: `lib/postgame-report.ts`, `lib/export-to-md.ts`, `components/SeasonComparison.tsx`. Mobil jegyzet: `mobile-sync/2026-09-28-postgame-metric-definitions.md`. Következő: C2 (USG%).
+- **Hotfix H12 / C2 – standard USG%** (2026-09-28): a post-game `usageShare` perc-normalizált USG% (csapatrészesedés helyett), küszöbök ≤ 15% / ≥ 25%, újraskálázott Impact usage-komponens; a webes játékostrend is ezt használja. Érintett: `lib/player-postgame.ts`, `lib/postgame-report.ts`, `lib/export-to-md.ts`, `components/SeasonComparison.tsx`. Mobil jegyzet: `mobile-sync/2026-09-28-postgame-usg-rate.md`. Következő: D (adatvalidáció).
+
+- **Hotfix H12 / C1 – post-game metrika-definíciók** (2026-09-28): közös birtoklásszám `(saját + ellenfél) / 2` a tempóhoz és mindkét ratinghez (meccs, szezon, liga-benchmark; `TeamSeasonStat.oppPossessions`); FT-mutató FTM / FGA a riportban és a benchmarkban; egyetlen TO-definíció (Oliver), a Kosarstat TO% csak a nyers blokkban. Érintett: `lib/postgame-report.ts`, `lib/export-to-md.ts`, `components/SeasonComparison.tsx`. Mobil jegyzet: `mobile-sync/2026-09-28-postgame-metric-definitions.md`.
 
 - **Hotfix H12 / B – post-game döntő tényezők** (2026-09-28): a faktorok elsődleges forrása a meccs-párharc (saját vs. ellenfél négy faktor), a referencia-delta másodlagos; a védekezés az ellenfél értékét a liga mediánhoz méri (a hibás „Tripla-volumen kockázat kontroll alatt” ág megszűnt); explicit `tone` / `source` a `decisiveFactorMeta`-ban, a web ezt használja. Érintett: `lib/postgame-report.ts`, `components/SeasonComparison.tsx`. Mobil jegyzet: `mobile-sync/2026-09-28-postgame-decisive-factors.md`. Részletek: `BACKLOG.md` H12.
 

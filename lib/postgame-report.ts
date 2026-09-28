@@ -1,5 +1,5 @@
 import type { PreGameXFactorContext } from './pregame-scouting';
-import { buildPlayerPostGameReport, computePlayerUsage } from './player-postgame';
+import { USG_HIGH_MIN, USG_LOW_MAX, buildPlayerPostGameReport, computeUsageRates } from './player-postgame';
 import type { PlayerPostGameReport, PlayerShotMapContext } from './player-postgame';
 
 export type Position = 'PG' | 'SG' | 'SF' | 'PF' | 'C';
@@ -1228,17 +1228,17 @@ const analyzePlayerImpact = (players: PlayerGameStat[]) => {
   const overperformers: Array<{ name: string; score: number }> = [];
   const underperformers: Array<{ name: string; score: number }> = [];
 
-  const totalUsage = players.reduce((sum, player) => sum + computePlayerUsage(player), 0);
+  // Standard, perc-normalizált USG% (0–1), ugyanaz, mint a játékosbontásban.
+  const usageRates = computeUsageRates(players);
 
   players.forEach(player => {
-    const usage = computePlayerUsage(player);
-    const usageShare = totalUsage > 0 ? usage / totalUsage : 0;
+    const usageShare = usageRates.get(player.playerId) ?? 0;
     const ts = computePlayerTrueShooting(player);
     const valPer36 = player.minutes > 0 ? (player.val / player.minutes) * 36 : 0;
     const hasReliableSample = player.minutes >= 8;
 
-    if (usageShare >= 0.13 && player.val <= 5) negative.push(player.name);
-    if (hasReliableSample && usageShare <= 0.1 && (player.val >= 10 || (player.minutes >= 12 && valPer36 >= 18))) {
+    if (usageShare >= USG_HIGH_MIN && player.val <= 5) negative.push(player.name);
+    if (hasReliableSample && usageShare <= USG_LOW_MAX && (player.val >= 10 || (player.minutes >= 12 && valPer36 >= 18))) {
       positive.push(formatPositiveContributorLabel(player));
     }
 
@@ -1247,7 +1247,7 @@ const analyzePlayerImpact = (players: PlayerGameStat[]) => {
     const qualifiesOverperformer =
       (player.minutes >= 18 || (player.minutes >= 12 && valPer36 >= 35 && ts >= 0.65))
       && (player.val >= 18 || valPer36 >= 20)
-      && (ts >= 0.55 || usageShare >= 0.12);
+      && (ts >= 0.55 || usageShare >= 0.2);
 
     if (qualifiesOverperformer) {
       const score =
@@ -1262,7 +1262,7 @@ const analyzePlayerImpact = (players: PlayerGameStat[]) => {
     const qualifiesUnderperformer =
       player.minutes >= 14
       && player.val <= 3
-      && (ts <= 0.47 || usageShare >= 0.1);
+      && (ts <= 0.47 || usageShare >= 0.18);
 
     if (qualifiesUnderperformer) {
       const score = (4 - player.val) * 2 + Math.max((0.5 - ts) * 100, 0) + usageShare * 100;
