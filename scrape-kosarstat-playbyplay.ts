@@ -2,6 +2,7 @@ import { chromium, type Page } from 'playwright';
 import { createClient } from '@supabase/supabase-js';
 import * as dotenv from 'dotenv';
 import { inspect } from 'node:util';
+import { withMirrorGames } from './scrape-utils';
 
 dotenv.config({ path: '.env.local' });
 
@@ -1801,7 +1802,7 @@ const linkGamesToKosarstatId = async (seasonId: string, gameId: string, metadata
 
   const { data: candidates, error } = await supabase
     .from('games')
-    .select('id, our_team_id, opponent, kosarstat_game_id')
+    .select('id, our_team_id, opponent, opponent_team_id, kosarstat_game_id')
     .eq('season_id', seasonId)
     .eq('date', metadata.matchDate);
 
@@ -1814,7 +1815,7 @@ const linkGamesToKosarstatId = async (seasonId: string, gameId: string, metadata
   const home = normalizeText(metadata.homeTeamName);
   const away = normalizeText(metadata.awayTeamName);
 
-  const matched = (candidates || []).filter(candidate => {
+  const nameMatched = (candidates || []).filter(candidate => {
     const teamEntry = teamNames.get(String(candidate.our_team_id || ''));
     if (!teamEntry) return false;
     const ourName = normalizeText(teamEntry.name);
@@ -1827,6 +1828,9 @@ const linkGamesToKosarstatId = async (seasonId: string, gameId: string, metadata
       (ourMatchesAway && namesLooselyMatch(oppName, home))
     );
   });
+
+  // A névdrift miatt kimaradt tükörsor (a másik csapat szemszöge) is linket kap.
+  const matched = withMirrorGames(nameMatched, candidates || []);
 
   if (matched.length === 0) {
     console.warn(

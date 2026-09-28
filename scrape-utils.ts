@@ -310,6 +310,36 @@ export const dedupeShotEvents = <T extends ShotEventKeyFields>(events: T[]): T[]
 };
 
 /** Supabase hibaobjektum olvasható stringgé alakítása CLI loghoz. */
+export type LinkableGameRow = {
+  id: string;
+  our_team_id: string | null;
+  opponent_team_id: string | null;
+};
+
+/**
+ * Egy meccsnek két `games` sora van (mindkét csapat szemszögéből). A név-
+ * alapú Kosarstat-párosítás szponzornév-driftnél csak az egyik sort találja
+ * meg („Endo Plus Service-Honvéd” vs. az `opponent` szövegben „Budapesti
+ * Honvéd Sportegyesület”), ezért a párosított sorok tükörsora – ugyanaz a
+ * nap, felcserélt `our_team_id` / `opponent_team_id` – is hozzáadódik.
+ * Az ellenfél azonosítása az `opponent_team_id`-n megy (architektúra 11.).
+ */
+export const withMirrorGames = <T extends LinkableGameRow>(matched: T[], candidates: T[]): T[] => {
+  const result = [...matched];
+  const ids = new Set(matched.map(row => row.id));
+  matched.forEach(row => {
+    if (!row.our_team_id || !row.opponent_team_id) return;
+    candidates.forEach(candidate => {
+      if (ids.has(candidate.id)) return;
+      if (candidate.our_team_id === row.opponent_team_id && candidate.opponent_team_id === row.our_team_id) {
+        result.push(candidate);
+        ids.add(candidate.id);
+      }
+    });
+  });
+  return result;
+};
+
 export const formatSupabaseError = (error: unknown): string => {
   if (error instanceof Error) return error.message;
   if (error && typeof error === 'object') {

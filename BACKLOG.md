@@ -1,6 +1,6 @@
 # BACKLOG.md – ASEStats Projekt
 
-_Utoljára frissítve: 2026-09-28 (H12 – post-game riportgenerátor hibalista, A–E egység kész)_
+_Utoljára frissítve: 2026-09-28 (H12 lezárva – Kosarstat reimport és tükörsor-linkelés)_
 
 ---
 
@@ -686,7 +686,7 @@ a nézőpont nem hiba.
   „Szezon: 2026/2027” – a Liga csak akkor jelenik meg, ha különbözik. Csak
   webes MD export, mobil jegyzet nem kell.
 
-**H12 – Post-game riportgenerátor hibalista (ASE–Pécs, Szolnok–OSE) ✓ (2026-09-28)** – a 18 pont kész; nyitott: 3 Kosarstat meccs force reimportja (lent)
+**H12 – Post-game riportgenerátor hibalista (ASE–Pécs, Szolnok–OSE) ✓ (2026-09-28)** – a 18 pont kész, a Kosarstat reimport lefutott
 
 Felhasználói hibaösszesítő, 18 tétel (P1 szakmai következtetés, P2 adat-
 inkonzisztencia, P3 szöveg/UI). Valós adaton reprodukálva: a két meccsre a
@@ -782,7 +782,7 @@ egység zárja.
   - `tsc`, `eslint` (korábbi 5 figyelmeztetés), `npm run build` tiszta.
     Böngészős ellenőrzés nem történt. Mobil jegyzet:
     `mobile-sync/2026-09-28-postgame-data-validation.md`.
-- [ ] **Új nyitott tétel (a D ellenőrzése közben):** 3 db 2026-09-26-i
+- [x] **Új tétel (a D ellenőrzése közben) ✓ (2026-09-28, jóváhagyva):** 3 db 2026-09-26-i
   Kosarstat meccs (`20260926114138`, `20260926127201`, `20260926136166`)
   nyers oldala a CMP-dialógus metaadatával („KosarStat.hu” / „Do Not Process
   My Personal Information”) jött be, ezért nincs `games` linkjük. Ok: a
@@ -790,6 +790,20 @@ egység zárja.
   push csak 09-27-én történt, mint a H11-nél). Teendő (jóváhagyással): a 3
   meccs force reimportja (`kosarstat:pbp` force), majd
   `kosarstat:backfill-links`.
+  - Lefuttatva: `KOSARSTAT_FORCE_REIMPORT=true KOSARSTAT_ONLY_GAME_IDS=…
+    npm run kosarstat:pbp` – 3 meccs, 27 oldal, 0 hiba; a metaadat helyes
+    csapatneveket kapott.
+  - Kiderült: szponzornév-driftnél a névalapú linkelés csak az egyik csapat
+    `games` sorát találja meg (Kecskemét ↔ „Budapesti Honvéd
+    Sportegyesület” / „Endo Plus Service-Honvéd”, Fót ↔ „Falco KC
+    Szombathely”). Javítás: `scrape-utils.ts` `withMirrorGames()` – az importer
+    és a backfill a tükörsort (felcserélt `our_team_id` / `opponent_team_id`)
+    is linkeli. Eredmény: 2026/27-ben 14/14 `games` sor linkelt (korábban 8),
+    minden Kosarstat meccshez pontosan 2 sor.
+  - Maradék: az ASE–Pécs (`20260926102180`) nyers metaadata is CMP-szöveg (a
+    linkjei megvannak, csak a backfill figyelmeztet rá) – force reimportja
+    külön jóváhagyásra vár.
+  - Mobil jegyzet: `mobile-sync/2026-09-28-kosarstat-reimport-mirror-links.md`.
 - [x] **E – UI és szöveg (12, 14–18) ✓ (2026-09-28)**
   - 12: lineup-rangsorok (post-game ötös/páros és a „Leghatékonyabb /
     legjobb védekező együttállások” lista) csak legalább 5 perces mintából

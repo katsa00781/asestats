@@ -6,6 +6,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import * as dotenv from 'dotenv';
+import { withMirrorGames } from '../scrape-utils';
 
 dotenv.config({ path: '.env.local' });
 
@@ -107,7 +108,7 @@ const main = async () => {
   for (const [gameId, meta] of uniqueGames) {
     const { data: candidates, error } = await supabase
       .from('games')
-      .select('id, our_team_id, opponent, kosarstat_game_id')
+      .select('id, our_team_id, opponent, opponent_team_id, kosarstat_game_id')
       .eq('season_id', meta.seasonId)
       .eq('date', meta.matchDate);
 
@@ -119,7 +120,7 @@ const main = async () => {
     const home = normalizeText(meta.home);
     const away = normalizeText(meta.away);
 
-    const matched = (candidates || []).filter(candidate => {
+    const nameMatched = (candidates || []).filter(candidate => {
       const teamEntry = teamNames.get(String(candidate.our_team_id || ''));
       if (!teamEntry) return false;
       const ourName = normalizeText(teamEntry.name);
@@ -132,6 +133,9 @@ const main = async () => {
         (ourMatchesAway && namesLooselyMatch(oppName, home))
       );
     });
+
+    // A névdrift miatt kimaradt tükörsor (a másik csapat szemszöge) is linket kap.
+    const matched = withMirrorGames(nameMatched, candidates || []);
 
     if (matched.length === 0) {
       console.warn(`⚠️ Nincs párosítás: ${gameId} (${meta.matchDate}, ${meta.home} vs ${meta.away})`);
