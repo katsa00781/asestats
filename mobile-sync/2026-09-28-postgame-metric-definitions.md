@@ -3,7 +3,7 @@
 - **Dátum:** 2026-09-28
 - **Webes commit:** ez a commit
 - **Típus:** @core | funkcionális
-- **Állapot a mobilban:** NYITOTT
+- **Állapot a mobilban:** ÁTVEZETVE (2026-09-28, mobil commit 3a1eea4, @core szinkron fa4ef72; az eszközös próba nyitott)
 
 ## Mi változott
 - `lib/postgame-report.ts` (felhasználói döntések, 2026-09-28):
@@ -37,13 +37,13 @@
   fordít, az új címkék: `'TO rate (Oliver)'`, `'FTM rate'`.
 
 ## Teendő a mobil repóban
-- [ ] `npm run sync:core`
-- [ ] `lib/team-season-stats.ts` / `lib/postgame-data.ts`: `oppPossessions`
+- [x] `npm run sync:core`
+- [x] `lib/team-season-stats.ts` / `lib/postgame-data.ts`: `oppPossessions`
       (az ellenfelek szezonos `FGA + 0,44·FTA + LV − T-lep` összege)
       átadása a benchmark-medence minden csapatánál
-- [ ] `lib/postgame-view.ts`: címke-térkép `'FTM arány'` (és ha van:
+- [x] `lib/postgame-view.ts`: címke-térkép `'FTM arány'` (és ha van:
       `'FTM rate'`, `'TO rate (Oliver)'`)
-- [ ] Ha a mobil a Kosarstat TO%-ot a riport soraiban mutatja, jelölése
+- [x] Ha a mobil a Kosarstat TO%-ot a riport soraiban mutatja, jelölése
       „TO% (LV/birtoklás)”
 
 ## Kézi lépések

@@ -3,7 +3,7 @@
 - **Dátum:** 2026-09-28
 - **Webes commit:** ez a commit
 - **Típus:** adattartalom
-- **Állapot a mobilban:** NYITOTT
+- **Állapot a mobilban:** ÁTVEZETVE (2026-09-28, mobil commit 3a1eea4; post-game és clutch ellenőrizve, kódváltozás nem kellett)
 
 ## Mi változott
 - A `20260926102180` (ASE–Pécs, 2026-09-26) Kosarstat meccs nyers oldalai
@@ -20,7 +20,7 @@
   Kódváltozás nem kell.
 
 ## Teendő a mobil repóban
-- [ ] Ellenőrzés: az ASE–Pécs post-game / clutch nézet betölt
+- [x] Ellenőrzés: az ASE–Pécs post-game / clutch nézet betölt
 
 ## Kézi lépések
 nincs (a reimport lefutott, 2026-09-28)

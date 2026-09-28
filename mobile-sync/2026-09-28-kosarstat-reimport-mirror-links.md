@@ -3,7 +3,7 @@
 - **Dátum:** 2026-09-28
 - **Webes commit:** ez a commit
 - **Típus:** adattartalom | scraping
-- **Állapot a mobilban:** NYITOTT
+- **Állapot a mobilban:** ÁTVEZETVE (2026-09-28, mobil commit 3a1eea4; ellenőrizve mind a 6 nézőpontból, kódváltozás nem kellett)
 
 ## Mi változott
 - Adat: a 2026-09-26-i `20260926114138` (Honvéd–Kecskemét), `20260926127201`
@@ -22,7 +22,7 @@
   a mobilban nem kell.
 
 ## Teendő a mobil repóban
-- [ ] Ellenőrzés: a fenti meccsek post-game nézete betölti a Kosarstat blokkot
+- [x] Ellenőrzés: a fenti meccsek post-game nézete betölti a Kosarstat blokkot
 
 ## Kézi lépések
 nincs (a reimport és a backfill lefutott, 2026-09-28)

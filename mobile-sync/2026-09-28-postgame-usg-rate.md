@@ -3,7 +3,7 @@
 - **Dátum:** 2026-09-28
 - **Webes commit:** ez a commit
 - **Típus:** @core | funkcionális
-- **Állapot a mobilban:** NYITOTT
+- **Állapot a mobilban:** ÁTVEZETVE (2026-09-28, mobil commit 3a1eea4, @core szinkron fa4ef72; kódváltozás nem kellett – a mobil csak a `usageLabel`-t mutatja)
 
 ## Mi változott
 - `lib/player-postgame.ts` (felhasználói döntés, 2026-09-28):
@@ -31,11 +31,11 @@
   – az a clutch-blokk saját részesedése.
 
 ## Teendő a mobil repóban
-- [ ] `npm run sync:core`
-- [ ] Post-game játékosbontás: a Usage% felirat / magyarázat „USG%
+- [x] `npm run sync:core`
+- [x] Post-game játékosbontás: a Usage% felirat / magyarázat „USG%
       (perc-normalizált)”; saját usage-küszöb esetén `USG_LOW_MAX` /
       `USG_HIGH_MIN` használata
-- [ ] Ha a mobil játékostrend saját usage-részesedést számol:
+- [x] Ha a mobil játékostrend saját usage-részesedést számol:
       `computeUsgRate` (`@core/player-postgame`)
 
 ## Kézi lépések

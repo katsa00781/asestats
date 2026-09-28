@@ -3,7 +3,7 @@
 - **Dátum:** 2026-09-28
 - **Webes commit:** ez a commit
 - **Típus:** @core | funkcionális
-- **Állapot a mobilban:** NYITOTT
+- **Állapot a mobilban:** ÁTVEZETVE (2026-09-28, mobil commit 3a1eea4, @core szinkron fa4ef72; a `dataNotes` megjelenik, névillesztés / lineup a mobilban nincs)
 
 ## Mi változott
 - `lib/postgame-report.ts` (`@core`): `analyzePostGameReport` összeveti a
@@ -34,10 +34,10 @@
   lineuphoz, ott ugyanaz a „közös keresztnév” hiba állhat fenn.
 
 ## Teendő a mobil repóban
-- [ ] `npm run sync:core`
-- [ ] Ha a mobil a `dataNotes`-ot nem mutatja, érdemes megjeleníteni
+- [x] `npm run sync:core`
+- [x] Ha a mobil a `dataNotes`-ot nem mutatja, érdemes megjeleníteni
       (adatminőség)
-- [ ] Ha a mobil Kosarstat ↔ box score neveket párosít: döntés, hogy a
+- [x] Ha a mobil Kosarstat ↔ box score neveket párosít: döntés, hogy a
       `lib/player-name-match.ts` bekerüljön-e a `@core` tükrözött modulok
       közé (webes CLAUDE.md lista bővítése)
 

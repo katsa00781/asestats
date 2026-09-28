@@ -3,7 +3,7 @@
 - **Dátum:** 2026-09-28
 - **Webes commit:** ez a commit
 - **Típus:** @core | funkcionális
-- **Állapot a mobilban:** NYITOTT
+- **Állapot a mobilban:** ÁTVEZETVE (2026-09-28, mobil commit 3a1eea4, @core szinkron fa4ef72; a mobil nem ír saját védekezési mondatot, lineup / trend-blokk nincs)
 
 ## Mi változott
 - `lib/postgame-report.ts` (`@core`):
@@ -35,10 +35,10 @@
   ugyanazok az üres-/kismintás esetek állhatnak fenn.
 
 ## Teendő a mobil repóban
-- [ ] `npm run sync:core`
-- [ ] Védekezési összefoglaló: `report.context.defense` (ellenfél eFG vs liga
+- [x] `npm run sync:core`
+- [x] Védekezési összefoglaló: `report.context.defense` (ellenfél eFG vs liga
       medián) megjelenítése
-- [ ] Ha van: lineup-rangsor ≥ 5 perces mintából, clutch blokk csak
+- [x] Ha van: lineup-rangsor ≥ 5 perces mintából, clutch blokk csak
       `clutch.available` esetén, trend csak ≥ 3 meccsnél
 
 ## Kézi lépések

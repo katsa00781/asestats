@@ -3,7 +3,7 @@
 - **Dátum:** 2026-09-28
 - **Webes commit:** ez a commit
 - **Típus:** @core | funkcionális
-- **Állapot a mobilban:** NYITOTT
+- **Állapot a mobilban:** ÁTVEZETVE (2026-09-28, mobil commit 3a1eea4, @core szinkron fa4ef72; az eszközös próba nyitott)
 
 ## Mi változott
 - `lib/postgame-report.ts` `buildDecisiveFactors` újraírva:
@@ -35,8 +35,8 @@
   „Ellenfél hatékonyan dobott (…)” nem ismert minta → pozitívként jelenne meg).
 
 ## Teendő a mobil repóban
-- [ ] `npm run sync:core`
-- [ ] `lib/postgame-view.ts` `buildDecisiveGroups`: `negative: factor.tone
+- [x] `npm run sync:core`
+- [x] `lib/postgame-view.ts` `buildDecisiveGroups`: `negative: factor.tone
       ? factor.tone === 'negative' : isNegativeDecisiveLabel(...)` (a regex
       csak régi, mentett riportra maradjon fallback)
 

@@ -3,7 +3,7 @@
 - **Dátum:** 2026-09-28
 - **Webes commit:** ez a commit
 - **Típus:** @core | funkcionális
-- **Állapot a mobilban:** NYITOTT
+- **Állapot a mobilban:** ÁTVEZETVE (2026-09-28, mobil commit 3a1eea4, @core szinkron fa4ef72; az eszközös próba nyitott)
 
 ## Mi változott
 - `lib/postgame-report.ts`:
@@ -34,12 +34,12 @@
   `baseline.comparable === false` esetén 0-s deltát mutatna.
 
 ## Teendő a mobil repóban
-- [ ] `npm run sync:core`
-- [ ] `lib/team-season-stats.ts` / `lib/postgame-data.ts`: a `TeamSeasonStat`
+- [x] `npm run sync:core`
+- [x] `lib/team-season-stats.ts` / `lib/postgame-data.ts`: a `TeamSeasonStat`
       bemenet kapja meg az `oppDreb`-et (az ellenfelek szezonos V-lep összege,
       meccsenként a másik csapat sorainak `defensive_rebounds` összegéből) –
       a benchmark-medencében minden csapatnál
-- [ ] Post-game kulcsmutatók: `baseline.comparable === false` esetén a
+- [x] Post-game kulcsmutatók: `baseline.comparable === false` esetén a
       referencia és a delta rejtése
 
 ## Kézi lépések
