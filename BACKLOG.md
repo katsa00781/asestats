@@ -1,6 +1,6 @@
 # BACKLOG.md – ASEStats Projekt
 
-_Utoljára frissítve: 2026-09-28 (H12 – post-game riportgenerátor hibalista, A egység: referencialogika)_
+_Utoljára frissítve: 2026-09-28 (H12 – post-game riportgenerátor hibalista, A–B egység)_
 
 ---
 
@@ -714,11 +714,24 @@ egység zárja.
     hivatkoznak referenciára, az MD / webes kártya nem ír 0-s deltát.
   - `tsc`, `eslint` (csak a korábbi 5 figyelmeztetés), `npm run build`
     tiszta. Mobil jegyzet: `mobile-sync/2026-09-28-postgame-reference-logic.md`.
-- [ ] **B – Faktorszelekció és előjel (2, 3)**: a döntő tényezők forrása az
-  ellenfél-különbség és a liga-delta, a szezon-delta másodlagos; a „Tripla-
-  volumen kockázat kontroll alatt” ág 35–42% közti ellenfél 3P%-nál is
-  pozitív címkét ad (valós adaton reprodukálva: Szolnok, 37,5%) – előjel,
-  küszöb (liga medián) és címke–mért érték összehangolása.
+- [x] **B – Faktorszelekció és előjel (2, 3) ✓ (2026-09-28)**
+  - 2: a döntő tényezők elsődleges forrása a meccs-párharc (saját vs.
+    ellenfél: eFG ±5, TO ±4, OREB% ±10, FT rate ±10 pp); a referencia-delta
+    (liga medián / szezonátlag, a nevével a címkében) másodlagos, azonos
+    témában nem duplikál. Valós adaton: Szolnok első tényezője
+    `Lepattanó-fölény (OREB% 37.5% vs 6.9%, +30.6 pp)` (= Kosarstat ORB-
+    különbség); az ASE-nél 4 támadó + 1 védekező tényező a „Nincs kiemelt
+    faktor” helyett.
+  - 3: a védekezési tényezők az ellenfél értékét a liga mediánhoz mérik; a
+    „Tripla-volumen kockázat kontroll alatt” ág megszűnt (35–42% között
+    pozitívként jelent meg). Szolnok: `Periméter-kockázat (ellenfél 3P 9/24,
+    37.5% vs liga medián 32.1%)`, negatív.
+  - Explicit `tone` / `source` a `decisiveFactorMeta`-ban; a web ezt használja
+    a regexes becslés helyett. Az „<ellenfél> erősség” cím csak negatív
+    védekezési faktorra jár (a pozitívra „<csapat> védekezési kontroll”); a
+    faktor-részletező védekezési faktorhoz nem mutat saját (0-s) deltát.
+  - `tsc`, `eslint` (korábbi 5 figyelmeztetés), `npm run build` tiszta.
+    Mobil jegyzet: `mobile-sync/2026-09-28-postgame-decisive-factors.md`.
 - [ ] **C – Metrika-definíciók (4, 5, 8, 9)**: közös birtoklásszám
   (`(poss_A + poss_B) / 2`) mindkét ratinghez; USG% perc-normalizált
   képlettel (most csapatrészesedés, összege ≈ 100% – Molnár 3,8%); egy TO%

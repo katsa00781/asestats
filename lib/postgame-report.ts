@@ -316,6 +316,10 @@ type FactorMeta = {
   annotated: string;
   type: FactorType;
   axis: 'offense' | 'defense';
+  /** Explicit előjel; opcionális a korábban mentett riportok miatt. */
+  tone?: 'positive' | 'negative';
+  /** `opponent`: meccs-párharc; `reference`: liga medián / szezonátlag. */
+  source?: 'opponent' | 'reference';
 };
 
 type MechanismStatus = {
@@ -809,98 +813,222 @@ const classifyDelta = (delta: number, threshold: number) => {
   return 'Similar';
 };
 
+/**
+ * Egy döntő tényező jelöltje. A `tone` explicit előjel (a szövegből nem kell
+ * kikövetkeztetni); a `source` mutatja, hogy az állítás a meccs-párharcból
+ * (saját vs. ellenfél ugyanazon a meccsen) vagy a referenciából (liga medián /
+ * szezonátlag) származik.
+ */
+type DecisiveFactorCandidate = {
+  label: string;
+  axis: 'offense' | 'defense';
+  type: FactorType;
+  tone: 'positive' | 'negative';
+  source: 'opponent' | 'reference';
+  topic: string;
+  /** |eltérés| / küszöb – a rangsoroláshoz. */
+  strength: number;
+};
+
+const signedPp = (value: number) => `${value >= 0 ? '+' : ''}${round(value, 1)} pp`;
+/** Egy tizedesre kerekítve, a kulcsmutató-táblával azonos kerekítéssel. */
+const fixed1 = (value: number) => round(value, 1).toFixed(1);
+
+/**
+ * A párharc-tényező (saját vs. ellenfél) mindkét csapat értékét mutatja, így
+ * lefedi az azonos témájú ellenfél-oldali sort is.
+ */
+const OPPONENT_TOPIC_COVERS: Record<string, string[]> = {
+  efg: ['efg', 'opp-efg'],
+  to: ['to', 'opp-to'],
+  oreb: ['oreb', 'opp-oreb'],
+  ft: ['ft'],
+};
+
+/**
+ * Döntő tényezők. Elsődleges forrás a meccs-párharc (négy faktor: eFG, TO,
+ * OREB, FT rate a két csapat között) és a védekezésnél az ellenfél értéke a
+ * liga mediánhoz mérve; a saját referenciához (liga medián / szezonátlag)
+ * mért delta másodlagos, és azonos témában nem ismétli a párharc-tényezőt.
+ * Kis minta + referencia nélkül a referencia-delta sorok kimaradnak.
+ */
 const buildDecisiveFactors = (
   game: NormalizedGameStats,
   opponent: NormalizedGameStats | null,
-  season: NormalizedTeamStats
-) => {
-  const offense: string[] = [];
-  const defense: string[] = [];
+  season: NormalizedTeamStats,
+  baseline: PostgameBaseline,
+  benchmarks: LeagueTeamBenchmarks
+): { offense: string[]; defense: string[]; meta: FactorMeta[] } => {
+  const candidates: DecisiveFactorCandidate[] = [];
+  const add = (candidate: DecisiveFactorCandidate) => candidates.push(candidate);
 
-  const threePctDelta = round(game.threePct - season.threePct, 1);
-  const twoRateDelta = toPct(game.twoRate - season.twoRate, 1);
-  const ftRateDelta = toPct(game.ftRate - season.ftRate, 1);
-  const assistRateDelta = toPct(game.assistRate - season.assistRate, 1);
-  const turnoverRateDelta = toPct(game.turnoverRate - season.turnoverRate, 1);
-  const orebRateDelta = toPct(game.orebRate - season.orebRate, 1);
-
-  if (threePctDelta >= 4) {
-    offense.push(`Periméterdobás hatékonyabb (+${threePctDelta} pp)`);
-  } else if (threePctDelta <= -4) {
-    offense.push(`Gyenge 3P-hatékonyság (${threePctDelta} pp)`);
-  }
-
-  if (twoRateDelta >= 6) offense.push(`Festékfókusz erősebb (+${twoRateDelta} pp)`);
-
-  if (ftRateDelta >= 8) {
-    offense.unshift(`FT rate dominancia (+${ftRateDelta} pp)`);
-  } else if (ftRateDelta >= 5) {
-    offense.push(`Aggresszív támadás (FT rate +${ftRateDelta} pp)`);
-  } else if (ftRateDelta <= -6) {
-    offense.push(`Kevés büntető (FT rate ${ftRateDelta} pp)`);
-  }
-  if (assistRateDelta >= 5) offense.push(`Jobb labdajáratás (+${assistRateDelta} pp)`);
-  if (assistRateDelta <= -5) offense.push(`Labdajáratás akadozott (${assistRateDelta} pp)`);
-  if (turnoverRateDelta >= 5) offense.push(`Támadás szétesett (TO rate +${turnoverRateDelta} pp)`);
-  if (orebRateDelta >= 6) {
-    offense.push(`Második esély dominancia (OREB +${orebRateDelta} pp)`);
-  } else if (orebRateDelta <= -6) {
-    offense.push(`Második esély hiány (OREB ${orebRateDelta} pp)`);
-  }
-
+  // 1) Meccs-párharc: saját vs. ellenfél ugyanazon a meccsen.
   if (opponent) {
-    const oppEfg = opponent.efg;
-    const defenseHeldOverall = oppEfg <= season.efg - 3;
-    if (oppEfg <= season.efg - 3) defense.push(`Ellenfél dobáshatékonyság limitált (${round(oppEfg, 1)}% eFG)`);
-    if (opponent.fga3 >= 16) {
-      const opponentThreePct = (opponent.fgm3 / opponent.fga3) * 100;
-      const clearPerimeterIssue = opponentThreePct >= 42;
-      const contextualIssue = opponentThreePct >= 38 && !defenseHeldOverall;
-      // Az állítás mellé mindig odakerül a bizonyíték (ellenfél 3P dobás/kísérlet).
-      const threeEvidence = `ellenfél 3P ${opponent.fgm3}/${opponent.fga3}, ${round(opponentThreePct, 1)}%`;
-      if (clearPerimeterIssue || contextualIssue) {
-        defense.push(`Perimétervédekezési probléma (${threeEvidence})`);
-      } else if (opponentThreePct >= 35 && !defenseHeldOverall) {
-        defense.push(`Tripla-volumen kockázat kontroll alatt (${threeEvidence})`);
+    const efgDiff = round(game.efg - opponent.efg, 1);
+    if (Math.abs(efgDiff) >= 5) {
+      add({
+        label: `Dobáshatékonysági ${efgDiff > 0 ? 'előny' : 'hátrány'} az ellenféllel szemben (eFG ${game.efg.toFixed(1)}% vs ${opponent.efg.toFixed(1)}%, ${signedPp(efgDiff)})`,
+        axis: 'offense', type: 'Hatékonyság', tone: efgDiff > 0 ? 'positive' : 'negative',
+        source: 'opponent', topic: 'efg', strength: Math.abs(efgDiff) / 5,
+      });
+    }
+    const toDiff = toPct(game.turnoverRate - opponent.turnoverRate, 1);
+    if (Math.abs(toDiff) >= 4) {
+      add({
+        label: `Labdabiztonsági ${toDiff < 0 ? 'előny' : 'hátrány'} (TO rate ${toPct(game.turnoverRate, 1)}% vs ${toPct(opponent.turnoverRate, 1)}%, ${signedPp(toDiff)})`,
+        axis: 'offense', type: 'Kontroll', tone: toDiff < 0 ? 'positive' : 'negative',
+        source: 'opponent', topic: 'to', strength: Math.abs(toDiff) / 4,
+      });
+    }
+    const orebDiff = toPct(game.orebRate - opponent.orebRate, 1);
+    if (Math.abs(orebDiff) >= 10) {
+      add({
+        label: `Lepattanó-${orebDiff > 0 ? 'fölény' : 'hátrány'} (OREB% ${toPct(game.orebRate, 1)}% vs ${toPct(opponent.orebRate, 1)}%, ${signedPp(orebDiff)})`,
+        axis: 'offense', type: 'Volumen', tone: orebDiff > 0 ? 'positive' : 'negative',
+        source: 'opponent', topic: 'oreb', strength: Math.abs(orebDiff) / 10,
+      });
+    }
+    const ftDiff = toPct(game.ftRate - opponent.ftRate, 1);
+    if (Math.abs(ftDiff) >= 10) {
+      add({
+        label: `${ftDiff > 0 ? 'Több' : 'Kevesebb'} kiharcolt büntető az ellenfélnél (FT rate ${toPct(game.ftRate, 1)}% vs ${toPct(opponent.ftRate, 1)}%, ${signedPp(ftDiff)})`,
+        axis: 'offense', type: 'Volumen', tone: ftDiff > 0 ? 'positive' : 'negative',
+        source: 'opponent', topic: 'ft', strength: Math.abs(ftDiff) / 10,
+      });
+    }
+  }
+
+  // 2) Referencia-delta (liga medián / szezonátlag) – másodlagos.
+  if (baseline.comparable) {
+    const noun = baseline.noun;
+    const reference = (
+      topic: string,
+      delta: number,
+      threshold: number,
+      type: FactorType,
+      positiveLabel: string,
+      negativeLabel: string,
+      higherIsBetter = true
+    ) => {
+      if (Math.abs(delta) < threshold) return;
+      const better = higherIsBetter ? delta > 0 : delta < 0;
+      add({
+        label: `${better ? positiveLabel : negativeLabel} (${signedPp(delta)})`,
+        axis: 'offense', type, tone: better ? 'positive' : 'negative',
+        source: 'reference', topic, strength: Math.abs(delta) / threshold,
+      });
+    };
+
+    reference('three', round(game.threePct - season.threePct, 1), 4, 'Hatékonyság',
+      `3P% a ${noun} felett`, `3P% a ${noun} alatt`);
+    const twoRateDelta = toPct(game.twoRate - season.twoRate, 1);
+    if (twoRateDelta >= 6) {
+      reference('paint', twoRateDelta, 6, 'Volumen', `Festékfókusz erősebb a ${noun}nál`, '');
+    }
+    reference('ft', toPct(game.ftRate - season.ftRate, 1), 6, 'Volumen',
+      `Több büntető a ${noun}nál (FT rate)`, `Kevés büntető a ${noun}hoz képest (FT rate)`);
+    reference('assist', toPct(game.assistRate - season.assistRate, 1), 5, 'Hatékonyság',
+      `Jobb labdajáratás a ${noun}nál`, `Labdajáratás akadozott a ${noun}hoz képest`);
+    reference('to', toPct(game.turnoverRate - season.turnoverRate, 1), 5, 'Kontroll',
+      `Kevesebb labdaeladás a ${noun}nál (TO rate)`, `Támadás szétesett a ${noun}hoz képest (TO rate)`, false);
+    reference('oreb', toPct(game.orebRate - season.orebRate, 1), 6, 'Volumen',
+      `Második esély a ${noun} felett (OREB)`, `Második esély a ${noun} alatt (OREB)`);
+  }
+
+  // 3) Védekezés: az ellenfél meccsértéke a liga mediánhoz mérve. Liga
+  //    benchmark nélkül nincs megbízható viszonyítás – a sor kimarad.
+  if (opponent) {
+    const leagueEfg = getLeagueMedian(benchmarks, season, 'efg');
+    if (leagueEfg !== null) {
+      const delta = round(opponent.efg - leagueEfg, 1);
+      if (Math.abs(delta) >= 3) {
+        add({
+          label: delta < 0
+            ? `Ellenfél dobáshatékonysága limitálva (eFG ${fixed1(opponent.efg)}% vs liga medián ${fixed1(leagueEfg)}%)`
+            : `Ellenfél hatékonyan dobott (eFG ${fixed1(opponent.efg)}% vs liga medián ${fixed1(leagueEfg)}%)`,
+          axis: 'defense', type: 'Hatékonyság', tone: delta < 0 ? 'positive' : 'negative',
+          source: 'reference', topic: 'opp-efg', strength: Math.abs(delta) / 3,
+        });
       }
     }
-    if (opponent.orebRate >= 0.33) defense.push(`Lepattanózás gyenge (ellenfél OREB ${toPct(opponent.orebRate, 1)}%)`);
+
+    const leagueThree = getLeagueMedian(benchmarks, season, 'three_pct');
+    if (leagueThree !== null && opponent.fga3 >= 16) {
+      // Az állítás mellé mindig odakerül a bizonyíték (ellenfél 3P dobás/kísérlet).
+      const evidence = `ellenfél 3P ${opponent.fgm3}/${opponent.fga3}, ${fixed1(opponent.threePct)}% vs liga medián ${fixed1(leagueThree)}%`;
+      const delta = round(opponent.threePct - leagueThree, 1);
+      if (delta >= 6) {
+        add({
+          label: `Perimétervédekezési probléma (${evidence})`,
+          axis: 'defense', type: 'Hatékonyság', tone: 'negative',
+          source: 'reference', topic: 'opp-three', strength: delta / 3,
+        });
+      } else if (delta >= 3) {
+        add({
+          label: `Periméter-kockázat (${evidence})`,
+          axis: 'defense', type: 'Hatékonyság', tone: 'negative',
+          source: 'reference', topic: 'opp-three', strength: delta / 3,
+        });
+      } else if (delta <= -5) {
+        add({
+          label: `Periméter kontroll (${evidence})`,
+          axis: 'defense', type: 'Hatékonyság', tone: 'positive',
+          source: 'reference', topic: 'opp-three', strength: Math.abs(delta) / 3,
+        });
+      }
+    }
+
+    const leagueOreb = getLeagueMedian(benchmarks, season, 'oreb_rate');
+    if (leagueOreb !== null) {
+      const delta = toPct(opponent.orebRate - leagueOreb, 1);
+      if (Math.abs(delta) >= 6) {
+        add({
+          label: `${delta > 0 ? 'Védőlepattanózás gyenge' : 'Védőlepattanó kontroll'} (ellenfél OREB ${toPct(opponent.orebRate, 1)}% vs liga medián ${toPct(leagueOreb, 1)}%)`,
+          axis: 'defense', type: 'Volumen', tone: delta > 0 ? 'negative' : 'positive',
+          source: 'reference', topic: 'opp-oreb', strength: Math.abs(delta) / 6,
+        });
+      }
+    }
+
+    const leagueTo = getLeagueMedian(benchmarks, season, 'turnover_rate');
+    if (leagueTo !== null) {
+      const delta = toPct(opponent.turnoverRate - leagueTo, 1);
+      if (Math.abs(delta) >= 5) {
+        add({
+          label: `${delta > 0 ? 'Kikényszerített labdavesztések' : 'Kevés kikényszerített labdavesztés'} (ellenfél TO rate ${toPct(opponent.turnoverRate, 1)}% vs liga medián ${toPct(leagueTo, 1)}%)`,
+          axis: 'defense', type: 'Kontroll', tone: delta > 0 ? 'positive' : 'negative',
+          source: 'reference', topic: 'opp-to', strength: Math.abs(delta) / 5,
+        });
+      }
+    }
   }
 
-  return { offense, defense };
-};
+  // Azonos témában a párharc-tényező nyer; a sorrend: párharc, majd erősség.
+  const opponentTopics = new Set(
+    candidates
+      .filter(c => c.source === 'opponent')
+      .flatMap(c => OPPONENT_TOPIC_COVERS[c.topic] ?? [c.topic])
+  );
+  const selected = candidates
+    .filter(c => c.source === 'opponent' || !opponentTopics.has(c.topic))
+    .sort((a, b) => {
+      if (a.source !== b.source) return a.source === 'opponent' ? -1 : 1;
+      return b.strength - a.strength;
+    });
 
-const classifyFactorType = (label: string): FactorType => {
-  const lower = label.toLowerCase();
-  if (lower.includes('hatékony') || lower.includes('efg') || lower.includes('3p') || lower.includes('dobás')) {
-    return 'Hatékonyság';
-  }
-  if (lower.includes('ft rate') || lower.includes('oreb') || lower.includes('második') || lower.includes('volumen') || lower.includes('possession')) {
-    return 'Volumen';
-  }
-  if (lower.includes('tempó') || lower.includes('tempo') || lower.includes('labdabiztonság') || lower.includes('turnover') || lower.includes('nyomás') || lower.includes('kontroll')) {
-    return 'Kontroll';
-  }
-  return 'Hatékonyság';
-};
+  const meta = selected.map<FactorMeta>(c => ({
+    label: c.label,
+    annotated: `${c.label} • ${c.type}-alapú`,
+    type: c.type,
+    axis: c.axis,
+    tone: c.tone,
+    source: c.source,
+  }));
 
-const annotateFactorList = (list: string[], axis: 'offense' | 'defense') => {
-  return list.map<FactorMeta>(label => {
-    const type = classifyFactorType(label);
-    const annotated = `${label} • ${type}-alapú`;
-    return { label, annotated, type, axis };
-  });
-};
-
-const annotateDecisiveFactors = (decisive: { offense: string[]; defense: string[] }) => {
-  const offenseMeta = annotateFactorList(decisive.offense, 'offense');
-  const defenseMeta = annotateFactorList(decisive.defense, 'defense');
   return {
-    annotated: {
-      offense: offenseMeta.map(item => item.annotated),
-      defense: defenseMeta.map(item => item.annotated),
-    },
-    meta: [...offenseMeta, ...defenseMeta],
+    offense: meta.filter(item => item.axis === 'offense').map(item => item.label),
+    defense: meta.filter(item => item.axis === 'defense').map(item => item.label),
+    meta: [...meta.filter(item => item.axis === 'offense'), ...meta.filter(item => item.axis === 'defense')],
   };
 };
 
@@ -2107,8 +2235,15 @@ export const analyzePostGameReport = (
     ? classifyDelta(defenseReferenceEfg - opponent.efg, 2.5)
     : 'Similar';
 
-  const decisive = buildDecisiveFactors(game, opponent, season);
-  const decisiveAnnotations = annotateDecisiveFactors(decisive);
+  const decisiveResult = buildDecisiveFactors(game, opponent, season, baseline, leagueBenchmarks);
+  const decisive = { offense: decisiveResult.offense, defense: decisiveResult.defense };
+  const decisiveAnnotations = {
+    annotated: {
+      offense: decisiveResult.meta.filter(item => item.axis === 'offense').map(item => item.annotated),
+      defense: decisiveResult.meta.filter(item => item.axis === 'defense').map(item => item.annotated),
+    },
+    meta: decisiveResult.meta,
+  };
   const playerImpact = analyzePlayerImpact(players);
   const gameShotSummary = shotMapContext?.gameShots?.length
     ? buildTeamShotMapSummary(shotMapContext.gameShots)

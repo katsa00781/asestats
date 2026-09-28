@@ -9418,14 +9418,17 @@ export function SeasonComparison({
   }, [activeKosarstatTeamAnalysis, selectedComboPlayerA, selectedComboPlayerB, selectedComboPlayerC, selectedComboSize]);
 
   const decisiveFactorGroups = useMemo(() => {
-    if (!postgameReport) return [] as Array<{ key: string; axis: 'offense' | 'defense'; type: string; label: string; items: string[] }>;
-    const grouped = new Map<string, { key: string; axis: 'offense' | 'defense'; type: string; items: string[] }>();
+    type DecisiveItem = { label: string; negative: boolean };
+    if (!postgameReport) return [] as Array<{ key: string; axis: 'offense' | 'defense'; type: string; label: string; items: DecisiveItem[] }>;
+    const grouped = new Map<string, { key: string; axis: 'offense' | 'defense'; type: string; items: DecisiveItem[] }>();
     postgameReport.decisiveFactorMeta.forEach(factor => {
       const key = `${factor.axis}-${factor.type}`;
       if (!grouped.has(key)) {
         grouped.set(key, { key, axis: factor.axis, type: factor.type, items: [] });
       }
-      grouped.get(key)!.items.push(factor.label);
+      // Az explicit előjel az irányadó; a szövegalapú becslés csak régi riportnál.
+      const negative = factor.tone ? factor.tone === 'negative' : isNegativeDecisiveLabel(factor.label, factor.axis);
+      grouped.get(key)!.items.push({ label: factor.label, negative });
     });
     return Array.from(grouped.values()).map(group => ({
       ...group,
@@ -9502,7 +9505,10 @@ export function SeasonComparison({
     const factor = postgameReport.decisiveFactorMeta.find(item => item.label === selectedPostgameFactor);
     if (!factor) return null;
 
-    const relatedStats = postgameReport.metrics.keyStats.filter(stat => {
+    // A kulcsmutatók a saját csapat értékei: védekezési (ellenfél-) faktorhoz
+    // nem kapcsolhatók, referencia nélkül pedig a delta 0 lenne.
+    const hasOwnReference = factor.axis === 'offense' && postgameReport.baseline?.comparable !== false;
+    const relatedStats = !hasOwnReference ? [] : postgameReport.metrics.keyStats.filter(stat => {
       const l = factor.label.toLowerCase();
       if (l.includes('3p') || l.includes('periméter')) return stat.key.includes('three');
       if (l.includes('ft')) return stat.key.includes('ft');
@@ -9520,15 +9526,20 @@ export function SeasonComparison({
 
   const opponentLinkedBreakdown = useMemo(() => {
     if (!postgameReport) return [] as Array<{ title: string; detail: string; linkedFactor?: string }>;
+    const isNegativeFactor = (item: PostGameReport['decisiveFactorMeta'][number]) =>
+      item.tone ? item.tone === 'negative' : isNegativeDecisiveLabel(item.label, item.axis);
     const defenseFactors = postgameReport.decisiveFactorMeta.filter(item => item.axis === 'defense');
     const offenseIssues = postgameReport.decisiveFactorMeta
       .filter(item => item.axis === 'offense')
-      .filter(item => /gyenge|akadozott|szétesett|kevés|hiány/i.test(item.label));
+      .filter(isNegativeFactor);
 
     const lines: Array<{ title: string; detail: string; linkedFactor?: string }> = [];
     defenseFactors.slice(0, 2).forEach(item => {
+      // Negatív védekezési faktor = az ellenfél erőssége; pozitív = saját kontroll.
       lines.push({
-        title: `${postgameReport.opponentName} erősség`,
+        title: isNegativeFactor(item)
+          ? `${postgameReport.opponentName} erősség`
+          : `${postgameReport.teamName} védekezési kontroll`,
         detail: item.label,
         linkedFactor: item.label,
       });
@@ -9570,7 +9581,8 @@ export function SeasonComparison({
       return 9;
     };
 
-    const factorHint = opponentLinkedBreakdown[0]?.detail;
+    // Fókusz csak javítandó pontból lesz, saját védekezési sikerből nem.
+    const factorHint = opponentLinkedBreakdown.find(row => !row.title.endsWith('védekezési kontroll'))?.detail;
     const focus: string[] = [];
 
     postgameReport.nextFocus.forEach(item => {
@@ -16731,8 +16743,7 @@ export function SeasonComparison({
                             </span>
                           </div>
                           <ul className="mt-2 space-y-1">
-                            {group.items.map(label => {
-                              const isNegative = isNegativeDecisiveLabel(label, group.axis);
+                            {group.items.map(({ label, negative: isNegative }) => {
                               const toneClass = isNegative ? 'text-negative' : 'text-positive';
                               const icon = isNegative ? '🔻' : '▲';
                               const isActive = selectedPostgameFactor === label;
