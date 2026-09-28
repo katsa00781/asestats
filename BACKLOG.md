@@ -800,9 +800,12 @@ egység zárja.
     és a backfill a tükörsort (felcserélt `our_team_id` / `opponent_team_id`)
     is linkeli. Eredmény: 2026/27-ben 14/14 `games` sor linkelt (korábban 8),
     minden Kosarstat meccshez pontosan 2 sor.
-  - Maradék: az ASE–Pécs (`20260926102180`) nyers metaadata is CMP-szöveg (a
-    linkjei megvannak, csak a backfill figyelmeztet rá) – force reimportja
-    külön jóváhagyásra vár.
+  - ASE–Pécs (`20260926102180`) ✓ (2026-09-28, jóváhagyva): force reimport,
+    a nyers metaadat helyes csapatneveket kapott; a 2026/27-ben nem maradt
+    CMP-szöveges oldal, a backfill 14/14 linkelt, figyelmeztetés nélkül.
+    Mobil jegyzet: `mobile-sync/2026-09-28-kosarstat-ase-pecs-metadata.md`.
+  - Mobil összesítő a mai 8 jegyzethez:
+    `mobile-sync/2026-09-28-mobil-teendok-osszesito.md`.
   - Mobil jegyzet: `mobile-sync/2026-09-28-kosarstat-reimport-mirror-links.md`.
 - [x] **E – UI és szöveg (12, 14–18) ✓ (2026-09-28)**
   - 12: lineup-rangsorok (post-game ötös/páros és a „Leghatékonyabb /
