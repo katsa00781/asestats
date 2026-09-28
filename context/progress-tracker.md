@@ -121,7 +121,9 @@ Update this file after every meaningful implementation change.
 
 ## Completed (legutóbbi)
 
-- **Hotfix H12 / C2 – standard USG%** (2026-09-28): a post-game `usageShare` perc-normalizált USG% (csapatrészesedés helyett), küszöbök ≤ 15% / ≥ 25%, újraskálázott Impact usage-komponens; a webes játékostrend is ezt használja. Érintett: `lib/player-postgame.ts`, `lib/postgame-report.ts`, `lib/export-to-md.ts`, `components/SeasonComparison.tsx`. Mobil jegyzet: `mobile-sync/2026-09-28-postgame-usg-rate.md`. Következő: D (adatvalidáció).
+- **Hotfix H12 / D – post-game adatvalidáció** (2026-09-28): új `lib/player-name-match.ts` vezetéknév-alapú box score ↔ Kosarstat illesztéssel és kódbeli aliasokkal (a régi illesztő két „Dániel”-t összepárosított); nem párosítható nevek a riport megjegyzéseiben; dobástérkép vs. box score FGA ellenőrzés a `@core`-ban; a post-game pozíció a meccsbeli Kosarstat lineup-slot. Érintett: `lib/player-name-match.ts`, `lib/postgame-report.ts`, `lib/export-to-md.ts`, `components/SeasonComparison.tsx`. Mobil jegyzet: `mobile-sync/2026-09-28-postgame-data-validation.md`. Új nyitott: 3 Kosarstat meccs force reimportja (CMP-metaadat, `BACKLOG.md` H12). Következő: E (UI és szöveg).
+
+- **Hotfix H12 / C2 – standard USG%** (2026-09-28): a post-game `usageShare` perc-normalizált USG% (csapatrészesedés helyett), küszöbök ≤ 15% / ≥ 25%, újraskálázott Impact usage-komponens; a webes játékostrend is ezt használja. Érintett: `lib/player-postgame.ts`, `lib/postgame-report.ts`, `lib/export-to-md.ts`, `components/SeasonComparison.tsx`. Mobil jegyzet: `mobile-sync/2026-09-28-postgame-usg-rate.md`.
 
 - **Hotfix H12 / C1 – post-game metrika-definíciók** (2026-09-28): közös birtoklásszám `(saját + ellenfél) / 2` a tempóhoz és mindkét ratinghez (meccs, szezon, liga-benchmark; `TeamSeasonStat.oppPossessions`); FT-mutató FTM / FGA a riportban és a benchmarkban; egyetlen TO-definíció (Oliver), a Kosarstat TO% csak a nyers blokkban. Érintett: `lib/postgame-report.ts`, `lib/export-to-md.ts`, `components/SeasonComparison.tsx`. Mobil jegyzet: `mobile-sync/2026-09-28-postgame-metric-definitions.md`.
 

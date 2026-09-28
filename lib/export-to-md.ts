@@ -808,6 +808,14 @@ export function postgameReportToMd(report: PostGameReport, seasonName?: string):
       lines.push(`**Limitált hatás (magas usage):** ${playerImpact.negative.join(', ')}`);
   }
 
+  // Adatminőség: ellenfél-adat, dobástérkép–box score eltérés, névillesztés,
+  // Kosarstat import-állapot. (A Kosarstat-kiegészítés utólag fűzi hozzá a
+  // saját megjegyzéseit, ezért nem mind szerepel az összefoglalóban.)
+  if (report.dataNotes.length > 0) {
+    lines.push(``, `## Adatminőség és megjegyzések`, ``);
+    for (const note of report.dataNotes) lines.push(`- ${note}`);
+  }
+
   if (report.reflection.xFactor || report.reflection.risk) {
     lines.push(``, `## Reflexió`, ``);
     if (report.reflection.xFactor) lines.push(report.reflection.xFactor);

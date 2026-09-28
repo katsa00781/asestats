@@ -2112,6 +2112,32 @@ const buildRatings = (
   };
 };
 
+/**
+ * A dobástérkép dobásszámának egyeztetése a box score FGA-jával. Eltérésnél a
+ * dobástérkép hiányos (pl. kimaradt események), így a zóna- és 3P-adatai
+ * nem egyeznek a box score-ral – ezt a riport jelzi. Nagy (>10%) hiánynál a
+ * dobástérkép-alapú erősség/probléma sorok sem megbízhatók.
+ */
+const validateShotMap = (summary: TeamShotMapSummary | null, game: NormalizedGameStats) => {
+  if (!summary || !(game.fga > 0)) return { notes: [] as string[], reliable: Boolean(summary) };
+  const notes: string[] = [];
+  const diff = summary.attempts - game.fga;
+  const relative = Math.abs(diff) / game.fga;
+  if (Math.abs(diff) >= 3 || relative >= 0.05) {
+    notes.push(
+      `Dobástérkép hiányos: ${summary.attempts} dobás a box score ${game.fga} mezőnykísérletével szemben (${diff > 0 ? '+' : ''}${diff}); a dobástérkép zóna- és 3P-adatai (3P% ${summary.threePct.toFixed(1)}%) csak tájékoztatók, a box score 3P% ${game.threePct.toFixed(1)}%.`
+    );
+  } else {
+    const shotMapThreeAttempts = Math.round((summary.threeRate / 100) * summary.attempts);
+    if (Math.abs(shotMapThreeAttempts - game.fga3) >= 3) {
+      notes.push(
+        `Dobástérkép 3P-besorolás eltér: ${shotMapThreeAttempts} tripla a box score ${game.fga3} hárompontos kísérletével szemben – a zónaadatok tájékoztatók.`
+      );
+    }
+  }
+  return { notes, reliable: relative <= 0.1 };
+};
+
 const buildOpponentShooting = (opponent: NormalizedGameStats | null): PostgameOpponentShooting | null => {
   if (!opponent) return null;
   return {
@@ -2272,7 +2298,8 @@ export const analyzePostGameReport = (
   const seasonShotSummary = shotMapContext?.seasonShots?.length
     ? buildTeamShotMapSummary(shotMapContext.seasonShots)
     : null;
-  const shotMapComparison = gameShotSummary && seasonShotSummary
+  const shotMapValidation = validateShotMap(gameShotSummary, game);
+  const shotMapComparison = gameShotSummary && seasonShotSummary && shotMapValidation.reliable
     ? buildShotMapComparison(gameShotSummary, seasonShotSummary)
     : null;
 
@@ -2294,7 +2321,10 @@ export const analyzePostGameReport = (
   const result: 'win' | 'loss' =
     teamGame.result ?? (actualPointsFor >= actualPointsAgainst ? 'win' : 'loss');
 
-  const dataNotes = opponent ? [] : ['Ellenfél statisztikák nem elérhetők, a védekező értékelés korlátozott.'];
+  const dataNotes = [
+    ...(opponent ? [] : ['Ellenfél statisztikák nem elérhetők, a védekező értékelés korlátozott.']),
+    ...shotMapValidation.notes,
+  ];
 
   return {
     teamId: teamGame.teamId,

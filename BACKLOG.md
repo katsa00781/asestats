@@ -1,6 +1,6 @@
 # BACKLOG.md – ASEStats Projekt
 
-_Utoljára frissítve: 2026-09-28 (H12 – post-game riportgenerátor hibalista, A–C egység)_
+_Utoljára frissítve: 2026-09-28 (H12 – post-game riportgenerátor hibalista, A–D egység)_
 
 ---
 
@@ -759,9 +759,37 @@ egység zárja.
   ezt használja. Valós adaton: Daniels 11,8% → 22,5%, Molnár 3,8% → 12,7%,
   Chandler 34,0%. `tsc`, `eslint`, `npm run build` tiszta. Mobil jegyzet:
   `mobile-sync/2026-09-28-postgame-usg-rate.md`.
-- [ ] **D – Adatvalidáció (6, 10, 13)**: box score ↔ Kosarstat névillesztés
-  (kódbeli alias + nem illeszkedő nevek naplózása – eldöntve); dobástérkép-
-  dobásszám vs. box score FGA figyelmeztetés; pozícióforrás egységesítése.
+- [x] **D – Adatvalidáció (6, 10, 13) ✓ (2026-09-28)**
+  - 6: új `lib/player-name-match.ts` – vezetéknév-alapú illesztés (a
+    nagybetűs token a vezetéknév; kis átírási eltérés engedett:
+    KRIVACEVIC ↔ KRIVACSEVICS; becenév hosszú vezetéknévnél: Jay Jay ↔ John
+    Watson CHANDLER), kódbeli `PLAYER_NAME_ALIASES` (első bejegyzés: Trey
+    WERTZ). **Rejtett hiba javítva:** a régi webes illesztő a 6+ betűs közös
+    keresztnév miatt „HALMAI Dániel”-t és „NAGY Dániel”-t összepárosította.
+    A `SeasonComparison` minden névpárosítása az új illesztőn megy; a nem
+    párosítható / kétértelmű nevek a riport megjegyzéseibe és a konzolba
+    kerülnek. 2026/27 teljes ellenőrzés: 4 linkelt meccsen 39/42 név
+    párosítva, a maradék 3-ból 2 (Huszár, Dávid, 22 mp) a box score-ból a
+    0 perces sor kihagyása miatt hiányzik – ezt a riport külön jelzi –, 1
+    becenév (Wertz → alias).
+  - 10: `analyzePostGameReport` összeveti a dobástérkép dobásszámát a box
+    score FGA-val; eltérésnél megjegyzés (ASE–Pécs: 73 vs 76, 3P% 31,8% vs
+    38,5%), 10% feletti hiánynál a dobástérkép-alapú erősség/probléma sorok
+    kimaradnak. Az MD új „Adatminőség és megjegyzések” szekciót kap.
+  - 13 (felhasználói döntés): a post-game játékospozíció a meccsbeli Kosarstat
+    lineup-slot (legtöbb idő), fallback a keretpozíció – ugyanaz a forrás, mint
+    a lineup nézet szűrőié (Révész PF, Géringer PF, Daniels SG).
+  - `tsc`, `eslint` (korábbi 5 figyelmeztetés), `npm run build` tiszta.
+    Böngészős ellenőrzés nem történt. Mobil jegyzet:
+    `mobile-sync/2026-09-28-postgame-data-validation.md`.
+- [ ] **Új nyitott tétel (a D ellenőrzése közben):** 3 db 2026-09-26-i
+  Kosarstat meccs (`20260926114138`, `20260926127201`, `20260926136166`)
+  nyers oldala a CMP-dialógus metaadatával („KosarStat.hu” / „Do Not Process
+  My Personal Information”) jött be, ezért nincs `games` linkjük. Ok: a
+  09-26 18:42 UTC-s GitHub Actions import még a H8 előtti kóddal futott (a
+  push csak 09-27-én történt, mint a H11-nél). Teendő (jóváhagyással): a 3
+  meccs force reimportja (`kosarstat:pbp` force), majd
+  `kosarstat:backfill-links`.
 - [ ] **E – UI és szöveg (12, 14–18)**: lineup-rangsor percküszöb (a
   `minSampleSeconds = 180` fallbackje ma a teljes mintára esik vissza);
   „X győzött Y ellen”; a védekezési mondat referenciával; generikus fallback

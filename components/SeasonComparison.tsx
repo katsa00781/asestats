@@ -65,6 +65,7 @@ import {
   mergeKosarstatPostgameContext,
 } from '@/lib/postgame-report';
 import { computeUsgRate } from '@/lib/player-postgame';
+import { playerNamesMatch, resolvePlayerNames } from '@/lib/player-name-match';
 
 type SeasonComparisonProps = {
   allPlayers: PlayerStats[];
@@ -1543,51 +1544,19 @@ const normalizeTeamKey = (value: string) =>
 type NormalizedNameProfile = {
   key: string;
   tokens: string[];
+  /** Az eredeti név – a vezetéknév-felismeréshez (nagybetűs tokenek) kell. */
+  raw: string;
 };
 
 const buildNormalizedNameProfile = (value: string): NormalizedNameProfile => {
   const key = normalizeTeamKey(value);
   const tokens = key.split(' ').filter(Boolean);
-  return { key, tokens };
+  return { key, tokens, raw: value };
 };
 
-const matchesNormalizedNameProfile = (candidate: string, profiles: NormalizedNameProfile[]) => {
-  const normalizedCandidate = buildNormalizedNameProfile(candidate);
-  if (!normalizedCandidate.key) return false;
-
-  return profiles.some(profile => {
-    if (profile.key === normalizedCandidate.key) return true;
-    if (normalizedCandidate.tokens.length < 2) return false;
-
-    // Long-token shortcut: if both sides share a token of ≥6 chars it's the same person.
-    // Handles foreign names where Kosarstat uses a nickname/abbreviated form
-    // (e.g. "Zena EDOSOMWAN" vs "EDOSOMWAN Kinsley Nehizena").
-    const hasLongSharedToken = profile.tokens.some(profileToken =>
-      profileToken.length >= 6
-      && normalizedCandidate.tokens.some(t =>
-        t === profileToken || profileToken.includes(t) || t.includes(profileToken)
-      )
-    );
-    if (hasLongSharedToken) return true;
-
-    let exactMatches = 0;
-    const allTokensMatch = normalizedCandidate.tokens.every(token => {
-      const matchedToken = profile.tokens.find(profileToken => (
-        profileToken === token
-        || profileToken.includes(token)
-        || token.includes(profileToken)
-      ));
-
-      if (matchedToken && matchedToken === token) {
-        exactMatches += 1;
-      }
-
-      return Boolean(matchedToken);
-    });
-
-    return allTokensMatch && exactMatches >= 1;
-  });
-};
+/** Box score ↔ Kosarstat névpárosítás a közös, vezetéknév-alapú illesztővel. */
+const matchesNormalizedNameProfile = (candidate: string, profiles: NormalizedNameProfile[]) =>
+  profiles.some(profile => playerNamesMatch(candidate, profile.raw));
 
 const mapPositionInfo = (pos?: string | null) => buildPositionMetadata(pos, 'C');
 
@@ -9141,10 +9110,70 @@ export function SeasonComparison({
       .map(name => buildNormalizedNameProfile(name))
       .filter(profile => profile.key.length > 0);
 
+    const resolveBoxName = (row: GamePlayerStatRow) => {
+      const seasonPlayer = seasonPlayers.find(player => String(player.id) === String(row.player_id));
+      return seasonPlayer?.name || row.players?.name?.trim() || row.player_id;
+    };
+
+    // Kosarstat lineup ↔ box score névpárosítás (a nem illeszkedő nevek a riportba kerülnek).
+    const lineupNames = activeLineupTeam
+      ? Array.from(new Set([
+          ...activeLineupTeam.playerMinutes.map(item => item.player),
+          ...activeLineupTeam.stints.flatMap(stint => stint.players),
+        ]))
+      : [];
+    const nameResolution = resolvePlayerNames(lineupNames, teamPlayers.map(resolveBoxName));
+    const nameNotes: string[] = [];
+    if (activeLineupTeam && lineupNames.length > 0) {
+      if (nameResolution.matched.size === 0) {
+        nameNotes.push('Névillesztés: a Kosarstat lineup egyetlen játékosa sem párosítható a box score-ral – a lineup-adatok nem ehhez a csapathoz kapcsolódnak.');
+      } else {
+        const secondsByName = new Map(activeLineupTeam.playerMinutes.map(item => [item.player, item.seconds]));
+        const brief = nameResolution.unmatched.filter(name => (secondsByName.get(name) ?? 0) < 60);
+        const missing = nameResolution.unmatched.filter(name => !brief.includes(name));
+        if (missing.length > 0) {
+          nameNotes.push(`Névillesztés: ${missing.length} Kosarstat játékos nem párosítható a box score-ral (${missing.join(', ')}) – a lineup-adataik nem kapcsolódnak a játékosbontáshoz.`);
+        }
+        if (brief.length > 0) {
+          nameNotes.push(`1 percnél rövidebb játékidő, a box score-ban nincs soruk (a forrás 0 percnek írja): ${brief.join(', ')}.`);
+        }
+        if (nameResolution.ambiguous.length > 0) {
+          nameNotes.push(`Névillesztés: több box score játékosra is illeszkedik, ezért nincs párosítva: ${nameResolution.ambiguous.join(', ')}.`);
+        }
+      }
+      if (nameNotes.length > 0) {
+        console.warn('[postgame] Kosarstat ↔ box score névillesztési eltérés', {
+          unmatched: nameResolution.unmatched,
+          ambiguous: nameResolution.ambiguous,
+        });
+      }
+    }
+
+    // Meccsbeli pozíció: a Kosarstat lineup-slot (PG…C), ahol a legtöbb időt
+    // töltötte – ugyanaz a forrás, mint a lineup nézet pozíciószűrőinél.
+    // Kosarstat adat nélkül a keretpozíció a fallback.
+    const LINEUP_SLOT_POSITIONS: Position[] = ['PG', 'SG', 'SF', 'PF', 'C'];
+    const slotSecondsByBoxName = new Map<string, number[]>();
+    activeLineupTeam?.stints.forEach(stint => {
+      if (stint.players.length !== 5 || !(stint.seconds > 0)) return;
+      stint.players.forEach((lineupName, slotIndex) => {
+        const boxName = nameResolution.matched.get(lineupName);
+        if (!boxName) return;
+        const slots = slotSecondsByBoxName.get(boxName) ?? [0, 0, 0, 0, 0];
+        slots[slotIndex] += stint.seconds;
+        slotSecondsByBoxName.set(boxName, slots);
+      });
+    });
+    const gamePositionFor = (boxName: string): Position | null => {
+      const slots = slotSecondsByBoxName.get(boxName);
+      if (!slots) return null;
+      const max = Math.max(...slots);
+      return max > 0 ? LINEUP_SLOT_POSITIONS[slots.indexOf(max)] : null;
+    };
+
     const players: PlayerGameStat[] = teamPlayers.map(row => {
       const seasonPlayer = seasonPlayers.find(player => String(player.id) === String(row.player_id));
-      const fallbackName = row.players?.name?.trim();
-      const resolvedName = seasonPlayer?.name || fallbackName || row.player_id;
+      const resolvedName = resolveBoxName(row);
       const explicitStarter = typeof row.is_starter === 'boolean' ? row.is_starter : undefined;
       const inferredStarter = starterProfiles.length > 0
         ? matchesNormalizedNameProfile(resolvedName, starterProfiles)
@@ -9153,7 +9182,7 @@ export function SeasonComparison({
       return {
         playerId: row.player_id,
         name: resolvedName,
-        position: mapPosition(seasonPlayer?.position || 'PG'),
+        position: gamePositionFor(resolvedName) ?? mapPosition(seasonPlayer?.position || 'PG'),
         isStarter: explicitStarter ?? inferredStarter,
         minutes: row.minutes || 0,
         points: row.points || 0,
@@ -9295,7 +9324,7 @@ export function SeasonComparison({
     })();
 
     return mergeKosarstatPostgameContext(baseReport, kosarstatPostgameContext, {
-      extraNotes: kosarstatPostgameNotes,
+      extraNotes: [...kosarstatPostgameNotes, ...nameNotes],
       lineupInsights,
     });
   }, [kosarstatLineupAnalysis, kosarstatPostgameContext, kosarstatPostgameNotes, league, playerGameStats, postgameBenchmarks, postgameOpponentTotalsByTeam, postgameShotContext, pregameReport, rolesByPlayerId, seasonPlayers, selectedGame, resolvedTeamId, selectedTeamStats]);
