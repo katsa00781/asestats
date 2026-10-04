@@ -182,6 +182,64 @@ export const findTeamByNameFuzzy = <T extends ScrapeTeamRecord>(
   ]);
 
 /* ---------------------------------------------------------------------------
+ * Szezon-illeszkedés
+ * ------------------------------------------------------------------------- */
+
+export type SeasonDateRange = {
+  name: string;
+  start_date: string | null;
+  end_date: string | null;
+};
+
+export type SeasonDatedItem = { date: string; label: string };
+
+/** Ekkora szezonon kívüli arány fölött az import írás előtt leáll. */
+export const SEASON_MISMATCH_RATIO = 0.1;
+
+/**
+ * Szezon-illeszkedés ellenőrzés a Hunbasket importokhoz. A menetrend URL
+ * slugja (x2526) és a célszezon egymástól függetlenül állítható – ha
+ * elcsúsznak, egy másik évad meccsei kerülnek rossz season_id alá (2026-ban
+ * 276 meccs és 138 dobástérkép került így a 2025/2026 szezonba).
+ *
+ * A TELJES, szűretlen menetrend-listára kell hívni: néhány kilógó meccs
+ * (elhalasztott mérkőzés, júniusi döntő) valós lehet, ezeket csak jelzi és
+ * visszaadja; a határérték fölött hibát dob, hogy semmi ne íródjon.
+ */
+export const assertDatesMatchSeason = (
+  season: SeasonDateRange,
+  items: SeasonDatedItem[],
+  source: string
+): SeasonDatedItem[] => {
+  if (items.length === 0) return [];
+
+  const { start_date: start, end_date: end } = season;
+  if (!start || !end) {
+    console.warn(`FIGYELEM: a(z) ${season.name} szezonnak nincs start_date/end_date értéke – az illeszkedés nem ellenőrizhető.`);
+    return [];
+  }
+
+  const outside = items.filter(item => item.date < start || item.date > end);
+  if (outside.length === 0) return [];
+
+  const seasonRange = `${start} – ${end}`;
+  if (outside.length / items.length <= SEASON_MISMATCH_RATIO) {
+    console.warn(
+      `FIGYELEM: ${outside.length} mérkőzés dátuma a(z) ${season.name} szezon határain kívül esik (${seasonRange}): ` +
+        outside.map(item => `${item.date} ${item.label}`).join(', ')
+    );
+    return outside;
+  }
+
+  const dates = items.map(item => item.date).sort();
+  throw new Error(
+    `A menetrend nem illeszkedik a kiválasztott szezonhoz: a(z) ${items.length} mérkőzésből ${outside.length} ` +
+      `a(z) ${season.name} szezon határain kívül esik. Menetrend dátumtartomány: ${dates[0]} – ${dates[dates.length - 1]}, ` +
+      `szezon: ${seasonRange}. Valószínűleg rossz a slug vagy az URL (${source}) a kiválasztott szezonhoz. Nem írok adatot.`
+  );
+};
+
+/* ---------------------------------------------------------------------------
  * Menetrend-szűrők
  *
  * A forduló-, dátum- és csapatszűrés korábban csak a box-score importban

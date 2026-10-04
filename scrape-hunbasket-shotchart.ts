@@ -27,6 +27,8 @@ import {
   matchesDateRange,
   matchesTeamFilter,
   isRoundFilterEmpty,
+  assertDatesMatchSeason,
+  type SeasonDateRange,
 } from './scrape-utils';
 
 dotenv.config({ path: '.env.local' });
@@ -121,11 +123,15 @@ const ensureTeam = async (name: string): Promise<TeamRecord> => {
   return data;
 };
 
-const resolveSeasonId = async (): Promise<string> => {
+type SeasonRecord = SeasonDateRange & { id: string };
+
+const SEASON_FIELDS = 'id, name, start_date, end_date';
+
+const resolveSeason = async (): Promise<SeasonRecord> => {
   if (HUNBASKET_SEASON_ID) {
     const { data, error } = await supabase
       .from('seasons')
-      .select('id')
+      .select(SEASON_FIELDS)
       .eq('id', HUNBASKET_SEASON_ID)
       .single();
 
@@ -133,12 +139,12 @@ const resolveSeasonId = async (): Promise<string> => {
       throw new Error(`Season not found for HUNBASKET_SEASON_ID=${HUNBASKET_SEASON_ID}`);
     }
 
-    return data.id;
+    return data as SeasonRecord;
   }
 
   const { data, error } = await supabase
     .from('seasons')
-    .select('id')
+    .select(SEASON_FIELDS)
     .eq('name', HUNBASKET_SEASON_NAME)
     .single();
 
@@ -146,7 +152,7 @@ const resolveSeasonId = async (): Promise<string> => {
     throw new Error(`Season not found: ${HUNBASKET_SEASON_NAME}`);
   }
 
-  return data.id;
+  return data as SeasonRecord;
 };
 
 const dismissCookieBanner = async (page: Page) => {
@@ -160,7 +166,7 @@ const dismissCookieBanner = async (page: Page) => {
   }
 };
 
-const scrapePlayedGames = async (page: Page): Promise<ScheduleGame[]> => {
+const scrapePlayedGames = async (page: Page, season: SeasonRecord): Promise<ScheduleGame[]> => {
   await page.goto(HUNBASKET_SCHEDULE_URL, { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(2500);
   await dismissCookieBanner(page);
@@ -217,6 +223,13 @@ const scrapePlayedGames = async (page: Page): Promise<ScheduleGame[]> => {
     homeTeam: cleanTeamName(row.homeTeam),
     awayTeam: cleanTeamName(row.awayTeam),
   }));
+
+  // A teljes (szűretlen) menetrendre: rossz slug/szezon párosításnál írás előtt leáll.
+  assertDatesMatchSeason(
+    season,
+    games.map(game => ({ date: game.date, label: `${game.homeTeam}–${game.awayTeam}` })),
+    HUNBASKET_SCHEDULE_URL
+  );
 
   return applyFilters(games);
 };
@@ -315,7 +328,9 @@ const upsertRawGame = async (seasonId: string, game: ScheduleGame, shotchartData
 };
 
 const main = async () => {
-  const seasonId = await resolveSeasonId();
+  const season = await resolveSeason();
+  const seasonId = season.id;
+  console.log(`Target season: ${season.name} (${season.start_date ?? '?'} – ${season.end_date ?? '?'})`);
   await refreshTeamCache();
 
   const browser = await chromium.launch({ headless: HEADLESS });
@@ -323,7 +338,7 @@ const main = async () => {
 
   try {
     console.log(`Fetching played games from: ${HUNBASKET_SCHEDULE_URL}`);
-    const games = await scrapePlayedGames(page);
+    const games = await scrapePlayedGames(page, season);
     console.log(`Played games found: ${games.length}`);
 
     if (games.length === 0) {

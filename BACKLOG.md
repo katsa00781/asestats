@@ -749,10 +749,22 @@ Nyitott:
   törlés ekkorra már végbement, a hiba a `ON COMMIT DROP` temp táblára
   hivatkozó utasítás ismételt / külön futtatásából jött. A script temp tábla
   nélkülire átírva, így részenként és újra is futtatható.
-- [ ] **Szezon-dátum védelem a box-score importba** (`scrape-hunbasket.ts`,
-  a menetrend import `assertFixturesMatchSeason` mintájára) – felhasználói
-  jóváhagyásra vár (scraping szkript).
-- [ ] **Szezonon kívüli shot chart sorok** – 138 `hunbasket_shotchart_raw` sor
+- [x] **Szezon-dátum védelem a box-score és a dobástérkép importban
+  (2026-10-04, felhasználói jóváhagyással)** – új közös
+  `scrape-utils.ts` `assertDatesMatchSeason()`: a teljes, szűretlen
+  menetrend dátumait veti össze a `seasons.start_date`/`end_date`
+  értékkel; 10% fölötti kilógásnál írás előtt hibával leáll, alatta csak
+  figyelmeztet (elhalasztott meccs, júniusi döntő). Bekötve:
+  `scrape-hunbasket.ts` (`getGameLinks`) és `scrape-hunbasket-shotchart.ts`
+  (`scrapePlayedGames`) – a 138 rossz szezonú dobástérkép-sor ugyanezen a
+  résen jött be. Valós oldalakon ellenőrizve (csak olvasva): `x2425` →
+  2025/2026 leáll (182/182 kívül), `x2526` → 2025/2026 és `x2627` →
+  2026/2027 átmegy. Teszt: `tests/season-date-guard.test.ts`.
+- [ ] A menetrend import (`scrape-hunbasket-fixtures.ts`) saját
+  `assertFixturesMatchSeason` példánya átállítható a közös segédre
+  (azonos logika, két példányban).
+- [ ] **2024/2025-ös shot chart sorok rossz szezon alatt (felhasználói
+  döntés 2026-10-04: feladatként marad, később térünk vissza rá)** – 138 `hunbasket_shotchart_raw` sor
   (`season_slug = x2425`, importálva 2026-04-20) a 2025/2026 szezon alatt áll;
   2024/2025 alatt nincs párjuk. Döntés kell: átírás 2024/2025-re (a
   `hunbasket_shot_events` játékos-hozzárendelését újra kell futtatni) vagy törlés.

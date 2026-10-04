@@ -32,6 +32,8 @@ import {
   isRoundFilterEmpty,
   dedupeShotEvents,
   cleanPlayerName,
+  assertDatesMatchSeason,
+  type SeasonDateRange,
 } from './scrape-utils';
 
 dotenv.config({ path: '.env.local' });
@@ -275,11 +277,15 @@ const ensureTeam = async (name: string): Promise<TeamRecord> => {
   return data;
 };
 
-const resolveSeasonId = async (): Promise<string> => {
+type SeasonRecord = SeasonDateRange & { id: string };
+
+const SEASON_FIELDS = 'id, name, start_date, end_date';
+
+const resolveSeason = async (): Promise<SeasonRecord> => {
   if (HUNBASKET_SEASON_ID) {
     const { data, error } = await supabase
       .from('seasons')
-      .select('id, name')
+      .select(SEASON_FIELDS)
       .eq('id', HUNBASKET_SEASON_ID)
       .single();
 
@@ -294,12 +300,12 @@ const resolveSeasonId = async (): Promise<string> => {
       );
     }
 
-    return data.id;
+    return data as SeasonRecord;
   }
 
   const { data, error } = await supabase
     .from('seasons')
-    .select('id')
+    .select(SEASON_FIELDS)
     .eq('name', HUNBASKET_SEASON_NAME)
     .single();
 
@@ -309,10 +315,10 @@ const resolveSeasonId = async (): Promise<string> => {
     );
   }
 
-  return data.id;
+  return data as SeasonRecord;
 };
 
-const getGameLinks = async (page: Page): Promise<GameLink[]> => {
+const getGameLinks = async (page: Page, season: SeasonRecord): Promise<GameLink[]> => {
   console.log('📋 Meccslista letöltése...');
   await page.goto(HUNBASKET_SCHEDULE_URL, { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(3000);
@@ -358,6 +364,13 @@ const getGameLinks = async (page: Page): Promise<GameLink[]> => {
 
     return entries;
   });
+
+  // A teljes (szűretlen) menetrendre: rossz slug/szezon párosításnál írás előtt leáll.
+  assertDatesMatchSeason(
+    season,
+    games.map(game => ({ date: game.date, label: `${game.homeTeam}–${game.awayTeam}` })),
+    HUNBASKET_SCHEDULE_URL
+  );
 
   const filtered = games.filter(game => {
     if (!matchesDateFilter(game.date)) return false;
@@ -910,13 +923,15 @@ const main = async () => {
   console.log('🚀 HUNBASKET teljes szezon import indítása');
 
   await refreshTeamCache();
-  const seasonId = await resolveSeasonId();
+  const season = await resolveSeason();
+  const seasonId = season.id;
+  console.log(`🎯 Célszezon: ${season.name} (${season.start_date ?? '?'} – ${season.end_date ?? '?'})`);
 
   const browser = await chromium.launch({ headless: HEADLESS });
   const page = await browser.newPage();
 
   try {
-    const games = await getGameLinks(page);
+    const games = await getGameLinks(page, season);
 
     if (games.length === 0) {
       console.log('⚠️ Nincs feldolgozható meccs a megadott szűrővel.');
