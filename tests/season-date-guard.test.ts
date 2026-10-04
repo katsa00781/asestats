@@ -9,7 +9,7 @@ test('Másik évad menetrendje írás előtt megállítja az importot', () => {
   const lastSeason = ['2024-09-27', '2024-10-04', '2025-02-12'].map(item);
   assert.throws(
     () => assertDatesMatchSeason(season, lastSeason, 'https://hunbasket.hu/menetrend-teljes/ferfi/x2425/hun'),
-    /nem illeszkedik a kiválasztott szezonhoz.*3 mérkőzésből 3.*x2425/s
+    /nem illeszkedik a kiválasztott szezonhoz[\s\S]*3 mérkőzésből 3[\s\S]*x2425/
   );
 });
 
