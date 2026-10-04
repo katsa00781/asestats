@@ -141,7 +141,7 @@ asestats/
 │   ├── useGameData.ts
 │   └── useFilterData.ts
 ├── migrations/                 # SQL migrációs fájlok – csak Supabase SQL Editorban futtatni
-├── mobile-sync/                # Web → mobil változásnapló (lásd „Mobil app szinkron”)
+├── mobile-sync/                # LEZÁRT archívum (2026-10-04-ig) – új jegyzet a mobil repóba megy (lásd „Mobil app szinkron”)
 ├── scripts/                    # Node.js adatbázis segédeszközök
 ├── archive/                    # Egyszeri diagnosztikai szkriptek (fix-*, check-*, delete-*)
 ├── public/                     # Statikus fájlok
@@ -469,26 +469,34 @@ Konvenciók:
 
 ## Mobil app szinkron – kötelező követő jegyzet
 
-A projekt egyszerre fut webes (ez a repó) és mobil (iOS Expo, külön repó: `/Users/kacsorzsolt/Developer/Projektek/asestatmobile`) verzióban, **közös Supabase adatbázison**. Ha egy művelet a mobil verziót is érinti, **kötelező egy követő MD fájlt létrehozni** a `mobile-sync/` mappában, még a commit előtt, és azt ugyanabba a commitba tenni.
+A projekt egyszerre fut webes (ez a repó) és mobil (iOS Expo, külön repó: `/Users/kacsorzsolt/Developer/Projektek/asestatmobile`) verzióban, **közös Supabase adatbázison**. Ha egy művelet a mobil verziót is érinti, **kötelező egy követő MD fájlt létrehozni – a mobil repóban**, a `docs/mobile-sync/` mappában, még a webes commit előtt.
+
+**Hová kerül (2026-10-04-től, felhasználói döntés):** minden mobil-szinkron jegyzet a mobil app mappájába megy: `/Users/kacsorzsolt/Developer/Projektek/asestatmobile/docs/mobile-sync/`. A felhasználó onnan dolgozza fel a teendőket. A webes `mobile-sync/` mappa lezárt archívum – **oda új fájl nem kerül**, a régi jegyzeteket nem mozgatjuk és nem töröljük.
 
 **Mikor kell (bármelyik elég):**
 - **Adatbázis változás**: új/módosított tábla, oszlop, view, index, constraint, RLS policy, trigger, új szezon tábla (`migrations/*.sql`)
 - **Adattartalom változás**, ami a mobil olvasást befolyásolja: tömeges javítás, újraimport, dedup, adat törlése/átírása
-- **`@core` modul változás**: a mobil `core/` mappába tükrözött `lib/` fájlok bármelyike (`stat-formulas`, `positions`, `terminology`, `style-vocabulary`, `dashboard-types`, `player-stat-mapping`, `season-tables`, `fetch-all-rows`, `situational-analysis`, `kosarstat-clutch-parse`, `postgame-report`, `player-analysis`, `player-postgame`, `pregame-scouting`, `team-analysis`) → a mobilban `npm run sync:core` szükséges
+- **`@core` modul változás**: a mobil `core/` mappába tükrözött `lib/` fájlok bármelyike (`stat-formulas`, `positions`, `terminology`, `style-vocabulary`, `dashboard-types`, `player-stat-mapping`, `season-tables`, `fetch-all-rows`, `situational-analysis`, `kosarstat-clutch-parse`, `postgame-report`, `player-analysis`, `player-postgame`, `pregame-scouting`, `team-analysis`, `player-movements`) → a mobilban `npm run sync:core` szükséges. A mérvadó lista a mobil `scripts/sync-core.ts` `MODULES` tömbje – ha eltér ettől, ezt a felsorolást kell hozzá igazítani
 - **Funkcionális változás**: új feature/nézet, módosított üzleti logika, számítás, szűrés vagy megjelenítési szabály, amit a mobil fogyasztói nézeteinek is követnie kell
 - **Auth / jogosultság / API változás**: szerepkör, RLS, `requireAdmin`/`requireAuth`, olyan API route, amit a mobil hív
 - **Scraping / import változás**, ami új adatot, új mezőt vagy más adatformát eredményez
 
 **Mikor NEM kell:** tisztán webes stílus/UI változás (Dark Command Center osztályok, layout), webes admin/import felület, amit a mobil nem használ, dokumentáció, belső refaktor viselkedésváltozás nélkül. Kétes esetben inkább készüljön jegyzet.
 
-**Fájl:** `mobile-sync/YYYY-MM-DD-<rovid-slug>.md` (pl. `mobile-sync/2026-09-23-league-player-movements-view.md`). Minden érintett művelethez külön fájl, meglévőt nem írunk felül.
+**Fájl:** `asestatmobile/docs/mobile-sync/YYYY-MM-DD-<rovid-slug>.md` (pl. `…/docs/mobile-sync/2026-10-12-standings-team-id.md`).
+
+- **Nem töredezünk:** egy munkamenet / feladategység mobil teendői **egyetlen fájlba** kerülnek. Ha több művelet is érinti a mobilt, nem készül műveletenként külön fájl, hanem egy összesítő (`YYYY-MM-DD-mobil-teendok-osszesito.md`): elöl egy táblázat az érintett változásokról, utána a teendők végrehajtási sorrendben, a végén közös lezárás. Minta: `asestatmobile/docs/mobile-sync/2026-10-04-mobil-teendok-osszesito.md`.
+- Ha aznapra már van `NYITOTT` fájl ugyanahhoz a munkához, azt bővítjük, nem nyitunk újat. `ÁTVEZETVE` állapotú fájlhoz nem nyúlunk.
+- **Önállóan feldolgozható** legyen: lekérdezés-minták, mező- és táblanevek, ellenőrző számok a fájlban, hogy a mobil repóban a webes forrás megnyitása nélkül is végrehajtható legyen. Írás előtt érdemes a mobil kód mostani állapotával összevetni (mi van már meg, mi hiányzik).
+- **Commit:** a jegyzet másik repóban él, ezért nem része a webes commitnak. A webes commit előtt készül el; a commit után a `Webes commit` sorba a tényleges hash kerül. A mobil repóban **nem commitolunk** – a fájl ott követetlen marad, a mobil átvezetés commitja viszi be. A webes `BACKLOG.md` bejegyzés hivatkozik a fájl nevére.
+- Ha a mobil repó mappája nem érhető el, a jegyzet **nem** kerül vissza a webes `mobile-sync/` mappába – jelezni kell a felhasználónak.
 
 **Kötelező tartalom:**
 ```markdown
 # <Rövid cím>
 
 - **Dátum:** YYYY-MM-DD
-- **Webes commit:** <hash vagy „ez a commit”>
+- **Webes commit:** <hash – a webes commit után kitöltve>
 - **Típus:** adatbázis | adattartalom | @core | funkcionális | auth/API | scraping
 - **Állapot a mobilban:** NYITOTT
 
@@ -505,7 +513,9 @@ A projekt egyszerre fut webes (ez a repó) és mobil (iOS Expo, külön repó: `
 <SQL migráció futtatva-e már a Supabase SQL Editorban, újraimport stb.; ha nincs: „nincs”>
 ```
 
-A mobil repóban való átvezetés után az `Állapot` → `ÁTVEZETVE (YYYY-MM-DD, mobil commit <hash>)`. A jegyzetet nem töröljük – ez a web → mobil változásnapló.
+Összesítő fájlnál a fejléc (dátum, típus, állapot) egyszer szerepel a fájl elején, a változásonkénti „Mi változott / Hatás / Teendő” részek pedig szakaszonként; a webes commit hash-ek az érintett változások táblázatába kerülnek.
+
+A mobil repóban való átvezetés után az `Állapot` → `ÁTVEZETVE (YYYY-MM-DD, mobil commit <hash>)` – ezt a mobil oldali feldolgozás írja át, a mobil repóban lévő fájlban. A jegyzetet nem töröljük – ez a web → mobil változásnapló. (A 2026-10-04 előtti, a webes `mobile-sync/` mappában maradt jegyzetek állapotát továbbra is ott kell átírni.)
 
 ---
 
@@ -518,7 +528,7 @@ Tömören kommunikálok. Minden változás után jelzem:
 - Ha új design tokent vagy animációt vezetnék be, megkérdezem
 - Ha egy stílus-feladat funkcionális változtatást igényelne, jelzem és külön döntést kérek
 - Ha `context/progress-tracker.md`-t frissítettem
-- Ha a változás a mobil appot is érinti: a létrehozott `mobile-sync/` jegyzet nevét
+- Ha a változás a mobil appot is érinti: a mobil repóban létrehozott / bővített `docs/mobile-sync/` jegyzet nevét
 - A részműveletek és a műveletek végén a Backlog.md fájlt frissítsd, hogy mindig a legaktuálisabb legyen minden.
 
 ---
