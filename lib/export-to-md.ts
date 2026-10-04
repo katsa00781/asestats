@@ -1,6 +1,6 @@
 import type { PlayerStats, TeamGame, GameAggregate } from './dashboard-types';
 import type { ScoutingReport } from './pregame-scouting';
-import type { PostGameReport } from './postgame-report';
+import type { PostGameReport, PostgameBoxScoreLine } from './postgame-report';
 import type { KosarstatGameClutch } from './kosarstat-clutch-parse';
 import { trueShootingPct, effectiveFgPct } from './stat-formulas';
 
@@ -752,16 +752,43 @@ export function postgameReportToMd(report: PostGameReport, seasonName?: string):
     );
   }
 
+  const box = report.metrics.boxScore;
+  if (box) {
+    const shots = (made: number, att: number, pct: number) => (att > 0 ? `${made}/${att} (${pct.toFixed(1)}%)` : '–');
+    const oppCell = (cell: (line: PostgameBoxScoreLine) => string) => (box.opponent ? cell(box.opponent) : '–');
+    lines.push(
+      ``,
+      `## Box score alapmutatók`,
+      ``,
+      `| Mutató | ${report.teamName} | ${report.opponentName} |`,
+      `|--------|-------|-------|`,
+      `| FG (dobott/kísérlet) | ${shots(box.own.fgm, box.own.fga, box.own.fgPct)} | ${oppCell(o => shots(o.fgm, o.fga, o.fgPct))} |`,
+      `| FT (dobott/kísérlet) | ${shots(box.own.ftm, box.own.fta, box.own.ftPct)} | ${oppCell(o => shots(o.ftm, o.fta, o.ftPct))} |`,
+      `| Lepattanó (össz.) | ${box.own.reb} | ${oppCell(o => `${o.reb}`)} |`,
+      `| Támadólepattanó | ${box.own.oreb} | ${oppCell(o => `${o.oreb}`)} |`,
+      `| Védőlepattanó | ${box.own.dreb} | ${oppCell(o => `${o.dreb}`)} |`,
+      ``,
+      `*Nem elérhető adat: labdaeladásból szerzett pont, második esélyből szerzett pont és gyorsindításból (fast break) szerzett pont – ezek az importált box score és Kosarstat adatok között nem szerepelnek, ezért a riport nem becsüli őket.*`
+    );
+  }
+
   if (report.decisiveFactors.offense.length > 0 || report.decisiveFactors.defense.length > 0) {
+    // Az irány explicit jelölése: a címke szövegéből ne kelljen kikövetkeztetni.
+    const toneByLabel = new Map(report.decisiveFactorMeta.map(item => [item.label, item.tone]));
+    const withTone = (label: string) => {
+      const tone = toneByLabel.get(label);
+      return tone ? `${tone === 'positive' ? '(+)' : '(−)'} ${label}` : label;
+    };
     lines.push(``, `## Döntő tényezők`, ``);
     if (report.decisiveFactors.offense.length > 0) {
       lines.push(`**Támadás:**`);
-      for (const f of report.decisiveFactors.offense) lines.push(`- ${f}`);
+      for (const f of report.decisiveFactors.offense) lines.push(`- ${withTone(f)}`);
     }
     if (report.decisiveFactors.defense.length > 0) {
       lines.push(`**Védekezés:**`);
-      for (const f of report.decisiveFactors.defense) lines.push(`- ${f}`);
+      for (const f of report.decisiveFactors.defense) lines.push(`- ${withTone(f)}`);
     }
+    lines.push(``, `*(+) a saját csapatnak kedvező, (−) kedvezőtlen tényező. Jelöletlen értékpárnál a „vs” előtti érték a saját csapaté; az ellenfél értékét „ellenfél” felirat jelöli.*`);
   }
 
   if (report.playerReport.players.length > 0) {

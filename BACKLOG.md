@@ -1,6 +1,6 @@
 # BACKLOG.md – ASEStats Projekt
 
-_Utoljára frissítve: 2026-09-28 (H12 lezárva – Kosarstat reimport és tükörsor-linkelés)_
+_Utoljára frissítve: 2026-10-04 (H13 – post-game export: büntető-címke iránya, ellenfélprofil, box score alapmutatók)_
 
 ---
 
@@ -685,6 +685,41 @@ a nézőpont nem hiba.
   `seasonName` paramétert kap, a fejléc közös `seasonLeagueLine()` segéddel
   „Szezon: 2026/2027” – a Liga csak akkor jelenik meg, ha különbözik. Csak
   webes MD export, mobil jegyzet nem kell.
+
+**H13 – Post-game export adat-anomáliák (ASE–Körmend 95–84, 2026-10-03) ✓ (2026-10-04)**
+
+Felhasználói hibajelzés a legutóbbi meccs export MD-jére (4 pont). A 3. pont
+(aritmetika: 95 pont, 200 perc, negyedek, ORtg/DRtg/Net) rendben volt.
+
+- [x] **1. Téves irányú büntető-címke** – a „Kevesebb büntetőpont az
+  ellenfélnél (FTM rate 16,7% vs 27,1%)” az ellenfél hátrányaként volt
+  olvasható, pedig a 16,7% a saját értékünk (a `tone` eddig is `negative`
+  volt, csak a szöveg volt kétértelmű). Új címke: „Büntető-előny / -hátrány
+  az ellenféllel szemben”. `lib/postgame-report.ts` `buildDecisiveFactors`.
+  Az export „Döntő tényezők” listája a `decisiveFactorMeta.tone` alapján
+  `(+)` / `(−)` jelet és magyarázó lábjegyzetet kap (`lib/export-to-md.ts`).
+- [x] **2. „Ellenfél profil” a saját mutatóinkat írta az ellenfélnek** –
+  a „védekezési realizáció: kontakt-limitálás / passzútvonal-zavarás” sor a
+  saját FTM rate-ünket és Assist%-unkat tulajdonította az ellenfél
+  védekezésének. Mostantól: (a) első sor az ellenfél **mért** mutatói (eFG,
+  3P, FTM rate, OREB%, TO rate); (b) „Saját támadómutatók a <referencia>
+  alatt <ellenfél> ellen: …”; (c) külön „Értelmezés” sor, amely kimondja,
+  hogy ez következtetés, nem mért ellenfél-adat. `buildOpponentProfileSection`
+  (új `opponent` paraméter, a `buildSummary`-n át).
+- [x] **4. Hiányzó alapmutatók** – új opcionális `metrics.boxScore`
+  (`PostgameBoxScoreLine`: FG, FT dobott/kísérlet + %, T/V/összes lepattanó,
+  saját és ellenfél); az exportban új „Box score alapmutatók” tábla.
+- [ ] **4. Nem pótolható:** labdaeladásból szerzett pont, második esélyből
+  szerzett pont, fast break pont – ezek nincsenek az importált adatok között
+  (sem a Hunbasket box score, sem a tárolt Kosarstat táblák). Az export
+  lábjegyzetben jelzi, hogy nem elérhetők és a riport nem becsüli őket.
+  Pótlásukhoz scraping + sémabővítés kellene – külön döntés.
+- [x] `npx tsc --noEmit` + `npx eslint` tiszta; a kimenet a meccshez igazított
+  box score-ral, ideiglenes harness-szel ellenőrizve (nem része a repónak).
+
+Mobil jegyzet: `mobile-sync/2026-10-04-postgame-ft-label-opponent-profile.md`.
+A már mentett riportszövegek nem változnak – a javítás az újragenerált
+riportra / új exportra érvényes.
 
 **H12 – Post-game riportgenerátor hibalista (ASE–Pécs, Szolnok–OSE) ✓ (2026-09-28)** – a 18 pont kész, a Kosarstat reimport lefutott
 
