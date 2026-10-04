@@ -61,9 +61,11 @@ import {
   type PostGameReport,
   type KosarstatQuarterStatRow,
   type KosarstatTeamMetricRow,
+  type KosarstatPointSourceTotals,
   buildKosarstatPostgameContext,
   mergeKosarstatPostgameContext,
 } from '@/lib/postgame-report';
+import { parseKosarstatPointSources } from '@/lib/kosarstat-pbp-parse';
 import { computeUsgRate } from '@/lib/player-postgame';
 import { playerNamesMatch, resolvePlayerNames } from '@/lib/player-name-match';
 
@@ -2701,6 +2703,7 @@ export function SeasonComparison({
   const [kosarstatLineupAnalysis, setKosarstatLineupAnalysis] = useState<KosarstatLineupAnalysis | null>(null);
   const [kosarstatQuarterStats, setKosarstatQuarterStats] = useState<KosarstatQuarterStatRow[]>([]);
   const [kosarstatTeamMetrics, setKosarstatTeamMetrics] = useState<KosarstatTeamMetricRow[]>([]);
+  const [kosarstatPointSources, setKosarstatPointSources] = useState<KosarstatPointSourceTotals | null>(null);
   const [postgamePbpContext, setPostgamePbpContext] = useState<PostgamePbpContext | null>(null);
   const [kosarstatClutchImportNote, setKosarstatClutchImportNote] = useState<string | null>(null);
   const [seasonKosarstatClutch, setSeasonKosarstatClutch] = useState<PostgamePbpContext['clutch'] | null>(null);
@@ -3090,6 +3093,7 @@ export function SeasonComparison({
           setKosarstatLineupAnalysis(null);
           setKosarstatQuarterStats([]);
           setKosarstatTeamMetrics([]);
+          setKosarstatPointSources(null);
           setIsLoadingKosarstatPostgame(false);
         }
         return;
@@ -3464,12 +3468,13 @@ export function SeasonComparison({
             setKosarstatClutchImportNote(null);
             setKosarstatQuarterStats([]);
             setKosarstatTeamMetrics([]);
+            setKosarstatPointSources(null);
             setIsLoadingKosarstatPostgame(false);
           }
           return;
         }
 
-        const [quarterStatsResult, teamMetricsResult, clutchRawResult] = await Promise.all([
+        const [quarterStatsResult, teamMetricsResult, clutchRawResult, eventsRawResult] = await Promise.all([
           supabase
             .from('kosarstat_game_quarter_stats' as never)
             .select('team_name, team_side, quarter, points, cumulative_points')
@@ -3488,7 +3493,15 @@ export function SeasonComparison({
             .eq('kosarstat_game_id', gameId)
             .eq('page_type', 'game_clutch')
             .order('imported_at', { ascending: false })
-            .limit(5)
+            .limit(5),
+          supabase
+            .from('kosarstat_game_pages_raw' as never)
+            .select('id')
+            .eq('season_id', resolvedSeasonId)
+            .eq('kosarstat_game_id', gameId)
+            .eq('page_type', 'game_events')
+            .order('imported_at', { ascending: false })
+            .limit(1)
         ]);
 
         loadedQuarterStats = Array.isArray(quarterStatsResult.data)
@@ -3561,9 +3574,31 @@ export function SeasonComparison({
           }
         }
 
+        // Pontforrások (második esély, labdaeladásból, gyors befejezés) az eseménylistából.
+        let loadedPointSources: KosarstatPointSourceTotals | null = null;
+        const eventsRawId = Array.isArray(eventsRawResult.data)
+          ? String((eventsRawResult.data as Array<{ id?: string }>)[0]?.id || '')
+          : '';
+        if (eventsRawId) {
+          const { data: eventTablesData } = await supabase
+            .from('kosarstat_game_page_tables' as never)
+            .select('rows, headers')
+            .eq('page_raw_id', eventsRawId)
+            .order('table_index', { ascending: true });
+
+          for (const table of (eventTablesData as KosarstatLineupTableRow[] | null) ?? []) {
+            const headers = Array.isArray(table.headers) ? table.headers.map(item => String(item ?? '').trim()) : [];
+            if (!headers.includes('home_event')) continue;
+            const rows = Array.isArray(table.rows) ? table.rows.filter(Array.isArray).map(item => item as unknown[]) : [];
+            loadedPointSources = parseKosarstatPointSources(headers, rows);
+            break;
+          }
+        }
+
         if (!cancelled) {
           setKosarstatQuarterStats(loadedQuarterStats);
           setKosarstatTeamMetrics(loadedTeamMetrics);
+          setKosarstatPointSources(loadedPointSources);
           setPostgamePbpContext(loadedClutchContext);
           setKosarstatClutchImportNote(loadedClutchImportNote);
         }
@@ -3824,6 +3859,7 @@ export function SeasonComparison({
           setKosarstatLineupAnalysis(null);
           setKosarstatQuarterStats([]);
           setKosarstatTeamMetrics([]);
+          setKosarstatPointSources(null);
           setIsLoadingKosarstatPostgame(false);
         }
       }
@@ -9029,8 +9065,9 @@ export function SeasonComparison({
       clutch: postgamePbpContext?.clutch ?? null,
       turnoverTypes: postgamePbpContext?.turnoverTypes ?? [],
       clutchImportNote: kosarstatClutchImportNote,
+      pointSources: kosarstatPointSources,
     });
-  }, [kosarstatClutchImportNote, kosarstatQuarterStats, kosarstatTeamMetrics, postgamePbpContext, selectedGameForPostgame, selectedTeamNameForPostgame]);
+  }, [kosarstatClutchImportNote, kosarstatPointSources, kosarstatQuarterStats, kosarstatTeamMetrics, postgamePbpContext, selectedGameForPostgame, selectedTeamNameForPostgame]);
 
   const postgameReport = useMemo<PostGameReport | null>(() => {
     if (!selectedGame || !selectedTeamStats || !postgameBenchmarks || !resolvedTeamId || resolvedTeamId === 'all') return null;
@@ -15894,6 +15931,34 @@ export function SeasonComparison({
                             diffBadge('TO% (LV/birt.) diff', own?.tov_pct, opp?.tov_pct, ' pp', true),
                             diffBadge('ORB% diff', own?.orb_pct, opp?.orb_pct, ' pp'),
                           ].filter(Boolean)}
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {(() => {
+                    const sources = postgameReport?.metrics.pointSources;
+                    if (!sources) return null;
+                    const sourceRows = [
+                      { label: 'Második esélyből', own: sources.own.secondChancePoints, opp: sources.opponent.secondChancePoints },
+                      { label: 'Labdaeladásból', own: sources.own.pointsOffTurnovers, opp: sources.opponent.pointsOffTurnovers },
+                      { label: `Gyors befejezés (≤ ${sources.quickFinishSeconds} mp)`, own: sources.own.quickFinishPoints, opp: sources.opponent.quickFinishPoints },
+                    ];
+                    return (
+                      <div className="space-y-2">
+                        <div className="text-xs text-secondary">Pontforrások (a Kosarstat eseménylistából számolva – nem hivatalos adat)</div>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs">
+                          {sourceRows.map(item => (
+                            <div key={`point-source-${item.label}`} className="rounded-md border border-border-subtle bg-surface-1/60 p-2">
+                              <div className="text-muted mb-1">{item.label}</div>
+                              <div className="text-primary tabular-nums">
+                                {item.own} – {item.opp}{' '}
+                                <span className={item.own >= item.opp ? 'text-positive' : 'text-negative'}>
+                                  ({item.own - item.opp > 0 ? '+' : ''}{item.own - item.opp})
+                                </span>
+                              </div>
+                            </div>
+                          ))}
                         </div>
                       </div>
                     );

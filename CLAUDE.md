@@ -117,6 +117,7 @@ asestats/
 │   ├── export-to-md.ts
 │   ├── fetch-all-rows.ts       # Lapozó helper a PostgREST 1000 soros limit ellen
 │   ├── kosarstat-clutch-parse.ts
+│   ├── kosarstat-pbp-parse.ts  # Eseménylista → pontforrások (második esély, labdaeladásból, gyors befejezés)
 │   ├── player-analysis.ts
 │   ├── player-postgame.ts
 │   ├── player-stat-mapping.ts  # SupabasePlayerStat típus + PlayerStats mapping (egyetlen példány)

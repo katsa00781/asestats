@@ -152,6 +152,33 @@ export type PostgameBoxScoreLine = {
   reb: number;
 };
 
+/**
+ * Pontforrások egy csapatra a Kosarstat eseménylistából. Számított, nem
+ * hivatalos adat (a Kosarstat és a Hunbasket nem közli).
+ */
+export type PostgamePointSourceLine = {
+  /** Támadólepattanó utáni pontok ugyanabban a birtoklásban. */
+  secondChancePoints: number;
+  /** Az ellenfél labdaeladását követő birtoklásban szerzett pontok. */
+  pointsOffTurnovers: number;
+  /** Labdaszerzés vagy védőlepattanó után `quickFinishSeconds` mp-en belüli pontok. */
+  quickFinishPoints: number;
+};
+
+export type PostgamePointSources = {
+  own: PostgamePointSourceLine;
+  opponent: PostgamePointSourceLine;
+  /** A gyors befejezés időküszöbe másodpercben. */
+  quickFinishSeconds: number;
+};
+
+/** A `kosarstat-pbp-parse` kimenete: oldalanként, az eseményekből összeadott pontszámmal. */
+export type KosarstatPointSourceTotals = {
+  home: PostgamePointSourceLine & { points: number };
+  away: PostgamePointSourceLine & { points: number };
+  quickFinishSeconds: number;
+};
+
 export type PostgameOpponentShooting = {
   efg: number;
   fgm3: number;
@@ -183,6 +210,8 @@ export type PostGameReport = {
     opponent?: PostgameOpponentShooting | null;
     /** Box score alapmutatók (FG, FT, lepattanó); régi riportobjektumban hiányzik. */
     boxScore?: { own: PostgameBoxScoreLine; opponent: PostgameBoxScoreLine | null };
+    /** Kosarstat eseménylistából számolt pontforrások; a kosarstat-kiegészítés tölti ki. */
+    pointSources?: PostgamePointSources | null;
   };
   charts: {
     efficiency: PostGameChartDatum[];
@@ -2570,6 +2599,8 @@ export type KosarstatPostgameInput<C extends PostgameClutchInput = PostgameClutc
   turnoverTypes?: PostgameTurnoverType[];
   /** Import-állapot megjegyzés, ha nincs értelmezhető clutch blokk. */
   clutchImportNote?: string | null;
+  /** Az eseménylistából számolt pontforrások (`parseKosarstatPointSources`). */
+  pointSources?: KosarstatPointSourceTotals | null;
 };
 
 export type KosarstatPostgameContext<C extends PostgameClutchInput = PostgameClutchInput> = {
@@ -2578,6 +2609,12 @@ export type KosarstatPostgameContext<C extends PostgameClutchInput = PostgameClu
   oppMetrics: KosarstatTeamMetricRow | null;
   clutch: C | null;
   turnoverTypes: PostgameTurnoverType[];
+  /** Saját / ellenfél oldalra rendezve; a `points` a végeredmény-ellenőrzéshez kell. */
+  pointSources: {
+    own: KosarstatPointSourceTotals['home'];
+    opponent: KosarstatPointSourceTotals['home'];
+    quickFinishSeconds: number;
+  } | null;
   strengths: string[];
   problems: string[];
   nextFocus: string[];
@@ -2608,6 +2645,7 @@ export const buildKosarstatPostgameContext = <C extends PostgameClutchInput = Po
       oppMetrics: null,
       clutch: null,
       turnoverTypes: [],
+      pointSources: null,
       strengths: [],
       problems: [],
       nextFocus: [],
@@ -2801,12 +2839,21 @@ export const buildKosarstatPostgameContext = <C extends PostgameClutchInput = Po
     }
   }
 
+  const pointSources = input.pointSources
+    ? {
+        own: input.pointSources[ownSide],
+        opponent: input.pointSources[oppSide],
+        quickFinishSeconds: input.pointSources.quickFinishSeconds,
+      }
+    : null;
+
   return {
     quarterDiffRows,
     ownMetrics: ownMetric,
     oppMetrics: oppMetric,
     clutch,
     turnoverTypes,
+    pointSources,
     strengths,
     problems,
     nextFocus,
@@ -2846,9 +2893,27 @@ export const mergeKosarstatPostgameContext = (
   const extraNotes = options.extraNotes ?? [];
   const lineupInsights = options.lineupInsights;
 
+  // A pontforrás csak akkor kerül a riportba, ha az eseménylistából összeadott
+  // pontszám mindkét oldalon egyezik a végeredménnyel (teljes az eseménylista).
+  const sources = context.pointSources;
+  const pointSourcesValid = sources !== null &&
+    sources.own.points === report.metrics.pointsFor &&
+    sources.opponent.points === report.metrics.pointsAgainst;
+  const pointSourceNotes = sources === null
+    ? []
+    : pointSourcesValid
+      ? [`Pontforrások (második esély, labdaeladásból, gyors befejezés ≤ ${sources.quickFinishSeconds} mp) a Kosarstat eseménylistából számolva – nem hivatalos adat.`]
+      : [`Kosarstat eseménylista pontösszege (${sources.own.points}-${sources.opponent.points}) eltér a végeredménytől (${report.metrics.pointsFor}-${report.metrics.pointsAgainst}) – a pontforrások kimaradtak.`];
+  const toSourceLine = (line: PostgamePointSourceLine): PostgamePointSourceLine => ({
+    secondChancePoints: line.secondChancePoints,
+    pointsOffTurnovers: line.pointsOffTurnovers,
+    quickFinishPoints: line.quickFinishPoints,
+  });
+
   if (
     extraNotes.length === 0 &&
     !lineupInsights &&
+    sources === null &&
     context.strengths.length === 0 &&
     context.problems.length === 0 &&
     context.nextFocus.length === 0 &&
@@ -2859,7 +2924,17 @@ export const mergeKosarstatPostgameContext = (
 
   return {
     ...report,
-    dataNotes: mergeUniqueLines(report.dataNotes, [...extraNotes, ...context.insightNotes]),
+    metrics: sources !== null && pointSourcesValid
+      ? {
+          ...report.metrics,
+          pointSources: {
+            own: toSourceLine(sources.own),
+            opponent: toSourceLine(sources.opponent),
+            quickFinishSeconds: sources.quickFinishSeconds,
+          },
+        }
+      : report.metrics,
+    dataNotes: mergeUniqueLines(report.dataNotes, [...extraNotes, ...context.insightNotes, ...pointSourceNotes]),
     strengths: mergeUniqueLines(report.strengths, context.strengths),
     problems: mergeUniqueLines(report.problems, context.problems),
     nextFocus: mergeUniqueLines(report.nextFocus, context.nextFocus),

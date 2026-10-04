@@ -767,8 +767,27 @@ export function postgameReportToMd(report: PostGameReport, seasonName?: string):
       `| Lepattanó (össz.) | ${box.own.reb} | ${oppCell(o => `${o.reb}`)} |`,
       `| Támadólepattanó | ${box.own.oreb} | ${oppCell(o => `${o.oreb}`)} |`,
       `| Védőlepattanó | ${box.own.dreb} | ${oppCell(o => `${o.dreb}`)} |`,
+    );
+  }
+
+  const sources = report.metrics.pointSources;
+  if (sources) {
+    lines.push(
       ``,
-      `*Nem elérhető adat: labdaeladásból szerzett pont, második esélyből szerzett pont és gyorsindításból (fast break) szerzett pont – ezek az importált box score és Kosarstat adatok között nem szerepelnek, ezért a riport nem becsüli őket.*`
+      `## Pontforrások`,
+      ``,
+      `| Mutató | ${report.teamName} | ${report.opponentName} |`,
+      `|--------|-------|-------|`,
+      `| Második esélyből szerzett pont | ${sources.own.secondChancePoints} | ${sources.opponent.secondChancePoints} |`,
+      `| Labdaeladásból szerzett pont | ${sources.own.pointsOffTurnovers} | ${sources.opponent.pointsOffTurnovers} |`,
+      `| Gyors befejezés (≤ ${sources.quickFinishSeconds} mp) | ${sources.own.quickFinishPoints} | ${sources.opponent.quickFinishPoints} |`,
+      ``,
+      `*Számított, nem hivatalos adat: a Kosarstat eseménylistájából birtoklás-követéssel (az eseményekből összeadott pontszám egyezik a végeredménnyel). Második esély = támadólepattanó utáni pont ugyanabban a birtoklásban; labdaeladásból = az ellenfél eladott labdáját követő birtoklás pontjai; gyors befejezés = labdaszerzés vagy védőlepattanó után ${sources.quickFinishSeconds} mp-en belül szerzett pont – ez nem a jegyzőkönyvi fast break pont, hanem időalapú közelítés. A három kategória átfedhet.*`
+    );
+  } else if (box) {
+    lines.push(
+      ``,
+      `*Nem elérhető adat: második esélyből, labdaeladásból és gyors befejezésből szerzett pont – ehhez a meccshez nincs (teljes) Kosarstat eseménylista, a riport nem becsüli őket.*`
     );
   }
 

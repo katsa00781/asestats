@@ -1,6 +1,6 @@
 # BACKLOG.md – ASEStats Projekt
 
-_Utoljára frissítve: 2026-10-04 (H13 – post-game export: büntető-címke iránya, ellenfélprofil, box score alapmutatók)_
+_Utoljára frissítve: 2026-10-04 (H13 – post-game pontforrások a Kosarstat eseménylistából)_
 
 ---
 
@@ -709,15 +709,35 @@ Felhasználói hibajelzés a legutóbbi meccs export MD-jére (4 pont). A 3. pon
 - [x] **4. Hiányzó alapmutatók** – új opcionális `metrics.boxScore`
   (`PostgameBoxScoreLine`: FG, FT dobott/kísérlet + %, T/V/összes lepattanó,
   saját és ellenfél); az exportban új „Box score alapmutatók” tábla.
-- [ ] **4. Nem pótolható:** labdaeladásból szerzett pont, második esélyből
-  szerzett pont, fast break pont – ezek nincsenek az importált adatok között
-  (sem a Hunbasket box score, sem a tárolt Kosarstat táblák). Az export
-  lábjegyzetben jelzi, hogy nem elérhetők és a riport nem becsüli őket.
-  Pótlásukhoz scraping + sémabővítés kellene – külön döntés.
+- [x] **4. Pontforrások az eseménylistából (1. lépés, felhasználói döntés
+  2026-10-04)** – kész mutatót sem a Kosarstat, sem a Hunbasket nem közöl,
+  de a már tárolt `game_events` eseménylistából számolhatók. Új
+  `lib/kosarstat-pbp-parse.ts` (`parseKosarstatPointSources`, birtoklás-
+  követés): második esélyből szerzett pont, labdaeladásból szerzett pont,
+  gyors befejezés (labdaszerzés / védőlepattanó után ≤ 6 mp – időalapú
+  közelítés, **nem** a jegyzőkönyvi fast break). `SeasonComparison` betölti a
+  meccs eseménytábláját; a `mergeKosarstatPostgameContext` csak akkor teszi a
+  riportba (`metrics.pointSources`), ha az eseményekből összeadott pontszám
+  mindkét oldalon egyezik a végeredménnyel – különben megjegyzés kerül az
+  adatminőség-blokkba. Megjelenik a Kosarstat blokkban és az exportban
+  („Pontforrások” tábla, definíciós lábjegyzettel). Séma- és scraping-
+  változás nincs.
+  - Ellenőrzés a tárolt 250 meccsen: 246 / 246 értékelhető meccsnél pontos a
+    pontösszeg; ligaátlag csapatonként 11,0 / 15,1 / 13,8 pont.
+  - Korlát: eseménylista csak 2025/2026-ra és 2026/2027-re van; 1 meccsnél
+    hiányzik az eseménytábla, 2-nél a tárolt végeredmény.
+- [ ] **Nyitott (2. lépés, külön döntés):** importkori előszámítás a
+  `kosarstat_game_team_metrics`-be + backfill → szezonátlag és liga-medián
+  referencia a pontforrásokhoz.
+- [ ] **Nyitott adathiba:** a Falco–Szolnok (`20260525127169`) Kosarstat
+  nyers oldalán 0–0 a tárolt végeredmény (force reimport kell).
+- [ ] **Nyitott:** az AI szöveggenerálás (`generate-game-text-report`) payloadja
+  nem tartalmazza a `metrics.boxScore` / `metrics.pointSources` mezőket.
 - [x] `npx tsc --noEmit` + `npx eslint` tiszta; a kimenet a meccshez igazított
   box score-ral, ideiglenes harness-szel ellenőrizve (nem része a repónak).
 
-Mobil jegyzet: `mobile-sync/2026-10-04-postgame-ft-label-opponent-profile.md`.
+Mobil jegyzetek: `mobile-sync/2026-10-04-postgame-ft-label-opponent-profile.md`,
+`mobile-sync/2026-10-04-postgame-point-sources.md`.
 A már mentett riportszövegek nem változnak – a javítás az újragenerált
 riportra / új exportra érvényes.
 
