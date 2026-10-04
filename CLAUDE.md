@@ -116,6 +116,7 @@ asestats/
 │   ├── dashboard-types.ts      # Publikus dashboard típusok (kiszervezve page.tsx-ből)
 │   ├── export-to-md.ts
 │   ├── fetch-all-rows.ts       # Lapozó helper a PostgREST 1000 soros limit ellen
+│   ├── game-text-report-prompt.ts # Meccs AI-szöveg: prompt, adatkivonat, számok visszaellenőrzése
 │   ├── kosarstat-clutch-parse.ts
 │   ├── kosarstat-pbp-parse.ts  # Eseménylista → pontforrások (második esély, labdaeladásból, gyors befejezés)
 │   ├── player-analysis.ts

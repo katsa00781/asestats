@@ -1,6 +1,6 @@
 # BACKLOG.md – ASEStats Projekt
 
-_Utoljára frissítve: 2026-10-04 (H13 – post-game pontforrások a Kosarstat eseménylistából)_
+_Utoljára frissítve: 2026-10-04 (H13 – AI szöveggenerálás: adathű prompt, új mezők, számellenőrzés)_
 
 ---
 
@@ -731,8 +731,43 @@ Felhasználói hibajelzés a legutóbbi meccs export MD-jére (4 pont). A 3. pon
   referencia a pontforrásokhoz.
 - [ ] **Nyitott adathiba:** a Falco–Szolnok (`20260525127169`) Kosarstat
   nyers oldalán 0–0 a tárolt végeredmény (force reimport kell).
-- [ ] **Nyitott:** az AI szöveggenerálás (`generate-game-text-report`) payloadja
-  nem tartalmazza a `metrics.boxScore` / `metrics.pointSources` mezőket.
+- [x] **AI szöveggenerálás – adathű prompt (2026-10-04)** – a prompt és az
+  adatkivonat új modulba került (`lib/game-text-report-prompt.ts`), a route
+  csak a hívást és a mentést végzi.
+  - **Adatkivonat:** a modell megkapja a `metrics` blokkot (végeredmény,
+    kulcsmutatók referenciával és deltával, ratingek, ellenfél mért adatai,
+    `boxScore`, `pointSources`), a `baseline`-t, a `dataNotes`-ot és a csapat-
+    neveket; a döntő tényezők `tone` iránnyal mennek. Viszonyítási alap nélkül
+    a `reference` / `delta` `null`. A H12 óta nem illeszkedő, regex-alapú
+    `computedDeltas` megszűnt.
+  - **Javított irányhiba:** a régi prompt szerint a `pregame.vulnerabilities`
+    „ASE saját gyengeségei”, valójában az **ellenfél** támadható pontjai
+    (`buildVulnerabilities(normalizedOpponent)`). A pregame kulcsok a
+    kivonatban `opponentProfile` / `opponentThreats` /
+    `opponentVulnerabilities` / `opponentKeyPlayers` néven mennek, mellettük
+    az `ownTeamProfile`. A beégetett „ASE” helyett `ownTeamName`.
+  - **Adathűségi szabályok (16 pont):** egyetlen forrás a JSON; nincs adat →
+    nincs állítás; tilos a kitalált meccsesemény, játékperc, egyéni
+    szezonátlag (a régi prompt ezt kérte, pedig nincs ilyen adat), hatásbecslés
+    és a JSON-mezőnevek emlegetése; a `keyStats` mindig a saját csapaté; az
+    X-faktor jelölése a `reflection`-ből jön; a gyors befejezés nem hivatalos
+    fast break.
+  - **Számellenőrzés:** `findUngroundedNumbers` a generált szöveg tizedes
+    számait és a 10 feletti egészeket visszakeresi az adatkivonatban; az
+    eltérést a route `unverifiedNumbers`-ként adja vissza, a felület
+    figyelmeztető toastot mutat. Heurisztika: a kitalált számot fogja meg, a
+    szöveges értelmezést nem.
+  - **Időkorlát:** a generálás mérten 65–73 mp, ezért a route `maxDuration`
+    60 → 120, az AI hívás időkorlátja 50 → 105 mp (csak ennél a route-nál).
+    A hőmérséklet 0,2–0,3 (volt 0,3–0,4). Terjedelmi plafon kb. 5500 karakter,
+    `#` címsor és elválasztó nélkül (a felület sima szövegként jeleníti meg).
+  - Ellenőrzés: 3 valós generálás a 2026-05-14-i ASE–Kaposvár pillanatképen
+    (mentés nélkül); nem igazolt szám egyik futásban sem volt.
+- [ ] **Nyitott:** a többi generáló route (`generate-pregame-text`,
+  `generate-player-postgame-text`, `generate-player-season-text`,
+  `generate-team-analysis-text`) promptja és 60 mp-es kerete nincs átnézve.
+- [ ] **Nyitott:** a Vercel csomag felülről korlátozhatja a `maxDuration`-t
+  (`HOWTO-vercel-deploy.md`); ha 60 mp a plafon, az éles generálás timeoutol.
 - [x] `npx tsc --noEmit` + `npx eslint` tiszta; a kimenet a meccshez igazított
   box score-ral, ideiglenes harness-szel ellenőrizve (nem része a repónak).
 

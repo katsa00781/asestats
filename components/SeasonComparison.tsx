@@ -10536,6 +10536,7 @@ export function SeasonComparison({
         narrative?: string;
         report?: GameTextReportRow;
         error?: string;
+        unverifiedNumbers?: string[];
       };
 
       if (!response.ok || !payload.ok) {
@@ -10544,6 +10545,10 @@ export function SeasonComparison({
 
       const narrative = payload.narrative ?? payload.report?.narrative ?? '';
       setTextReport(narrative);
+      // A szerver jelzi, ha a szöveg olyan számot tartalmaz, ami nincs a bemeneti adatokban.
+      if (Array.isArray(payload.unverifiedNumbers) && payload.unverifiedNumbers.length > 0) {
+        toast.warning(`Ellenőrizd az AI szöveget: ${payload.unverifiedNumbers.length} szám nem található a bemeneti adatokban (${payload.unverifiedNumbers.join(', ')}).`, { duration: 15000 });
+      }
       setTextReportMeta({
         generatedAt: payload.report?.generated_at ?? new Date().toISOString(),
         generatedBy: payload.report?.generated_by ?? 'gpt-automata',
