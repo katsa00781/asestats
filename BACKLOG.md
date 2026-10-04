@@ -11,6 +11,8 @@ _Utoljára frissítve: 2026-10-04 (H14 – csapat szezon export: negyedprofil, �
 - [ ] **Mobil átvezetés** – post-game elemzés nézet a mobilban (a jegyzet szerint)
 - [x] **Post-game kosarstat-kiegészítés a `@core`-ban (2026-09-26)** – a `SeasonComparison.tsx` negyed-trend / kosarstat eFG·TO%·ORB% / clutch / TO-típus szabályai és a `mergeUnique` összefűzés átkerült a `lib/postgame-report.ts`-be (`buildKosarstatPostgameContext`, `mergeKosarstatPostgameContext`, `KosarstatQuarterStatRow`, `KosarstatTeamMetricRow`, `PostgameClutchInput`). Webes viselkedés változatlan; a lineup-elemzés webes maradt. Mobil jegyzet: `mobile-sync/2026-09-26-postgame-kosarstat-core.md`
 - [ ] **Mobil átvezetés** – `npm run sync:core` + kosarstat-kontextus a mobil post-game hookban (`mobile-sync/2026-09-26-postgame-kosarstat-core.md`)
+- [x] **Nyitott jegyzetek átadása a mobil repónak (2026-10-04)** – a 9 `NYITOTT` jegyzet (5 db 2026-10-04-i H14: pontforrások, büntető-címke / ellenfélprofil, `TeamGame` szakasz-mezők, szakasz-besorolás, 2025/2026 takarítás; 4 db korábbi: játékosnév-javítás, `is_primary`, dobástérkép dedup, Kosarstat link) egyetlen önálló munkalistában: `asestatmobile/docs/2026-10-04-mobil-teendok-osszesito.md` (végrehajtási sorrend, lekérdezés-minták, ellenőrző számok, a mobil kód mostani állapotával összevetve). A webes jegyzetek nem változtak, külön fájlonkénti másolat nem készült.
+- [ ] **Mobil átvezetés** – a fenti összesítő feldolgozása a mobil repóban; utána a 9 jegyzet `Állapot` sora `ÁTVEZETVE`, és a `CLAUDE.md` `@core` listájába felvenni a `kosarstat-pbp-parse` (és a mobilban már tükrözött `player-movements`) modult
 
 ---
 
