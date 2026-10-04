@@ -2,6 +2,7 @@ import type { PlayerStats } from './dashboard-types';
 import type { ScoutingReport } from './pregame-scouting';
 import type { PostGameReport, PostgameBoxScoreLine } from './postgame-report';
 import type { KosarstatGameClutch } from './kosarstat-clutch-parse';
+import type { PostgameLineupExport, PostgameLineupUnit } from './postgame-lineup-export';
 import type {
   TeamBoxLine,
   TeamExportAggregate,
@@ -10,6 +11,7 @@ import type {
   TeamExportQuarterLine,
   TeamSeasonExportInput,
 } from './team-season-export';
+import { LINEUP_NET_MIN_SECONDS, LINEUP_SLOT_POSITIONS, MAX_TRIOS } from './postgame-lineup-export';
 import { trueShootingPct, effectiveFgPct } from './stat-formulas';
 import {
   buildTeamSeasonExport,
@@ -928,7 +930,113 @@ export function pregameReportToMd(report: ScoutingReport, seasonName?: string): 
   return lines.join('\n');
 }
 
-export function postgameReportToMd(report: PostGameReport, seasonName?: string): string {
+/** A meccs Kosarstat ötös-adatai az exporthoz; `null` = az adott csapatra nincs betöltött lineup. */
+export type PostgameLineupsMd = {
+  own: PostgameLineupExport | null;
+  opponent: PostgameLineupExport | null;
+};
+
+/**
+ * Az „Ötösök és on/off” szakasz sorai a post-game exporthoz. A nyers számok
+ * (perc, szerzett / kapott pont) mindig szerepelnek; a 40 percre vetített érték
+ * csak a mintaküszöb fölött.
+ */
+export function postgameLineupsToMd(
+  lineups: PostgameLineupsMd,
+  game: { teamName: string; opponentName: string; pointsFor: number; pointsAgainst: number }
+): string[] {
+  if (!lineups.own && !lineups.opponent) {
+    return [
+      ``,
+      `## Ötösök és on/off (Kosarstat lineup)`,
+      ``,
+      `*Nem elérhető adat: ehhez a meccshez nincs betöltött (a csapathoz párosítható) Kosarstat lineup oldal, ezért az ötösök és az on/off kimaradtak.*`,
+    ];
+  }
+
+  const mmss = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.round(seconds % 60)).padStart(2, '0')}`;
+  const signedInt = (v: number) => `${v > 0 ? '+' : ''}${v}`;
+  const per40 = (diff: number, seconds: number) =>
+    seconds >= LINEUP_NET_MIN_SECONDS ? sign((diff * 2400) / seconds) : '–';
+  const minMinutes = LINEUP_NET_MIN_SECONDS / 60;
+
+  const unitCells = (unit: PostgameLineupUnit) => {
+    const diff = unit.teamPts - unit.oppPts;
+    return `${mmss(unit.seconds)} | ${unit.teamPts} | ${unit.oppPts} | ${signedInt(diff)} | ${per40(diff, unit.seconds)}`;
+  };
+
+  const lineupTable = (model: PostgameLineupExport) => [
+    `| # | ${LINEUP_SLOT_POSITIONS.join(' | ')} | Perc | Szerzett | Kapott | +/- | Net/40 |`,
+    `|---|${LINEUP_SLOT_POSITIONS.map(() => '----').join('|')}|------|----------|--------|-----|--------|`,
+    ...model.lineups.map((lineup, index) => `| ${index + 1} | ${lineup.players.join(' | ')} | ${unitCells(lineup)} |`),
+  ];
+
+  const onOffTable = (model: PostgameLineupExport) => [
+    `| Játékos | Poszt (perc) | Pályán | Pontok (on) | On +/- | On net/40 | Padon | Pontok (off) | Off +/- | Off net/40 |`,
+    `|---------|--------------|--------|-------------|--------|-----------|-------|--------------|---------|------------|`,
+    ...model.onOff.map(item => {
+      const onDiff = item.onFor - item.onAgainst;
+      const offDiff = item.offFor - item.offAgainst;
+      const positions = item.positions.map(pos => `${pos.position} ${mmss(pos.seconds)}`).join(' · ');
+      return `| ${item.player} | ${positions} | ${mmss(item.onSeconds)} | ${item.onFor}–${item.onAgainst} | ${signedInt(onDiff)} | ${per40(onDiff, item.onSeconds)} | ${mmss(item.offSeconds)} | ${item.offFor}–${item.offAgainst} | ${signedInt(offDiff)} | ${per40(offDiff, item.offSeconds)} |`;
+    }),
+  ];
+
+  const comboTable = (label: string, combos: PostgameLineupUnit[]) => [
+    `| ${label} | Perc | Szerzett | Kapott | +/- | Net/40 |`,
+    `|------|------|----------|--------|-----|--------|`,
+    ...combos.map(combo => `| ${combo.players.join(' + ')} | ${unitCells(combo)} |`),
+  ];
+
+  // A lineup-tábla teljes, ha a pontösszege egyezik a végeredménnyel.
+  const coverage = (model: PostgameLineupExport, expectedFor: number, expectedAgainst: number) => {
+    const out = [
+      `**Lefedett játékidő:** ${mmss(model.totalSeconds)} | **Pontok ez idő alatt:** ${model.totalFor}–${model.totalAgainst} | **Különböző ötösök:** ${model.lineups.length}`,
+    ];
+    if (model.totalFor !== expectedFor || model.totalAgainst !== expectedAgainst) {
+      out.push(
+        ``,
+        `> **Eltérés:** az ötös-tábla pontösszege (${model.totalFor}–${model.totalAgainst}) nem egyezik a végeredménnyel (${expectedFor}–${expectedAgainst}) – az ötös-adat hiányos lehet, az on/off „padon” oszlopai ennek megfelelően kezelendők.`
+      );
+    }
+    return out;
+  };
+
+  const lines: string[] = [``, `## Ötösök és on/off (Kosarstat lineup)`];
+
+  const own = lineups.own;
+  if (own) {
+    lines.push(``, `### Ötösök – ${game.teamName}`, ``);
+    if (own.starters.length > 0) lines.push(`**Kezdő ötös:** ${own.starters.join(' · ')}`);
+    lines.push(...coverage(own, game.pointsFor, game.pointsAgainst), ``, ...lineupTable(own));
+    lines.push(``, `### On/off – ${game.teamName}`, ``, ...onOffTable(own));
+    if (own.pairs.length > 0) {
+      lines.push(``, `### Párosok – ${game.teamName} (legalább ${minMinutes} perc együtt)`, ``, ...comboTable('Páros', own.pairs));
+    }
+    if (own.trios.length > 0) {
+      lines.push(``, `### Hármasok – ${game.teamName} (legalább ${minMinutes} perc együtt)`, ``, ...comboTable('Hármas', own.trios));
+    }
+  } else {
+    lines.push(``, `*A saját csapat ötös-adata nem elérhető (nincs a box score-ral párosítható Kosarstat lineup).*`);
+  }
+
+  const opponent = lineups.opponent;
+  if (opponent) {
+    lines.push(``, `### Ellenfél ötösei – ${game.opponentName}`, ``);
+    if (opponent.starters.length > 0) lines.push(`**Kezdő ötös:** ${opponent.starters.join(' · ')}`);
+    lines.push(...coverage(opponent, game.pointsAgainst, game.pointsFor), ``, ...lineupTable(opponent));
+    lines.push(``, `### Ellenfél on/off – ${game.opponentName}`, ``, ...onOffTable(opponent));
+  }
+
+  lines.push(
+    ``,
+    `*Forrás: a Kosarstat lineup oldalának ötös-táblája erre a meccsre; a nevek a Kosarstat írásmódját követik, a poszt a Kosarstat ötös-beosztása (PG–C). A forrás soronként másodpercre kerekít, ezért az idők összege 1–2 másodperccel eltérhet a teljes játékidőtől. Szerzett / kapott = az adott csapat és az ellenfele pontjai, amíg az egység a pályán volt (az ellenfél tábláiban az ellenfél a „szerzett”). Net/40 = pontkülönbség 40 percre vetítve – csak legalább ${minMinutes} perc együtt töltött időnél szerepel, mert rövidebb mintából irreális érték jön ki. A párosok és hármasok az ötösökből összevont együttállások; a hármasokból a ${MAX_TRIOS} legtöbbet együtt játszó szerepel. On/off = a csapat pontkülönbsége a játékos pályán, illetve padon töltött ideje alatt; nem a játékos egyéni hatása, a csapattársak és az ellenfél ötösei is alakítják. Egyetlen meccs kis minta: az értékek mintázatot jeleznek, nem végleges ítéletet.*`
+  );
+
+  return lines;
+}
+
+export function postgameReportToMd(report: PostGameReport, seasonName?: string, lineups?: PostgameLineupsMd): string {
   const result = report.result === 'win' ? 'Győzelem' : 'Vereség';
   const margin = report.metrics.margin;
   const marginStr = margin > 0 ? `+${margin}` : `${margin}`;
@@ -1074,6 +1182,15 @@ export function postgameReportToMd(report: PostGameReport, seasonName?: string):
       ``,
       `*Sorrend és címke az Impact score alapján (VAL/36 45%, TS% 25%, usage 20%, St+Bl 10%), nem a nyers VAL szerint. A meccs legjobbjától legfeljebb 10%-kal elmaradó játékosok ugyanazt a vezető címkét kapják. Usage% = standard USG% = (FGA + 0,44·FTA + LV) · (csapatperc / 5) / (perc · csapat FGA + 0,44·FTA + LV); átlag ~20%, alacsony ≤ 15%, magas ≥ 25%.*`
     );
+  }
+
+  if (lineups) {
+    lines.push(...postgameLineupsToMd(lineups, {
+      teamName: report.teamName,
+      opponentName: report.opponentName,
+      pointsFor: report.metrics.pointsFor,
+      pointsAgainst: report.metrics.pointsAgainst,
+    }));
   }
 
   if (report.strengths.length > 0) {

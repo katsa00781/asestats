@@ -123,6 +123,7 @@ asestats/
 │   ├── player-postgame.ts
 │   ├── player-stat-mapping.ts  # SupabasePlayerStat típus + PlayerStats mapping (egyetlen példány)
 │   ├── positions.ts
+│   ├── postgame-lineup-export.ts # Post-game export ötös-modellje (ötösök, on/off, párosok, hármasok a Kosarstat lineupból)
 │   ├── postgame-report.ts
 │   ├── pregame-scouting.ts
 │   ├── run-script.ts           # Közös spawn wrapper a scraping route-okhoz

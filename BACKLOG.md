@@ -1,6 +1,6 @@
 # BACKLOG.md – ASEStats Projekt
 
-_Utoljára frissítve: 2026-10-04 (H14 – csapat szezon export: negyedprofil, ötösök / on-off, liga-összehasonlítás; import szezon-védelem)_
+_Utoljára frissítve: 2026-10-04 (H15 – post-game Export MD: Kosarstat ötösök és on/off blokk külső LLM-elemzéshez)_
 
 ---
 
@@ -690,6 +690,56 @@ a nézőpont nem hiba.
   `seasonName` paramétert kap, a fejléc közös `seasonLeagueLine()` segéddel
   „Szezon: 2026/2027” – a Liga csak akkor jelenik meg, ha különbözik. Csak
   webes MD export, mobil jegyzet nem kell.
+
+**H15 – Kosarstat ötösök a post-game Export MD-ben ✓ (2026-10-04)**
+
+Felhasználói kérés: a post-game elemzés exportjába kerüljön be a Kosarstat
+lineup, hogy az ötösök elemzése is elvégeztethető legyen LLM-mel. Pontosítás
+(felhasználói döntés): az **Export MD**-t kell bővíteni, a saját AI-kérést
+(`lib/game-text-report-prompt.ts`, `generate-game-text-report`) **nem** – az
+változatlan maradt.
+
+- [x] **Új `lib/postgame-lineup-export.ts`** (`buildPostgameLineupExport`) –
+  tiszta modell a meccs Kosarstat ötös-tábláiból: minden ötös (poszt szerinti
+  beosztással, idő, szerzett / kapott pont), játékosonkénti on/off és poszt
+  szerinti játékidő, párosok és hármasok. Ugyanaz az öt játékos más
+  poszt-kiosztással egy ötösnek számít.
+- [x] **`postgameReportToMd` új, opcionális `lineups` paramétere** és
+  `postgameLineupsToMd` (`lib/export-to-md.ts`) – „Ötösök és on/off (Kosarstat
+  lineup)” szakasz a „Játékos bontás” után: saját ötösök, on/off, párosok,
+  hármasok, plusz az **ellenfél** ötösei és on/off táblája. A nyers számok
+  mindig szerepelnek; a Net/40 csak legalább 5 perc együtt töltött időnél
+  (a post-game nézet meglévő küszöbe). Párosból minden 5 perc fölötti, hármasból
+  a 20 legtöbbet együtt játszó.
+- [x] **Adatminőség** – ha az ötös-tábla pontösszege eltér a végeredménytől,
+  „Eltérés” megjegyzés kerül a szakaszba; ha a lineup egyetlen játékosa sem
+  párosítható a box score-ral (nem ehhez a csapathoz tartozó adat), vagy nincs
+  lineup oldal, a szakasz „Nem elérhető adat” sort ad.
+- [x] **Bekötve mindkét post-game Export MD gombba** (`SeasonComparison.tsx`,
+  `postgameLineupExport` memo) – a „Post-game jelentés” és a „Manuális postgame
+  elemzés beillesztése” kártyán.
+- [x] **Teszt valós adattal** – `tests/postgame-lineup-export.test.ts` (7 eset)
+  az Egis Körmend – ASE 84–95 (2026-10-03) Kosarstat ötös-tábláival: 16 ötös,
+  95–84, az on/off egyezik a Kosarstat játékostáblájával (Benke 79–60, Joseph
+  52–44), a poszt-idő is (Révész PF 24,4 / C 4,0 perc), a kezdő ötös Net/40-e
+  +3,6 (Kosarstat On 40: 3,6). A forrás soronként másodpercre kerekít, ezért az
+  ötösök ideje 39:59-re összegződik – a lábjegyzet jelzi.
+  Futtatás: `node --import tsx --test tests/postgame-lineup-export.test.ts`.
+- Mobil jegyzet nem kell: csak webes MD export, a `@core` modulok
+  (`postgame-report.ts`) nem változtak.
+
+Nyitott:
+
+- [ ] **Böngészős ellenőrzés** – a modell és az MD valós adaton tesztelt, de a
+  gombnyomásos export (a `SeasonComparison` parserén át) böngészőben még
+  nincs kipróbálva.
+- [ ] A Kosarstat lineup oldal **posztonkénti párharc-táblája** (`table_15`:
+  „PG – összes” stb., a két csapat posztonkénti box score-ja) és az ötösök
+  átlagmagassága (`Átl. mag.`) nincs kiolvasva – a parser bővítésével az
+  exportba tehető.
+- [ ] A `SeasonComparison.tsx` `buildComboStats` páros / hármas számítása
+  kiváltható az új modul számításával (a „SeasonComparison szétbontása”
+  sprint része).
 
 **H14 – Csapat szezon export (Elemzések → Csapat elemzés → Export MD) hibái ✓ (2026-10-04)** – a kód kész, a takarító SQL lefutott
 
