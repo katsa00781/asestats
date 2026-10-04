@@ -686,7 +686,7 @@ a nézőpont nem hiba.
   „Szezon: 2026/2027” – a Liga csak akkor jelenik meg, ha különbözik. Csak
   webes MD export, mobil jegyzet nem kell.
 
-**H14 – Csapat szezon export (Elemzések → Csapat elemzés → Export MD) hibái (2026-10-04)** – a kód kész, a takarító SQL kézi futtatásra vár
+**H14 – Csapat szezon export (Elemzések → Csapat elemzés → Export MD) hibái ✓ (2026-10-04)** – a kód kész, a takarító SQL lefutott
 
 Felhasználói hibajelzés az ASE 2025/2026 export MD-jére. Gyökérokok:
 
@@ -741,10 +741,14 @@ Elkészült:
 
 Nyitott:
 
-- [ ] **KÉZI LÉPÉS: a takarító SQL futtatása** a Supabase SQL Editorban. Amíg
-  nem fut le, a dashboard többi nézete (Csapat tab KPI-k, játékoslista,
-  liga-benchmarkok) a 2025/2026 szezonra továbbra is a kevert adatot mutatja –
-  az export már most is kiszűri.
+- [x] **Takarító SQL lefuttatva (2026-10-04)** – ellenőrzött végállapot: 0
+  szezonon kívüli meccs a 2025/2026 szezonban, ASE 39 meccs,
+  `player_game_stats_2025_2026` 7194 → 4456 sor, az összesítő-sor „játékos”
+  törölve (a Honvéd–ASE 2026-02-22 ellenfél box score így már érvényes). A
+  futtatáskor `relation "stray_games" does not exist` hiba jelent meg: a
+  törlés ekkorra már végbement, a hiba a `ON COMMIT DROP` temp táblára
+  hivatkozó utasítás ismételt / külön futtatásából jött. A script temp tábla
+  nélkülire átírva, így részenként és újra is futtatható.
 - [ ] **Szezon-dátum védelem a box-score importba** (`scrape-hunbasket.ts`,
   a menetrend import `assertFixturesMatchSeason` mintájára) – felhasználói
   jóváhagyásra vár (scraping szkript).
@@ -754,7 +758,7 @@ Nyitott:
   `hunbasket_shot_events` játékos-hozzárendelését újra kell futtatni) vagy törlés.
 - [ ] **Összesítő-sor játékosként** – a 2026-02-22-i Honvéd–ASE kupameccsen a
   csapat összesítő sora „játékosként” importálódott (név: csupa `0` és
-  tabulátor), ezért a Honvéd box score duplán számol. A takarító SQL törli;
+  tabulátor), ezért a Honvéd box score duplán számolt. A takarító SQL törölte;
   a kézi import parserét (melyik felület írta 2026-02-23-án) meg kell keresni.
 - [ ] **2025-12-06 Körmend–Falco** a 2024/2025 szezonban is szerepel (2025-12-07-i
   import, 99–70), a 2025/2026-ban 99–79-cel – a fordított irányú hibás

@@ -100,13 +100,6 @@ Update this file after every meaningful implementation change.
 
 ## Manuális teendők (a sprint lezárásához)
 
-- **H14 – szezon-szennyezés takarítása (2026-10-04):**
-  `migrations/fix-remove-2024-25-games-from-2025-26-season.sql` futtatása a
-  Supabase SQL Editorban (előbb az 1. előnézeti lépés). 276 db, a 2025/2026
-  szezonba tévesen bekerült 2024/25-ös meccset töröl a hozzájuk tartozó
-  játékos-sorokkal. Amíg nem fut le, a 2025/2026-os dashboard-nézetek
-  kevert adatot mutatnak (a csapat export már kiszűri).
-
 - **Játékosmozgás:** `migrations/add-league-player-movements-view.sql`
   futtatása a Supabase SQL Editorban. Az alaptáblák és a teljes adatimport
   már készen vannak. Részletes sorrend: `HOWTO-player-movements.md`.
@@ -128,7 +121,7 @@ Update this file after every meaningful implementation change.
 
 ## Completed (legutóbbi)
 
-- **H14 / csapat szezon export – egységes meccshalmaz** (2026-10-04): az Elemzések „Csapat elemzés” exportja nullákat és két szezon keverékét mutatta. Gyökérok: 276 db 2024/25-ös meccs a 2025/2026 szezonban (hibás slug/szezon párosítású import 2026-02-07 és 2026-04-20), plusz a riport két külön forrásból (végeredmény vs. aktív játékosok view-ja) számolt. Új `lib/team-season-export.ts` (`buildTeamSeasonExport`): minden csapatszintű szám a meccs-sorokból, szezonon kívüli meccsek és hibás pontösszegű box score-ok kiszűrve és jelölve; `teamStatsToMd` átírva (saját + ellenfél mutatók, ORtg/DRtg/tempó, hazai/vendég és szakasz bontás, USG% + per-36 100 perces küszöbbel, elérhetőség, meccsenkénti tábla, FTM és FTA rate külön). `TeamGame` új opcionális mezői: `opponentTeamId`, `round`, `competitionPhase` (Kosarstat `competition_phase`). Érintett: `lib/team-season-export.ts`, `lib/export-to-md.ts`, `lib/dashboard-types.ts`, `hooks/useGameData.ts`, `components/TeamStatistics.tsx`, `components/SeasonComparison.tsx`, `app/page.tsx`, `tests/team-season-export.test.ts`. **Kézi lépés:** `migrations/fix-remove-2024-25-games-from-2025-26-season.sql`. Mobil jegyzetek: `mobile-sync/2026-10-04-team-game-phase-opponent-fields.md`, `mobile-sync/2026-10-04-season-2025-26-stray-games-cleanup.md`. Nyitott pontok: `BACKLOG.md` H14.
+- **H14 / csapat szezon export – egységes meccshalmaz** (2026-10-04): az Elemzések „Csapat elemzés” exportja nullákat és két szezon keverékét mutatta. Gyökérok: 276 db 2024/25-ös meccs a 2025/2026 szezonban (hibás slug/szezon párosítású import 2026-02-07 és 2026-04-20), plusz a riport két külön forrásból (végeredmény vs. aktív játékosok view-ja) számolt. Új `lib/team-season-export.ts` (`buildTeamSeasonExport`): minden csapatszintű szám a meccs-sorokból, szezonon kívüli meccsek és hibás pontösszegű box score-ok kiszűrve és jelölve; `teamStatsToMd` átírva (saját + ellenfél mutatók, ORtg/DRtg/tempó, hazai/vendég és szakasz bontás, USG% + per-36 100 perces küszöbbel, elérhetőség, meccsenkénti tábla, FTM és FTA rate külön). `TeamGame` új opcionális mezői: `opponentTeamId`, `round`, `competitionPhase` (Kosarstat `competition_phase`). Érintett: `lib/team-season-export.ts`, `lib/export-to-md.ts`, `lib/dashboard-types.ts`, `hooks/useGameData.ts`, `components/TeamStatistics.tsx`, `components/SeasonComparison.tsx`, `app/page.tsx`, `tests/team-season-export.test.ts`. A takarító SQL (`migrations/fix-remove-2024-25-games-from-2025-26-season.sql`) **lefutott 2026-10-04-én** (276 meccs, 2738 stat sor törölve; ASE 39 meccs). Mobil jegyzetek: `mobile-sync/2026-10-04-team-game-phase-opponent-fields.md`, `mobile-sync/2026-10-04-season-2025-26-stray-games-cleanup.md`. Nyitott pontok: `BACKLOG.md` H14.
 
 - **H13 / AI szöveggenerálás – adathű prompt** (2026-10-04): új `lib/game-text-report-prompt.ts` (prompt, adatkivonat, `findUngroundedNumbers`); a modell megkapja a `metrics` blokkot (`boxScore`, `pointSources`, kulcsmutatók referenciával), a `baseline`-t és a döntő tényezők `tone` irányát; javítva a régi prompt irányhibája (a `pregame.vulnerabilities` az ellenfél gyengeségei, nem a sajátunk); 16 pontos adathűségi szabálysor; a route `unverifiedNumbers`-t ad vissza, a felület figyelmeztet. `maxDuration` 60 → 120 (a generálás mérten 65–73 mp), hőmérséklet 0,2–0,3. Érintett: `lib/game-text-report-prompt.ts`, `app/api/generate-game-text-report/route.ts`, `components/SeasonComparison.tsx`. Mobil jegyzet nem kell (a mobil nem hívja a route-ot). Nyitott: a többi generáló route promptja (`BACKLOG.md` H13).
 

@@ -16,6 +16,9 @@
 -- A script csak azokat a meccseket törli, amelyeknek van párja a 2024/2025
 -- szezonban (azonos csapat + dátum). A `players` sorokhoz nem nyúl.
 -- Futtatás: előbb az 1. lépés (előnézet), utána a 2. lépés egyben.
+--
+-- ÁLLAPOT: lefuttatva 2026-10-04-én (276 meccs, 2737 + 1 stat sor, 1 hibás
+-- „játékos” törölve). Újrafuttatva az előnézet 0 sort ad, a törlés 0 sort érint.
 -- =====================================================================
 
 -- ---------------------------------------------------------------------
@@ -60,30 +63,46 @@ WHERE s.name = '2025/2026'
 -- ---------------------------------------------------------------------
 -- 2. JAVÍTÁS – egy tranzakcióban
 -- ---------------------------------------------------------------------
+-- A törlendő halmaz mindkét utasításban ugyanaz az allekérdezés (nincs temp
+-- tábla), így a lépések külön-külön kijelölve is futtathatók és a script
+-- újrafuttatható: második futásra 0 sort töröl.
 BEGIN;
-
-CREATE TEMP TABLE stray_games ON COMMIT DROP AS
-SELECT g.id
-FROM games g
-JOIN seasons s ON s.id = g.season_id
-WHERE s.name = '2025/2026'
-  AND g.date < s.start_date
-  AND EXISTS (
-    SELECT 1
-    FROM games g2
-    JOIN seasons s2 ON s2.id = g2.season_id
-    WHERE s2.name = '2024/2025'
-      AND g2.our_team_id = g.our_team_id
-      AND g2.date = g.date
-  );
 
 -- A stat sorok FK-ja ON DELETE CASCADE, de explicit töröljük, hogy a
 -- törölt sorszám a futtatáskor látható legyen.
 DELETE FROM player_game_stats_2025_2026
-WHERE game_id IN (SELECT id FROM stray_games);
+WHERE game_id IN (
+  SELECT g.id
+  FROM games g
+  JOIN seasons s ON s.id = g.season_id
+  WHERE s.name = '2025/2026'
+    AND g.date < s.start_date
+    AND EXISTS (
+      SELECT 1
+      FROM games g2
+      JOIN seasons s2 ON s2.id = g2.season_id
+      WHERE s2.name = '2024/2025'
+        AND g2.our_team_id = g.our_team_id
+        AND g2.date = g.date
+    )
+);
 
 DELETE FROM games
-WHERE id IN (SELECT id FROM stray_games);
+WHERE id IN (
+  SELECT g.id
+  FROM games g
+  JOIN seasons s ON s.id = g.season_id
+  WHERE s.name = '2025/2026'
+    AND g.date < s.start_date
+    AND EXISTS (
+      SELECT 1
+      FROM games g2
+      JOIN seasons s2 ON s2.id = g2.season_id
+      WHERE s2.name = '2024/2025'
+        AND g2.our_team_id = g.our_team_id
+        AND g2.date = g.date
+    )
+);
 
 -- 2/b) Összesítő-sorból keletkezett „játékos” (a neve csupa szám és tabulátor,
 --      pl. a 2026-02-22-i Honvéd–ASE kupameccsen): a csapat összesítő sora

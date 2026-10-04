@@ -21,7 +21,7 @@
 - Sémaváltozás nincs.
 
 ## Hatás a mobil appra
-- A futtatásig a mobil 2025/2026-os nézetei is a kevert adatot mutatják:
+- A futtatásig a mobil 2025/2026-os nézetei is a kevert adatot mutatták:
   csapatonként ~20 meccsel több a meccslistában, a
   `player_season_stats_by_season` view-ból jövő játékos-összesítők (meccsszám,
   átlagok) a régi szezon sorait is tartalmazzák (pl. ASE: 58 meccs a valós
@@ -37,10 +37,10 @@
       gyorsítótár ürítése
 
 ## Kézi lépések
-**Még NINCS futtatva.** A Supabase SQL Editorban:
-`migrations/fix-remove-2024-25-games-from-2025-26-season.sql` – előbb az
-1. (előnézet) lépés, utána a 2. lépés egy tranzakcióban, végül a 3.
-ellenőrzés (várt: 0 szezonon kívüli meccs, ASE 39 meccs).
+**Lefuttatva 2026-10-04-én** a Supabase SQL Editorban
+(`migrations/fix-remove-2024-25-games-from-2025-26-season.sql`). Ellenőrzött
+végállapot: 0 szezonon kívüli meccs a 2025/2026 szezonban, ASE 39 meccs,
+`player_game_stats_2025_2026` 7194 → 4456 sor, a view-ban Halmai 37 meccs.
 
 Nyitott, a script nem kezeli: 138 `hunbasket_shotchart_raw` sor
 (`season_slug = x2425`) szintén a 2025/2026 szezon alatt áll – erről külön
