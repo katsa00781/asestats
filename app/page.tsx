@@ -211,6 +211,8 @@ export default function Home() {
                   players={playersBySeason}
                   games={games}
                   gameStats={gameStats}
+                  playerGameStats={playerGameStats}
+                  allTeams={allTeams}
                   teamName={allTeams.find(t => t.id === selectedTeamId)?.name}
                   seasonId={selectedSeasonId ?? undefined}
                   teamId={selectedTeamId ?? undefined}

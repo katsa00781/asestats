@@ -22,7 +22,7 @@ import { PostgameZoneHeatmapChart } from '@/components/PostgameZoneHeatmapChart'
 import { supabase, type Database } from '@/lib/supabase';
 import { fetchAllRows } from '@/lib/fetch-all-rows';
 import { buildPositionMetadata } from '@/lib/positions';
-import type { PlayerStats, TeamGame, GameAggregate } from '@/lib/dashboard-types';
+import type { PlayerStats, TeamGame } from '@/lib/dashboard-types';
 import {
   analyzePlayerSeason,
   buildLeagueBenchmarks,
@@ -4492,6 +4492,33 @@ export function SeasonComparison({
   const activeSeasonPlayers = useMemo(() => {
     return seasonPlayers.filter(player => player.isActive !== false);
   }, [seasonPlayers]);
+
+  const exportTeamSeasonMd = () => {
+    // A games / playerGameStats prop a fejlécben kiválasztott szezon + csapat
+    // adata; ha az Elemzések saját szűrője másra áll, nem keverjük össze őket.
+    if (String(resolvedSeasonId) !== String(currentSeasonId ?? '') || String(resolvedTeamId) !== String(currentTeamId ?? '')) {
+      toast.error('A csapat export a fejlécben kiválasztott szezonra és csapatra készül – állítsd azonosra a két szűrőt.');
+      return;
+    }
+    const tName = allTeams.find(t => t.id === resolvedTeamId)?.name;
+    const md = teamStatsToMd({
+      games,
+      statRows: playerGameStats,
+      players: seasonPlayers.filter(p => String(p.teamId ?? '') === String(resolvedTeamId)),
+      teamName: tName,
+      seasonName: resolvedSeasonName,
+      resolveTeamName: id => allTeams.find(team => team.id === id)?.name,
+    });
+    const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `csapat-${(tName ?? 'statisztika').replace(/\s+/g, '-')}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+    navigator.clipboard.writeText(md).catch(() => null);
+    toast.success('MD exportálva – vágólapra másolva és letöltve');
+  };
 
   const pregameOwnRosterOptions = useMemo(() => {
     if (!resolvedTeamId || resolvedTeamId === 'all') return [];
@@ -12481,30 +12508,7 @@ export function SeasonComparison({
               size="sm"
               className="border-border-subtle hover:bg-surface-2 text-cyan shrink-0"
               onClick={() => {
-                const teamPlayers = activeSeasonPlayers.filter(p => String(p.teamId ?? '') === String(resolvedTeamId));
-                const n = Math.max(games.length, 1);
-                const agg: GameAggregate = {
-                  totalGames: games.length,
-                  avgPoints: games.reduce((s, g) => s + g.ourScore, 0) / n,
-                  avgRebounds: games.reduce((s, g) => s + g.players.reduce((ps, p) => ps + p.rebounds.total, 0), 0) / n,
-                  avgAssists: games.reduce((s, g) => s + g.players.reduce((ps, p) => ps + p.assists, 0), 0) / n,
-                  avgSteals: games.reduce((s, g) => s + g.players.reduce((ps, p) => ps + p.steals, 0), 0) / n,
-                  avgBlocks: games.reduce((s, g) => s + g.players.reduce((ps, p) => ps + p.blocks, 0), 0) / n,
-                  avgTurnovers: games.reduce((s, g) => s + g.players.reduce((ps, p) => ps + p.turnovers, 0), 0) / n,
-                  avgValuation: games.reduce((s, g) => s + g.players.reduce((ps, p) => ps + p.valuation, 0), 0) / n,
-                };
-                const tName = allTeams.find(t => t.id === resolvedTeamId)?.name;
-                const sName = allSeasons.find(s => s.id === resolvedSeasonId)?.name;
-                const md = teamStatsToMd(teamPlayers, games, agg, tName, sName);
-                const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `csapat-${(tName ?? 'statisztika').replace(/\s+/g, '-')}.md`;
-                a.click();
-                URL.revokeObjectURL(url);
-                navigator.clipboard.writeText(md).catch(() => null);
-                toast.success('MD exportálva – vágólapra másolva és letöltve');
+                exportTeamSeasonMd();
               }}
             >
               <Download className="w-4 h-4 mr-2" />
@@ -13311,30 +13315,7 @@ export function SeasonComparison({
               size="sm"
               className="border-border-subtle hover:bg-surface-2 text-cyan shrink-0 ml-auto"
               onClick={() => {
-                const teamPlayers = activeSeasonPlayers.filter(p => String(p.teamId ?? '') === String(resolvedTeamId));
-                const n = Math.max(games.length, 1);
-                const agg: GameAggregate = {
-                  totalGames: games.length,
-                  avgPoints: games.reduce((s, g) => s + g.ourScore, 0) / n,
-                  avgRebounds: games.reduce((s, g) => s + g.players.reduce((ps, p) => ps + p.rebounds.total, 0), 0) / n,
-                  avgAssists: games.reduce((s, g) => s + g.players.reduce((ps, p) => ps + p.assists, 0), 0) / n,
-                  avgSteals: games.reduce((s, g) => s + g.players.reduce((ps, p) => ps + p.steals, 0), 0) / n,
-                  avgBlocks: games.reduce((s, g) => s + g.players.reduce((ps, p) => ps + p.blocks, 0), 0) / n,
-                  avgTurnovers: games.reduce((s, g) => s + g.players.reduce((ps, p) => ps + p.turnovers, 0), 0) / n,
-                  avgValuation: games.reduce((s, g) => s + g.players.reduce((ps, p) => ps + p.valuation, 0), 0) / n,
-                };
-                const tName = allTeams.find(t => t.id === resolvedTeamId)?.name;
-                const sName = allSeasons.find(s => s.id === resolvedSeasonId)?.name;
-                const md = teamStatsToMd(teamPlayers, games, agg, tName, sName);
-                const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `csapat-${(tName ?? 'statisztika').replace(/\s+/g, '-')}.md`;
-                a.click();
-                URL.revokeObjectURL(url);
-                navigator.clipboard.writeText(md).catch(() => null);
-                toast.success('MD exportálva – vágólapra másolva és letöltve');
+                exportTeamSeasonMd();
               }}
             >
               <Download className="w-4 h-4 mr-2" strokeWidth={1.6} />

@@ -1,6 +1,6 @@
 # BACKLOG.md – ASEStats Projekt
 
-_Utoljára frissítve: 2026-10-04 (H13 – AI szöveggenerálás: adathű prompt, új mezők, számellenőrzés)_
+_Utoljára frissítve: 2026-10-04 (H14 – csapat szezon export: egységes meccshalmaz, szezon-szennyezés feltárva)_
 
 ---
 
@@ -685,6 +685,88 @@ a nézőpont nem hiba.
   `seasonName` paramétert kap, a fejléc közös `seasonLeagueLine()` segéddel
   „Szezon: 2026/2027” – a Liga csak akkor jelenik meg, ha különbözik. Csak
   webes MD export, mobil jegyzet nem kell.
+
+**H14 – Csapat szezon export (Elemzések → Csapat elemzés → Export MD) hibái (2026-10-04)** – a kód kész, a takarító SQL kézi futtatásra vár
+
+Felhasználói hibajelzés az ASE 2025/2026 export MD-jére. Gyökérokok:
+
+- **Szezon-szennyezés az adatbázisban** – 2026-02-07-én és 2026-04-20-án a
+  box-score import az `x2425` sluggal futott, de a 2025/2026 szezonba írt:
+  **276 `games` sor** (csapatonként 19–21, dátum 2024-09-27 – 2025-02-28) és
+  **2737 `player_game_stats_2025_2026` sor** került rossz szezonba. Ezért volt
+  a fejlécben 58 meccs a valós 39 helyett, és ezért „nem fedte le” a
+  dobásbontás a meccsszámot. A `scrape-hunbasket.ts`-ben nincs szezon-dátum
+  ellenőrzés (a menetrend importban van).
+- **Két különböző meccshalmaz egy riportban** – a pontátlag a `games`
+  végeredményeiből jött, a dobásbontás és a játékostábla a szezon view **aktív**
+  játékosaiból. Az inaktív játékosok (Hicks 253, Mitchell 31, Géringer 27 pont)
+  kimaradtak, a régi szezon sorai viszont benne voltak.
+- **Nullák** – a `SeasonComparison` a `games[].players` tömbből átlagolt, ami
+  a `useGameData`-ban mindig üres.
+
+Elkészült:
+
+- [x] **Új `lib/team-season-export.ts`** (`buildTeamSeasonExport`) – minden
+  csapatszintű szám a meccsenkénti box score sorokból, egyetlen meccshalmazra.
+  A szezon dátumablakán (júl. 1. – jún. 30.) kívüli meccsek kimaradnak és
+  az „Adatminőség” blokkban jelölve vannak; a végeredménytől eltérő
+  pontösszegű (pl. duplán importált) box score nem kerül a mutatókba.
+- [x] **`teamStatsToMd` átírva** (`lib/export-to-md.ts`) – fejléc box score
+  lefedettséggel és versenyszakasz-bontással; saját **és ellenfél** átlagok,
+  eFG / TS / TO rate / OREB%, tempó, ORtg / DRtg / Net; hazai / vendég és
+  szakasz szerinti bontás; játékostábla az inaktívakkal, USG%-kal és per-36
+  értékekkel, **100 összperces mintaküszöbbel**; elérhetőségi tábla;
+  meccsenkénti tábla **minden meccsről** (szakasz, pihenőnap, birtoklás,
+  ratingek); ellenfelenkénti összesítés.
+- [x] **Ellenfélnév egységesítve** – a `games.opponent_team_id` → `teams.name`
+  alapján („Szolnoki Olajbányász” és „NHSZ-Szolnoki Olajbányász” egy sor).
+- [x] **Versenyszakasz** – a Kosarstat `competition_phase` címkéjéből
+  (`kosarstat_game_pages_raw`, a `games.kosarstat_game_id` linken át);
+  sémaváltozás nélkül. Link nélkül a fordulószám → alapszakasz, forduló
+  nélkül „Kupa / nem azonosított”. `TeamGame` új opcionális mezői:
+  `opponentTeamId`, `round`, `competitionPhase` (`hooks/useGameData.ts` tölti).
+- [x] **FT definíció** – külön sor az **FTM rate (FTM/FGA)** (a postgame
+  riporttal azonos) és az **FTA rate (FTA/FGA)**, lábjegyzetben a képlettel.
+  A TO rate az Oliver-féle, a birtoklás a két csapat becslésének átlaga
+  (2026-09-28-i döntés szerint).
+- [x] **Mindkét export gomb** (Csapat tab és Elemzések) ugyanazt a függvényt
+  hívja; az Elemzések gombja hibát jelez, ha a saját szűrője eltér a fejlécben
+  kiválasztott szezontól / csapattól (a meccsadat a fejléc szűrőjéhez tartozik).
+- [x] **Teszt** – `tests/team-season-export.test.ts` (6 eset).
+  Futtatás: `node --import tsx --test tests/team-season-export.test.ts`.
+- [x] **Takarító SQL megírva** – `migrations/fix-remove-2024-25-games-from-2025-26-season.sql`
+  (előnézet → törlés egy tranzakcióban → ellenőrzés).
+  Mobil jegyzetek: `mobile-sync/2026-10-04-team-game-phase-opponent-fields.md`,
+  `mobile-sync/2026-10-04-season-2025-26-stray-games-cleanup.md`.
+
+Nyitott:
+
+- [ ] **KÉZI LÉPÉS: a takarító SQL futtatása** a Supabase SQL Editorban. Amíg
+  nem fut le, a dashboard többi nézete (Csapat tab KPI-k, játékoslista,
+  liga-benchmarkok) a 2025/2026 szezonra továbbra is a kevert adatot mutatja –
+  az export már most is kiszűri.
+- [ ] **Szezon-dátum védelem a box-score importba** (`scrape-hunbasket.ts`,
+  a menetrend import `assertFixturesMatchSeason` mintájára) – felhasználói
+  jóváhagyásra vár (scraping szkript).
+- [ ] **Szezonon kívüli shot chart sorok** – 138 `hunbasket_shotchart_raw` sor
+  (`season_slug = x2425`, importálva 2026-04-20) a 2025/2026 szezon alatt áll;
+  2024/2025 alatt nincs párjuk. Döntés kell: átírás 2024/2025-re (a
+  `hunbasket_shot_events` játékos-hozzárendelését újra kell futtatni) vagy törlés.
+- [ ] **Összesítő-sor játékosként** – a 2026-02-22-i Honvéd–ASE kupameccsen a
+  csapat összesítő sora „játékosként” importálódott (név: csupa `0` és
+  tabulátor), ezért a Honvéd box score duplán számol. A takarító SQL törli;
+  a kézi import parserét (melyik felület írta 2026-02-23-án) meg kell keresni.
+- [ ] **2025-12-06 Körmend–Falco** a 2024/2025 szezonban is szerepel (2025-12-07-i
+  import, 99–70), a 2025/2026-ban 99–79-cel – a fordított irányú hibás
+  hozzárendelés, kézi ellenőrzés kell.
+- [ ] **Hiányzó box score-adat** – 2026-02-21 Szolnok–ASE (kupa): a két csapat
+  birtoklásbecslése 26%-kal eltér (ASE 47 FGA) – valószínűleg hiányos import;
+  2025-12-29 Szedeák: az ellenfél sorok összege 75, a végeredmény 76.
+- [ ] **A „3. helyért” szakasz fordulószáma** – a `scrape-hunbasket.ts` a
+  „3. helyért” szövegből `round = 3`-at ír; a szakasz tárolása a `games`
+  táblában sémadöntés.
+- [ ] **Exportból még hiányzik** – negyedprofil szezonszinten, lineup / on-off,
+  liga-összehasonlító tábla (a liga-tábla csak a takarítás után ad értelmes számot).
 
 **H13 – Post-game export adat-anomáliák (ASE–Körmend 95–84, 2026-10-03) ✓ (2026-10-04)**
 

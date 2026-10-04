@@ -3,6 +3,7 @@ import { authFetch } from '@/lib/api-fetch';
 
 import { useState, useCallback } from 'react';
 import type { PlayerStats, TeamGame, GameAggregate } from '@/lib/dashboard-types';
+import type { TeamExportStatRow } from '@/lib/team-season-export';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { StatCard } from './ui/stat-card';
 import { Button } from './ui/button';
@@ -17,18 +18,27 @@ type TeamStatisticsProps = {
   players: PlayerStats[];
   games: TeamGame[];
   gameStats: GameAggregate;
+  playerGameStats: TeamExportStatRow[];
+  allTeams: Array<{ id: string; name: string }>;
   teamName?: string;
   seasonId?: string;
   teamId?: string;
   seasonName?: string;
 };
 
-export function TeamStatistics({ players, games, gameStats, teamName, seasonId, teamId, seasonName }: TeamStatisticsProps) {
+export function TeamStatistics({ players, games, gameStats, playerGameStats, allTeams, teamName, seasonId, teamId, seasonName }: TeamStatisticsProps) {
   const [manualText, setManualText] = useState('');
   const [savingManual, setSavingManual] = useState(false);
 
   const exportTeamMd = useCallback(() => {
-    const md = teamStatsToMd(players, games, gameStats, teamName, seasonName);
+    const md = teamStatsToMd({
+      games,
+      statRows: playerGameStats,
+      players,
+      teamName,
+      seasonName,
+      resolveTeamName: id => allTeams.find(team => team.id === id)?.name,
+    });
     const filename = `csapat-${(teamName ?? 'statisztikak').replace(/\s+/g, '-')}-${seasonName ?? ''}.md`;
     const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
     const url = URL.createObjectURL(blob);
@@ -39,7 +49,7 @@ export function TeamStatistics({ players, games, gameStats, teamName, seasonId, 
     URL.revokeObjectURL(url);
     navigator.clipboard.writeText(md).catch(() => null);
     toast.success('MD exportálva – vágólapra másolva és letöltve');
-  }, [players, games, gameStats, teamName, seasonName]);
+  }, [players, games, playerGameStats, allTeams, teamName, seasonName]);
 
   const saveManualReport = useCallback(async () => {
     if (!manualText.trim()) return;

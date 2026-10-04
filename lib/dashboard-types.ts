@@ -99,6 +99,11 @@ export type TeamGame = {
   kosarstatGameId?: string | null;
   players: GamePlayer[];
   opponentGameId?: string;
+  /** Az ellenfél csapat azonosítója (games.opponent_team_id) – az `opponent` szabad szöveg, a kanonikus név ebből oldandó fel. */
+  opponentTeamId?: string | null;
+  round?: number | null;
+  /** Kosarstat versenyszakasz-címke (pl. „Alapszakasz”, „Elődöntő - 2. mérkőzés”); Kosarstat-link nélkül null. */
+  competitionPhase?: string | null;
 };
 
 export type GameAggregate = {

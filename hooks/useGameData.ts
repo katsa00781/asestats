@@ -16,6 +16,7 @@ type SupabaseGame = {
   kosarstat_game_id?: string | null;
   our_team_id?: string;
   opponent_team_id?: string | null;
+  round?: number | null;
 };
 
 export type SupabasePlayerGameStat = {
@@ -52,6 +53,9 @@ export type SupabasePlayerGameStat = {
   players?: {
     team_id?: string | null;
     name?: string | null;
+    number?: number | null;
+    position?: string | null;
+    is_active?: boolean | null;
   } | null;
 };
 
@@ -200,12 +204,12 @@ export function useGameData(
       const [ownStatsResult, opponentStatsResult] = await Promise.all([
         supabase
           .from(statsTable as never)
-          .select(`*, games:game_id (date, opponent, season_id), players:player_id (team_id, name)`)
+          .select(`*, games:game_id (date, opponent, season_id), players:player_id (team_id, name, number, position, is_active)`)
           .in('game_id', gameIds.length > 0 ? gameIds : ['00000000-0000-0000-0000-000000000000']),
         opponentGameIds.length > 0
           ? supabase
               .from(statsTable as never)
-              .select(`*, games:game_id (date, opponent, season_id), players:player_id (team_id, name)`)
+              .select(`*, games:game_id (date, opponent, season_id), players:player_id (team_id, name, number, position, is_active)`)
               .in('game_id', opponentGameIds)
           : Promise.resolve({ data: [], error: null }),
       ]);
@@ -298,6 +302,33 @@ export function useGameData(
           });
         });
 
+      // Versenyszakasz (alapszakasz / rájátszás) a Kosarstat meccsoldal
+      // metaadatából – a games táblában nincs szakasz-jelölés. Hiba esetén a
+      // meccsek szakasz nélkül töltődnek be.
+      const kosarstatGameIds = (gamesData || [])
+        .map((g: SupabaseGame) => g.kosarstat_game_id)
+        .filter((id): id is string => Boolean(id));
+      const phaseByKosarstatId = new Map<string, string>();
+      if (kosarstatGameIds.length > 0) {
+        const { data: phaseRows, error: phaseError } = await supabase
+          .from('kosarstat_game_pages_raw' as never)
+          .select('kosarstat_game_id, competition_phase')
+          .eq('season_id', selectedSeasonId)
+          .eq('page_type', 'game')
+          .in('kosarstat_game_id', kosarstatGameIds);
+
+        if (phaseError) {
+          console.warn('⚠️ Versenyszakasz lekérdezési hiba:', phaseError.message);
+        } else {
+          ((phaseRows || []) as Array<{ kosarstat_game_id?: string | null; competition_phase?: string | null }>)
+            .forEach(row => {
+              if (row.kosarstat_game_id && row.competition_phase) {
+                phaseByKosarstatId.set(String(row.kosarstat_game_id), row.competition_phase);
+              }
+            });
+        }
+      }
+
       const gamesConverted: TeamGame[] = (gamesData || []).map((g: SupabaseGame) => {
         const opponentTeamId = resolveOpponentTeamId(g);
         const opponentGameId = opponentTeamId
@@ -314,6 +345,9 @@ export function useGameData(
           kosarstatGameId: g.kosarstat_game_id ?? null,
           players: [],
           opponentGameId,
+          opponentTeamId: opponentTeamId ?? null,
+          round: g.round ?? null,
+          competitionPhase: g.kosarstat_game_id ? phaseByKosarstatId.get(g.kosarstat_game_id) ?? null : null,
         };
       });
 

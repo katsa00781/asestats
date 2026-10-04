@@ -1,8 +1,22 @@
-import type { PlayerStats, TeamGame, GameAggregate } from './dashboard-types';
+import type { PlayerStats } from './dashboard-types';
 import type { ScoutingReport } from './pregame-scouting';
 import type { PostGameReport, PostgameBoxScoreLine } from './postgame-report';
 import type { KosarstatGameClutch } from './kosarstat-clutch-parse';
+import type {
+  TeamBoxLine,
+  TeamExportAggregate,
+  TeamExportPlayer,
+  TeamSeasonExportInput,
+} from './team-season-export';
 import { trueShootingPct, effectiveFgPct } from './stat-formulas';
+import {
+  buildTeamSeasonExport,
+  lineFga,
+  lineFgm,
+  lineUsage,
+  MIN_SAMPLE_MINUTES,
+  PHASE_LABELS,
+} from './team-season-export';
 
 function fmtPct(made: number, attempted: number): string {
   return attempted > 0 ? `${((made / attempted) * 100).toFixed(1)}%` : '-';
@@ -406,125 +420,223 @@ export function playerSeasonToMd(player: PlayerStats): string {
   return lines.join('\n');
 }
 
-export function teamStatsToMd(
-  players: PlayerStats[],
-  games: TeamGame[],
-  gameStats: GameAggregate,
-  teamName?: string,
-  seasonName?: string
-): string {
-  const totalGames = games.length;
-  const wins = games.filter(g => g.result === 'win').length;
-  const losses = totalGames - wins;
+type TeamRateSet = {
+  efg: number;
+  ts: number;
+  threeRate: number;
+  ftmRate: number;
+  ftaRate: number;
+  toRate: number;
+  assistRate: number;
+};
 
-  // Aggregált dobásstatisztikák a játékosokból
-  let aggCloseMade = 0, aggCloseAttempted = 0;
-  let aggMidMade = 0, aggMidAttempted = 0;
-  let aggThreeMade = 0, aggThreeAttempted = 0;
-  let aggFtMade = 0, aggFtAttempted = 0;
-  let totalPoints = 0, totalAst = 0, totalTov = 0, totalOreb = 0, totalDreb = 0;
+function teamRates(line: TeamBoxLine): TeamRateSet {
+  const fga = lineFga(line);
+  const fgm = lineFgm(line);
+  const usage = lineUsage(line);
+  return {
+    efg: effectiveFgPct(fgm, line.threeMade, fga),
+    ts: trueShootingPct(line.points, fga, line.ftAtt),
+    threeRate: fga > 0 ? (line.threeAtt / fga) * 100 : 0,
+    ftmRate: fga > 0 ? (line.ftMade / fga) * 100 : 0,
+    ftaRate: fga > 0 ? (line.ftAtt / fga) * 100 : 0,
+    toRate: usage > 0 ? (line.tov / usage) * 100 : 0,
+    assistRate: fgm > 0 ? (line.ast / fgm) * 100 : 0,
+  };
+}
 
-  for (const p of players) {
-    aggCloseMade      += p.shooting.close.made;
-    aggCloseAttempted += p.shooting.close.attempted;
-    aggMidMade        += p.shooting.mid.made;
-    aggMidAttempted   += p.shooting.mid.attempted;
-    aggThreeMade      += p.shooting.three.made;
-    aggThreeAttempted += p.shooting.three.attempted;
-    aggFtMade         += p.shooting.freeThrow.made;
-    aggFtAttempted    += p.shooting.freeThrow.attempted;
-    totalPoints += p.points;
-    totalAst    += p.assists;
-    totalTov    += p.turnovers;
-    totalOreb   += p.rebounds.offensive;
-    totalDreb   += p.rebounds.defensive;
-  }
+/** OREB%: saját T-lep / (saját T-lep + a másik csapat V-lepattanója). */
+function orebPct(line: TeamBoxLine, other: TeamBoxLine): number {
+  const chances = line.oreb + other.dreb;
+  return chances > 0 ? (line.oreb / chances) * 100 : 0;
+}
 
-  const fga2 = aggCloseAttempted + aggMidAttempted;
-  const fgm2 = aggCloseMade + aggMidMade;
-  const fga3 = aggThreeAttempted;
-  const fgm3 = aggThreeMade;
-  const fga  = fga2 + fga3;
-  const fgm  = fgm2 + fgm3;
-  const fta  = aggFtAttempted;
+function aggregateRatings(agg: TeamExportAggregate) {
+  const hasRating = agg.possessions > 0 && agg.boxGames > 0;
+  const ortg = hasRating ? (agg.ratingPointsFor / agg.possessions) * 100 : null;
+  const drtg = hasRating ? (agg.ratingPointsAgainst / agg.possessions) * 100 : null;
+  return {
+    pace: hasRating ? agg.possessions / agg.boxGames : null,
+    ortg,
+    drtg,
+    net: ortg !== null && drtg !== null ? ortg - drtg : null,
+  };
+}
 
-  const teamEfg       = effectiveFgPct(fgm, fgm3, fga);
-  const teamTs        = trueShootingPct(totalPoints, fga, fta);
-  const teamAssistRate = fgm > 0 ? totalAst / fgm * 100 : 0;
-  const teamPossEst   = fga + 0.44 * fta + totalTov - totalOreb;
-  const teamToRate    = teamPossEst > 0 ? totalTov / teamPossEst * 100 : 0;
-  const teamOrebRate  = (totalOreb + totalDreb) > 0 ? totalOreb / (totalOreb + totalDreb) * 100 : 0;
-  const teamFtRate    = fga > 0 ? fta / fga * 100 : 0;
-  const teamThreeRate = fga > 0 ? fga3 / fga * 100 : 0;
+export function teamStatsToMd(input: TeamSeasonExportInput & { teamName?: string }): string {
+  const model = buildTeamSeasonExport(input);
+  const { overall } = model;
+  const hasOpp = overall.pairedGames > 0;
+
+  const per = (value: number, count: number) => (count > 0 ? (value / count).toFixed(1) : '–');
+  const pct = (value: number, available = true) => (available ? `${value.toFixed(1)}%` : '–');
+  const num = (value: number | null) => (value !== null ? value.toFixed(1) : '–');
+  const signed = (value: number | null) => (value !== null ? sign(value) : '–');
+  const record = (agg: TeamExportAggregate) => `${agg.wins}W – ${agg.losses}L`;
+
+  const own = teamRates(overall.own);
+  const opp = teamRates(overall.opp);
+  const ratings = aggregateRatings(overall);
 
   const lines: string[] = [
-    `# Csapat szezonstatisztikák: ${teamName ?? 'Csapat'}`,
+    `# Csapat szezonstatisztikák: ${input.teamName ?? 'Csapat'}`,
     ``,
-    ...(seasonName ? [`**Szezon:** ${seasonName}`] : []),
-    `**Meccsek:** ${totalGames} (${wins}W – ${losses}L)`,
+    ...(input.seasonName ? [`**Szezon:** ${input.seasonName}`] : []),
+    `**Meccsek:** ${overall.games} (${record(overall)}) | **Hazai:** ${record(model.home)} | **Vendég:** ${record(model.away)}`,
+    `**Box score lefedettség:** saját ${overall.boxGames}/${overall.games} meccs · ellenfél ${overall.pairedGames}/${overall.games} meccs`,
+    `**Versenyszakasz:** ${model.byPhase.map(item => `${PHASE_LABELS[item.phase]} ${item.aggregate.games} (${record(item.aggregate)})`).join(' · ') || '–'}`,
     ``,
+  ];
+
+  if (model.dataNotes.length > 0) {
+    lines.push(`## Adatminőség`, ``);
+    for (const note of model.dataNotes) lines.push(`- ${note}`);
+    lines.push(``);
+  }
+
+  lines.push(
     `## Csapat átlagok (meccsenkénti)`,
     ``,
-    `| Statisztika | Átlag/meccs |`,
-    `|-------------|-------------|`,
-    `| Pontok | ${gameStats.avgPoints.toFixed(1)} |`,
-    `| Lepattanók | ${gameStats.avgRebounds.toFixed(1)} |`,
-    `| Gólpasszok | ${gameStats.avgAssists.toFixed(1)} |`,
-    `| Labdaszerzések | ${gameStats.avgSteals.toFixed(1)} |`,
-    `| Blokkök | ${gameStats.avgBlocks.toFixed(1)} |`,
-    `| Labdavesztések | ${gameStats.avgTurnovers.toFixed(1)} |`,
-    `| Valuation | ${gameStats.avgValuation.toFixed(1)} |`,
+    `| Statisztika | Saját | Ellenfél |`,
+    `|-------------|-------|----------|`,
+    `| Pontok (végeredmény) | ${per(overall.pointsFor, overall.games)} | ${per(overall.pointsAgainst, overall.games)} |`,
+    `| Lepattanók | ${per(overall.own.reb, overall.boxGames)} | ${per(overall.opp.reb, overall.pairedGames)} |`,
+    `| Támadólepattanók | ${per(overall.own.oreb, overall.boxGames)} | ${per(overall.opp.oreb, overall.pairedGames)} |`,
+    `| Védőlepattanók | ${per(overall.own.dreb, overall.boxGames)} | ${per(overall.opp.dreb, overall.pairedGames)} |`,
+    `| Gólpasszok | ${per(overall.own.ast, overall.boxGames)} | ${per(overall.opp.ast, overall.pairedGames)} |`,
+    `| Labdaszerzések | ${per(overall.own.stl, overall.boxGames)} | ${per(overall.opp.stl, overall.pairedGames)} |`,
+    `| Blokkok | ${per(overall.own.blk, overall.boxGames)} | ${per(overall.opp.blk, overall.pairedGames)} |`,
+    `| Labdavesztések | ${per(overall.own.tov, overall.boxGames)} | ${per(overall.opp.tov, overall.pairedGames)} |`,
+    `| Szabálytalanságok | ${per(overall.own.pf, overall.boxGames)} | ${per(overall.opp.pf, overall.pairedGames)} |`,
+    `| Valuation | ${per(overall.own.val, overall.boxGames)} | ${per(overall.opp.val, overall.pairedGames)} |`,
+    ``,
+    `*A pontok a végeredményből (${overall.games} meccs), a többi sor a box score-ból: saját ${overall.boxGames}, ellenfél ${overall.pairedGames} meccs átlaga.*`,
     ``,
     `## Fejlett csapatmutatók (szezon összesített)`,
     ``,
-    `| Mutató | Érték |`,
-    `|--------|-------|`,
-    `| eFG% | ${teamEfg.toFixed(1)}% |`,
-    `| TS% | ${teamTs.toFixed(1)}% |`,
-    `| Assist arány (ast/fgm) | ${teamAssistRate.toFixed(1)}% |`,
-    `| TO rate | ${teamToRate.toFixed(1)}% |`,
-    `| OREB% (T-lep/össz. saját lep.) | ${teamOrebRate.toFixed(1)}% |`,
-    `| FT arány (fta/fga) | ${teamFtRate.toFixed(1)}% |`,
-    `| 3P arány (fga3/fga) | ${teamThreeRate.toFixed(1)}% |`,
+    `| Mutató | Saját | Ellenfél |`,
+    `|--------|-------|----------|`,
+    `| eFG% | ${pct(own.efg, overall.boxGames > 0)} | ${pct(opp.efg, hasOpp)} |`,
+    `| TS% | ${pct(own.ts, overall.boxGames > 0)} | ${pct(opp.ts, hasOpp)} |`,
+    `| 3P arány (3PA/FGA) | ${pct(own.threeRate, overall.boxGames > 0)} | ${pct(opp.threeRate, hasOpp)} |`,
+    `| FTM rate (FTM/FGA) | ${pct(own.ftmRate, overall.boxGames > 0)} | ${pct(opp.ftmRate, hasOpp)} |`,
+    `| FTA rate (FTA/FGA) | ${pct(own.ftaRate, overall.boxGames > 0)} | ${pct(opp.ftaRate, hasOpp)} |`,
+    `| TO rate (Oliver) | ${pct(own.toRate, overall.boxGames > 0)} | ${pct(opp.toRate, hasOpp)} |`,
+    `| OREB% | ${pct(orebPct(overall.pairedOwn, overall.opp), hasOpp)} | ${pct(orebPct(overall.opp, overall.pairedOwn), hasOpp)} |`,
+    `| Assist arány (AST/FGM) | ${pct(own.assistRate, overall.boxGames > 0)} | ${pct(opp.assistRate, hasOpp)} |`,
+    `| Birtoklás / meccs (tempó) | ${num(ratings.pace)} | ${num(ratings.pace)} |`,
+    `| ORtg (pont / 100 birtoklás) | ${num(ratings.ortg)} | ${num(ratings.drtg)} |`,
+    `| Net rating | ${signed(ratings.net)} | ${ratings.net !== null ? sign(-ratings.net) : '–'} |`,
+    ``,
+    `*Az ellenfél ORtg-je a saját DRtg (alacsonyabb a jobb). Birtoklás = a két csapat (FGA + 0,44·FTA + LV − T-lep) becslésének átlaga; ellenfél box score nélkül csak a saját becslés. TO rate (Oliver) = LV / (FGA + 0,44·FTA + LV). FTM rate = értékesített büntető / FGA – a postgame riport ugyanezt használja; az FTA rate = büntetőkísérlet / FGA ettől eltérő mutató. OREB% = T-lep / (T-lep + a másik csapat V-lepattanója), csak az ellenfél box score-ral fedett meccsekből.*`,
     ``,
     `## Dobásbontás (szezon összesített)`,
     ``,
-    `| Zóna | Kísérlet | Szerzett | % |`,
-    `|------|----------|----------|---|`,
-    `| Közeli | ${aggCloseAttempted} | ${aggCloseMade} | ${fmtPct(aggCloseMade, aggCloseAttempted)} |`,
-    `| Középtáv | ${aggMidAttempted} | ${aggMidMade} | ${fmtPct(aggMidMade, aggMidAttempted)} |`,
-    `| Hárompontos | ${aggThreeAttempted} | ${aggThreeMade} | ${fmtPct(aggThreeMade, aggThreeAttempted)} |`,
-    `| Büntető | ${aggFtAttempted} | ${aggFtMade} | ${fmtPct(aggFtMade, aggFtAttempted)} |`,
+    `| Zóna | Kísérlet | Szerzett | % | Pont | Ellenfél kísérlet | Ellenfél szerzett | Ellenfél % |`,
+    `|------|----------|----------|---|------|-------------------|-------------------|------------|`,
+    `| Közeli | ${overall.own.closeAtt} | ${overall.own.closeMade} | ${fmtPct(overall.own.closeMade, overall.own.closeAtt)} | ${overall.own.closeMade * 2} | ${overall.opp.closeAtt} | ${overall.opp.closeMade} | ${fmtPct(overall.opp.closeMade, overall.opp.closeAtt)} |`,
+    `| Középtáv | ${overall.own.midAtt} | ${overall.own.midMade} | ${fmtPct(overall.own.midMade, overall.own.midAtt)} | ${overall.own.midMade * 2} | ${overall.opp.midAtt} | ${overall.opp.midMade} | ${fmtPct(overall.opp.midMade, overall.opp.midAtt)} |`,
+    `| Hárompontos | ${overall.own.threeAtt} | ${overall.own.threeMade} | ${fmtPct(overall.own.threeMade, overall.own.threeAtt)} | ${overall.own.threeMade * 3} | ${overall.opp.threeAtt} | ${overall.opp.threeMade} | ${fmtPct(overall.opp.threeMade, overall.opp.threeAtt)} |`,
+    `| Büntető | ${overall.own.ftAtt} | ${overall.own.ftMade} | ${fmtPct(overall.own.ftMade, overall.own.ftAtt)} | ${overall.own.ftMade} | ${overall.opp.ftAtt} | ${overall.opp.ftMade} | ${fmtPct(overall.opp.ftMade, overall.opp.ftAtt)} |`,
+    `| **Összesen** | | | | **${overall.own.closeMade * 2 + overall.own.midMade * 2 + overall.own.threeMade * 3 + overall.own.ftMade}** | | | |`,
     ``,
-    `## Játékos szezon összesítés`,
+    `*A saját dobásbontás ${overall.boxGames}, az ellenfélé ${overall.pairedGames} meccs összege; a saját pontösszeg a box score-os meccsek végeredményével (${overall.ratingPointsFor} pont) vethető össze.*`,
     ``,
-    `| # | Játékos | Poz | Meccs | P/meccs | Min/meccs | T-Lep/m | V-Lep/m | Lep/m | Gp/m | St/m | Bl/m | LV/m | VAL/m | TS% | EFG% |`,
-    `|---|---------|-----|-------|---------|-----------|---------|---------|-------|------|------|------|------|-------|-----|------|`,
-  ];
-
-  const sorted = [...players].sort(
-    (a, b) => b.points / Math.max(b.gamesPlayed, 1) - a.points / Math.max(a.gamesPlayed, 1)
+    `## Bontások`,
+    ``,
+    `| Bontás | Meccs | Mérleg | Pont | Kapott | Tempó | ORtg | DRtg | Net | eFG% | Ellenfél eFG% | TO rate | Ellenfél TO rate |`,
+    `|--------|-------|--------|------|--------|-------|------|------|-----|------|---------------|---------|------------------|`,
   );
 
-  for (const p of sorted) {
-    const g = Math.max(p.gamesPlayed, 1);
-    const pp = (n: number) => (n / g).toFixed(1);
+  const splitRow = (label: string, agg: TeamExportAggregate) => {
+    const r = aggregateRatings(agg);
+    const o = teamRates(agg.own);
+    const d = teamRates(agg.opp);
+    return `| ${label} | ${agg.games} | ${record(agg)} | ${per(agg.pointsFor, agg.games)} | ${per(agg.pointsAgainst, agg.games)} | ${num(r.pace)} | ${num(r.ortg)} | ${num(r.drtg)} | ${signed(r.net)} | ${pct(o.efg, agg.boxGames > 0)} | ${pct(d.efg, agg.pairedGames > 0)} | ${pct(o.toRate, agg.boxGames > 0)} | ${pct(d.toRate, agg.pairedGames > 0)} |`;
+  };
+  lines.push(splitRow('Összes', overall), splitRow('Hazai', model.home), splitRow('Vendég', model.away));
+  for (const item of model.byPhase) lines.push(splitRow(PHASE_LABELS[item.phase], item.aggregate));
+  lines.push(``);
+
+  // --- Játékosok ---
+  const teamCourtMinutes = overall.own.minutes / 5;
+  const sortedPlayers = [...model.players].sort((a, b) => {
+    if (a.smallSample !== b.smallSample) return a.smallSample ? 1 : -1;
+    return b.line.points / b.gamesPlayed - a.line.points / a.gamesPlayed;
+  });
+  const playerLabel = (p: TeamExportPlayer) =>
+    `${p.name}${p.isActive === false ? ' (inaktív)' : ''}${p.smallSample ? ' *' : ''}`;
+
+  lines.push(
+    `## Játékos szezon összesítés`,
+    ``,
+    `| # | Játékos | Poz | Meccs | Perc/m | P/m | T-Lep/m | V-Lep/m | Lep/m | Gp/m | St/m | Bl/m | LV/m | VAL/m | TS% | eFG% | USG% | P/36 | Lep/36 | Gp/36 | VAL/36 |`,
+    `|---|---------|-----|-------|--------|-----|---------|---------|-------|------|------|------|------|-------|-----|------|------|------|--------|-------|--------|`,
+  );
+  for (const p of sortedPlayers) {
+    const l = p.line;
+    const pg = (value: number) => (value / p.gamesPlayed).toFixed(1);
+    const fga = lineFga(l);
+    const rated = !p.smallSample;
+    const per36 = (value: number) => (rated && l.minutes > 0 ? ((value / l.minutes) * 36).toFixed(1) : '–');
     lines.push(
-      `| ${p.number} | ${p.name} | ${p.position} | ${p.gamesPlayed} | ${pp(p.points)} | ${pp(p.minutes)} | ${pp(p.rebounds.offensive)} | ${pp(p.rebounds.defensive)} | ${pp(p.rebounds.total)} | ${pp(p.assists)} | ${pp(p.steals)} | ${pp(p.blocks)} | ${pp(p.turnovers)} | ${p.valuation.toFixed(1)} | ${p.trueShootingPct.toFixed(1)}% | ${p.effectiveShootingPct.toFixed(1)}% |`
+      `| ${p.number ?? '-'} | ${playerLabel(p)} | ${p.position ?? '-'} | ${p.gamesPlayed} | ${pg(l.minutes)} | ${pg(l.points)} | ${pg(l.oreb)} | ${pg(l.dreb)} | ${pg(l.reb)} | ${pg(l.ast)} | ${pg(l.stl)} | ${pg(l.blk)} | ${pg(l.tov)} | ${pg(l.val)} | ${pct(trueShootingPct(l.points, fga, l.ftAtt), rated)} | ${pct(effectiveFgPct(lineFgm(l), l.threeMade, fga), rated)} | ${pct(p.usgRate * 100, rated)} | ${per36(l.points)} | ${per36(l.reb)} | ${per36(l.ast)} | ${per36(l.val)} |`
     );
   }
-
-  lines.push(``);
-  lines.push(`## Meccseredmények (legutóbbi 20)`);
-  lines.push(``);
-  lines.push(`| Dátum | Ellenfél | H/V | Mi | Ők | Eredmény |`);
-  lines.push(`|-------|----------|-----|----|----|---------|`);
-
-  for (const g of games.slice(0, 20)) {
-    const hv = g.homeAway === 'home' ? 'Hazai' : 'Vendég';
-    const res = g.result === 'win' ? 'Győzelem' : 'Vereség';
-    lines.push(`| ${g.date} | ${g.opponent} | ${hv} | ${g.ourScore} | ${g.oppScore} | ${res} |`);
+  lines.push(
+    ``,
+    `*A tábla a csapat meccs-soraiból számol, ezért az inaktív (távozott) játékosokat is tartalmazza – összegei a csapat dobásbontásával egyeznek. A „*” jelű játékosok összperce ${MIN_SAMPLE_MINUTES} alatt van: az arány- és per-36 mutatóik kis minta miatt nem szerepelnek. USG% = (FGA + 0,44·FTA + LV) · (csapatperc / 5) / (perc · csapat FGA + 0,44·FTA + LV), a pályára lépéses meccsekre; átlag ~20%.*`,
+    ``,
+    `## Elérhetőség és játékidő`,
+    ``,
+    `| Játékos | Pályára lépett | Keretben, nem játszott | Nem volt keretben | Első meccs | Utolsó meccs | Összperc | Játékidő-részesedés |`,
+    `|---------|----------------|------------------------|-------------------|------------|--------------|----------|---------------------|`,
+  );
+  for (const p of [...model.players].sort((a, b) => b.line.minutes - a.line.minutes)) {
+    lines.push(
+      `| ${playerLabel(p)} | ${p.gamesPlayed}/${overall.boxGames} | ${p.dnpGames} | ${p.missedGames} | ${p.firstDate ?? '–'} | ${p.lastDate ?? '–'} | ${p.line.minutes} | ${pct(teamCourtMinutes > 0 ? (p.line.minutes / teamCourtMinutes) * 100 : 0, teamCourtMinutes > 0)} |`
+    );
   }
+  lines.push(
+    ``,
+    `*Játékidő-részesedés = a játékos perce / a csapat összes játékideje (csapatperc / 5). A „nem volt keretben” a jegyzőkönyvből hiányzó meccsek száma – sérülés, eltiltás és a szezon közbeni érkezés / távozás is ide esik; az okot az adat nem tartalmazza.*`,
+    ``,
+    `## Meccsenkénti tábla (${model.games.length} meccs, időrendben)`,
+    ``,
+    `| Dátum | Szakasz | Ellenfél | H/V | Pihenőnap | Eredmény | Birt. | ORtg | DRtg | Net | eFG% | Ellenfél eFG% | LV | Ellenfél LV | Büntető | Ellenfél büntető | T-lep | Ellenfél T-lep |`,
+    `|-------|---------|----------|-----|-----------|----------|-------|------|------|-----|------|---------------|----|-------------|---------|------------------|-------|----------------|`,
+  );
+  for (const g of model.games) {
+    const hv = g.homeAway === 'home' ? 'Hazai' : 'Vendég';
+    const res = `${g.result === 'win' ? 'Gy' : 'V'} ${g.ourScore}–${g.oppScore}`;
+    const cell = (line: TeamBoxLine | null, render: (l: TeamBoxLine) => string) => (line ? render(line) : '–');
+    lines.push(
+      `| ${g.date} | ${g.phaseLabel} | ${g.opponent} | ${hv} | ${g.restDays ?? '–'} | ${res} | ${num(g.possessions)} | ${num(g.ortg)} | ${num(g.drtg)} | ${signed(g.net)} | ${cell(g.own, l => pct(teamRates(l).efg))} | ${cell(g.opp, l => pct(teamRates(l).efg))} | ${cell(g.own, l => `${l.tov}`)} | ${cell(g.opp, l => `${l.tov}`)} | ${cell(g.own, l => `${l.ftMade}/${l.ftAtt}`)} | ${cell(g.opp, l => `${l.ftMade}/${l.ftAtt}`)} | ${cell(g.own, l => `${l.oreb}`)} | ${cell(g.opp, l => `${l.oreb}`)} |`
+    );
+  }
+  lines.push(
+    ``,
+    `*Pihenőnap = az előző meccs óta eltelt teljes napok száma (egymást követő napokon 0). A szakasz a Kosarstat versenyszakasz-címkéje; Kosarstat-link nélkül a fordulószámból következtetett alapszakasz, forduló nélkül „${PHASE_LABELS.other}”.*`,
+    ``,
+    `## Ellenfelenkénti összesítés`,
+    ``,
+    `| Ellenfél | Meccs | Mérleg | Pont | Kapott | Net |`,
+    `|----------|-------|--------|------|--------|-----|`,
+  );
+  for (const item of model.byOpponent) {
+    const agg = item.aggregate;
+    lines.push(
+      `| ${item.opponent} | ${agg.games} | ${record(agg)} | ${per(agg.pointsFor, agg.games)} | ${per(agg.pointsAgainst, agg.games)} | ${signed(aggregateRatings(agg).net)} |`
+    );
+  }
+  lines.push(
+    ``,
+    `## Ebben az exportban nem elérhető adat`,
+    ``,
+    `- Lineup és on/off: nincs ötös-szintű (csere-) adat a szezon exportban.`,
+    `- Negyedprofil: negyedenkénti bontás csak meccsenként, a Kosarstat blokkban érhető el.`,
+    `- Liga-összehasonlító tábla: a többi csapat azonos mutatói nincsenek ebben az exportban.`,
+  );
 
   return lines.join('\n');
 }
