@@ -3,7 +3,7 @@
 - **Dátum:** 2026-10-04
 - **Webes commit:** ez a commit
 - **Típus:** @core | funkcionális
-- **Állapot a mobilban:** NYITOTT
+- **Állapot a mobilban:** ÁTVEZETVE (2026-10-04, mobil commit 5af81c6, @core szinkron 6610ffb; az ellenfél neve `opponentTeamId` → `teams.name` alapján, mobil D-127; versenyszakasz-jelölés és `competitionPhase` most nem készül, mobil D-128)
 
 ## Mi változott
 - `lib/dashboard-types.ts` (`@core`): a `TeamGame` három új **opcionális**
@@ -35,14 +35,16 @@
   `round` önmagában nem elég (a „3. helyért” sorozat `round = 3`).
 
 ## Teendő a mobil repóban
-- [ ] `npm run sync:core` (a `dashboard-types` frissítése)
-- [ ] A mobil `useGameData` megfelelőjében az `opponentTeamId`, `round` és
+- [x] `npm run sync:core` (a `dashboard-types` frissítése)
+- [x] A mobil `useGameData` megfelelőjében az `opponentTeamId`, `round` és
       `competitionPhase` kitöltése (ugyanazzal a `kosarstat_game_pages_raw`
       lekérdezéssel)
-- [ ] Eldönteni: az ellenfél neve a mobilban is az `opponentTeamId` → `teams.name`
-      alapján jelenjen-e meg
-- [ ] Eldönteni: kell-e versenyszakasz-jelölés a mobil meccslistában
-      (a besorolási szabály a web `classifyPhase` függvénye)
+      – az `opponentTeamId` és a `round` eddig is megvolt; a `competitionPhase`
+      nem készül (mobil D-128)
+- [x] Eldönteni: az ellenfél neve a mobilban is az `opponentTeamId` → `teams.name`
+      alapján jelenjen-e meg → igen (mobil D-127)
+- [x] Eldönteni: kell-e versenyszakasz-jelölés a mobil meccslistában
+      (a besorolási szabály a web `classifyPhase` függvénye) → most nem (mobil D-128)
 
 ## Kézi lépések
 nincs

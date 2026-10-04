@@ -3,7 +3,7 @@
 - **Dátum:** 2026-10-04
 - **Webes commit:** ez a commit
 - **Típus:** @core | funkcionális
-- **Állapot a mobilban:** NYITOTT
+- **Állapot a mobilban:** ÁTVEZETVE (2026-10-04, mobil commit e3e8c62, @core szinkron 6610ffb; a 3 soros ellenfélprofil rendben tördel, a „Box score alapmutatók” szekció is elkészült, mobil D-126)
 
 ## Mi változott
 - `lib/postgame-report.ts`:
@@ -38,10 +38,10 @@
 - A `metrics.boxScore` megjeleníthető (FG%, FT%, lepattanó), de nem kötelező.
 
 ## Teendő a mobil repóban
-- [ ] `npm run sync:core`
-- [ ] Ellenőrizni, hogy a post-game összefoglaló az új „Ellenfél profil”
+- [x] `npm run sync:core`
+- [x] Ellenőrizni, hogy a post-game összefoglaló az új „Ellenfél profil”
       sorokat helyesen tördeli (3 sor a korábbi 1 helyett)
-- [ ] Opcionális: `metrics.boxScore` megjelenítése a post-game nézetben
+- [x] Opcionális: `metrics.boxScore` megjelenítése a post-game nézetben
 
 ## Kézi lépések
 nincs (a már mentett riportszövegek nem változnak; új generálás / export kell)

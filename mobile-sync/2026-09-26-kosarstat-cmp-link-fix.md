@@ -3,7 +3,7 @@
 - **Dátum:** 2026-09-26
 - **Webes commit:** ez a commit
 - **Típus:** adattartalom + scraping
-- **Állapot a mobilban:** NYITOTT
+- **Állapot a mobilban:** ÁTVEZETVE (2026-10-04, mobil commit 4f94694; kódváltozás nem kellett – a 2026-09-25-i 6 `games` sor mind a hat nézőpontból adja a negyed-, metrika- és clutch-adatot; eszközös próba nyitva)
 
 ## Mi változott
 - A Kosarstat oldalain CMP adatvédelmi dialógus és en dash fejléc jelent meg,
@@ -24,7 +24,7 @@
   látja a három meccs Kosarstat-adatait (negyedek, clutch, csapatmetrikák).
 
 ## Teendő a mobil repóban
-- [ ] Ellenőrizni, hogy a 2026-09-25-i meccsek részletező nézetében megjelenik a
+- [x] Ellenőrizni, hogy a 2026-09-25-i meccsek részletező nézetében megjelenik a
   Kosarstat-blokk (pl. ASE-meccs esetén a következő fordulótól); egyéb teendő nincs.
 
 ## Kézi lépések

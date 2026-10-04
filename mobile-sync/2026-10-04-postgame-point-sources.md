@@ -3,7 +3,7 @@
 - **Dátum:** 2026-10-04
 - **Webes commit:** ez a commit
 - **Típus:** @core | funkcionális
-- **Állapot a mobilban:** NYITOTT
+- **Állapot a mobilban:** ÁTVEZETVE (2026-10-04, mobil commit e3e8c62, @core szinkron 6610ffb; „Pontforrások” szekció a post-game nézetben, mobil D-126; eszközös próba nyitva)
 
 ## Mi változott
 - **Új `@core`-jelölt modul:** `lib/kosarstat-pbp-parse.ts` –
@@ -38,16 +38,16 @@
   (nem jegyzőkönyvi fast break) – a feliratnak ezt kell tükröznie.
 
 ## Teendő a mobil repóban
-- [ ] `scripts/sync-core.ts` listájába felvenni: `kosarstat-pbp-parse`, majd
+- [x] `scripts/sync-core.ts` listájába felvenni: `kosarstat-pbp-parse`, majd
       `npm run sync:core`
-- [ ] `lib/postgame-data.ts`: a meccs `game_events` oldalának betöltése
+- [x] `lib/postgame-data.ts`: a meccs `game_events` oldalának betöltése
       (`kosarstat_game_pages_raw` → `id`, majd `kosarstat_game_page_tables`
       `rows, headers` a `page_raw_id`-ra), `parseKosarstatPointSources`, és
       az eredmény átadása `pointSources`-ként a
       `buildKosarstatPostgameContext`-nek
-- [ ] Post-game nézet: `metrics.pointSources` megjelenítése (saját – ellenfél),
+- [x] Post-game nézet: `metrics.pointSources` megjelenítése (saját – ellenfél),
       „számított, nem hivatalos adat” jelöléssel
-- [ ] Átvezetés után a webes `CLAUDE.md` `@core` listájába felvenni a
+- [x] Átvezetés után a webes `CLAUDE.md` `@core` listájába felvenni a
       `kosarstat-pbp-parse` modult
 
 ## Kézi lépések

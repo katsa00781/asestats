@@ -3,7 +3,7 @@
 - **Dátum:** 2026-10-04
 - **Webes commit:** ez a commit
 - **Típus:** adattartalom
-- **Állapot a mobilban:** NYITOTT
+- **Állapot a mobilban:** ÁTVEZETVE (2026-10-04, mobil commit 4f94694; kódváltozás nem kellett – élő adaton ASE 39 meccs, legkorábbi 2025-09-27, Halmai 37; perzisztált szezonadat-cache nincs)
 
 ## Mi változott
 - Feltárt adathiba: 2026-02-07-én és 2026-04-20-án a box-score import a
@@ -31,9 +31,9 @@
 - A 2024/2025 és a 2026/2027 szezon nem érintett.
 
 ## Teendő a mobil repóban
-- [ ] A futtatás után ellenőrizni a mobilban: 2025/2026 szezon, ASE –
+- [x] A futtatás után ellenőrizni a mobilban: 2025/2026 szezon, ASE –
       39 meccs, a legkorábbi dátum 2025-09-27
-- [ ] Ha a mobil gyorsítótáraz szezonadatot (AsyncStorage), a 2025/2026-os
+- [x] Ha a mobil gyorsítótáraz szezonadatot (AsyncStorage), a 2025/2026-os
       gyorsítótár ürítése
 
 ## Kézi lépések

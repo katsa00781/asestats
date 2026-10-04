@@ -3,7 +3,7 @@
 - **Dátum:** 2026-10-04
 - **Webes commit:** ez a commit
 - **Típus:** funkcionális
-- **Állapot a mobilban:** NYITOTT
+- **Állapot a mobilban:** ÁTVEZETVE (2026-10-04, mobil commit 4f94694; döntéssel zárva: a mobil most nem jelöl versenyszakaszt, a `classifyPhase` marad a webes `lib/team-season-export.ts`-ben, mobil D-128)
 
 ## Mi változott
 A `mobile-sync/2026-10-04-team-game-phase-opponent-fields.md` jegyzetben leírt
@@ -37,8 +37,10 @@ változott, `@core` modul nem érintett):
 ## Teendő a mobil repóban
 - [ ] A versenyszakasz-jelölés bevezetésekor a tükörmeccs linkjét is
       figyelembe venni és a `classifyPhase` 3 lépéses szabályát átvenni
-- [ ] Eldönteni, hogy a `classifyPhase` átkerüljön-e egy `@core` modulba
-      (jelenleg a webes `lib/team-season-export.ts`-ben él)
+- [x] Eldönteni, hogy a `classifyPhase` átkerüljön-e egy `@core` modulba
+      (jelenleg a webes `lib/team-season-export.ts`-ben él) → nem aktuális, amíg a
+      mobil nem jelöl versenyszakaszt; ha újranyílik, `@core` modul legyen
+      (mobil D-128)
 
 ## Kézi lépések
 nincs

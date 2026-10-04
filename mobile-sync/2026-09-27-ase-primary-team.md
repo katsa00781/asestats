@@ -3,7 +3,7 @@
 - **Dátum:** 2026-09-27
 - **Webes commit:** ez a commit
 - **Típus:** adattartalom
-- **Állapot a mobilban:** NYITOTT
+- **Állapot a mobilban:** ÁTVEZETVE (2026-10-04, mobil commit 4f94694; kódváltozás nem kellett – a csapatszűrő alapértéke az `is_primary`-ből jön, a névtartalék védelemként marad, mobil D-129)
 
 ## Mi változott
 - `teams.is_primary = true` az `Atomerőmű SE` sorra (`ff4710a9-e2b2-49fc-904f-37f8356ed5f8`). Előtte egyetlen `is_primary = true` sor sem volt (az ASE sor 2026-01-29-én `false`-szal jött létre).
@@ -14,7 +14,7 @@
 - Séma nem változott, build nem törik.
 
 ## Teendő a mobil repóban
-- [ ] Ellenőrizni, hogy a mobil csapatszűrő alapértéke `is_primary`-ből jön-e; ha volt ASE-re égetett kerülőmegoldás (név / id), az kivezethető.
+- [x] Ellenőrizni, hogy a mobil csapatszűrő alapértéke `is_primary`-ből jön-e; ha volt ASE-re égetett kerülőmegoldás (név / id), az kivezethető.
 
 ## Kézi lépések
 A migráció lefutott (2026-09-27, `scripts/run-sql.sh`), további lépés nincs.

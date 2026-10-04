@@ -3,7 +3,7 @@
 - **Dátum:** 2026-09-26
 - **Webes commit:** ez a commit
 - **Típus:** adattartalom
-- **Állapot a mobilban:** NYITOTT
+- **Állapot a mobilban:** ÁTVEZETVE (2026-10-04, mobil commit 4f94694; kódváltozás nem kellett – a mobil nem használja az `event_count`-ot, az ASE–Pécs post-game dobástérképe 73 kísérlettel megjelenik)
 
 ## Mi változott
 
@@ -35,9 +35,9 @@
 
 ## Teendő a mobil repóban
 
-- [ ] Ellenőrizni, hogy a mobil nem az `hunbasket_shotchart_raw.event_count`
+- [x] Ellenőrizni, hogy a mobil nem az `hunbasket_shotchart_raw.event_count`
       mezőből számol dobásszámot.
-- [ ] A 2026-09-26-i ASE–Pécs meccsen megjelenik a dobástérkép-szekció
+- [x] A 2026-09-26-i ASE–Pécs meccsen megjelenik a dobástérkép-szekció
       (73 kísérlet), amint a post-game nézet elkészül.
 
 ## Kézi lépések
