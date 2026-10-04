@@ -11,7 +11,7 @@ import { Textarea } from './ui/textarea';
 import { Trophy, Target, TrendingUp, Users, Award, Activity, Download, Save, ClipboardList, Loader2 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { toast } from 'sonner';
-import { teamStatsToMd } from '@/lib/export-to-md';
+import { buildTeamSeasonMd } from '@/lib/team-season-export-data';
 import { CHART_COLORS, CHART_GRID, CHART_AXIS, RECHARTS_TOOLTIP_STYLE, RECHARTS_LEGEND_STYLE } from '@/lib/chart-theme';
 
 type TeamStatisticsProps = {
@@ -29,27 +29,41 @@ type TeamStatisticsProps = {
 export function TeamStatistics({ players, games, gameStats, playerGameStats, allTeams, teamName, seasonId, teamId, seasonName }: TeamStatisticsProps) {
   const [manualText, setManualText] = useState('');
   const [savingManual, setSavingManual] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
-  const exportTeamMd = useCallback(() => {
-    const md = teamStatsToMd({
-      games,
-      statRows: playerGameStats,
-      players,
-      teamName,
-      seasonName,
-      resolveTeamName: id => allTeams.find(team => team.id === id)?.name,
-    });
-    const filename = `csapat-${(teamName ?? 'statisztikak').replace(/\s+/g, '-')}-${seasonName ?? ''}.md`;
-    const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(url);
-    navigator.clipboard.writeText(md).catch(() => null);
-    toast.success('MD exportálva – vágólapra másolva és letöltve');
-  }, [players, games, playerGameStats, allTeams, teamName, seasonName]);
+  const exportTeamMd = useCallback(async () => {
+    if (!seasonId || !teamId || !seasonName) {
+      toast.error('Hiányzó szezon vagy csapat – az export nem készíthető el');
+      return;
+    }
+    setExporting(true);
+    try {
+      const md = await buildTeamSeasonMd({
+        seasonId,
+        teamId,
+        seasonName,
+        teamName,
+        teams: allTeams,
+        games,
+        statRows: playerGameStats,
+        players,
+      });
+      const filename = `csapat-${(teamName ?? 'statisztikak').replace(/\s+/g, '-')}-${seasonName}.md`;
+      const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+      navigator.clipboard.writeText(md).catch(() => null);
+      toast.success('MD exportálva – vágólapra másolva és letöltve');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Az export nem sikerült');
+    } finally {
+      setExporting(false);
+    }
+  }, [players, games, playerGameStats, allTeams, teamName, seasonId, teamId, seasonName]);
 
   const saveManualReport = useCallback(async () => {
     if (!manualText.trim()) return;
@@ -190,7 +204,7 @@ export function TeamStatistics({ players, games, gameStats, playerGameStats, all
               <ClipboardList className="h-4 w-4 text-cyan" strokeWidth={1.6} />
               Manuális csapatelemzés beillesztése
             </CardTitle>
-            <Button onClick={exportTeamMd} variant="outline" size="sm" className="text-cyan shrink-0">
+            <Button onClick={() => { void exportTeamMd(); }} disabled={exporting} variant="outline" size="sm" className="text-cyan shrink-0">
               <Download className="w-4 h-4 mr-2" strokeWidth={1.6} />
               Export MD
             </Button>

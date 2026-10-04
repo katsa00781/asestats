@@ -5,7 +5,8 @@ import { TerminologyGlossary } from './TerminologyGlossary';
 import Image from 'next/image';
 import { Loader2, Download, ClipboardList, Save } from 'lucide-react';
 import { toast } from 'sonner';
-import { playerSeasonToMd, teamStatsToMd, pregameReportToMd, postgameReportToMd } from '@/lib/export-to-md';
+import { playerSeasonToMd, pregameReportToMd, postgameReportToMd } from '@/lib/export-to-md';
+import { buildTeamSeasonMd } from '@/lib/team-season-export-data';
 import { useEffect, useMemo, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, Cell, LabelList, Legend, Line, LineChart, ResponsiveContainer, Scatter, ScatterChart, Tooltip, XAxis, YAxis, ZAxis } from 'recharts';
 import type { Props as RechartsLabelProps } from 'recharts/types/component/Label';
@@ -2711,6 +2712,7 @@ export function SeasonComparison({
   const [seasonKosarstatParsedClutchGames, setSeasonKosarstatParsedClutchGames] = useState<KosarstatParsedClutchGame[]>([]);
   const [seasonKosarstatLineupTeam, setSeasonKosarstatLineupTeam] = useState<KosarstatTeamLineupAnalysis | null>(null);
   const [seasonKosarstatLineupGames, setSeasonKosarstatLineupGames] = useState(0);
+  const [isExportingTeamSeason, setIsExportingTeamSeason] = useState(false);
   const [isLoadingKosarstatPostgame, setIsLoadingKosarstatPostgame] = useState(false);
   const [selectedComboSize, setSelectedComboSize] = useState<2 | 3>(2);
   const [selectedComboPlayerA, setSelectedComboPlayerA] = useState('');
@@ -4493,31 +4495,44 @@ export function SeasonComparison({
     return seasonPlayers.filter(player => player.isActive !== false);
   }, [seasonPlayers]);
 
-  const exportTeamSeasonMd = () => {
+  const exportTeamSeasonMd = async () => {
     // A games / playerGameStats prop a fejlécben kiválasztott szezon + csapat
     // adata; ha az Elemzések saját szűrője másra áll, nem keverjük össze őket.
     if (String(resolvedSeasonId) !== String(currentSeasonId ?? '') || String(resolvedTeamId) !== String(currentTeamId ?? '')) {
       toast.error('A csapat export a fejlécben kiválasztott szezonra és csapatra készül – állítsd azonosra a két szűrőt.');
       return;
     }
+    if (!resolvedSeasonName || isExportingTeamSeason) return;
     const tName = allTeams.find(t => t.id === resolvedTeamId)?.name;
-    const md = teamStatsToMd({
-      games,
-      statRows: playerGameStats,
-      players: seasonPlayers.filter(p => String(p.teamId ?? '') === String(resolvedTeamId)),
-      teamName: tName,
-      seasonName: resolvedSeasonName,
-      resolveTeamName: id => allTeams.find(team => team.id === id)?.name,
-    });
-    const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `csapat-${(tName ?? 'statisztika').replace(/\s+/g, '-')}.md`;
-    a.click();
-    URL.revokeObjectURL(url);
-    navigator.clipboard.writeText(md).catch(() => null);
-    toast.success('MD exportálva – vágólapra másolva és letöltve');
+    setIsExportingTeamSeason(true);
+    try {
+      const md = await buildTeamSeasonMd({
+        seasonId: resolvedSeasonId,
+        teamId: resolvedTeamId,
+        seasonName: resolvedSeasonName,
+        teamName: tName,
+        teams: allTeams,
+        games,
+        statRows: playerGameStats,
+        players: seasonPlayers.filter(p => String(p.teamId ?? '') === String(resolvedTeamId)),
+        lineups: seasonKosarstatLineupTeam
+          ? { games: seasonKosarstatLineupGames, stints: seasonKosarstatLineupTeam.stints }
+          : undefined,
+      });
+      const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `csapat-${(tName ?? 'statisztika').replace(/\s+/g, '-')}.md`;
+      a.click();
+      URL.revokeObjectURL(url);
+      navigator.clipboard.writeText(md).catch(() => null);
+      toast.success('MD exportálva – vágólapra másolva és letöltve');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Az export nem sikerült');
+    } finally {
+      setIsExportingTeamSeason(false);
+    }
   };
 
   const pregameOwnRosterOptions = useMemo(() => {
@@ -12507,8 +12522,9 @@ export function SeasonComparison({
               variant="outline"
               size="sm"
               className="border-border-subtle hover:bg-surface-2 text-cyan shrink-0"
+              disabled={isExportingTeamSeason}
               onClick={() => {
-                exportTeamSeasonMd();
+                void exportTeamSeasonMd();
               }}
             >
               <Download className="w-4 h-4 mr-2" />
@@ -13314,8 +13330,9 @@ export function SeasonComparison({
               variant="outline"
               size="sm"
               className="border-border-subtle hover:bg-surface-2 text-cyan shrink-0 ml-auto"
+              disabled={isExportingTeamSeason}
               onClick={() => {
-                exportTeamSeasonMd();
+                void exportTeamSeasonMd();
               }}
             >
               <Download className="w-4 h-4 mr-2" strokeWidth={1.6} />

@@ -1,6 +1,6 @@
 import type { TeamGame } from '../lib/dashboard-types';
 import type { TeamExportStatRow } from '../lib/team-season-export';
-import { buildTeamSeasonExport, classifyPhase } from '../lib/team-season-export';
+import { buildLeagueComparison, buildTeamSeasonExport, classifyPhase } from '../lib/team-season-export';
 import { teamStatsToMd } from '../lib/export-to-md';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
@@ -77,6 +77,83 @@ test('A „3. helyért” sorozat fordulószáma nem teszi alapszakasszá a mecc
   assert.equal(classifyPhase('Harmadik helyért - 2. mérkőzés', 3).phase, 'playoff');
   assert.equal(classifyPhase(null, 8).phase, 'regular');
   assert.equal(classifyPhase(null, null).phase, 'other');
+  // Link nélküli helyosztó („5. helyért” → round = 5) az alapszakasz vége után rájátszás.
+  const seasonEnd = { lastDate: '2026-04-11', maxRound: 26 };
+  assert.equal(classifyPhase(null, 5, { date: '2026-05-03', regularSeason: seasonEnd }).phase, 'playoff');
+  assert.equal(classifyPhase(null, 8, { date: '2025-11-08', regularSeason: seasonEnd }).phase, 'regular');
+  assert.equal(classifyPhase(null, null, { date: '2026-05-16', regularSeason: seasonEnd }).phase, 'other');
+  // Szezon közben: a még nem linkelt következő forduló alapszakasz marad.
+  assert.equal(classifyPhase(null, 3, { date: '2026-10-10', regularSeason: { lastDate: '2026-10-03', maxRound: 2 } }).phase, 'regular');
+});
+
+test('Negyedprofil: csak a végeredménnyel egyező meccsek, a saját oldal a hazai/vendég alapján', () => {
+  const quarters = (id: string, home: number[], away: number[]) => [
+    ...home.map((points, i) => ({ kosarstat_game_id: id, team_side: 'home', quarter: i + 1, points })),
+    ...away.map((points, i) => ({ kosarstat_game_id: id, team_side: 'away', quarter: i + 1, points })),
+  ];
+  const model = buildTeamSeasonExport({
+    games: [
+      game({ id: 'g1', date: '2025-10-01', kosarstatGameId: 'k1' }),
+      game({ id: 'g2', date: '2025-10-08', kosarstatGameId: 'k2', homeAway: 'away', ourScore: 70, oppScore: 80, result: 'loss' }),
+      game({ id: 'g3', date: '2025-10-15', kosarstatGameId: 'k3' }),
+    ],
+    statRows: [], players: [], seasonName: '2025/2026',
+    quarterRows: [
+      ...quarters('k1', [20, 20, 25, 15], [20, 10, 20, 20]),
+      ...quarters('k2', [30, 20, 10, 20], [10, 20, 30, 10]),
+      ...quarters('k3', [20, 20, 20, 10], [20, 10, 20, 20]),
+    ],
+  });
+  const profile = model.quarterProfile;
+  assert.ok(profile);
+  assert.equal(profile.games, 2);
+  // g1 hazai: 20–20 döntetlen; g2 vendég: 10–30 elvesztett.
+  assert.deepEqual(
+    { ...profile.quarters[0] },
+    { label: '1. negyed', games: 2, pointsFor: 30, pointsAgainst: 50, won: 0, tied: 1, lost: 1 }
+  );
+  assert.equal(profile.halves[1].pointsFor, 40 + 40);
+  assert.match(model.dataNotes.join(' '), /1 meccsen a Kosarstat negyedenkénti pontjainak összege eltér .*2025-10-15/);
+});
+
+test('On/off: a pályán és a padon töltött idő pontkülönbsége az ötösökből', () => {
+  const model = buildTeamSeasonExport({
+    games: [], statRows: [], players: [],
+    lineups: {
+      games: 2,
+      stints: [
+        { players: ['A', 'B', 'C', 'D', 'E'], seconds: 1200, teamPts: 50, oppPts: 40 },
+        { players: ['A', 'B', 'C', 'D', 'F'], seconds: 600, teamPts: 20, oppPts: 25 },
+        { players: ['B', 'C', 'D', 'E', 'F'], seconds: 600, teamPts: 10, oppPts: 20 },
+      ],
+    },
+  });
+  const lineups = model.lineups;
+  assert.ok(lineups);
+  assert.equal(lineups.totalSeconds, 2400);
+  assert.deepEqual(lineups.lineups.map(l => l.seconds), [1200, 600, 600]);
+  const a = lineups.onOff.find(item => item.player === 'A');
+  assert.deepEqual(a, { player: 'A', onSeconds: 1800, onFor: 70, onAgainst: 65, offSeconds: 600, offFor: 10, offAgainst: 20 });
+});
+
+test('Liga-összehasonlítás: csapatonként az alapszakasz, a rájátszás nélkül', () => {
+  const rows = buildLeagueComparison({
+    seasonName: '2025/2026',
+    statRows: [...ownRows('a1'), ...oppRows('b1')],
+    teams: [
+      { teamId: 'A', teamName: 'A csapat', games: [
+        game({ id: 'a1', date: '2025-10-01', opponentGameId: 'b1', competitionPhase: 'Alapszakasz' }),
+        game({ id: 'a2', date: '2026-05-01', competitionPhase: 'Döntő - 1. mérkőzés' }),
+      ] },
+      { teamId: 'B', teamName: 'B csapat', games: [
+        game({ id: 'b1', date: '2025-10-01', opponentGameId: 'a1', competitionPhase: 'Alapszakasz', ourScore: 70, oppScore: 80, result: 'loss', homeAway: 'away' }),
+      ] },
+      { teamId: 'C', teamName: 'Csak rájátszás', games: [game({ id: 'c1', date: '2026-05-01', competitionPhase: 'Döntő - 1. mérkőzés' })] },
+    ],
+  });
+  assert.deepEqual(rows.map(row => [row.teamId, row.aggregate.games, row.aggregate.wins]), [['A', 1, 1], ['B', 1, 0]]);
+  // A két nézet ugyanarra a birtoklásszámra jut, így A ORtg-je = B DRtg-je.
+  assert.equal(rows[0].aggregate.possessions, rows[1].aggregate.possessions);
 });
 
 test('Az MD az FTM és az FTA rate-et külön, definícióval írja ki, kis mintánál nincs arány', () => {
@@ -90,4 +167,6 @@ test('Az MD az FTM és az FTA rate-et külön, definícióval írja ki, kis mint
   // 80 perc < 100: a „*” jelű sorban a TS% és a per-36 oszlop üres.
   assert.match(md, /Második Játékos \* \|.*\| – \| – \| – \| – \| – \| – \| – \|/);
   assert.match(md, /Első Játékos \(inaktív\) \|/);
+  // Kiegészítő adat nélkül a három szakasz a „nem elérhető” listába kerül.
+  assert.match(md, /## Ebben az exportban nem elérhető adat[\s\S]*Negyedprofil[\s\S]*Lineup és on\/off[\s\S]*Liga-összehasonlító/);
 });

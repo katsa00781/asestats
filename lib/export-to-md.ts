@@ -5,7 +5,9 @@ import type { KosarstatGameClutch } from './kosarstat-clutch-parse';
 import type {
   TeamBoxLine,
   TeamExportAggregate,
+  TeamExportLeagueRow,
   TeamExportPlayer,
+  TeamExportQuarterLine,
   TeamSeasonExportInput,
 } from './team-season-export';
 import { trueShootingPct, effectiveFgPct } from './stat-formulas';
@@ -463,8 +465,19 @@ function aggregateRatings(agg: TeamExportAggregate) {
   };
 }
 
-export function teamStatsToMd(input: TeamSeasonExportInput & { teamName?: string }): string {
+export type TeamStatsMdInput = TeamSeasonExportInput & {
+  teamName?: string;
+  /** A saját csapat azonosítója a liga-táblában való kiemeléshez. */
+  teamId?: string;
+  /** Liga-összehasonlítás sorai (`buildLeagueComparison`); üresen a szakasz kimarad. */
+  league?: TeamExportLeagueRow[];
+  /** A kiegészítő adatok betöltési hibái – az „Adatminőség” blokkba kerülnek. */
+  extraNotes?: string[];
+};
+
+export function teamStatsToMd(input: TeamStatsMdInput): string {
   const model = buildTeamSeasonExport(input);
+  const dataNotes = [...model.dataNotes, ...(input.extraNotes ?? [])];
   const { overall } = model;
   const hasOpp = overall.pairedGames > 0;
 
@@ -488,9 +501,9 @@ export function teamStatsToMd(input: TeamSeasonExportInput & { teamName?: string
     ``,
   ];
 
-  if (model.dataNotes.length > 0) {
+  if (dataNotes.length > 0) {
     lines.push(`## Adatminőség`, ``);
-    for (const note of model.dataNotes) lines.push(`- ${note}`);
+    for (const note of dataNotes) lines.push(`- ${note}`);
     lines.push(``);
   }
 
@@ -616,7 +629,7 @@ export function teamStatsToMd(input: TeamSeasonExportInput & { teamName?: string
   }
   lines.push(
     ``,
-    `*Pihenőnap = az előző meccs óta eltelt teljes napok száma (egymást követő napokon 0). A szakasz a Kosarstat versenyszakasz-címkéje; Kosarstat-link nélkül a fordulószámból következtetett alapszakasz, forduló nélkül „${PHASE_LABELS.other}”.*`,
+    `*Pihenőnap = az előző meccs óta eltelt teljes napok száma (egymást követő napokon 0). A szakasz a Kosarstat versenyszakasz-címkéje. Címke nélkül a fordulószám alapszakaszra utal, kivéve az alapszakasz vége utáni helyosztókat (rájátszás, dátum alapján); forduló nélkül „${PHASE_LABELS.other}”.*`,
     ``,
     `## Ellenfelenkénti összesítés`,
     ``,
@@ -629,14 +642,141 @@ export function teamStatsToMd(input: TeamSeasonExportInput & { teamName?: string
       `| ${item.opponent} | ${agg.games} | ${record(agg)} | ${per(agg.pointsFor, agg.games)} | ${per(agg.pointsAgainst, agg.games)} | ${signed(aggregateRatings(agg).net)} |`
     );
   }
-  lines.push(
-    ``,
-    `## Ebben az exportban nem elérhető adat`,
-    ``,
-    `- Lineup és on/off: nincs ötös-szintű (csere-) adat a szezon exportban.`,
-    `- Negyedprofil: negyedenkénti bontás csak meccsenként, a Kosarstat blokkban érhető el.`,
-    `- Liga-összehasonlító tábla: a többi csapat azonos mutatói nincsenek ebben az exportban.`,
-  );
+  lines.push(``);
+
+  const unavailable: string[] = [];
+
+  // --- Negyedprofil ---
+  const quarterProfile = model.quarterProfile;
+  if (quarterProfile) {
+    const periodRow = (line: TeamExportQuarterLine) =>
+      `| ${line.label} | ${line.games} | ${per(line.pointsFor, line.games)} | ${per(line.pointsAgainst, line.games)} | ${line.games > 0 ? sign((line.pointsFor - line.pointsAgainst) / line.games) : '–'} | ${line.won} – ${line.tied} – ${line.lost} |`;
+    lines.push(
+      `## Negyedprofil (${quarterProfile.games} meccs)`,
+      ``,
+      `| Szakasz | Meccs | Szerzett / meccs | Kapott / meccs | Különbség | Megnyert – döntetlen – elvesztett |`,
+      `|---------|-------|------------------|----------------|-----------|-----------------------------------|`,
+      ...quarterProfile.quarters.map(periodRow),
+      ...quarterProfile.halves.map(periodRow),
+      ``,
+      `*Forrás: a Kosarstat negyedenkénti pontjai, a Kosarstat-linkkel rendelkező meccsekre (${quarterProfile.games}/${overall.games}); csak azok a meccsek, ahol a negyedek összege egyezik a végeredménnyel. A hosszabbítás sora csak a hosszabbításos meccseket átlagolja.*`,
+      ``,
+    );
+  } else {
+    unavailable.push(`Negyedprofil: ehhez a csapathoz és szezonhoz nincs betöltött Kosarstat negyedadat.`);
+  }
+
+  // --- Ötösök és on/off ---
+  const lineupModel = model.lineups;
+  if (lineupModel) {
+    const minutes = (seconds: number) => (seconds / 60).toFixed(1);
+    const per40 = (diff: number, seconds: number) => (seconds > 0 ? sign((diff * 2400) / seconds) : '–');
+    const minSeconds = MIN_SAMPLE_MINUTES * 60;
+    lines.push(
+      `## Ötösök és on/off (Kosarstat, ${lineupModel.games} meccs)`,
+      ``,
+      `**Lefedett játékidő:** ${minutes(lineupModel.totalSeconds)} perc | **Pontok ez idő alatt:** ${lineupModel.totalFor}–${lineupModel.totalAgainst} (net/40: ${per40(lineupModel.totalFor - lineupModel.totalAgainst, lineupModel.totalSeconds)})`,
+      ``,
+      `### Leggyakoribb ötösök`,
+      ``,
+      `| Ötös | Perc | Szerzett | Kapott | +/- | Net/40 |`,
+      `|------|------|----------|--------|-----|--------|`,
+    );
+    for (const stint of lineupModel.lineups) {
+      const diff = stint.teamPts - stint.oppPts;
+      lines.push(
+        `| ${stint.players.join(' · ')} | ${minutes(stint.seconds)} | ${stint.teamPts} | ${stint.oppPts} | ${diff > 0 ? '+' : ''}${diff} | ${per40(diff, stint.seconds)} |`
+      );
+    }
+    lines.push(
+      ``,
+      `### On/off`,
+      ``,
+      `| Játékos | Pályán (perc) | On +/- | On net/40 | Padon (perc) | Off +/- | Off net/40 | On − Off (net/40) |`,
+      `|---------|---------------|--------|-----------|--------------|---------|------------|-------------------|`,
+    );
+    for (const item of lineupModel.onOff) {
+      const onDiff = item.onFor - item.onAgainst;
+      const offDiff = item.offFor - item.offAgainst;
+      const rated = item.onSeconds >= minSeconds && item.offSeconds >= minSeconds;
+      const swing = rated
+        ? sign((onDiff * 2400) / item.onSeconds - (offDiff * 2400) / item.offSeconds)
+        : '–';
+      lines.push(
+        `| ${item.player} | ${minutes(item.onSeconds)} | ${onDiff > 0 ? '+' : ''}${onDiff} | ${item.onSeconds >= minSeconds ? per40(onDiff, item.onSeconds) : '–'} | ${minutes(item.offSeconds)} | ${offDiff > 0 ? '+' : ''}${offDiff} | ${item.offSeconds >= minSeconds ? per40(offDiff, item.offSeconds) : '–'} | ${swing} |`
+      );
+    }
+    lines.push(
+      ``,
+      `*Forrás: a Kosarstat ötös-táblái, meccsenként összevonva; a nevek a Kosarstat írásmódját követik. Net/40 = pontkülönbség 40 percre vetítve. Az on/off a játékos pályán töltött és padon töltött idejének csapat-pontkülönbsége; ${MIN_SAMPLE_MINUTES} perc alatti mintánál a vetített érték nem szerepel. Az on/off nem a játékos egyéni hatása: a csapattársak és az ellenfél ötösei is alakítják.*`,
+      ``,
+    );
+  } else {
+    unavailable.push(`Lineup és on/off: nincs betöltött Kosarstat ötös-adat (az Elemzések oldali exportban érhető el, ha a csapat meccseihez van Kosarstat lineup oldal).`);
+  }
+
+  // --- Liga-összehasonlítás ---
+  const league = input.league ?? [];
+  if (league.length > 1) {
+    const leagueRows = league
+      .map(row => {
+        const r = aggregateRatings(row.aggregate);
+        const o = teamRates(row.aggregate.own);
+        const d = teamRates(row.aggregate.opp);
+        return {
+          row,
+          ortg: r.ortg, drtg: r.drtg, net: r.net, pace: r.pace,
+          efg: o.efg, oppEfg: d.efg, toRate: o.toRate, oppToRate: d.toRate,
+          oreb: orebPct(row.aggregate.pairedOwn, row.aggregate.opp),
+          ftmRate: o.ftmRate, threeRate: o.threeRate,
+        };
+      })
+      .sort((a, b) => (b.net ?? -Infinity) - (a.net ?? -Infinity));
+    lines.push(
+      `## Liga-összehasonlítás (alapszakasz)`,
+      ``,
+      `| # | Csapat | Meccs | Mérleg | Pont | Kapott | Tempó | ORtg | DRtg | Net | eFG% | Ellenfél eFG% | TO rate | Ellenfél TO rate | OREB% | FTM rate | 3P arány |`,
+      `|---|--------|-------|--------|------|--------|-------|------|------|-----|------|---------------|---------|------------------|-------|----------|----------|`,
+    );
+    leagueRows.forEach((item, index) => {
+      const agg = item.row.aggregate;
+      const isOwn = item.row.teamId === input.teamId;
+      const name = isOwn ? `**${item.row.teamName}**` : item.row.teamName;
+      lines.push(
+        `| ${index + 1} | ${name} | ${agg.games} | ${record(agg)} | ${per(agg.pointsFor, agg.games)} | ${per(agg.pointsAgainst, agg.games)} | ${num(item.pace)} | ${num(item.ortg)} | ${num(item.drtg)} | ${signed(item.net)} | ${pct(item.efg, agg.boxGames > 0)} | ${pct(item.oppEfg, agg.pairedGames > 0)} | ${pct(item.toRate, agg.boxGames > 0)} | ${pct(item.oppToRate, agg.pairedGames > 0)} | ${pct(item.oreb, agg.pairedGames > 0)} | ${pct(item.ftmRate, agg.boxGames > 0)} | ${pct(item.threeRate, agg.boxGames > 0)} |`
+      );
+    });
+
+    const ownRow = leagueRows.find(item => item.row.teamId === input.teamId);
+    if (ownRow) {
+      // Helyezés mutatónként: a „jobb” irány mutatónként eltér (DRtg, TO rate: az alacsonyabb a jobb).
+      const rank = (value: (item: (typeof leagueRows)[number]) => number | null, lowerIsBetter = false) => {
+        const own = value(ownRow);
+        if (own === null) return '–';
+        const better = leagueRows.filter(item => {
+          const other = value(item);
+          return other !== null && (lowerIsBetter ? other < own : other > own);
+        }).length;
+        return `${better + 1}.`;
+      };
+      lines.push(
+        ``,
+        `**${ownRow.row.teamName} helyezése a ${leagueRows.length} csapat között:** ORtg ${rank(i => i.ortg)} · DRtg ${rank(i => i.drtg, true)} · Net ${rank(i => i.net)} · tempó ${rank(i => i.pace)} · eFG% ${rank(i => i.efg)} · ellenfél eFG% ${rank(i => i.oppEfg, true)} · TO rate ${rank(i => i.toRate, true)} · ellenfél TO rate ${rank(i => i.oppToRate)} · OREB% ${rank(i => i.oreb)} · FTM rate ${rank(i => i.ftmRate)}`,
+      );
+    }
+    lines.push(
+      ``,
+      `*Minden csapat ugyanazzal a számítással, csak az alapszakasz meccseiből (a rájátszás és a kupa nélkül), Net rating szerint rendezve. A DRtg-nél, az ellenfél eFG%-nál és a saját TO rate-nél az alacsonyabb érték a jobb helyezés; a tempónál a helyezés csak sorrend. A hibás vagy hiányzó box score-ú meccsek csapatonként kimaradnak a box score-alapú mutatókból; ahol a meccsszám kisebb a többiekénél, az adott csapat meccse hiányzik az adatbázisból.*`,
+      ``,
+    );
+  } else {
+    unavailable.push(`Liga-összehasonlító tábla: a többi csapat meccsadatai nincsenek betöltve ebben az exportban.`);
+  }
+
+  if (unavailable.length > 0) {
+    lines.push(`## Ebben az exportban nem elérhető adat`, ``);
+    for (const item of unavailable) lines.push(`- ${item}`);
+  }
 
   return lines.join('\n');
 }

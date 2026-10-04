@@ -134,7 +134,76 @@ export type TeamExportOpponentSummary = {
   aggregate: TeamExportAggregate;
 };
 
+/** A `kosarstat_game_quarter_stats` sor exporthoz szükséges mezői. */
+export type TeamExportQuarterRow = {
+  kosarstat_game_id: string;
+  team_side: string;
+  quarter: number;
+  points: number;
+};
+
+export type TeamExportQuarterLine = {
+  label: string;
+  games: number;
+  pointsFor: number;
+  pointsAgainst: number;
+  won: number;
+  tied: number;
+  lost: number;
+};
+
+export type TeamExportQuarterProfile = {
+  /** Meccsek, ahol a negyedek összege egyezik a végeredménnyel. */
+  games: number;
+  quarters: TeamExportQuarterLine[];
+  halves: TeamExportQuarterLine[];
+};
+
+/** Egy ötös összesített pályán töltött ideje és pontjai (Kosarstat lineup adat). */
+export type TeamExportLineupStint = {
+  players: string[];
+  seconds: number;
+  teamPts: number;
+  oppPts: number;
+};
+
+export type TeamExportLineupInput = {
+  /** Ennyi meccs lineup-adata van összevonva. */
+  games: number;
+  stints: TeamExportLineupStint[];
+};
+
+export type TeamExportOnOff = {
+  player: string;
+  onSeconds: number;
+  onFor: number;
+  onAgainst: number;
+  offSeconds: number;
+  offFor: number;
+  offAgainst: number;
+};
+
+export type TeamExportLineups = {
+  games: number;
+  totalSeconds: number;
+  totalFor: number;
+  totalAgainst: number;
+  /** A legtöbbet együtt játszó ötösök, percek szerint csökkenően. */
+  lineups: TeamExportLineupStint[];
+  /** Játékosonkénti on/off, pályán töltött idő szerint csökkenően. */
+  onOff: TeamExportOnOff[];
+};
+
+export type TeamExportLeagueRow = {
+  teamId: string;
+  teamName: string;
+  /** A csapat alapszakasz-összesítője. */
+  aggregate: TeamExportAggregate;
+};
+
 export type TeamSeasonExport = {
+  quarterProfile: TeamExportQuarterProfile | null;
+  lineups: TeamExportLineups | null;
   overall: TeamExportAggregate;
   home: TeamExportAggregate;
   away: TeamExportAggregate;
@@ -154,6 +223,10 @@ export type TeamSeasonExportInput = {
   players: PlayerStats[];
   seasonName?: string;
   resolveTeamName?: (teamId: string) => string | undefined;
+  /** Kosarstat negyedenkénti pontok a csapat linkelt meccseire (opcionális). */
+  quarterRows?: TeamExportQuarterRow[];
+  /** Szezonszintű Kosarstat ötös-adat (opcionális). */
+  lineups?: TeamExportLineupInput;
 };
 
 /** Ennyi összperc alatt a játékos arány- és per-36 mutatói nem jelennek meg. */
@@ -162,6 +235,8 @@ export const MIN_SAMPLE_MINUTES = 100;
 const REGULATION_TEAM_MINUTES = 200;
 const OVERTIME_TEAM_MINUTES = 25;
 const DAY_MS = 24 * 60 * 60 * 1000;
+/** Ennyi ötös kerül a lineup-táblába. */
+const TOP_LINEUPS = 10;
 /** Ekkora relatív eltérés fölött a két csapat birtoklásbecslése adathibára utal. */
 const POSSESSION_GAP_LIMIT = 0.15;
 
@@ -217,25 +292,39 @@ const seasonWindowFromName = (seasonName?: string): { start: string; end: string
 
 const PLAYOFF_PATTERN = /döntő|helyért|rájátszás|playoff/i;
 
+const isRegularSeasonLabel = (competitionPhase?: string | null) => /alapszakasz/i.test(competitionPhase ?? '');
+
+/** A címkézett alapszakasz-meccsek vége: az utolsó dátum és a legnagyobb forduló. */
+export type RegularSeasonBounds = { lastDate: string; maxRound: number };
+
 /**
- * Versenyszakasz: elsődleges a Kosarstat `competition_phase` címkéje. Link
- * nélküli meccsnél a fordulószám alapszakaszra utal; forduló nélkül (pl.
- * kupameccs) a szakasz nem azonosítható.
+ * Versenyszakasz: elsődleges a Kosarstat `competition_phase` címkéje.
+ *
+ * Címke nélküli meccsnél a fordulószám alapszakaszra utal – kivéve, ha a
+ * meccs az utolsó címkézett alapszakasz-meccs után van, és a fordulója nem
+ * nagyobb az addigi legnagyobbnál: a helyosztók „5. helyért” szövegéből a
+ * fordulószám 5 lesz, ezek rájátszás-meccsek. (A még nem linkelt, soron
+ * következő forduló száma nagyobb, így alapszakasz marad.) Forduló nélkül
+ * (pl. kupameccs) a szakasz nem azonosítható.
  */
 export const classifyPhase = (
   competitionPhase?: string | null,
-  round?: number | null
+  round?: number | null,
+  context?: { date: string; regularSeason: RegularSeasonBounds | null }
 ): { phase: TeamExportPhase; label: string } => {
   const label = competitionPhase?.trim();
   if (label) {
-    if (/alapszakasz/i.test(label)) return { phase: 'regular', label: PHASE_LABELS.regular };
+    if (isRegularSeasonLabel(label)) return { phase: 'regular', label: PHASE_LABELS.regular };
     if (PLAYOFF_PATTERN.test(label)) return { phase: 'playoff', label };
     return { phase: 'other', label };
   }
-  if (typeof round === 'number') {
-    return { phase: 'regular', label: `${PHASE_LABELS.regular} (${round}. forduló alapján)` };
+  if (typeof round !== 'number') return { phase: 'other', label: PHASE_LABELS.other };
+
+  const bounds = context?.regularSeason;
+  if (bounds && context.date > bounds.lastDate && round <= bounds.maxRound) {
+    return { phase: 'playoff', label: `${PHASE_LABELS.playoff} (dátum alapján)` };
   }
-  return { phase: 'other', label: PHASE_LABELS.other };
+  return { phase: 'regular', label: `${PHASE_LABELS.regular} (${round}. forduló alapján)` };
 };
 
 const emptyAggregate = (): TeamExportAggregate => ({
@@ -308,6 +397,13 @@ export function buildTeamSeasonExport(input: TeamSeasonExportInput): TeamSeasonE
     return line;
   };
 
+  const regularSeason = inSeason
+    .filter(game => isRegularSeasonLabel(game.competitionPhase))
+    .reduce<RegularSeasonBounds | null>((bounds, game) => ({
+      lastDate: bounds && bounds.lastDate > game.date ? bounds.lastDate : game.date,
+      maxRound: Math.max(bounds?.maxRound ?? 0, game.round ?? 0),
+    }), null);
+
   // Egy box score csak akkor használható, ha a játékos-sorok pontösszege
   // egyezik a végeredménnyel – a duplán importált vagy csonka jegyzőkönyv
   // minden ráépülő mutatót torzítana.
@@ -338,7 +434,7 @@ export function buildTeamSeasonExport(input: TeamSeasonExportInput): TeamSeasonE
     const hasRating = possessions !== null && possessions > 0;
     const ortg = hasRating ? (game.ourScore / possessions) * 100 : null;
     const drtg = hasRating ? (game.oppScore / possessions) * 100 : null;
-    const { phase, label } = classifyPhase(game.competitionPhase, game.round);
+    const { phase, label } = classifyPhase(game.competitionPhase, game.round, { date: game.date, regularSeason });
     const canonicalOpponent = game.opponentTeamId ? input.resolveTeamName?.(game.opponentTeamId) : undefined;
     return {
       id: game.id,
@@ -491,7 +587,12 @@ export function buildTeamSeasonExport(input: TeamSeasonExportInput): TeamSeasonE
     .map(opponent => ({ opponent, aggregate: aggregateGames(games.filter(game => game.opponent === opponent)) }))
     .sort((a, b) => b.aggregate.games - a.aggregate.games || a.opponent.localeCompare(b.opponent, 'hu'));
 
+  const quarterProfile = buildQuarterProfile(inSeason, input.quarterRows ?? [], dataNotes);
+  const lineups = buildLineups(input.lineups);
+
   return {
+    quarterProfile,
+    lineups,
     overall: aggregateGames(games),
     home: aggregateGames(games.filter(game => game.homeAway === 'home')),
     away: aggregateGames(games.filter(game => game.homeAway === 'away')),
@@ -501,4 +602,171 @@ export function buildTeamSeasonExport(input: TeamSeasonExportInput): TeamSeasonE
     players,
     dataNotes,
   };
+}
+
+const emptyQuarterLine = (label: string): TeamExportQuarterLine => ({
+  label, games: 0, pointsFor: 0, pointsAgainst: 0, won: 0, tied: 0, lost: 0,
+});
+
+const addPeriod = (line: TeamExportQuarterLine, pointsFor: number, pointsAgainst: number) => {
+  line.games += 1;
+  line.pointsFor += pointsFor;
+  line.pointsAgainst += pointsAgainst;
+  if (pointsFor > pointsAgainst) line.won += 1;
+  else if (pointsFor < pointsAgainst) line.lost += 1;
+  else line.tied += 1;
+};
+
+/**
+ * Szezonszintű negyedprofil a Kosarstat negyedenkénti pontjaiból. Csak azok a
+ * meccsek számítanak, ahol a negyedek összege mindkét oldalon egyezik a
+ * végeredménnyel; a hosszabbítások egy sorba vonódnak.
+ */
+function buildQuarterProfile(
+  games: TeamGame[],
+  quarterRows: TeamExportQuarterRow[],
+  dataNotes: string[]
+): TeamExportQuarterProfile | null {
+  if (quarterRows.length === 0) return null;
+
+  const rowsByGame = new Map<string, TeamExportQuarterRow[]>();
+  quarterRows.forEach(row => {
+    const key = String(row.kosarstat_game_id);
+    const list = rowsByGame.get(key);
+    if (list) list.push(row);
+    else rowsByGame.set(key, [row]);
+  });
+
+  const quarters = [1, 2, 3, 4].map(q => emptyQuarterLine(`${q}. negyed`));
+  const overtime = emptyQuarterLine('Hosszabbítás');
+  const halves = [emptyQuarterLine('1. félidő'), emptyQuarterLine('2. félidő')];
+  const mismatched: string[] = [];
+  let covered = 0;
+
+  games.forEach(game => {
+    const rows = game.kosarstatGameId ? rowsByGame.get(String(game.kosarstatGameId)) : undefined;
+    if (!rows || rows.length === 0) return;
+    const ownSide = game.homeAway;
+    const byQuarter = new Map<number, { own: number; opp: number }>();
+    rows.forEach(row => {
+      const entry = byQuarter.get(row.quarter) ?? { own: 0, opp: 0 };
+      if (row.team_side === ownSide) entry.own += row.points;
+      else entry.opp += row.points;
+      byQuarter.set(row.quarter, entry);
+    });
+    const periods = Array.from(byQuarter.entries()).sort((a, b) => a[0] - b[0]);
+    const ownTotal = periods.reduce((sum, [, value]) => sum + value.own, 0);
+    const oppTotal = periods.reduce((sum, [, value]) => sum + value.opp, 0);
+    if (ownTotal !== game.ourScore || oppTotal !== game.oppScore) {
+      mismatched.push(game.date);
+      return;
+    }
+
+    covered += 1;
+    let otFor = 0;
+    let otAgainst = 0;
+    let hasOvertime = false;
+    periods.forEach(([quarter, value]) => {
+      if (quarter >= 1 && quarter <= 4) addPeriod(quarters[quarter - 1], value.own, value.opp);
+      else {
+        hasOvertime = true;
+        otFor += value.own;
+        otAgainst += value.opp;
+      }
+    });
+    if (hasOvertime) addPeriod(overtime, otFor, otAgainst);
+    const half = (from: number, to: number) => {
+      const first = byQuarter.get(from) ?? { own: 0, opp: 0 };
+      const second = byQuarter.get(to) ?? { own: 0, opp: 0 };
+      return { own: first.own + second.own, opp: first.opp + second.opp };
+    };
+    const firstHalf = half(1, 2);
+    const secondHalf = half(3, 4);
+    addPeriod(halves[0], firstHalf.own, firstHalf.opp);
+    addPeriod(halves[1], secondHalf.own, secondHalf.opp);
+  });
+
+  if (mismatched.length > 0) {
+    dataNotes.push(
+      `${mismatched.length} meccsen a Kosarstat negyedenkénti pontjainak összege eltér a végeredménytől ` +
+        `(${mismatched.join(', ')}): a negyedprofilból kimaradt.`
+    );
+  }
+  if (covered === 0) return null;
+
+  return {
+    games: covered,
+    quarters: overtime.games > 0 ? [...quarters, overtime] : quarters,
+    halves,
+  };
+}
+
+/** Ötös-rangsor és játékosonkénti on/off a szezonszintű lineup-adatból. */
+function buildLineups(input?: TeamExportLineupInput): TeamExportLineups | null {
+  const stints = (input?.stints ?? []).filter(stint => stint.seconds > 0 && stint.players.length > 0);
+  if (!input || stints.length === 0) return null;
+
+  const total = stints.reduce(
+    (acc, stint) => ({
+      seconds: acc.seconds + stint.seconds,
+      teamPts: acc.teamPts + stint.teamPts,
+      oppPts: acc.oppPts + stint.oppPts,
+    }),
+    { seconds: 0, teamPts: 0, oppPts: 0 }
+  );
+
+  const onByPlayer = new Map<string, { seconds: number; teamPts: number; oppPts: number }>();
+  stints.forEach(stint => {
+    stint.players.forEach(player => {
+      const entry = onByPlayer.get(player) ?? { seconds: 0, teamPts: 0, oppPts: 0 };
+      entry.seconds += stint.seconds;
+      entry.teamPts += stint.teamPts;
+      entry.oppPts += stint.oppPts;
+      onByPlayer.set(player, entry);
+    });
+  });
+
+  const onOff: TeamExportOnOff[] = Array.from(onByPlayer.entries())
+    .map(([player, on]) => ({
+      player,
+      onSeconds: on.seconds,
+      onFor: on.teamPts,
+      onAgainst: on.oppPts,
+      offSeconds: total.seconds - on.seconds,
+      offFor: total.teamPts - on.teamPts,
+      offAgainst: total.oppPts - on.oppPts,
+    }))
+    .sort((a, b) => b.onSeconds - a.onSeconds);
+
+  return {
+    games: input.games,
+    totalSeconds: total.seconds,
+    totalFor: total.teamPts,
+    totalAgainst: total.oppPts,
+    lineups: [...stints].sort((a, b) => b.seconds - a.seconds).slice(0, TOP_LINEUPS),
+    onOff,
+  };
+}
+
+/**
+ * Liga-összehasonlítás: minden csapat alapszakasz-összesítője ugyanazzal a
+ * számítással, mint a saját csapaté. Az alapszakasz nélküli csapat kimarad.
+ */
+export function buildLeagueComparison(input: {
+  teams: Array<{ teamId: string; teamName: string; games: TeamGame[] }>;
+  statRows: TeamExportStatRow[];
+  seasonName?: string;
+}): TeamExportLeagueRow[] {
+  return input.teams
+    .map(team => {
+      const model = buildTeamSeasonExport({
+        games: team.games,
+        statRows: input.statRows,
+        players: [],
+        seasonName: input.seasonName,
+      });
+      const regular = model.byPhase.find(item => item.phase === 'regular');
+      return regular ? { teamId: team.teamId, teamName: team.teamName, aggregate: regular.aggregate } : null;
+    })
+    .filter((row): row is TeamExportLeagueRow => row !== null);
 }

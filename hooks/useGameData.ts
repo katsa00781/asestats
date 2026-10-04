@@ -166,7 +166,7 @@ export function useGameData(
       if (teamName && opponentIds.length > 0 && gameDates.length > 0) {
         const { data: opponentGames, error: opponentError } = await supabase
           .from('games')
-          .select('id, date, opponent, opponent_team_id, our_team_id, home_away, our_score, opp_score, result')
+          .select('id, date, opponent, opponent_team_id, our_team_id, home_away, our_score, opp_score, result, kosarstat_game_id')
           .eq('season_id', selectedSeasonId)
           .eq('opponent_team_id', selectedTeamId)
           .in('our_team_id', opponentIds)
@@ -305,9 +305,17 @@ export function useGameData(
       // Versenyszakasz (alapszakasz / rájátszás) a Kosarstat meccsoldal
       // metaadatából – a games táblában nincs szakasz-jelölés. Hiba esetén a
       // meccsek szakasz nélkül töltődnek be.
-      const kosarstatGameIds = (gamesData || [])
-        .map((g: SupabaseGame) => g.kosarstat_game_id)
-        .filter((id): id is string => Boolean(id));
+      // A link sokszor csak a meccs egyik nézetén van meg, ezért a tükörmeccs
+      // (ellenfél-nézet) linkjét is figyelembe vesszük.
+      const mirrorKosarstatIdByKey = new Map<string, string>();
+      opponentGamesData.forEach(og => {
+        if (og.kosarstat_game_id) mirrorKosarstatIdByKey.set(`${og.date}::${og.our_team_id}`, og.kosarstat_game_id);
+      });
+      const phaseSourceId = (g: SupabaseGame) =>
+        g.kosarstat_game_id ?? mirrorKosarstatIdByKey.get(`${g.date}::${resolveOpponentTeamId(g) ?? ''}`) ?? null;
+      const kosarstatGameIds = Array.from(new Set((gamesData || [])
+        .map((g: SupabaseGame) => phaseSourceId(g))
+        .filter((id): id is string => Boolean(id))));
       const phaseByKosarstatId = new Map<string, string>();
       if (kosarstatGameIds.length > 0) {
         const { data: phaseRows, error: phaseError } = await supabase
@@ -347,7 +355,7 @@ export function useGameData(
           opponentGameId,
           opponentTeamId: opponentTeamId ?? null,
           round: g.round ?? null,
-          competitionPhase: g.kosarstat_game_id ? phaseByKosarstatId.get(g.kosarstat_game_id) ?? null : null,
+          competitionPhase: phaseByKosarstatId.get(phaseSourceId(g) ?? '') ?? null,
         };
       });
 

@@ -1,6 +1,6 @@
 # BACKLOG.md – ASEStats Projekt
 
-_Utoljára frissítve: 2026-10-04 (H14 – csapat szezon export: egységes meccshalmaz, szezon-szennyezés feltárva)_
+_Utoljára frissítve: 2026-10-04 (H14 – csapat szezon export: negyedprofil, ötösök / on-off, liga-összehasonlítás; import szezon-védelem)_
 
 ---
 
@@ -781,8 +781,42 @@ Nyitott:
 - [ ] **A „3. helyért” szakasz fordulószáma** – a `scrape-hunbasket.ts` a
   „3. helyért” szövegből `round = 3`-at ír; a szakasz tárolása a `games`
   táblában sémadöntés.
-- [ ] **Exportból még hiányzik** – negyedprofil szezonszinten, lineup / on-off,
-  liga-összehasonlító tábla (a liga-tábla csak a takarítás után ad értelmes számot).
+- [x] **Negyedprofil, ötösök / on-off, liga-összehasonlítás az exportban
+  (2026-10-04, felhasználói jóváhagyással)**:
+  - **Negyedprofil** – a `kosarstat_game_quarter_stats` negyedenkénti
+    pontjaiból: negyedenként és félidőnként szerzett / kapott pont és
+    megnyert – döntetlen – elvesztett mérleg. Csak a végeredménnyel egyező
+    összegű meccsek (ASE 2025/2026: 32/39; a két hosszabbításos meccsnél a
+    Kosarstat negyedtáblájából hiányzik a hosszabbítás).
+  - **Ötösök és on/off** – az Elemzések oldal meglévő szezonszintű Kosarstat
+    lineup-összevonásából (`seasonKosarstatLineupTeam.stints`): a 10 legtöbbet
+    együtt játszó ötös (perc, pontok, net/40) és játékosonkénti on/off,
+    100 perces mintaküszöbbel. Csak az Elemzések export gombja adja át; a
+    Csapat tab exportja jelzi, hogy ott nem elérhető.
+  - **Liga-összehasonlítás** – minden csapat alapszakasza ugyanazzal a
+    számítással (`buildLeagueComparison`): mérleg, pont, tempó, ORtg / DRtg /
+    Net, eFG%, TO rate, OREB%, FTM rate, 3P arány, plusz a saját csapat
+    mutatónkénti helyezése. Az adat gombnyomásra töltődik
+    (`lib/team-season-export-data.ts` `loadTeamSeasonExportExtras`: a szezon
+    összes meccse + játékos-sora lapozva; 444 meccs / 4456 sor ~1 mp).
+  - **Szakasz-besorolás pontosítva** – a Kosarstat-link sokszor csak a meccs
+    egyik nézetén van meg, ezért a címke a tükörmeccs linkjéről is átvehető;
+    a link nélküli helyosztók („5. helyért” → `round = 5`) az alapszakasz
+    vége után rájátszásnak számítanak, a még nem linkelt következő forduló
+    alapszakasz marad (`classifyPhase`).
+  - Mindkét export gomb a közös `buildTeamSeasonMd`-t hívja (aszinkron,
+    a gomb a betöltés alatt le van tiltva). Tesztek: 12 eset.
+  Mobil jegyzet: `mobile-sync/2026-10-04-game-phase-classification-rule.md`.
+- [ ] **Az ötös / on-off szakasz valós adaton nincs ellenőrizve** – a
+  lineup-adat az Elemzések oldal React állapotából jön (a parser a
+  `SeasonComparison.tsx`-ben él, szkriptből nem futtatható); a számítás
+  szintetikus adattal tesztelt. Böngészőben egy exporttal ellenőrizendő.
+- [ ] **Hiányzó alapszakasz-meccs** – a 2025/2026-os Szolnok–Szedeák
+  párharc egyik meccse mindkét csapatnál hiányzik a `games` táblából
+  (25 alapszakasz-meccs a 26 helyett).
+- [ ] **Kosarstat negyedtábla hosszabbítás nélkül** – a hosszabbításos
+  meccseknél (2025-09-27, 2026-03-06) a `kosarstat_game_quarter_stats` csak
+  4 negyedet tartalmaz, ezért ezek a negyedprofilból kimaradnak.
 
 **H13 – Post-game export adat-anomáliák (ASE–Körmend 95–84, 2026-10-03) ✓ (2026-10-04)**
 

@@ -134,6 +134,7 @@ asestats/
 │   ├── supabase-admin.ts       # getSupabaseAdmin() – service role kliens factory
 │   ├── team-analysis.ts
 │   ├── team-season-export.ts   # Csapat szezon export adatmodellje (egységes meccshalmaz, adatminőség-szűrés)
+│   ├── team-season-export-data.ts # Az export gombnyomásra töltött adatai (negyedek, liga meccs-sorai) + buildTeamSeasonMd
 │   ├── terminology.ts
 │   └── utils.ts                # cn() utility (clsx + tailwind-merge)
 ├── hooks/                      # Kiszervezett adatlekérési hookok
