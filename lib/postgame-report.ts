@@ -2137,7 +2137,7 @@ const interpretProblems = (problems: string[]) => {
 
 const interpretNextFocus = (nextFocus: string[]) => {
   if (nextFocus.length === 0) return 'Következő fókusz: nincs kiemelt azonnali beavatkozás.';
-  const items = nextFocus.slice(0, 2).map(item => item.replace(/ /g, '').trim());
+  const items = nextFocus.slice(0, 2).map(item => item.replace(/\0/g, '').trim());
   return `Következő fókusz: ${items.join(' • ')}.`;
 };
 
@@ -2156,7 +2156,7 @@ const interpretExecutiveSummary = (
         ? 'lassabb tempó'
         : `${refNoun} körüli tempó`;
   const decisiveCore = decisiveText.split('.').shift()?.trim() || 'Komplex mérkőzéskép';
-  const focusCore = nextFocusText.replace('Következő fókusz: ', '').replace(/ /g, '');
+  const focusCore = nextFocusText.replace('Következő fókusz: ', '').replace(/\0/g, '');
   const reflectionFragment = [report.reflection?.xFactor, report.reflection?.risk].filter(Boolean).join(' ');
   const reflectionText = reflectionFragment ? ` ${reflectionFragment}` : '';
   return `${report.teamName} ${report.result === 'win' ? 'győzött' : 'vereséget szenvedett'} ${report.opponentName} ellen ${tempoText} mellett. ${decisiveCore}. ${focusCore}${reflectionText}`.trim();
