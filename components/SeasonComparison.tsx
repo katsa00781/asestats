@@ -1606,6 +1606,55 @@ const RECENT_GAMES_WINDOW = 5;
  * extrapolálva irreális Net/40-et adnak (pl. +666,7 vagy −324,3).
  */
 const LINEUP_MIN_SAMPLE_SECONDS = 300;
+
+type PlayerTrendRow = { gameId: string; dateValue: number; label: string; tsPct: number; usagePct: number; valPer36: number };
+
+/**
+ * Egy játékos meccsenkénti TS% / USG% / VAL/36 sora időrendben (a legfrissebb
+ * az utolsó). `untilTime`: csak az eddig az időpontig játszott meccsek;
+ * `playedOnly`: a 0 perces box score sorok kimaradnak.
+ */
+const buildPlayerTrendRows = (
+  gamesByTeam: Map<string, GamePlayerStatRow[]>,
+  playerId: string,
+  options: { limit: number; untilTime?: number; playedOnly?: boolean }
+): PlayerTrendRow[] =>
+  Array.from(gamesByTeam.entries())
+    .map(([gameId, players]) => {
+      const target = players.find(item => item.player_id === playerId);
+      if (!target) return null;
+      if (options.playedOnly && !((target.minutes || 0) > 0)) return null;
+
+      const rowUsage = (row: GamePlayerStatRow) =>
+        (row.close_attempted || 0) + (row.mid_attempted || 0) + (row.three_attempted || 0) + 0.44 * (row.free_throw_attempted || 0) + (row.turnovers || 0);
+      // Standard, perc-normalizált USG% – ugyanaz a képlet, mint a post-game játékosbontásban.
+      const team = players.reduce(
+        (acc, row) => ({ usage: acc.usage + rowUsage(row), minutes: acc.minutes + (row.minutes || 0) }),
+        { usage: 0, minutes: 0 }
+      );
+      const usgRate = computeUsgRate({ usage: rowUsage(target), minutes: target.minutes || 0 }, team);
+      const fga = (target.close_attempted || 0) + (target.mid_attempted || 0) + (target.three_attempted || 0);
+      const tsDenominator = 2 * (fga + 0.44 * (target.free_throw_attempted || 0));
+      const tsPct = tsDenominator > 0 ? (target.points || 0) / tsDenominator * 100 : 0;
+      const valPer36 = (target.minutes || 0) > 0 ? ((target.valuation || 0) / (target.minutes || 1)) * 36 : 0;
+      const dateValue = target.games?.date ? new Date(target.games.date).getTime() : 0;
+
+      return {
+        gameId,
+        dateValue,
+        label: target.games?.date
+          ? new Date(target.games.date).toLocaleDateString('hu-HU', { month: 'short', day: 'numeric' })
+          : 'Ismeretlen',
+        tsPct: roundValue(tsPct, 1),
+        usagePct: roundValue(usgRate * 100, 1),
+        valPer36: roundValue(valPer36, 1),
+      };
+    })
+    .filter((item): item is PlayerTrendRow => item !== null)
+    .filter(item => options.untilTime === undefined || item.dateValue <= options.untilTime)
+    .sort((a, b) => b.dateValue - a.dateValue)
+    .slice(0, options.limit)
+    .reverse();
 /** A játékostrend ennyi meccs alatt nem értelmezhető. */
 const PLAYER_TREND_MIN_GAMES = 3;
 const TEAM_FORM_WINDOW = 5;
@@ -9674,10 +9723,77 @@ export function SeasonComparison({
   );
 
   // A riportobjektumon kívüli, a nézetben megjelenő adatok az Export MD-hez.
-  const postgameExportExtras = useMemo<PostgameExportExtras>(
-    () => ({ focus: nextGameAutoFocus }),
-    [nextGameAutoFocus]
-  );
+  const postgameExportExtras = useMemo<PostgameExportExtras>(() => {
+    if (!postgameReport) return { focus: nextGameAutoFocus };
+
+    // A Kosarstat lineup nevei box score írásmódra – ugyanaz a párosítás, mint az ötös-blokkban.
+    const lineupTeam = activeKosarstatTeamAnalysis;
+    const boxNames = postgameReport.playerReport.players.map(player => player.name);
+    const lineupNames = lineupTeam
+      ? Array.from(new Set([
+          ...lineupTeam.playerMinutes.map(item => item.player),
+          ...lineupTeam.playerTimelines.map(item => item.player),
+          ...lineupTeam.starters,
+        ]))
+      : [];
+    const matched = resolvePlayerNames(lineupNames, boxNames).matched;
+    // Ha egyetlen név sem párosítható, a lineup nem ehhez a csapathoz tartozik.
+    const lineupUsable = lineupTeam !== null && matched.size > 0;
+    const boxName = (name: string) => matched.get(name) ?? name;
+
+    const officialPlusMinus: Record<string, number> = {};
+    if (lineupUsable) {
+      lineupTeam.playerMinutes.forEach(item => {
+        const name = matched.get(item.player);
+        if (name && item.plusMinus !== null) officialPlusMinus[name] = item.plusMinus;
+      });
+    }
+    const starters = new Set(lineupUsable ? lineupTeam.starters : []);
+
+    const gamesByTeam = resolvedTeamId ? teamGamePlayerRows.get(resolvedTeamId) : undefined;
+    const gameTime = selectedGame?.date ? new Date(selectedGame.date).getTime() : undefined;
+    const playerTrends = gamesByTeam
+      ? postgameReport.playerReport.players
+          .filter(player => player.minutes > 0)
+          .map(player => ({
+            player: player.name,
+            games: buildPlayerTrendRows(gamesByTeam, player.playerId, {
+              limit: PLAYER_TREND_MIN_GAMES,
+              untilTime: gameTime,
+              playedOnly: true,
+            }),
+          }))
+      : [];
+
+    return {
+      focus: nextGameAutoFocus,
+      game: selectedGame
+        ? {
+            date: selectedGame.date,
+            homeAway: selectedGame.homeAway,
+            round: selectedGame.round ?? null,
+            kosarstatGameId: kosarstatLineupAnalysis?.gameId ?? selectedGame.kosarstatGameId ?? null,
+          }
+        : undefined,
+      kosarstat: {
+        quarterDiffRows: kosarstatPostgameContext.quarterDiffRows,
+        ownMetrics: kosarstatPostgameContext.ownMetrics,
+        oppMetrics: kosarstatPostgameContext.oppMetrics,
+      },
+      rotation: lineupUsable
+        ? lineupTeam.playerTimelines.map(row => ({
+            player: boxName(row.player),
+            seconds: row.seconds,
+            plusMinus: row.plusMinus,
+            isStarter: starters.has(row.player),
+            subInMinutes: row.subInMinutes,
+            subOutMinutes: row.subOutMinutes,
+          }))
+        : undefined,
+      officialPlusMinus,
+      playerTrends,
+    };
+  }, [activeKosarstatTeamAnalysis, kosarstatLineupAnalysis, kosarstatPostgameContext, nextGameAutoFocus, postgameReport, resolvedTeamId, selectedGame, teamGamePlayerRows]);
 
   const displayedPostgameStrengths = useMemo(() => {
     if (!postgameReport) return [] as string[];
@@ -10040,49 +10156,10 @@ export function SeasonComparison({
   );
 
   const playerTrendSeries = useMemo(() => {
-    if (!resolvedTeamId || !selectedTrendPlayerId) {
-      return [] as Array<{ label: string; tsPct: number; usagePct: number; valPer36: number }>;
-    }
-
+    if (!resolvedTeamId || !selectedTrendPlayerId) return [] as PlayerTrendRow[];
     const gamesByTeam = teamGamePlayerRows.get(resolvedTeamId);
-    if (!gamesByTeam) return [] as Array<{ label: string; tsPct: number; usagePct: number; valPer36: number }>;
-
-    const rows = Array.from(gamesByTeam.entries())
-      .map(([gameId, players]) => {
-        const target = players.find(item => item.player_id === selectedTrendPlayerId);
-        if (!target) return null;
-
-        const rowUsage = (row: typeof target) =>
-          (row.close_attempted || 0) + (row.mid_attempted || 0) + (row.three_attempted || 0) + 0.44 * (row.free_throw_attempted || 0) + (row.turnovers || 0);
-        // Standard, perc-normalizált USG% – ugyanaz a képlet, mint a post-game játékosbontásban.
-        const team = players.reduce(
-          (acc, row) => ({ usage: acc.usage + rowUsage(row), minutes: acc.minutes + (row.minutes || 0) }),
-          { usage: 0, minutes: 0 }
-        );
-        const usgRate = computeUsgRate({ usage: rowUsage(target), minutes: target.minutes || 0 }, team);
-        const fga = (target.close_attempted || 0) + (target.mid_attempted || 0) + (target.three_attempted || 0);
-        const tsDenominator = 2 * (fga + 0.44 * (target.free_throw_attempted || 0));
-        const tsPct = tsDenominator > 0 ? (target.points || 0) / tsDenominator * 100 : 0;
-        const valPer36 = (target.minutes || 0) > 0 ? ((target.valuation || 0) / (target.minutes || 1)) * 36 : 0;
-        const dateValue = target.games?.date ? new Date(target.games.date).getTime() : 0;
-
-        return {
-          gameId,
-          dateValue,
-          label: target.games?.date
-            ? new Date(target.games.date).toLocaleDateString('hu-HU', { month: 'short', day: 'numeric' })
-            : 'Ismeretlen',
-          tsPct: roundValue(tsPct, 1),
-          usagePct: roundValue(usgRate * 100, 1),
-          valPer36: roundValue(valPer36, 1),
-        };
-      })
-      .filter((item): item is NonNullable<typeof item> => Boolean(item))
-      .sort((a, b) => b.dateValue - a.dateValue)
-      .slice(0, 8)
-      .reverse();
-
-    return rows;
+    if (!gamesByTeam) return [] as PlayerTrendRow[];
+    return buildPlayerTrendRows(gamesByTeam, selectedTrendPlayerId, { limit: 8 });
   }, [resolvedTeamId, selectedTrendPlayerId, teamGamePlayerRows]);
 
   const bubbleLabelOffsets = useMemo(

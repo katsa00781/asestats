@@ -1,6 +1,6 @@
 # BACKLOG.md – ASEStats Projekt
 
-_Utoljára frissítve: 2026-10-10 (H17 / B – post-game riportlogika: festék-szabály, ellentmondás-ellenőrzés, címkék, közös fókuszlista)_
+_Utoljára frissítve: 2026-10-10 (H17 / C–D – post-game Export MD: a webes nézet 12 hiányzó blokkja)_
 
 ---
 
@@ -781,13 +781,50 @@ címkéje „Stabil alappillér (padról)”; mind az öt egység elkészül; a 
 - Mobil jegyzet: `asestatmobile/docs/mobile-sync/2026-10-10-postgame-riport-javitasok.md`
   (`@core`: `postgame-report`, `player-postgame`).
 
+*C és D egység – a webes nézet 12 hiányzó blokkja az Export MD-ben ✓ (2026-10-10)*
+
+Egy commitban készült (ugyanaz a függvény, ugyanaz a fájl). A
+`postgameReportToMd` negyedik, opcionális `extras` paramétere
+(`PostgameExportExtras`) viszi a riportobjektumon kívüli adatokat; a
+`SeasonComparison` `postgameExportExtras` memója tölti mindkét export gombnak.
+A blokkok adat nélkül kimaradnak.
+
+- [x] **1. Kosarstat csapatmutatók** – kétoszlopos tábla különbséggel (POSS,
+  ORTG, eFG%, TO% Kosarstat-definícióval, ORB%, FTM rate), lábjegyzettel a
+  riport saját mutatóitól való eltérésről.
+- [x] **2. Negyedek** – Q, saját, ellenfél, különbség, kumulált különbség
+  (+5 / +15 / +28 / +29).
+- [x] **3. Liga medián oszlop** a Kulcs mutatók táblában („Liga medián” és
+  „vs liga”); kimarad, ha a referencia maga a liga medián.
+- [x] **4. Dobástérkép és zónák** – gyűrű, festék, gyűrű + festék együtt,
+  középtáv, sarok tripla, tripla (nem sarok), tripla összesen: találat /
+  kísérlet, arány, szezon arány, delta, FG%, szezon FG%; shot quality index; a
+  tetején a hiányzó dobás figyelmeztetése.
+- [x] **5. Dobásprofil** – 2P / 3P arány és FTM arány a referenciához mérve.
+- [x] **6. Rotáció és cserék** – játékos, perc, +/-, kezdő, be (perc), le
+  (perc) a Kosarstat percrácsából.
+- [x] **7. Hivatalos +/-** oszlop a játékostáblában (Kosarstat játékostábla,
+  név-párosítással).
+- [x] **8. Off/40 és Def/40** a páros és hármas táblában, plusz „Legjobb
+  védekező együttállások” (a 5 legalacsonyabb Def/40; Halmai + Révész 29,1).
+- [x] **9. Játékos trend** – az utolsó 3 meccs TS%, Usage%, VAL/36 értéke
+  minden pályára lépett játékosra, a kiválasztott meccsig. A számítás közös
+  segédbe került (`buildPlayerTrendRows`), a webes trend-chart is ezt hívja.
+- [x] **10. Faktor-kategóriák** – a Döntő tényezők Hatékonyság / Kontroll /
+  Volumen alcímek alatt, előjellel és tengellyel (Támadás / Védekezés).
+- [x] **11. Meccs-metaadat** a fejlécben: dátum, hazai / vendég, forduló,
+  Kosarstat game ID.
+- [x] **12. Assist-megjegyzés** az adatminőségi szakaszban és az ötös-blokk
+  lábjegyzetében.
+- [x] **Teszt** – új `tests/postgame-export-md.test.ts` (12 eset) a valós
+  negyed- és csapatmutató-sorokkal; közös tesztadat:
+  `tests/fixtures/postgame-ase-sopron.ts`. 55 / 55 teszt, `tsc --noEmit`,
+  `eslint`, `npm run build` tiszta.
+- Mobil jegyzet a C–D egységhez nem kell: csak a webes MD export és a webes
+  komponens változott.
+
 Nyitott (a további egységek):
 
-- [ ] **C – hiányzó blokkok 1–4**: Kosarstat csapatmutatók, negyedek kumulált
-  különbséggel, liga medián oszlop, dobástérkép és zónák.
-- [ ] **D – hiányzó blokkok 5–12**: dobásprofil, rotáció, hivatalos +/- a
-  játékostáblában, Off/40 és Def/40, játékos trend, faktor-kategóriák,
-  meccs-metaadat, assist-megjegyzés.
 - [ ] **E – web igazítása**: Net/40 csak 5 perc fölött a webes ötös-táblában.
 - [ ] **Adatbázis-szintű játékos-megfeleltetés** (`players` ↔ `league_players`
   Kosarstat ID) – sémaváltozás, külön döntés; most a kódbeli névillesztő
