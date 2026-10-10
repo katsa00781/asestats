@@ -12,6 +12,7 @@ import type {
   TeamSeasonExportInput,
 } from './team-season-export';
 import { LINEUP_NET_MIN_SECONDS, LINEUP_SLOT_POSITIONS, MAX_TRIOS } from './postgame-lineup-export';
+import { buildPostgameAutoFocus } from './postgame-report';
 import { trueShootingPct, effectiveFgPct } from './stat-formulas';
 import {
   buildTeamSeasonExport,
@@ -1058,7 +1059,21 @@ export function postgameLineupsToMd(
   return lines;
 }
 
-export function postgameReportToMd(report: PostGameReport, seasonName?: string, lineups?: PostgameLineupsMd): string {
+/** A riportobjektumon kívüli, a webes nézetben megjelenő adatok az exporthoz. */
+export type PostgameExportExtras = {
+  /**
+   * A webes „Következő fókusz” lista (`buildPostgameAutoFocus` a kosarstat
+   * kontextussal). Ha hiányzik, az export a riportból maga állítja elő.
+   */
+  focus?: string[];
+};
+
+export function postgameReportToMd(
+  report: PostGameReport,
+  seasonName?: string,
+  lineups?: PostgameLineupsMd,
+  extras: PostgameExportExtras = {}
+): string {
   const result = report.result === 'win' ? 'Győzelem' : 'Vereség';
   const margin = report.metrics.margin;
   const marginStr = margin > 0 ? `+${margin}` : `${margin}`;
@@ -1202,7 +1217,7 @@ export function postgameReportToMd(report: PostGameReport, seasonName?: string, 
     }
     lines.push(
       ``,
-      `*Sorrend és címke az Impact score alapján (VAL/36 45%, TS% 25%, usage 20%, St+Bl 10%), nem a nyers VAL szerint. A meccs legjobbjától legfeljebb 10%-kal elmaradó játékosok ugyanazt a vezető címkét kapják. Usage% = standard USG% = (FGA + 0,44·FTA + LV) · (csapatperc / 5) / (perc · csapat FGA + 0,44·FTA + LV); átlag ~20%, alacsony ≤ 15%, magas ≥ 25%.*`
+      `*Sorrend és címke az Impact score alapján (VAL/36 45%, TS% 25%, usage 20%, St+Bl 10%), nem a nyers VAL szerint. A meccs legjobbjától legfeljebb 10%-kal elmaradó játékosok ugyanazt a vezető címkét kapják. A „Stabil alappillér” címkéhez legalább 52-es Impact score és 16 perc játékidő kell (kezdőnél 12 perc); „(padról)” = cserejátékos, „(rövid percben)” = alappillér-szintű pontszám ennél kevesebb játékidővel. Usage% = standard USG% = (FGA + 0,44·FTA + LV) · (csapatperc / 5) / (perc · csapat FGA + 0,44·FTA + LV); átlag ~20%, alacsony ≤ 15%, magas ≥ 25%.*`
     );
   }
 
@@ -1225,9 +1240,11 @@ export function postgameReportToMd(report: PostGameReport, seasonName?: string, 
     for (const p of report.problems) lines.push(`- ${p}`);
   }
 
-  if (report.nextFocus.length > 0) {
+  // Ugyanaz a lista, mint a webes nézetben (ellenfél-specifikus fókusz is).
+  const focus = extras.focus ?? buildPostgameAutoFocus(report);
+  if (focus.length > 0) {
     lines.push(``, `## Következő fókusz`, ``);
-    for (const f of report.nextFocus) lines.push(`- ${f}`);
+    for (const f of focus) lines.push(`- ${f}`);
   }
 
   const { playerImpact } = report;

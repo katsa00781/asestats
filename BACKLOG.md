@@ -1,6 +1,6 @@
 # BACKLOG.md – ASEStats Projekt
 
-_Utoljára frissítve: 2026-10-10 (H17 / A – post-game Export MD: lineup-hibák javítva)_
+_Utoljára frissítve: 2026-10-10 (H17 / B – post-game riportlogika: festék-szabály, ellentmondás-ellenőrzés, címkék, közös fókuszlista)_
 
 ---
 
@@ -738,12 +738,51 @@ címkéje „Stabil alappillér (padról)”; mind az öt egység elkészül; a 
 - Mobil jegyzet az A egységhez nem kell: csak webes MD export és a webes
   lineup-parser változott, `@core` modul nem; a mobil nem olvas lineup táblát.
 
+*B egység – riportlogika, `@core` ✓ (2026-10-10)*
+
+- [x] **Hiányzó 3. fókuszpont** – a web a komponensben állította össze a
+  megjelenített listát (ellenfél-specifikus fókusz + riport + Kosarstat), az MD
+  csak a `report.nextFocus`-t írta ki. A logika a `lib/postgame-report.ts`-be
+  került (`buildPostgameAutoFocus`, `buildOpponentLinkedBreakdown`,
+  `isNegativeDecisiveLabel`); a web és az Export MD ugyanazt a függvényt hívja
+  (`postgameReportToMd` új `extras.focus` paramétere), így a két lista nem
+  térhet el. Erre a meccsre az első pont: „Ellenfél-specifikus fókusz:
+  Periméter-kockázat (ellenfél 3P 9/23, 39,1% …)”.
+- [x] **„Festékbefejezések visszaestek (−8,4 pp)”** – a szabály a box score
+  2P-kísérletarányát nevezte festéknek (a középtávot is tartalmazza, a
+  tripla-arány tükre). Új `paintRate` / `interiorRate` és
+  `paintRateDelta` / `interiorRateDelta`; megbízható dobástérképnél a festék
+  jellegű erősség / probléma / döntő tényező csak a gyűrű + festék zóna
+  együttes arányára épül, és mindkét zóna értékét kiírja. Dobástérkép nélkül a
+  sor „2P-kísérletek aránya …”, a „rim run” fókusz nem aktiválódik. Erre a
+  meccsre (gyűrű +6,5 pp, festék −7,7 pp, együtt −1,2 pp) nincs festék-sor.
+- [x] **ORB% ↔ második esély ellentmondás** – `reconcileSecondChance`: érvényes
+  pontforrás mellett, ha a második esélyből szerzett pont nem pozitív, a
+  lepattanó-fölény kikerül az erősségek közül („Második esély: ORB% különbség”
+  és a riport „Támadólepattanózás erős” sora is), helyette probléma
+  („Támadólepattanó-fölény nem vált pontra: ORB% különbség +7,4 pp, második
+  esélyből 7–10 pont.”), az „OREB agresszivitás fenntartása” fókusz helyére
+  pedig „Második esélyek pontra váltása” lép. `KosarstatPostgameInput` új,
+  opcionális `expectedPoints` mezője (a web kitölti).
+- [x] **Impact címkék** – `mapContextualImpactLabel`: a címke rangja az impact
+  osztályt követi. Padról jövő `engine`: „Stabil alappillér (padról)”
+  (felhasználói döntés); a sokat játszó kezdő `support` nem lép feljebb.
+  **Saját kiegészítés, jóváhagyásra:** ugyanez az ellentmondás Eilingsfeldnél
+  is megvolt (62,3, 15 perc → „Rotációs hozzájárulás”, miközben Joseph 58,3 →
+  „Stabil alappillér”), mert az alappillérhez 16 perc kell – a címke ezt most
+  kimondja: „Rotációs hozzájárulás (rövid percben)”. Az osztályozás és a
+  küszöbök nem változtak; az MD lábjegyzete leírja a szabályt.
+- [x] **Dobástérkép 63 / 64** – `shotMap.coverage` és megjegyzés bármilyen
+  eltérésnél (eddig csak ≥ 3 dobás / ≥ 5%); a webes dobástérkép kártya tetején
+  figyelmeztető sor.
+- [x] **Teszt** – új `tests/postgame-report-rules.test.ts` (9 eset) a valós
+  ASE–Sopron box score-ral és a webes zónaszámokkal. 43 / 43 teszt,
+  `tsc --noEmit`, `eslint`, `npm run build` tiszta.
+- Mobil jegyzet: `asestatmobile/docs/mobile-sync/2026-10-10-postgame-riport-javitasok.md`
+  (`@core`: `postgame-report`, `player-postgame`).
+
 Nyitott (a további egységek):
 
-- [ ] **B – riportlogika (`@core`)**: közös fókuszlista a webbel (hiányzó 3.
-  fókuszpont), festék-szabály a dobástérkép gyűrű + festék zónájából,
-  ORB% ↔ második esély ellentmondás-ellenőrzés, Impact címkék, dobástérkép
-  lefedettség (63 / 64) jelzése.
 - [ ] **C – hiányzó blokkok 1–4**: Kosarstat csapatmutatók, negyedek kumulált
   különbséggel, liga medián oszlop, dobástérkép és zónák.
 - [ ] **D – hiányzó blokkok 5–12**: dobásprofil, rotáció, hivatalos +/- a

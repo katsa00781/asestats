@@ -5,7 +5,7 @@ import { TerminologyGlossary } from './TerminologyGlossary';
 import Image from 'next/image';
 import { Loader2, Download, ClipboardList, Save } from 'lucide-react';
 import { toast } from 'sonner';
-import type { PostgameLineupsMd } from '@/lib/export-to-md';
+import type { PostgameExportExtras, PostgameLineupsMd } from '@/lib/export-to-md';
 import { playerSeasonToMd, pregameReportToMd, postgameReportToMd } from '@/lib/export-to-md';
 import { buildPostgameLineupSides, isScoringLineupStint } from '@/lib/postgame-lineup-export';
 import { buildTeamSeasonMd } from '@/lib/team-season-export-data';
@@ -66,6 +66,9 @@ import {
   type KosarstatTeamMetricRow,
   type KosarstatPointSourceTotals,
   buildKosarstatPostgameContext,
+  buildOpponentLinkedBreakdown,
+  buildPostgameAutoFocus,
+  isNegativeDecisiveLabel,
   mergeKosarstatPostgameContext,
 } from '@/lib/postgame-report';
 import { parseKosarstatPointSources } from '@/lib/kosarstat-pbp-parse';
@@ -1611,23 +1614,6 @@ const TEAM_FORM_ROLLING_WINDOW = 3;
 const TEAM_FORM_EFG_THRESHOLD = 3;
 const TEAM_FORM_MARGIN_THRESHOLD = 4;
 const HEAD_TO_HEAD_MATCH_WINDOW_MS = 36 * 60 * 60 * 1000; // 36 hours tolerance when pairing mirrored game IDs
-
-const isNegativeDecisiveLabel = (label: string, axis: 'offense' | 'defense') => {
-  const lower = label.toLowerCase();
-  const hasNegativeDelta = /-\d+(?:[.,]\d+)?\s*pp/.test(lower);
-  const hasPositiveDelta = /\+\d+(?:[.,]\d+)?\s*pp/.test(lower);
-
-  if (axis === 'defense') {
-    if (/limit[aá]lt|kontroll|megfog|zavar/.test(lower)) return false;
-    if (/probl[eé]ma|gyenge|romlott|engedett|visszaesett|hi[aá]ny/.test(lower)) return true;
-    if (hasNegativeDelta && !hasPositiveDelta) return true;
-    return false;
-  }
-
-  if (/hi[aá]ny|gyenge|vissza|akadozott|sz[eé]tesett|alacsony|probl[eé]ma/.test(lower)) return true;
-  if (hasNegativeDelta && !hasPositiveDelta) return true;
-  return false;
-};
 
 const roundValue = (value: number, digits = 1) => {
   const factor = Math.pow(10, digits);
@@ -9082,6 +9068,7 @@ export function SeasonComparison({
       turnoverTypes: postgamePbpContext?.turnoverTypes ?? [],
       clutchImportNote: kosarstatClutchImportNote,
       pointSources: kosarstatPointSources,
+      expectedPoints: { own: targetGame.ourScore, opponent: targetGame.oppScore },
     });
   }, [kosarstatClutchImportNote, kosarstatPointSources, kosarstatQuarterStats, kosarstatTeamMetrics, postgamePbpContext, selectedGameForPostgame, selectedTeamNameForPostgame]);
 
@@ -9675,91 +9662,22 @@ export function SeasonComparison({
     };
   }, [postgameReport, selectedPostgameFactor]);
 
-  const opponentLinkedBreakdown = useMemo(() => {
-    if (!postgameReport) return [] as Array<{ title: string; detail: string; linkedFactor?: string }>;
-    const isNegativeFactor = (item: PostGameReport['decisiveFactorMeta'][number]) =>
-      item.tone ? item.tone === 'negative' : isNegativeDecisiveLabel(item.label, item.axis);
-    const defenseFactors = postgameReport.decisiveFactorMeta.filter(item => item.axis === 'defense');
-    const offenseIssues = postgameReport.decisiveFactorMeta
-      .filter(item => item.axis === 'offense')
-      .filter(isNegativeFactor);
+  const opponentLinkedBreakdown = useMemo(
+    () => (postgameReport ? buildOpponentLinkedBreakdown(postgameReport) : []),
+    [postgameReport]
+  );
 
-    const lines: Array<{ title: string; detail: string; linkedFactor?: string }> = [];
-    defenseFactors.slice(0, 2).forEach(item => {
-      // Negatív védekezési faktor = az ellenfél erőssége; pozitív = saját kontroll.
-      lines.push({
-        title: isNegativeFactor(item)
-          ? `${postgameReport.opponentName} erősség`
-          : `${postgameReport.teamName} védekezési kontroll`,
-        detail: item.label,
-        linkedFactor: item.label,
-      });
-    });
-    offenseIssues.slice(0, 2).forEach(item => {
-      lines.push({
-        title: `${postgameReport.teamName} javítandó`,
-        detail: item.label,
-        linkedFactor: item.label,
-      });
-    });
-    return lines;
-  }, [postgameReport]);
+  // A megjelenített fókuszlista – az Export MD ugyanezt kapja.
+  const nextGameAutoFocus = useMemo(
+    () => (postgameReport ? buildPostgameAutoFocus(postgameReport, kosarstatPostgameContext) : [] as string[]),
+    [kosarstatPostgameContext, postgameReport]
+  );
 
-  const nextGameAutoFocus = useMemo(() => {
-    if (!postgameReport) return [] as string[];
-
-    const normalizeTopic = (text: string) => {
-      const lower = text.toLowerCase();
-      if (lower.includes('ft rate') || lower.includes('büntető')) return 'ft';
-      if (lower.includes('to ') || lower.includes('turnover') || lower.includes('labdaeladás')) return 'to';
-      if (lower.includes('oreb') || lower.includes('második esély') || lower.includes('lepattanó')) return 'oreb';
-      if (lower.includes('3p') || lower.includes('periméter')) return 'perimeter';
-      return lower.replace(/\s+/g, ' ').trim();
-    };
-
-    const pushUniqueByTopic = (arr: string[], candidate: string) => {
-      const topic = normalizeTopic(candidate);
-      if (arr.some(item => normalizeTopic(item) === topic)) return;
-      arr.push(candidate);
-    };
-
-    const topicPriority = (text: string) => {
-      const topic = normalizeTopic(text);
-      if (topic === 'to') return 1;
-      if (topic === 'ft') return 2;
-      if (topic === 'perimeter') return 3;
-      if (topic === 'oreb') return 4;
-      return 9;
-    };
-
-    // Fókusz csak javítandó pontból lesz, saját védekezési sikerből nem.
-    const factorHint = opponentLinkedBreakdown.find(row => !row.title.endsWith('védekezési kontroll'))?.detail;
-    const focus: string[] = [];
-
-    postgameReport.nextFocus.forEach(item => {
-      pushUniqueByTopic(focus, item);
-    });
-
-    kosarstatPostgameContext.nextFocus.forEach(item => {
-      pushUniqueByTopic(focus, item);
-    });
-
-    if (factorHint) {
-      focus.unshift(`Ellenfél-specifikus fókusz: ${factorHint}.`);
-    }
-
-    if (postgameReport.problems.length > 0) {
-      pushUniqueByTopic(focus, `Mérkőzés utáni javítás: ${postgameReport.problems[0]}.`);
-    }
-
-    if (kosarstatPostgameContext.problems.length > 0) {
-      pushUniqueByTopic(focus, `Kosarstat javítási pont: ${kosarstatPostgameContext.problems[0]}`);
-    }
-
-    return focus
-      .sort((a, b) => topicPriority(a) - topicPriority(b))
-      .slice(0, 3);
-  }, [kosarstatPostgameContext.nextFocus, kosarstatPostgameContext.problems, opponentLinkedBreakdown, postgameReport]);
+  // A riportobjektumon kívüli, a nézetben megjelenő adatok az Export MD-hez.
+  const postgameExportExtras = useMemo<PostgameExportExtras>(
+    () => ({ focus: nextGameAutoFocus }),
+    [nextGameAutoFocus]
+  );
 
   const displayedPostgameStrengths = useMemo(() => {
     if (!postgameReport) return [] as string[];
@@ -15720,7 +15638,7 @@ export function SeasonComparison({
                 size="sm"
                 className="border-border-subtle hover:bg-surface-2 text-cyan shrink-0"
                 onClick={() => {
-                  const md = postgameReportToMd(postgameReport, resolvedSeasonName, postgameLineupExport);
+                  const md = postgameReportToMd(postgameReport, resolvedSeasonName, postgameLineupExport, postgameExportExtras);
                   const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
                   const url = URL.createObjectURL(blob);
                   const a = document.createElement('a');
@@ -16492,6 +16410,14 @@ export function SeasonComparison({
                       Kísérletek: {postgameReport.shotMap.team.attempts} • FG%: {formatShotPct(postgameReport.shotMap.team.fgPct)}
                     </div>
                   </div>
+                  {postgameReport.shotMap.coverage && postgameReport.shotMap.coverage.missing !== 0 && (
+                    <div className="text-xs text-warning">
+                      {postgameReport.shotMap.coverage.missing > 0
+                        ? `${postgameReport.shotMap.coverage.missing} dobás hiányzik a dobástérképről`
+                        : `${-postgameReport.shotMap.coverage.missing} dobással több van a dobástérképen`}
+                      : {postgameReport.shotMap.coverage.shotMapAttempts} dobás a box score {postgameReport.shotMap.coverage.boxAttempts} mezőnykísérletével szemben – a zónaadatok és az FG% ehhez mérten értendők.
+                    </div>
+                  )}
 
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
                     <div className="p-3 bg-surface-2/50 rounded-lg">
@@ -17373,7 +17299,7 @@ export function SeasonComparison({
                 size="sm"
                 className="border-border-subtle hover:bg-surface-2 text-cyan shrink-0 ml-auto"
                 onClick={() => {
-                  const md = postgameReportToMd(postgameReport, resolvedSeasonName, postgameLineupExport);
+                  const md = postgameReportToMd(postgameReport, resolvedSeasonName, postgameLineupExport, postgameExportExtras);
                   const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
                   const url = URL.createObjectURL(blob);
                   const a = document.createElement('a');
