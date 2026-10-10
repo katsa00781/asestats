@@ -1,6 +1,6 @@
 # BACKLOG.md – ASEStats Projekt
 
-_Utoljára frissítve: 2026-10-10 (H16 – Kosarstat import: a kapcsolat-időtúllépés újrapróbálható lett)_
+_Utoljára frissítve: 2026-10-10 (H17 / A – post-game Export MD: lineup-hibák javítva)_
 
 ---
 
@@ -690,6 +690,73 @@ a nézőpont nem hiba.
   `seasonName` paramétert kap, a fejléc közös `seasonLeagueLine()` segéddel
   „Szezon: 2026/2027” – a Liga csak akkor jelenik meg, ha különbözik. Csak
   webes MD export, mobil jegyzet nem kell.
+
+**H17 – Post-game riport és Export MD: hibák és hiányzó blokkok (2026-10-10)** – folyamatban
+
+Felhasználói hibajelzés az ASE–Sopron KC 109–80 (2026-10-10, Kosarstat
+`20261010102163`) Export MD-jére, a webes nézettel összevetve: 9 hiba,
+12 hiányzó blokk, 2 pont, ahol az MD a jobb. Öt egységben (A–E), egységenként
+teszt és commit. Felhasználói döntések (2026-10-10): a névírás a kódbeli
+névillesztővel egységesül (adatbázis-tábla nélkül); a padról jövő alappillér
+címkéje „Stabil alappillér (padról)”; mind az öt egység elkészül; a webes
+ötös-táblában a Net/40 is csak 5 perc fölött jelenik meg.
+
+*A egység – lineup-hibák ✓ (2026-10-10)*
+
+- [x] **Az „ellenfél ötösei” blokk a saját csapat adatait mutatta** – a
+  `postgameLineupExport` memo az ellenfelet objektum-azonossággal kereste
+  (`team !== ownTeam`), de a `selectedTeam` a névátfedés-ágon másolat, így a
+  `homeTeam` (maga az ASE) lett az „ellenfél”; a fordított eltérés-üzenet
+  (80–109) ennek következménye volt. Új `KosarstatLineupAnalysis.selectedSide`,
+  az ellenfél az ellentétes oldal. Új `buildPostgameLineupSides`
+  (`lib/postgame-lineup-export.ts`) védelemmel: ha az ellenfél-lineup
+  játékosainak legalább fele a saját box score-ral párosítható, az ellenfél
+  oldala kimarad, és az MD „nem elérhető” sort ír. A Sopron lineup a forrásban
+  megvan (21 ötös, 80–109).
+- [x] **Az on/off 1-gyel elmaradt a box +/- értéktől (108 vs 109)** – a
+  Kosarstat ötös-táblában van egy 0:00 idejű sor (Halmai, Daniels, Benke,
+  Eilingsfeld, Young: 1–0; csere közben dobott büntető), amit a parser, a
+  `buildComboStats` és a `buildPostgameLineupExport` a `seconds <= 0` szűrővel
+  eldobott. A pontot tehát a forrás ötöshöz rendeli – a sort megtartjuk, ha van
+  pontja (`isScoringLineupStint`). Az ötösök összege 109–80, mind a 11 játékos
+  on +/- értéke egyezik a Kosarstat játékostáblájával.
+- [x] **Hivatalos +/- az on/off táblában** – a Kosarstat játékostáblájának
+  `+/-` oszlopa (`officialPlusMinus`) külön oszlopban; eltérésnél az MD
+  megnevezi az érintett játékosokat.
+- [x] **Egységes névírás** – a lineup blokk a Kosarstat neveit a meglévő
+  `resolvePlayerNames` párosítással box score írásmódra cseréli (KRIVACEVIC,
+  CHANDLER III. John Watson, DANIELS II Clarence Oliver); a nem párosítható név
+  a Kosarstat alakjában marad.
+- [x] **„Lineup +/- tartomány: −24 … +28”** – a megjegyzés a lineup oldal
+  összes tábláját olvasta, a −24 az ellenfél játékosa (Robert Ford III) volt.
+  Mostantól csak a saját csapat játékostáblájából, „Játékos +/- tartomány
+  (csapatnév, Kosarstat játékostábla)” címkével (erre a meccsre −10 … +28).
+- [x] **Teszt valós adattal** – `tests/postgame-lineup-export.test.ts` 5 új
+  esete az ASE–Sopron táblákkal (19 + 21 ötös, hivatalos +/-, box score nevek,
+  Halmai + Révész Def/40 = 29,1). `node --import tsx --test tests/*.test.ts`
+  (34 / 34), `tsc --noEmit`, `eslint` tiszta.
+- Mobil jegyzet az A egységhez nem kell: csak webes MD export és a webes
+  lineup-parser változott, `@core` modul nem; a mobil nem olvas lineup táblát.
+
+Nyitott (a további egységek):
+
+- [ ] **B – riportlogika (`@core`)**: közös fókuszlista a webbel (hiányzó 3.
+  fókuszpont), festék-szabály a dobástérkép gyűrű + festék zónájából,
+  ORB% ↔ második esély ellentmondás-ellenőrzés, Impact címkék, dobástérkép
+  lefedettség (63 / 64) jelzése.
+- [ ] **C – hiányzó blokkok 1–4**: Kosarstat csapatmutatók, negyedek kumulált
+  különbséggel, liga medián oszlop, dobástérkép és zónák.
+- [ ] **D – hiányzó blokkok 5–12**: dobásprofil, rotáció, hivatalos +/- a
+  játékostáblában, Off/40 és Def/40, játékos trend, faktor-kategóriák,
+  meccs-metaadat, assist-megjegyzés.
+- [ ] **E – web igazítása**: Net/40 csak 5 perc fölött a webes ötös-táblában.
+- [ ] **Adatbázis-szintű játékos-megfeleltetés** (`players` ↔ `league_players`
+  Kosarstat ID) – sémaváltozás, külön döntés; most a kódbeli névillesztő
+  egységesít.
+- [ ] **Képlet-lábjegyzetek a weben** (TO rate Oliver vs. Kosarstat, Usage%) –
+  az MD-ben megvannak, a webes nézetben nem látszanak.
+- [ ] **Böngészős ellenőrzés** (felhasználói lépés) – ASE–Sopron post-game →
+  Export MD.
 
 **H16 – `scrape.yml`: a Kosarstat import kapcsolat-időtúllépésnél idő előtt feladta ✓ (2026-10-10)**
 

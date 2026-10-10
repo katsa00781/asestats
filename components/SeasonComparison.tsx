@@ -7,7 +7,7 @@ import { Loader2, Download, ClipboardList, Save } from 'lucide-react';
 import { toast } from 'sonner';
 import type { PostgameLineupsMd } from '@/lib/export-to-md';
 import { playerSeasonToMd, pregameReportToMd, postgameReportToMd } from '@/lib/export-to-md';
-import { buildPostgameLineupExport } from '@/lib/postgame-lineup-export';
+import { buildPostgameLineupSides, isScoringLineupStint } from '@/lib/postgame-lineup-export';
 import { buildTeamSeasonMd } from '@/lib/team-season-export-data';
 import { useEffect, useMemo, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, Cell, LabelList, Legend, Line, LineChart, ResponsiveContainer, Scatter, ScatterChart, Tooltip, XAxis, YAxis, ZAxis } from 'recharts';
@@ -240,6 +240,8 @@ type KosarstatTeamLineupAnalysis = {
 type KosarstatLineupAnalysis = {
   gameId: string;
   selectedTeam: KosarstatTeamLineupAnalysis | null;
+  /** A `selectedTeam` oldala a lineup oldalon – a másik oldal az ellenfél. */
+  selectedSide: 'home' | 'away' | null;
   homeTeam: KosarstatTeamLineupAnalysis | null;
   awayTeam: KosarstatTeamLineupAnalysis | null;
 };
@@ -795,7 +797,7 @@ const buildComboStats = (stints: KosarstatLineupStint[], comboSize: 2 | 3): Kosa
   };
 
   stints.forEach(stint => {
-    if (stint.players.length < comboSize || stint.seconds <= 0) return;
+    if (stint.players.length < comboSize || !isScoringLineupStint(stint)) return;
     const combos = combinations(stint.players, comboSize);
     combos.forEach(players => {
       const key = [...players].sort().join(' | ');
@@ -1042,10 +1044,11 @@ const parseKosarstatTeamLineupAnalysis = (
       const minutesLabel = typeof rawRow[idx.min] === 'string' ? String(rawRow[idx.min]).trim() : '';
       if (players.length !== 5 || !minutesLabel || minutesLabel === 'Min') return;
       const seconds = parseMmSsToSeconds(minutesLabel);
-      if (seconds <= 0) return;
-
       const teamPts = parseSignedNumber(rawRow[idx.teamPts]) ?? 0;
       const oppPts = parseSignedNumber(rawRow[idx.oppPts]) ?? 0;
+      // A 0:00 idejű sor is kell, ha van pontja (csere közben dobott büntető) –
+      // nélküle az ötösök pontösszege elmarad a végeredménytől.
+      if (!isScoringLineupStint({ seconds, teamPts, oppPts })) return;
       const plusMinus = parseSignedNumber(rawRow[idx.pm]) ?? teamPts - oppPts;
 
       stints.push({
@@ -1338,6 +1341,7 @@ const parseKosarstatLineupAnalysis = (
   return {
     gameId,
     selectedTeam,
+    selectedSide: selectedTeam === null ? null : selectedTeam === parsedTeams[1] ? 'away' : 'home',
     homeTeam: parsedTeams[0] || null,
     awayTeam: parsedTeams[1] || null,
   };
@@ -3777,55 +3781,23 @@ export function SeasonComparison({
                 // Ensure the header reflects the selected team context when Kosarstat labels are swapped.
                 teamName: selectedTeamName || byOverlap.teamName,
               },
+              // A selectedTeam másolat, objektum-azonossággal nem kereshető vissza.
+              selectedSide: byOverlap === parsedLineupRaw.awayTeam ? 'away' : 'home',
             };
           }
         }
 
-        let totalRows = 0;
-        const plusMinusValues: number[] = [];
+        const totalRows = selectedTablesData.reduce(
+          (sum, table) => sum + (Array.isArray(table.rows) ? (table.rows as unknown[]).length : 0),
+          0
+        );
 
-        selectedTablesData.forEach(table => {
-          const headers = Array.isArray(table.headers) ? (table.headers as unknown[]) : [];
-          const plusMinusColumnIndexes = headers
-            .map((header, index) => ({
-              index,
-              text:
-                typeof header === 'string'
-                  ? header
-                      .toLowerCase()
-                      .replace(/\s+/g, ' ')
-                      .trim()
-                  : '',
-            }))
-            .filter(item =>
-              item.text.includes('+/-') ||
-              item.text.includes('±') ||
-              item.text.includes('plus/minus') ||
-              item.text === '+-'
-            )
-            .map(item => item.index);
-
-          const rows = Array.isArray(table.rows) ? (table.rows as unknown[]) : [];
-          totalRows += rows.length;
-
-          rows.forEach(rawRow => {
-            if (!Array.isArray(rawRow)) return;
-            const indexesToCheck = plusMinusColumnIndexes.length > 0
-              ? plusMinusColumnIndexes
-              : [];
-
-            indexesToCheck.forEach(index => {
-              const cell = rawRow[index];
-              if (typeof cell !== 'string') return;
-              const normalized = cell.trim().replace(',', '.');
-              if (!/^[-+]?\d{1,3}(?:\.\d+)?$/.test(normalized)) return;
-              const value = Number(normalized);
-              if (!Number.isFinite(value)) return;
-              if (Math.abs(value) > 100) return;
-              plusMinusValues.push(value);
-            });
-          });
-        });
+        // Csak a saját csapat játékostáblájából: a lineup oldal az ellenfél
+        // sorait is tartalmazza, azok +/- értéke nem a mi tartományunk.
+        const ownLineupTeam = parsedLineup?.selectedTeam ?? null;
+        const plusMinusValues = (ownLineupTeam?.playerMinutes ?? [])
+          .map(item => item.plusMinus)
+          .filter((value): value is number => value !== null && Number.isFinite(value));
 
         const notes: string[] = [
           `Kosarstat lineup adat csatolva (game=${gameId}, raw=${selectedLineupRawId}, tablazatok=${selectedTablesData.length}, sorok=${totalRows}).`,
@@ -3834,7 +3806,7 @@ export function SeasonComparison({
         if (plusMinusValues.length > 0) {
           const minPm = Math.min(...plusMinusValues);
           const maxPm = Math.max(...plusMinusValues);
-          notes.push(`Lineup +/- tartomány: ${minPm > 0 ? '+' : ''}${minPm} ... ${maxPm > 0 ? '+' : ''}${maxPm}.`);
+          notes.push(`Játékos +/- tartomány (${ownLineupTeam?.teamName || 'saját csapat'}, Kosarstat játékostábla): ${minPm > 0 ? '+' : ''}${minPm} ... ${maxPm > 0 ? '+' : ''}${maxPm}.`);
         }
 
         if (loadedQuarterStats.length > 0) {
@@ -9425,25 +9397,38 @@ export function SeasonComparison({
     return kosarstatLineupAnalysis.selectedTeam || kosarstatLineupAnalysis.homeTeam || kosarstatLineupAnalysis.awayTeam;
   }, [kosarstatLineupAnalysis]);
 
-  // A post-game Export MD ötös-blokkja: a saját és az ellenfél Kosarstat lineupja.
+  // A post-game Export MD ötös-blokkja: a saját és az ellenfél Kosarstat lineupja,
+  // box score névírással. Az ellenfél a lineup oldal másik oldala – a
+  // `selectedTeam` másolat lehet, ezért objektum-azonossággal nem kereshető.
   const postgameLineupExport = useMemo<PostgameLineupsMd>(() => {
     const ownTeam = activeKosarstatTeamAnalysis;
     if (!postgameReport || !kosarstatLineupAnalysis || !ownTeam) return { own: null, opponent: null };
 
-    // Ha a lineup egyetlen játékosa sem párosítható a box score-ral, az ötös-adat
-    // nem ehhez a csapathoz tartozik – ilyenkor az ellenfél oldala sem azonosítható.
-    const lineupNames = Array.from(new Set(ownTeam.stints.flatMap(stint => stint.players)));
-    const boxNames = postgameReport.playerReport.players.map(player => player.name);
-    if (resolvePlayerNames(lineupNames, boxNames).matched.size === 0) return { own: null, opponent: null };
+    const opponentTeam = kosarstatLineupAnalysis.selectedSide === 'home'
+      ? kosarstatLineupAnalysis.awayTeam
+      : kosarstatLineupAnalysis.selectedSide === 'away'
+        ? kosarstatLineupAnalysis.homeTeam
+        : null;
+    const toInput = (team: KosarstatTeamLineupAnalysis) => ({
+      teamName: team.teamName,
+      starters: team.starters,
+      stints: team.stints,
+      officialPlayers: team.playerMinutes.map(item => ({ player: item.player, plusMinus: item.plusMinus })),
+    });
+    const opponentBoxNames = selectedGame?.opponentGameId
+      ? playerGameStats
+          .filter(row => row.game_id === selectedGame.opponentGameId)
+          .map(row => row.players?.name?.trim() ?? '')
+          .filter(Boolean)
+      : [];
 
-    const opponentTeam = [kosarstatLineupAnalysis.homeTeam, kosarstatLineupAnalysis.awayTeam]
-      .find(team => team !== null && team !== ownTeam) ?? null;
-
-    return {
-      own: buildPostgameLineupExport(ownTeam),
-      opponent: opponentTeam ? buildPostgameLineupExport(opponentTeam) : null,
-    };
-  }, [activeKosarstatTeamAnalysis, kosarstatLineupAnalysis, postgameReport]);
+    return buildPostgameLineupSides({
+      own: toInput(ownTeam),
+      opponent: opponentTeam ? toInput(opponentTeam) : null,
+      ownBoxNames: postgameReport.playerReport.players.map(player => player.name),
+      opponentBoxNames,
+    });
+  }, [activeKosarstatTeamAnalysis, kosarstatLineupAnalysis, playerGameStats, postgameReport, selectedGame]);
 
   // Páros / hármas rangsor csak legalább 5 perces együttállásból.
   const rankedComboStats = useMemo(() => {

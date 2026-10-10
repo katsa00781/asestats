@@ -971,16 +971,36 @@ export function postgameLineupsToMd(
     ...model.lineups.map((lineup, index) => `| ${index + 1} | ${lineup.players.join(' | ')} | ${unitCells(lineup)} |`),
   ];
 
-  const onOffTable = (model: PostgameLineupExport) => [
-    `| Játékos | Poszt (perc) | Pályán | Pontok (on) | On +/- | On net/40 | Padon | Pontok (off) | Off +/- | Off net/40 |`,
-    `|---------|--------------|--------|-------------|--------|-----------|-------|--------------|---------|------------|`,
-    ...model.onOff.map(item => {
-      const onDiff = item.onFor - item.onAgainst;
-      const offDiff = item.offFor - item.offAgainst;
-      const positions = item.positions.map(pos => `${pos.position} ${mmss(pos.seconds)}`).join(' · ');
-      return `| ${item.player} | ${positions} | ${mmss(item.onSeconds)} | ${item.onFor}–${item.onAgainst} | ${signedInt(onDiff)} | ${per40(onDiff, item.onSeconds)} | ${mmss(item.offSeconds)} | ${item.offFor}–${item.offAgainst} | ${signedInt(offDiff)} | ${per40(offDiff, item.offSeconds)} |`;
-    }),
-  ];
+  // A „Hivatalos +/-” oszlop (Kosarstat játékostábla) csak akkor jelenik meg, ha
+  // a forrás adott ilyen sort; az ötösökből számolt on +/- ezzel ellenőrizhető.
+  const onOffTable = (model: PostgameLineupExport) => {
+    const hasOfficial = model.onOff.some(item => item.officialPlusMinus !== null);
+    const mismatches = model.onOff.filter(
+      item => item.officialPlusMinus !== null && item.officialPlusMinus !== item.onFor - item.onAgainst
+    );
+    const out = [
+      `| Játékos | Poszt (perc) | Pályán | Pontok (on) | On +/- |${hasOfficial ? ' Hivatalos +/- |' : ''} On net/40 | Padon | Pontok (off) | Off +/- | Off net/40 |`,
+      `|---------|--------------|--------|-------------|--------|${hasOfficial ? '---------------|' : ''}-----------|-------|--------------|---------|------------|`,
+      ...model.onOff.map(item => {
+        const onDiff = item.onFor - item.onAgainst;
+        const offDiff = item.offFor - item.offAgainst;
+        const positions = item.positions.map(pos => `${pos.position} ${mmss(pos.seconds)}`).join(' · ');
+        const official = hasOfficial
+          ? ` ${item.officialPlusMinus !== null ? signedInt(item.officialPlusMinus) : '–'} |`
+          : '';
+        return `| ${item.player} | ${positions} | ${mmss(item.onSeconds)} | ${item.onFor}–${item.onAgainst} | ${signedInt(onDiff)} |${official} ${per40(onDiff, item.onSeconds)} | ${mmss(item.offSeconds)} | ${item.offFor}–${item.offAgainst} | ${signedInt(offDiff)} | ${per40(offDiff, item.offSeconds)} |`;
+      }),
+    ];
+    if (mismatches.length > 0) {
+      out.push(
+        ``,
+        `> **Eltérés:** az ötösökből számolt on +/- nem egyezik a Kosarstat játékostáblájával: ${mismatches
+          .map(item => `${item.player} (számolt ${signedInt(item.onFor - item.onAgainst)}, hivatalos ${signedInt(item.officialPlusMinus ?? 0)})`)
+          .join(', ')} – az ötös-tábla ezekre a játékosokra hiányos.`
+      );
+    }
+    return out;
+  };
 
   const comboTable = (label: string, combos: PostgameLineupUnit[]) => [
     `| ${label} | Perc | Szerzett | Kapott | +/- | Net/40 |`,
@@ -1026,11 +1046,13 @@ export function postgameLineupsToMd(
     if (opponent.starters.length > 0) lines.push(`**Kezdő ötös:** ${opponent.starters.join(' · ')}`);
     lines.push(...coverage(opponent, game.pointsAgainst, game.pointsFor), ``, ...lineupTable(opponent));
     lines.push(``, `### Ellenfél on/off – ${game.opponentName}`, ``, ...onOffTable(opponent));
+  } else {
+    lines.push(``, `*Az ellenfél (${game.opponentName}) ötös-adata nem elérhető: a Kosarstat lineup oldalán nincs az ellenfélhez párosítható ötös-tábla.*`);
   }
 
   lines.push(
     ``,
-    `*Forrás: a Kosarstat lineup oldalának ötös-táblája erre a meccsre; a nevek a Kosarstat írásmódját követik, a poszt a Kosarstat ötös-beosztása (PG–C). A forrás soronként másodpercre kerekít, ezért az idők összege 1–2 másodperccel eltérhet a teljes játékidőtől. Szerzett / kapott = az adott csapat és az ellenfele pontjai, amíg az egység a pályán volt (az ellenfél tábláiban az ellenfél a „szerzett”). Net/40 = pontkülönbség 40 percre vetítve – csak legalább ${minMinutes} perc együtt töltött időnél szerepel, mert rövidebb mintából irreális érték jön ki. A párosok és hármasok az ötösökből összevont együttállások; a hármasokból a ${MAX_TRIOS} legtöbbet együtt játszó szerepel. On/off = a csapat pontkülönbsége a játékos pályán, illetve padon töltött ideje alatt; nem a játékos egyéni hatása, a csapattársak és az ellenfél ötösei is alakítják. Egyetlen meccs kis minta: az értékek mintázatot jeleznek, nem végleges ítéletet.*`
+    `*Forrás: a Kosarstat lineup oldalának ötös-táblája erre a meccsre; a nevek a box score írásmódját követik (a Kosarstat nevei névillesztéssel átírva – a nem párosítható név a Kosarstat alakjában marad), a poszt a Kosarstat ötös-beosztása (PG–C). A forrás soronként másodpercre kerekít, ezért az idők összege 1–2 másodperccel eltérhet a teljes játékidőtől. A 0:00 idejű ötös-sor álló óra alatt szerzett pontot jelöl (jellemzően csere közben dobott büntető): a pont a pályán lévő ötöshöz tartozik, játékidő nélkül. Hivatalos +/- = a Kosarstat játékostáblájának értéke, az ötösökből számolt on +/- ellenőrzésére. Szerzett / kapott = az adott csapat és az ellenfele pontjai, amíg az egység a pályán volt (az ellenfél tábláiban az ellenfél a „szerzett”). Net/40 = pontkülönbség 40 percre vetítve – csak legalább ${minMinutes} perc együtt töltött időnél szerepel, mert rövidebb mintából irreális érték jön ki. A párosok és hármasok az ötösökből összevont együttállások; a hármasokból a ${MAX_TRIOS} legtöbbet együtt játszó szerepel. On/off = a csapat pontkülönbsége a játékos pályán, illetve padon töltött ideje alatt; nem a játékos egyéni hatása, a csapattársak és az ellenfél ötösei is alakítják. Egyetlen meccs kis minta: az értékek mintázatot jeleznek, nem végleges ítéletet.*`
   );
 
   return lines;

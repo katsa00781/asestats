@@ -2,6 +2,8 @@
 // párosok, hármasok). Tiszta modul – a nyers Kosarstat táblák értelmezése a
 // `SeasonComparison` parserében marad, ide már a kinyert ötösök érkeznek.
 
+import { resolvePlayerNames } from './player-name-match';
+
 /** A Kosarstat ötös-tábla oszlopsorrendje: az ötös i. játékosa ezen a poszton állt. */
 export const LINEUP_SLOT_POSITIONS = ['PG', 'SG', 'SF', 'PF', 'C'] as const;
 
@@ -26,10 +28,18 @@ export type PostgameLineupStintInput = {
   oppPts: number;
 };
 
+/** A Kosarstat játékostáblájának sora: a forrás saját, játékosonkénti +/- értéke. */
+export type PostgameLineupOfficialRow = {
+  player: string;
+  plusMinus: number | null;
+};
+
 export type PostgameLineupInput = {
   teamName: string;
   starters: string[];
   stints: PostgameLineupStintInput[];
+  /** A Kosarstat játékostáblája – az ötösökből számolt on/off ellenőrzéséhez. */
+  officialPlayers?: PostgameLineupOfficialRow[];
 };
 
 /** Egy együtt pályán lévő egység (ötös, páros vagy hármas) ideje és pontjai. */
@@ -50,6 +60,8 @@ export type PostgameLineupOnOff = {
   offSeconds: number;
   offFor: number;
   offAgainst: number;
+  /** A Kosarstat játékostáblájának +/- értéke; `null`, ha a forrásban nincs ilyen sor. */
+  officialPlusMinus: number | null;
 };
 
 export type PostgameLineupExport = {
@@ -103,11 +115,19 @@ const buildCombos = (lineups: PostgameLineupUnit[], size: number, limit?: number
 };
 
 /**
+ * Értékelhető-e az ötös-sor. A 0:00 idejű sor is az, ha van pontja: a Kosarstat
+ * az álló óra alatt (jellemzően csere közben) dobott büntetőt külön, idő nélküli
+ * ötöshöz rendeli – eldobva a pontösszeg és az on/off elmarad a végeredménytől.
+ */
+export const isScoringLineupStint = (stint: { seconds: number; teamPts: number; oppPts: number }) =>
+  stint.seconds > 0 || stint.teamPts !== 0 || stint.oppPts !== 0;
+
+/**
  * Egy csapat meccsbeli ötös-adatai az exporthoz. `null`, ha nincs értékelhető
- * (öt játékosból álló, pozitív idejű) ötös-sor.
+ * (öt játékosból álló, időt vagy pontot tartalmazó) ötös-sor.
  */
 export function buildPostgameLineupExport(input: PostgameLineupInput): PostgameLineupExport | null {
-  const stints = input.stints.filter(stint => stint.players.length === 5 && stint.seconds > 0);
+  const stints = input.stints.filter(stint => stint.players.length === 5 && isScoringLineupStint(stint));
   if (stints.length === 0) return null;
 
   // Ugyanaz az öt játékos más poszt-kiosztással külön sorban is szerepelhet –
@@ -146,6 +166,8 @@ export function buildPostgameLineupExport(input: PostgameLineupInput): PostgameL
     { seconds: 0, teamPts: 0, oppPts: 0 }
   );
 
+  const officialByPlayer = new Map((input.officialPlayers ?? []).map(row => [row.player, row.plusMinus]));
+
   const onOff: PostgameLineupOnOff[] = Array.from(slotSecondsByPlayer.entries())
     .map(([player, slots]) => {
       const on = lineups
@@ -170,6 +192,7 @@ export function buildPostgameLineupExport(input: PostgameLineupInput): PostgameL
         offSeconds: total.seconds - on.seconds,
         offFor: total.teamPts - on.teamPts,
         offAgainst: total.oppPts - on.oppPts,
+        officialPlusMinus: officialByPlayer.get(player) ?? null,
       };
     })
     .sort((a, b) => b.onSeconds - a.onSeconds || byName(a.player, b.player));
@@ -184,5 +207,61 @@ export function buildPostgameLineupExport(input: PostgameLineupInput): PostgameL
     onOff,
     pairs: buildCombos(lineups, 2),
     trios: buildCombos(lineups, 3, MAX_TRIOS),
+  };
+}
+
+const lineupPlayerNames = (input: PostgameLineupInput) =>
+  Array.from(new Set(input.stints.flatMap(stint => stint.players)));
+
+/** A Kosarstat nevek cseréje a párosított (box score) írásmódra; a többi név marad. */
+const renameLineupPlayers = (input: PostgameLineupInput, names: Map<string, string>): PostgameLineupInput => {
+  const rename = (player: string) => names.get(player) ?? player;
+  return {
+    ...input,
+    starters: input.starters.map(rename),
+    stints: input.stints.map(stint => ({ ...stint, players: stint.players.map(rename) })),
+    officialPlayers: input.officialPlayers?.map(row => ({ ...row, player: rename(row.player) })),
+  };
+};
+
+export type PostgameLineupSidesInput = {
+  /** A saját csapat Kosarstat lineupja (a hívó oldal szerint választja ki). */
+  own: PostgameLineupInput | null;
+  /** A lineup oldal másik csapata. */
+  opponent: PostgameLineupInput | null;
+  /** A saját csapat box score nevei – ezekhez igazodik a kiírt írásmód. */
+  ownBoxNames: string[];
+  /** Az ellenfél box score nevei; üres, ha az ellenfél meccs-sora nem érhető el. */
+  opponentBoxNames: string[];
+};
+
+/**
+ * A két csapat ötös-modellje az exporthoz, box score névírással.
+ *
+ * - Ha a saját lineup egyetlen játékosa sem párosítható a box score-ral, az
+ *   ötös-adat nem ehhez a csapathoz tartozik: mindkét oldal `null`.
+ * - Az ellenfél oldala `null`, ha a játékosainak legalább fele a **saját** box
+ *   score-ral párosítható – akkor az a saját csapat adata volna más címke alatt.
+ */
+export function buildPostgameLineupSides(input: PostgameLineupSidesInput): {
+  own: PostgameLineupExport | null;
+  opponent: PostgameLineupExport | null;
+} {
+  if (!input.own) return { own: null, opponent: null };
+
+  const ownNames = resolvePlayerNames(lineupPlayerNames(input.own), input.ownBoxNames);
+  if (ownNames.matched.size === 0) return { own: null, opponent: null };
+
+  const own = buildPostgameLineupExport(renameLineupPlayers(input.own, ownNames.matched));
+  if (!input.opponent) return { own, opponent: null };
+
+  const opponentPlayers = lineupPlayerNames(input.opponent);
+  const overlapsOwn = resolvePlayerNames(opponentPlayers, input.ownBoxNames).matched.size;
+  if (opponentPlayers.length === 0 || overlapsOwn * 2 >= opponentPlayers.length) return { own, opponent: null };
+
+  const opponentNames = resolvePlayerNames(opponentPlayers, input.opponentBoxNames);
+  return {
+    own,
+    opponent: buildPostgameLineupExport(renameLineupPlayers(input.opponent, opponentNames.matched)),
   };
 }

@@ -1,5 +1,5 @@
 import type { PostgameLineupStintInput } from '../lib/postgame-lineup-export';
-import { buildPostgameLineupExport, LINEUP_NET_MIN_SECONDS, MAX_TRIOS } from '../lib/postgame-lineup-export';
+import { buildPostgameLineupExport, buildPostgameLineupSides, LINEUP_NET_MIN_SECONDS, MAX_TRIOS } from '../lib/postgame-lineup-export';
 import { postgameLineupsToMd } from '../lib/export-to-md';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
@@ -151,4 +151,172 @@ test('Hiányos vagy hiányzó ötös-adat jelölve van', () => {
   const missing = postgameLineupsToMd({ own: null, opponent: null }, GAME).join('\n');
   assert.match(missing, /Nem elérhető adat/);
   assert.doesNotMatch(missing, /\| # \|/);
+});
+
+// Valós adat: Atomerőmű SE – Sopron KC 109–80 (2026-10-10), kosarstat_game_id
+// 20261010102163. Az ASE táblájának utolsó sora 0:00 idejű, 1–0 ponttal: csere
+// közben dobott büntető, a Kosarstat idő nélküli ötöshöz rendeli.
+const ASE_SOPRON: PostgameLineupStintInput[] = [
+  stint('Yasiin JOSEPH, Jay Jay CHANDLER, BENKE Szilárd, RÉVÉSZ Ádám, Kalif YOUNG', '11:02', 29, 17),
+  stint('HALMAI Dániel, Clarence DANIELS, GÉRINGER Gergő, EILINGSFELD János, KRIVACSEVICS Markó', '3:59', 7, 12),
+  stint('Yasiin JOSEPH, Clarence DANIELS, BENKE Szilárd, EILINGSFELD János, Kalif YOUNG', '3:49', 5, 5),
+  stint('HALMAI Dániel, Jay Jay CHANDLER, BENKE Szilárd, GÉRINGER Gergő, Kalif YOUNG', '2:43', 5, 5),
+  stint('HALMAI Dániel, MERKL Barna, Clarence DANIELS, GÉRINGER Gergő, RÉVÉSZ Ádám', '2:35', 10, 1),
+  stint('HALMAI Dániel, MERKL Barna, Clarence DANIELS, GÉRINGER Gergő, KRIVACSEVICS Markó', '2:14', 2, 10),
+  stint('HALMAI Dániel, Clarence DANIELS, BENKE Szilárd, GÉRINGER Gergő, Kalif YOUNG', '2:01', 5, 4),
+  stint('HALMAI Dániel, Jay Jay CHANDLER, BENKE Szilárd, EILINGSFELD János, Kalif YOUNG', '1:52', 8, 8),
+  stint('HALMAI Dániel, Jay Jay CHANDLER, Clarence DANIELS, GÉRINGER Gergő, Kalif YOUNG', '1:37', 7, 2),
+  stint('HALMAI Dániel, Jay Jay CHANDLER, Clarence DANIELS, EILINGSFELD János, RÉVÉSZ Ádám', '1:30', 5, 0),
+  stint('HALMAI Dániel, Clarence DANIELS, BENKE Szilárd, EILINGSFELD János, RÉVÉSZ Ádám', '1:25', 8, 2),
+  stint('HALMAI Dániel, Jay Jay CHANDLER, BENKE Szilárd, RÉVÉSZ Ádám, Kalif YOUNG', '1:11', 5, 0),
+  stint('Yasiin JOSEPH, Clarence DANIELS, BENKE Szilárd, EILINGSFELD János, KRIVACSEVICS Markó', '1:04', 8, 5),
+  stint('HALMAI Dániel, Jay Jay CHANDLER, Clarence DANIELS, GÉRINGER Gergő, RÉVÉSZ Ádám', '0:48', 0, 3),
+  stint('HALMAI Dániel, Jay Jay CHANDLER, BENKE Szilárd, EILINGSFELD János, RÉVÉSZ Ádám', '0:46', 0, 0),
+  stint('Yasiin JOSEPH, Jay Jay CHANDLER, BENKE Szilárd, GÉRINGER Gergő, Kalif YOUNG', '0:44', 4, 0),
+  stint('Yasiin JOSEPH, Jay Jay CHANDLER, BENKE Szilárd, EILINGSFELD János, RÉVÉSZ Ádám', '0:22', 0, 3),
+  stint('Yasiin JOSEPH, Clarence DANIELS, BENKE Szilárd, EILINGSFELD János, RÉVÉSZ Ádám', '0:18', 0, 3),
+  stint('HALMAI Dániel, Clarence DANIELS, BENKE Szilárd, EILINGSFELD János, Kalif YOUNG', '0:00', 1, 0),
+];
+/** A Kosarstat játékostáblájának +/- oszlopa (a „hivatalos” érték). */
+const ASE_SOPRON_OFFICIAL = [
+  ['BENKE Szilárd', 26], ['Kalif YOUNG', 28], ['HALMAI Dániel', 16], ['Jay Jay CHANDLER', 25],
+  ['Clarence DANIELS', 11], ['RÉVÉSZ Ádám', 28], ['Yasiin JOSEPH', 13], ['GÉRINGER Gergő', 3],
+  ['EILINGSFELD János', 4], ['KRIVACSEVICS Markó', -10], ['MERKL Barna', 1],
+].map(([player, plusMinus]) => ({ player: String(player), plusMinus: Number(plusMinus) }));
+const SOPRON: PostgameLineupStintInput[] = [
+  stint('Robert FORD III, Trey WERTZ, MESZLÉNYI Róbert, KUCSERA Dániel, Domagoj PROLETA', '7:38', 15, 24),
+  stint('Robert FORD III, RUJÁK András, Trey WERTZ, KOVÁCS Benedek, KUCSERA Dániel', '3:16', 8, 5),
+  stint('RUJÁK András, Trey WERTZ, HAJDU Péter, KUCSERA Dániel, Domagoj PROLETA', '2:52', 6, 7),
+  stint('RUJÁK András, Trey WERTZ, KOVÁCS Benedek, HAJDU Péter, KELENFÖLDI Domonkos', '2:44', 7, 11),
+  stint('Robert FORD III, RUJÁK András, MESZLÉNYI Róbert, KOVÁCS Benedek, Domagoj PROLETA', '2:18', 3, 5),
+  stint('Robert FORD III, RUJÁK András, Trey WERTZ, KUCSERA Dániel, Domagoj PROLETA', '2:03', 2, 8),
+  stint('RUJÁK András, Trey WERTZ, MESZLÉNYI Róbert, KUCSERA Dániel, KELENFÖLDI Domonkos', '2:03', 2, 2),
+  stint('RUJÁK András, Trey WERTZ, MESZLÉNYI Róbert, KUCSERA Dániel, Domagoj PROLETA', '2:01', 4, 5),
+  stint('Robert FORD III, RUJÁK András, HAJDU Péter, KUCSERA Dániel, Domagoj PROLETA', '1:52', 8, 8),
+  stint('MESZLÉNYI Róbert, KELLER Bendegúz, HAJDU Péter, KELENFÖLDI Domonkos, Domagoj PROLETA', '1:46', 1, 5),
+  stint('Trey WERTZ, MESZLÉNYI Róbert, HAJDU Péter, KELENFÖLDI Domonkos, Domagoj PROLETA', '1:41', 8, 2),
+  stint('Robert FORD III, RUJÁK András, MESZLÉNYI Róbert, KOVÁCS Benedek, KUCSERA Dániel', '1:37', 2, 7),
+  stint('RUJÁK András, Trey WERTZ, HAJDU Péter, KUCSERA Dániel, KELENFÖLDI Domonkos', '1:33', 4, 2),
+  stint('Robert FORD III, Trey WERTZ, MESZLÉNYI Róbert, KUCSERA Dániel, KELENFÖLDI Domonkos', '1:11', 0, 5),
+  stint('Robert FORD III, Trey WERTZ, MESZLÉNYI Róbert, KOVÁCS Benedek, KUCSERA Dániel', '1:02', 3, 0),
+  stint('Robert FORD III, MESZLÉNYI Róbert, KOVÁCS Benedek, KUCSERA Dániel, Domagoj PROLETA', '1:01', 3, 0),
+  stint('Robert FORD III, Trey WERTZ, KOVÁCS Benedek, HAJDU Péter, KELENFÖLDI Domonkos', '0:53', 2, 5),
+  stint('MESZLÉNYI Róbert, KELLER Bendegúz, HAJDU Péter, KUCSERA Dániel, KELENFÖLDI Domonkos', '0:49', 0, 5),
+  stint('Trey WERTZ, KOVÁCS Benedek, HAJDU Péter, KELENFÖLDI Domonkos, Domagoj PROLETA', '0:33', 2, 0),
+  stint('RUJÁK András, Trey WERTZ, KOVÁCS Benedek, HAJDU Péter, KUCSERA Dániel', '0:33', 0, 0),
+  stint('Robert FORD III, MESZLÉNYI Róbert, KOVÁCS Benedek, HAJDU Péter, Domagoj PROLETA', '0:32', 0, 3),
+];
+// A Hunbasket box score írásmódja (a `players` tábla nevei) ugyanerre a meccsre.
+const ASE_BOX_NAMES = [
+  'BENKE Szilárd', 'YOUNG Kalif Karl', 'HALMAI Dániel', 'CHANDLER III. John Watson', 'DANIELS II Clarence Oliver',
+  'RÉVÉSZ Ádám', 'JOSEPH Yasiin Yousef', 'GÉRINGER Gergő', 'EILINGSFELD János', 'KRIVACEVIC Markó', 'MERKL Barna Márton',
+];
+const SOPRON_BOX_NAMES = [
+  'KUCSERA Dániel', 'WERTZ III Langston Boyer Walter', 'MESZLÉNYI Róbert Vilmos', 'PROLETA Domagoj', 'RUJÁK András Baldvin',
+  'FORD III Robert Edward', 'HAJDU Péter Márton', 'KOVÁCS Benedek Máté', 'KELENFÖLDI Domonkos', 'KELLER Bendegúz',
+];
+const SOPRON_GAME = { teamName: 'Atomerőmű SE', opponentName: 'Sopron KC', pointsFor: 109, pointsAgainst: 80 };
+const aseSopronInput = () => ({
+  teamName: 'Atomerőmű SE', starters: STARTERS, stints: ASE_SOPRON, officialPlayers: ASE_SOPRON_OFFICIAL,
+});
+
+test('A 0:00 idejű, pontot tartalmazó ötös-sor megmarad: a pontösszeg és az on/off egyezik', () => {
+  const model = buildPostgameLineupExport(aseSopronInput());
+  assert.ok(model);
+  assert.equal(model.lineups.length, 19);
+  assert.equal(model.totalFor, 109);
+  assert.equal(model.totalAgainst, 80);
+  // A box +/- (Kosarstat játékostábla) mind a 11 játékosra egyezik a számolt on +/- értékkel.
+  for (const item of model.onOff) {
+    assert.equal(item.onFor - item.onAgainst, item.officialPlusMinus, item.player);
+  }
+  const plusMinus = (player: string) => {
+    const item = model.onOff.find(row => row.player === player);
+    return item ? item.onFor - item.onAgainst : null;
+  };
+  assert.deepEqual(
+    ['BENKE Szilárd', 'HALMAI Dániel', 'Clarence DANIELS', 'EILINGSFELD János', 'Kalif YOUNG'].map(plusMinus),
+    [26, 16, 11, 4, 28]
+  );
+  // A pont nélküli 0:00 sor továbbra sem ötös.
+  const empty = buildPostgameLineupExport({
+    teamName: 'Teszt', starters: [],
+    stints: [{ players: ['A', 'B', 'C', 'D', 'E'], seconds: 0, teamPts: 0, oppPts: 0 }],
+  });
+  assert.equal(empty, null);
+});
+
+test('HALMAI + RÉVÉSZ a meccs legjobb védekező párosa (Def/40 = 29,1)', () => {
+  const model = buildPostgameLineupExport(aseSopronInput());
+  const pair = model?.pairs.find(item => item.players.join('+') === 'HALMAI Dániel+RÉVÉSZ Ádám');
+  assert.ok(pair);
+  assert.equal(pair.seconds, 495);
+  assert.equal(Math.round((pair.oppPts * 2400 * 10) / pair.seconds) / 10, 29.1);
+});
+
+test('Az ellenfél blokk az ellenfél lineupja, a nevek box score írásmódban', () => {
+  const sides = buildPostgameLineupSides({
+    own: aseSopronInput(),
+    opponent: { teamName: 'Sopron KC', starters: [], stints: SOPRON },
+    ownBoxNames: ASE_BOX_NAMES,
+    opponentBoxNames: SOPRON_BOX_NAMES,
+  });
+  assert.ok(sides.own && sides.opponent);
+  const ownPlayers = sides.own.onOff.map(item => item.player);
+  // Egyetlen írásmód: a Kosarstat alak (KRIVACSEVICS, Jay Jay CHANDLER) eltűnik.
+  assert.ok(ownPlayers.includes('KRIVACEVIC Markó'));
+  assert.ok(ownPlayers.includes('CHANDLER III. John Watson'));
+  assert.ok(ownPlayers.includes('DANIELS II Clarence Oliver'));
+  assert.ok(!ownPlayers.some(name => /KRIVACSEVICS|Jay Jay|Clarence DANIELS/.test(name)));
+  assert.equal(sides.own.onOff.find(item => item.player === 'KRIVACEVIC Markó')?.officialPlusMinus, -10);
+
+  const opponentPlayers = sides.opponent.onOff.map(item => item.player);
+  assert.ok(opponentPlayers.includes('FORD III Robert Edward'));
+  assert.ok(opponentPlayers.includes('WERTZ III Langston Boyer Walter'));
+  assert.ok(!opponentPlayers.some(name => ASE_BOX_NAMES.includes(name)));
+  assert.deepEqual([sides.opponent.totalFor, sides.opponent.totalAgainst], [80, 109]);
+  // Kosarstat játékostábla: Robert FORD III −24 (46–70).
+  const ford = sides.opponent.onOff.find(item => item.player === 'FORD III Robert Edward');
+  assert.deepEqual([ford?.onFor, ford?.onAgainst], [46, 70]);
+
+  const md = postgameLineupsToMd(sides, SOPRON_GAME).join('\n');
+  assert.ok(md.includes('**Pontok ez idő alatt:** 109–80'));
+  assert.doesNotMatch(md, /Eltérés/);
+  assert.match(md, /### Ellenfél ötösei – Sopron KC/);
+  assert.match(md, /\| Hivatalos \+\/- \|/);
+  assert.ok(md.includes('| BENKE Szilárd | SF 27:17 | 27:17 | 78–52 | +26 | +26 |'));
+});
+
+test('A saját csapat lineupja nem jelenhet meg ellenfélként', () => {
+  // A hibás eset: az „ellenfél” oldalra is a saját csapat lineupja kerül.
+  const sides = buildPostgameLineupSides({
+    own: aseSopronInput(),
+    opponent: { teamName: 'Sopron KC', starters: [], stints: ASE_SOPRON },
+    ownBoxNames: ASE_BOX_NAMES,
+    opponentBoxNames: SOPRON_BOX_NAMES,
+  });
+  assert.ok(sides.own);
+  assert.equal(sides.opponent, null);
+  const md = postgameLineupsToMd(sides, SOPRON_GAME).join('\n');
+  assert.match(md, /Az ellenfél \(Sopron KC\) ötös-adata nem elérhető/);
+  assert.doesNotMatch(md, /### Ellenfél ötösei/);
+
+  // Ha a lineup egyetlen játékosa sem párosítható a box score-ral, nincs ötös-adat.
+  const foreign = buildPostgameLineupSides({
+    own: { teamName: 'Atomerőmű SE', starters: [], stints: SOPRON },
+    opponent: null,
+    ownBoxNames: ASE_BOX_NAMES,
+    opponentBoxNames: [],
+  });
+  assert.deepEqual(foreign, { own: null, opponent: null });
+});
+
+test('Eltérő hivatalos +/- esetén az MD megnevezi az érintett játékosokat', () => {
+  // A 0:00 sor nélkül (a korábbi hiba) négy-öt játékos on +/- értéke 1-gyel elmarad.
+  const model = buildPostgameLineupExport({ ...aseSopronInput(), stints: ASE_SOPRON.slice(0, -1) });
+  const md = postgameLineupsToMd({ own: model, opponent: null }, SOPRON_GAME).join('\n');
+  assert.match(md, /az ötös-tábla pontösszege \(108–80\) nem egyezik a végeredménnyel \(109–80\)/);
+  assert.match(md, /BENKE Szilárd \(számolt \+25, hivatalos \+26\)/);
+  assert.match(md, /HALMAI Dániel \(számolt \+15, hivatalos \+16\)/);
+  assert.doesNotMatch(md, /RÉVÉSZ Ádám \(számolt/);
 });
