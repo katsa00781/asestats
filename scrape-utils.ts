@@ -414,6 +414,32 @@ export const formatSupabaseError = (error: unknown): string => {
   return String(error);
 };
 
+// A `timed_out` a net::ERR_TIMED_OUT és a net::ERR_CONNECTION_TIMED_OUT kódot is lefedi.
+const RETRYABLE_NAVIGATION_MARKERS = [
+  'timeout',
+  'timed_out',
+  'err_network_changed',
+  'err_internet_disconnected',
+  'err_connection_reset',
+  'err_connection_closed',
+  'err_connection_aborted',
+  'err_connection_refused',
+  'err_name_not_resolved',
+  'err_address_unreachable',
+  'err_empty_response',
+];
+
+/**
+ * Átmeneti (újrapróbálható) navigációs hiba-e: Playwright időtúllépés vagy
+ * kapcsolat-szintű Chromium net:: hiba. Tartalmi hibát (pl. tanúsítvány,
+ * érvénytelen URL) nem tekint annak.
+ */
+export const isRetryableNavigationError = (error: unknown): boolean => {
+  const message = error instanceof Error ? error.message : String(error || '');
+  const lowered = message.toLowerCase();
+  return RETRYABLE_NAVIGATION_MARKERS.some(marker => lowered.includes(marker));
+};
+
 /**
  * Supabase kliens a CLI szkriptekhez: .env.local betöltés + env ellenőrzés.
  * Service role kulcsot preferálja, anon kulcsra esik vissza.

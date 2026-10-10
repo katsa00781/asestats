@@ -1,6 +1,6 @@
 # BACKLOG.md – ASEStats Projekt
 
-_Utoljára frissítve: 2026-10-04 (H15 – post-game Export MD: Kosarstat ötösök és on/off blokk külső LLM-elemzéshez)_
+_Utoljára frissítve: 2026-10-10 (H16 – Kosarstat import: a kapcsolat-időtúllépés újrapróbálható lett)_
 
 ---
 
@@ -690,6 +690,21 @@ a nézőpont nem hiba.
   `seasonName` paramétert kap, a fejléc közös `seasonLeagueLine()` segéddel
   „Szezon: 2026/2027” – a Liga csak akkor jelenik meg, ha különbözik. Csak
   webes MD export, mobil jegyzet nem kell.
+
+**H16 – `scrape.yml`: a Kosarstat import kapcsolat-időtúllépésnél idő előtt feladta ✓ (2026-10-10)**
+
+Tünet: a GitHub Actions `Kosarstat play-by-play import` lépése `exit code 1`-gyel állt le a szezonlista oldalon (`games/season_games/?season=2627`): két `NAV RETRY` (60 mp-es Playwright időtúllépés) után a harmadik próba `net::ERR_CONNECTION_TIMED_OUT` hibával azonnal elbuktatta a futást, pedig 4 próba van beállítva.
+
+Ok: (1) a `kosarstat.hu` a runnerről percekig nem volt elérhető – ez külső, átmeneti hiba; fejlesztői gépről ugyanaz az oldal 2–3 mp alatt 200-zal válaszol, a szezonkód és az URL rendben van. (2) Kódhiba: az `isRetryableNavigationError` listája a `timeout` és az `err_timed_out` mintát kereste, a `net::ERR_CONNECTION_TIMED_OUT` egyikre sem illik, ezért nem számított újrapróbálhatónak, és a negyedik próba elmaradt.
+
+- [x] **`scrape-utils.ts`** – az `isRetryableNavigationError` ide került (exportálva), a lista bővült: `timed_out` (a `ERR_TIMED_OUT` és a `ERR_CONNECTION_TIMED_OUT` is), `err_connection_refused`, `err_name_not_resolved`, `err_address_unreachable`, `err_empty_response`. Tanúsítvány- és URL-hiba továbbra sem újrapróbálható.
+- [x] **`scrape-kosarstat-playbyplay.ts`** – a helyi példány törölve, a közös segédet importálja; a `navigateWithRetry` (próbaszám, időkorlát, várakozás) változatlan.
+- [x] **`tests/navigation-retry.test.ts`** – a CI-log hibaüzenete szó szerint, a többi átmeneti hiba, és a nem újrapróbálható esetek. `tsx --test`, `tsc --noEmit`, `eslint` tiszta.
+- [x] **`HOWTO-auto-import.md`** – a `Timeout` / `net::ERR_` sor kiegészítve.
+- [ ] **Újrafuttatás (felhasználói lépés)** – push után `Re-run failed jobs` vagy kézi indítás. A Kosarstat import élesben nem futott le a javítás után (a helyi futás az éles adatbázisba írna).
+- [ ] **Nem garantált gyógymód**: a javítással a futás a negyedik próbát is megkapja, de ha a forrás 4–5 percnél tovább elérhetetlen, a lépés ugyanúgy elbukik. Ez ellen a lenti „Auto import” szakasz nyitott döntése véd (`continue-on-error` / hiba-értesítés). Új adalék ehhez: a `Kosarstat meccs-linkek pótlása` lépés csak adatbázist olvas és ír, hálózat nem kell hozzá, mégis kimaradt, mert a pbp lépés előtte elbukott.
+
+Mobil jegyzet nem kell: adat, séma és adatforma nem változott.
 
 **H15 – Kosarstat ötösök a post-game Export MD-ben ✓ (2026-10-04)**
 

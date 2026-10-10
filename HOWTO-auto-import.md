@@ -111,7 +111,7 @@ a `scrape.yml` `env:` blokkját bővíteni kell (lásd 5. pont).
 | `Season not found: <név>` | a `seasons` sor nincs meg | `HOWTO-uj-szezon.md` |
 | `a beolvasott dátumok kívül esnek a szezon tartományán` | rossz `SEASON_SLUG` ↔ `SEASON_NAME` párosítás | 3. pont – a slug és a név ugyanarra a szezonra mutasson |
 | `Feloldatlan csapat: ...` | új klubnév a hunbasket oldalon | `scrape-utils.ts` `TEAM_NAME_ALIASES` bővítése |
-| `Timeout` / `net::ERR_` | hunbasket.hu vagy kosarstat.hu lassú/elérhetetlen | újrafuttatás (`Re-run failed jobs`) |
+| `Timeout` / `net::ERR_` | hunbasket.hu vagy kosarstat.hu lassú/elérhetetlen | újrafuttatás (`Re-run failed jobs`). A Kosarstat import oldalanként 4-szer próbálkozik (`NAV RETRY` sorok a logban, 60 mp-es időkorláttal); ha ezután is elbukik, a forrás percekig nem volt elérhető a runnerről |
 | `relation "player_game_stats_2026_2027" does not exist` | új szezon migráció kimaradt | `HOWTO-uj-szezon.md` |
 | Supabase `project is paused` | free tier projekt inaktivitás miatt szüneteltetve | Supabase dashboard → Restore project |
 

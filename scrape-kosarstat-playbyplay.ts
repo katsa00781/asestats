@@ -2,7 +2,7 @@ import { chromium, type Page } from 'playwright';
 import { createClient } from '@supabase/supabase-js';
 import * as dotenv from 'dotenv';
 import { inspect } from 'node:util';
-import { withMirrorGames } from './scrape-utils';
+import { isRetryableNavigationError, withMirrorGames } from './scrape-utils';
 
 dotenv.config({ path: '.env.local' });
 
@@ -195,21 +195,6 @@ const dismissCookieBanner = async (page: Page) => {
 
 const sleep = async (ms: number) => {
   await new Promise(resolve => setTimeout(resolve, ms));
-};
-
-const isRetryableNavigationError = (error: unknown) => {
-  const message = error instanceof Error ? error.message : String(error || '');
-  const lowered = message.toLowerCase();
-
-  return (
-    lowered.includes('timeout') ||
-    lowered.includes('err_network_changed') ||
-    lowered.includes('err_internet_disconnected') ||
-    lowered.includes('err_connection_reset') ||
-    lowered.includes('err_connection_closed') ||
-    lowered.includes('err_connection_aborted') ||
-    lowered.includes('err_timed_out')
-  );
 };
 
 const navigateWithRetry = async (page: Page, url: string) => {
