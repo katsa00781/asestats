@@ -16246,7 +16246,7 @@ export function SeasonComparison({
                             <th className="px-2 py-1 text-right">Team PTS</th>
                             <th className="px-2 py-1 text-right">Opp PTS</th>
                             <th className="px-2 py-1 text-right">On +/-</th>
-                            <th className="px-2 py-1 text-right">On40</th>
+                            <th className="px-2 py-1 text-right" title="40 percre vetített pontkülönbség – csak legalább 5 perc együtt töltött időnél">On40</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -16271,8 +16271,11 @@ export function SeasonComparison({
                               <td className={`px-2 py-1 text-right whitespace-nowrap ${stint.plusMinus >= 0 ? 'text-positive' : 'text-negative'}`}>
                                 {stint.plusMinus > 0 ? '+' : ''}{stint.plusMinus}
                               </td>
+                              {/* 5 percnél rövidebb mintából nem vetítünk 40 percre – mint az Export MD-ben. */}
                               <td className="px-2 py-1 text-secondary text-right whitespace-nowrap">
-                                {stint.on40 === null ? '-' : `${stint.on40 > 0 ? '+' : ''}${stint.on40.toFixed(1)}`}
+                                {stint.on40 === null || stint.seconds < LINEUP_MIN_SAMPLE_SECONDS
+                                  ? '–'
+                                  : `${stint.on40 > 0 ? '+' : ''}${stint.on40.toFixed(1)}`}
                               </td>
                             </tr>
                           ))}

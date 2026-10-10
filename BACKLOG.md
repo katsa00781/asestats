@@ -1,6 +1,6 @@
 # BACKLOG.md – ASEStats Projekt
 
-_Utoljára frissítve: 2026-10-10 (H17 / C–D – post-game Export MD: a webes nézet 12 hiányzó blokkja)_
+_Utoljára frissítve: 2026-10-10 (H17 – post-game riport és Export MD: mind az öt egység kész, böngészős ellenőrzés nyitva)_
 
 ---
 
@@ -691,7 +691,7 @@ a nézőpont nem hiba.
   „Szezon: 2026/2027” – a Liga csak akkor jelenik meg, ha különbözik. Csak
   webes MD export, mobil jegyzet nem kell.
 
-**H17 – Post-game riport és Export MD: hibák és hiányzó blokkok (2026-10-10)** – folyamatban
+**H17 – Post-game riport és Export MD: hibák és hiányzó blokkok ✓ (2026-10-10)** – a kód kész, a böngészős ellenőrzés nyitva
 
 Felhasználói hibajelzés az ASE–Sopron KC 109–80 (2026-10-10, Kosarstat
 `20261010102163`) Export MD-jére, a webes nézettel összevetve: 9 hiba,
@@ -823,9 +823,16 @@ A blokkok adat nélkül kimaradnak.
 - Mobil jegyzet a C–D egységhez nem kell: csak a webes MD export és a webes
   komponens változott.
 
-Nyitott (a további egységek):
+*E egység – a web igazítása az MD-hez ✓ (2026-10-10)*
 
-- [ ] **E – web igazítása**: Net/40 csak 5 perc fölött a webes ötös-táblában.
+- [x] **On40 csak 5 perc fölött a webes ötös-táblában** – a rövid ötösökre a
+  tábla a forrás extrém értékeit írta ki (+219,2, −400,0); mostantól
+  `LINEUP_MIN_SAMPLE_SECONDS` alatt „–”, a fejléc tooltipje jelzi a szabályt.
+  A nyers számok (perc, pontok, On +/-) változatlanul látszanak, a 0:00 idejű
+  ötös-sor is megjelenik.
+
+Nyitott:
+
 - [ ] **Adatbázis-szintű játékos-megfeleltetés** (`players` ↔ `league_players`
   Kosarstat ID) – sémaváltozás, külön döntés; most a kódbeli névillesztő
   egységesít.
