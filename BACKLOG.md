@@ -1,6 +1,6 @@
 # BACKLOG.md – ASEStats Projekt
 
-_Utoljára frissítve: 2026-10-11 (H18 – post-game riport második hibalista: A–C egység kész, D folyamatban)_
+_Utoljára frissítve: 2026-10-11 (H18 – post-game riport második hibalista: mind a négy egység kész, böngészős ellenőrzés és két saját döntés jóváhagyása nyitva)_
 
 ---
 
@@ -691,7 +691,7 @@ a nézőpont nem hiba.
   „Szezon: 2026/2027” – a Liga csak akkor jelenik meg, ha különbözik. Csak
   webes MD export, mobil jegyzet nem kell.
 
-**H18 – Post-game riport: második hibalista (ASE–Sopron KC 109–80) – folyamatban (2026-10-11)**
+**H18 – Post-game riport: második hibalista (ASE–Sopron KC 109–80) ✓ (2026-10-11)** – a kód kész, a böngészős ellenőrzés nyitva
 
 Felhasználói hibajelzés a H17 utáni Export MD-re: 8 hiba és 11 pontatlanság.
 Négy egységben (A–D), a felhasználó javasolt sorrendjében, egységenként teszt
@@ -835,6 +835,53 @@ Q3 03:00-nál véget ér. Két külön ok volt:
   70 / 70 teszt, `tsc --noEmit`, `eslint` tiszta.
 - Mobil jegyzet: `asestatmobile/docs/mobile-sync/2026-10-11-postgame-riport-h18.md`
   (`@core`: `postgame-report`).
+
+*D egység – Export MD: box score, trendtábla, irányjelölés, lábjegyzetek ✓ (2026-10-11)*
+
+- [x] **Box score tábla: 3P, AST, LV, St, Bl** – a `PostgameBoxScoreLine` új,
+  opcionális mezői (2P / 3P bontás százalékkal, `ast`, `tov`, `stl`, `blk`); az
+  MD tábla 2P és 3P sort, majd Gólpassz / Labdavesztés / Labdaszerzés / Blokk
+  sort kap. A 3P sorból (14/30) látszik, hogy a dobástérképről (13/29) hiányzó
+  dobás egy bement hármas – ezt a dobástérkép figyelmeztetése és az
+  adatminőségi sor is kimondja (C egység). Régi riportobjektumnál a tábla a
+  korábbi sorokkal készül.
+- [x] **Eilingsfeld hiányzott a „Játékos trend” táblából** – ez volt az első
+  pályára lépése a szezonban, a tábla pedig a „legalább 2 meccs” szűrővel
+  kidobta (13 ponttal a csapat harmadik pontszerzője). Mostantól az egy meccses
+  játékos is szerepel, „(egyetlen meccs)” jelöléssel.
+- [x] **Merkl TS% „0,0%” a trendtáblában** – dobáskísérlet nélkül a TS% nem
+  értelmezhető: a `buildPlayerTrendRows` `tsPct`-je ilyenkor `null`, az MD „–”-t
+  ír (mint a játékostábla), a webes trend-chart vonala megszakad.
+- [x] **A Kulcs mutatók Delta oszlopa nem jelölte az irányt** – ▲ = a saját
+  csapatnak kedvező, ▼ = kedvezőtlen, a „Delta” és a „vs liga” oszlopban is. A
+  TO rate-nél és a DRtg-nél az alacsonyabb érték a jobb („+1,9 pp ▼”, „−1,9 pp
+  ▲”); a tempó nem minősített. Lábjegyzet magyarázza.
+- [x] **Kosarstat ORB% különbség +7,4 pp vs 38,5 − 31,0 = 7,5** – lábjegyzet: a
+  különbség a nyers értékekből számol.
+- [x] **A „shot quality index” valójában dobáshely-mix index** – az MD-ben és a
+  webes kártyán „Dobáshely-mix index (shot quality)”; a lábjegyzet / tooltip
+  kimondja, hogy csak a dobások helyét méri, a középtáv negatív súlyú, ezért a
+  jó százalékkal dobott középtáv (4/5) is rontja. A képlet nem változott.
+- [x] **Elírás** – „a 5 legalacsonyabb” → „az 5 legalacsonyabb” (`articleFor`: a
+  névelő a szám kiejtéséhez igazodik).
+- [x] **Teszt** – `tests/postgame-export-md.test.ts` 3 új és 3 frissített esete.
+  73 / 73 teszt, `tsc --noEmit`, `eslint` (csak korábbi figyelmeztetések),
+  `npm run build` tiszta.
+- Mobil jegyzet: `asestatmobile/docs/mobile-sync/2026-10-11-postgame-riport-h18.md`
+  (`@core`: `postgame-report` – a box score új mezői).
+
+Nyitott (H18):
+
+- [ ] **Saját döntések jóváhagyása** – (1) „Hatékony szerepjátékos” címke
+  `support` osztálynál is (A egység); (2) a védekezés verdiktje három jelzés
+  szavazata, ±2,5 pp / ±3 pp / ±4 pont sávval (C egység); (3) a lineup-probléma
+  küszöbe: legalább 5 perc együtt és −8 pont (C egység). A hibalista többi
+  küszöbe (≥ 10 pont pontforrás, ≥ 2 pp liga-eltérés) a javaslat szerint készült.
+- [ ] **Böngészős ellenőrzés** (felhasználói lépés) – ASE–Sopron post-game: a
+  csere-lista forrása „eseménylista”, a Q4 eseményei látszanak; Export MD.
+- [ ] **A webes összefoglaló megjelenítése** – a `postgameReport.summary` a
+  nézetben sortörések nélkül, `**` jelekkel jelenik meg (a szöveg soronként
+  tagolt, a kártya nem `whitespace-pre-line`). Stílus-feladat, külön döntés.
 
 **H17 – Post-game riport és Export MD: hibák és hiányzó blokkok ✓ (2026-10-10)** – a kód kész, a böngészős ellenőrzés nyitva
 

@@ -139,17 +139,31 @@ export type PostgameRatings = {
   primaryCause: 'offense' | 'defense' | 'balanced' | 'unknown';
 };
 
-/** Nyers box score alapsor: dobott / kísérlet, százalék és lepattanók. */
+/**
+ * Nyers box score alapsor: dobott / kísérlet, százalék, lepattanók és a
+ * számláló statisztikák. A 2P / 3P bontás és az AST / LV / St / Bl mezők régi
+ * (mentett) riportobjektumban hiányoznak.
+ */
 export type PostgameBoxScoreLine = {
   fgm: number;
   fga: number;
   fgPct: number;
+  fgm2?: number;
+  fga2?: number;
+  twoPct?: number;
+  fgm3?: number;
+  fga3?: number;
+  threePct?: number;
   ftm: number;
   fta: number;
   ftPct: number;
   oreb: number;
   dreb: number;
   reb: number;
+  ast?: number;
+  tov?: number;
+  stl?: number;
+  blk?: number;
 };
 
 /**
@@ -1536,7 +1550,7 @@ const buildStrengths = (
       strengths.push('Dobástérkép: saroktripla-volumen és hatékonyság liga-szintű trendet mutat');
     }
     if (shotMapComparison.shotQualityDelta >= 5) {
-      strengths.push('Dobásszelekció javult (shot quality index emelkedés)');
+      strengths.push('Dobásszelekció javult (a dobáshely-mix index emelkedett)');
     }
   }
 
@@ -1582,7 +1596,7 @@ const buildProblems = (
 
   if (shotMapComparison) {
     if (shotMapComparison.midRateDelta >= 6 && shotMapComparison.shotQualityDelta <= -4) {
-      problems.push('Dobástérkép: túl magas középtávoli arány, romló shot quality');
+      problems.push('Dobástérkép: túl magas középtávoli arány, romló dobáshely-mix');
     }
     if (shotMapComparison.rimRateDelta <= -5 && shotMapComparison.rimPctDelta <= -4) {
       problems.push('Dobástérkép: gyengült gyűrűtámadás és festékbeli befejezés');
@@ -2532,12 +2546,22 @@ const buildBoxScoreLine = (team: NormalizedGameStats): PostgameBoxScoreLine => (
   fgm: team.fgm,
   fga: team.fga,
   fgPct: team.fga > 0 ? round((team.fgm / team.fga) * 100, 1) : 0,
+  fgm2: team.fgm2,
+  fga2: team.fga2,
+  twoPct: team.fga2 > 0 ? round((team.fgm2 / team.fga2) * 100, 1) : 0,
+  fgm3: team.fgm3,
+  fga3: team.fga3,
+  threePct: team.fga3 > 0 ? round((team.fgm3 / team.fga3) * 100, 1) : 0,
   ftm: team.ftm,
   fta: team.fta,
   ftPct: team.fta > 0 ? round((team.ftm / team.fta) * 100, 1) : 0,
   oreb: team.oreb,
   dreb: team.dreb,
   reb: team.oreb + team.dreb,
+  ast: team.ast,
+  tov: team.tov,
+  stl: team.stl,
+  blk: team.blk,
 });
 
 const buildPostgameMetrics = (

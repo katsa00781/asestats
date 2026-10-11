@@ -1078,7 +1078,7 @@ export function postgameLineupsToMd(
 
   lines.push(
     ``,
-    `*Forrás: a Kosarstat lineup oldalának ötös-táblája erre a meccsre; a nevek a box score írásmódját követik (a Kosarstat nevei névillesztéssel átírva – a nem párosítható név a Kosarstat alakjában marad), a poszt a Kosarstat ötös-beosztása (PG–C). A forrás soronként másodpercre kerekít, ezért az idők összege 1–2 másodperccel eltérhet a teljes játékidőtől. A 0:00 idejű ötös-sor álló óra alatt szerzett pontot jelöl (jellemzően csere közben dobott büntető): a pont a pályán lévő ötöshöz tartozik, játékidő nélkül. Hivatalos +/- = a Kosarstat játékostáblájának értéke, az ötösökből számolt on +/- ellenőrzésére. Szerzett / kapott = az adott csapat és az ellenfele pontjai, amíg az egység a pályán volt (az ellenfél tábláiban az ellenfél a „szerzett”). Net/40 = pontkülönbség 40 percre vetítve – csak legalább ${minMinutes} perc együtt töltött időnél szerepel, mert rövidebb mintából irreális érték jön ki. Off/40 és Def/40 = a szerzett, illetve a kapott pont 40 percre vetítve (a Def/40-nél az alacsonyabb a jobb). A párosok és hármasok az ötösökből összevont együttállások; a hármasokból a ${MAX_TRIOS} legtöbbet együtt játszó szerepel, a védekező listában a ${BEST_DEFENSE_COMBOS} legalacsonyabb Def/40. Assist alapú páros / hármas adat nem érhető el: a Kosarstat lineup oldala együttállásonként csak időt és pontot ad. On/off = a csapat pontkülönbsége a játékos pályán, illetve padon töltött ideje alatt; nem a játékos egyéni hatása, a csapattársak és az ellenfél ötösei is alakítják. Egyetlen meccs kis minta: az értékek mintázatot jeleznek, nem végleges ítéletet.*`
+    `*Forrás: a Kosarstat lineup oldalának ötös-táblája erre a meccsre; a nevek a box score írásmódját követik (a Kosarstat nevei névillesztéssel átírva – a nem párosítható név a Kosarstat alakjában marad), a poszt a Kosarstat ötös-beosztása (PG–C). A forrás soronként másodpercre kerekít, ezért az idők összege 1–2 másodperccel eltérhet a teljes játékidőtől. A 0:00 idejű ötös-sor álló óra alatt szerzett pontot jelöl (jellemzően csere közben dobott büntető): a pont a pályán lévő ötöshöz tartozik, játékidő nélkül. Hivatalos +/- = a Kosarstat játékostáblájának értéke, az ötösökből számolt on +/- ellenőrzésére. Szerzett / kapott = az adott csapat és az ellenfele pontjai, amíg az egység a pályán volt (az ellenfél tábláiban az ellenfél a „szerzett”). Net/40 = pontkülönbség 40 percre vetítve – csak legalább ${minMinutes} perc együtt töltött időnél szerepel, mert rövidebb mintából irreális érték jön ki. Off/40 és Def/40 = a szerzett, illetve a kapott pont 40 percre vetítve (a Def/40-nél az alacsonyabb a jobb). A párosok és hármasok az ötösökből összevont együttállások; a hármasokból a ${MAX_TRIOS} legtöbbet együtt játszó szerepel, a védekező listában ${articleFor(BEST_DEFENSE_COMBOS)} ${BEST_DEFENSE_COMBOS} legalacsonyabb Def/40. Assist alapú páros / hármas adat nem érhető el: a Kosarstat lineup oldala együttállásonként csak időt és pontot ad. On/off = a csapat pontkülönbsége a játékos pályán, illetve padon töltött ideje alatt; nem a játékos egyéni hatása, a csapattársak és az ellenfél ötösei is alakítják. Egyetlen meccs kis minta: az értékek mintázatot jeleznek, nem végleges ítéletet.*`
   );
 
   return lines;
@@ -1103,7 +1103,8 @@ export type PostgameRotationRow = {
 /** Egy játékos legutóbbi meccsei időrendben (a legfrissebb az utolsó). */
 export type PostgamePlayerTrendRow = {
   player: string;
-  games: Array<{ label: string; tsPct: number; usagePct: number; valPer36: number }>;
+  /** `tsPct === null`: a meccsen nem volt dobáskísérlete, a TS% nem értelmezhető. */
+  games: Array<{ label: string; tsPct: number | null; usagePct: number; valPer36: number }>;
 };
 
 /** A riportobjektumon kívüli, a webes nézetben megjelenő adatok az exporthoz. */
@@ -1136,6 +1137,18 @@ export type PostgameExportExtras = {
   officialPlusMinus?: Record<string, number>;
   /** Játékosonként az utolsó meccsek (TS%, Usage%, VAL/36). */
   playerTrends?: PostgamePlayerTrendRow[];
+};
+
+/** Kulcsmutatók, ahol az alacsonyabb érték a jobb – a delta irányjelöléséhez. */
+const LOWER_IS_BETTER_STATS = new Set(['turnover_rate']);
+
+/** Határozott névelő szám előtt: „az 5”, „az 1”, „a 3”, „a 10”. */
+const articleFor = (value: number) => {
+  const digits = String(Math.abs(Math.trunc(value)));
+  const leading = digits[0];
+  // Magánhangzóval kezdődik: egy / egymillió…, öt / ötven / ötszáz…, ezer (1 000–1 999).
+  const vowelStart = leading === '5' || (leading === '1' && (digits.length === 1 || digits.length === 4 || digits.length >= 7));
+  return vowelStart ? 'az' : 'a';
 };
 
 const signed1 = (v: number, suffix = '') => `${v >= 0 ? '+' : ''}${v.toFixed(1)}${suffix}`;
@@ -1208,7 +1221,7 @@ function postgameKosarstatMetricsToMd(
     row('ORB%', metric => metric.orb_pct, '%'),
     row('FTM rate (FTM/FGA)', metric => metric.ftm_rate, '%', 100),
     ``,
-    `*A Kosarstat saját számítása a meccsoldaláról, változtatás nélkül. A POSS csapatonként külön becslés (a riport „Birtoklás (tempó)” sora a kettő átlaga), a TO% nevezője a birtoklás – ezért tér el a Kulcs mutatók Oliver-féle TO rate-jétől. Az ORTG a csapat saját POSS értékére vetít.*`,
+    `*A Kosarstat saját számítása a meccsoldaláról, változtatás nélkül. A POSS csapatonként külön becslés (a riport „Birtoklás (tempó)” sora a kettő átlaga), a TO% nevezője a birtoklás – ezért tér el a Kulcs mutatók Oliver-féle TO rate-jétől. Az ORTG a csapat saját POSS értékére vetít. A „Különbség” a nyers (kerekítés előtti) értékekből számol, ezért 0,1-gyel eltérhet a két kiírt, kerekített érték különbségétől.*`,
   ];
 }
 
@@ -1262,12 +1275,12 @@ function postgameShotMapToMd(report: PostGameReport): string[] {
   const coverage = shotMap.coverage;
   if (coverage && coverage.missing !== 0) {
     lines.push(
-      `> **Hiányos dobástérkép:** ${coverage.shotMapAttempts} dobás a box score ${coverage.boxAttempts} mezőnykísérletével szemben (${coverage.missing > 0 ? `${coverage.missing} dobás hiányzik` : `${-coverage.missing} dobás többlet`}) – a zónák kísérletszáma és FG%-a ehhez mérten értendő, a csapat hivatalos dobószázaléka a „Box score alapmutatók” táblában van.`,
+      `> **Hiányos dobástérkép:** ${coverage.shotMapAttempts} dobás a box score ${coverage.boxAttempts} mezőnykísérletével szemben (${coverage.missing > 0 ? `${coverage.missing} dobás hiányzik${coverage.missingDetail ? `; a box score szerint: ${coverage.missingDetail}` : ''}` : `${-coverage.missing} dobás többlet`}) – a zónák kísérletszáma és FG%-a ehhez mérten értendő, a csapat hivatalos dobószázaléka a „Box score alapmutatók” táblában van.`,
       ``
     );
   }
   lines.push(
-    `**Kísérletek:** ${team.attempts} | **FG%:** ${team.fgPct.toFixed(1)}% | **Shot quality index:** ${team.shotQualityIndex.toFixed(1)}` +
+    `**Kísérletek:** ${team.attempts} | **FG%:** ${team.fgPct.toFixed(1)}% | **Dobáshely-mix index (shot quality):** ${team.shotQualityIndex.toFixed(1)}` +
       (season ? ` (szezon ${season.shotQualityIndex.toFixed(1)}, ${signed1(team.shotQualityIndex - season.shotQualityIndex)})` : ''),
     ``,
     `| Zóna | Találat/kísérlet | Arány | Szezon arány | Delta | FG% | Szezon FG% | FG% delta |`,
@@ -1285,7 +1298,7 @@ function postgameShotMapToMd(report: PostGameReport): string[] {
   }
   lines.push(
     ``,
-    `*Forrás: a Hunbasket dobástérképe; a zóna a dobás helyéből számolt besorolás, a szezonoszlop a csapat szezonbeli dobásai. Arány = a zóna részesedése a meccs dobásaiból, delta = meccs − szezon. A festékre vonatkozó riportállítások a „Gyűrű + festék együtt” sorra épülnek. Shot quality index = a zónaarányok súlyozott összege (gyűrű 1,25 · festék 0,8 · sarok tripla 1,2 · egyéb tripla 0,65 − középtáv 0,9).*`
+    `*Forrás: a Hunbasket dobástérképe; a zóna a dobás helyéből számolt besorolás, a szezonoszlop a csapat szezonbeli dobásai. Arány = a zóna részesedése a meccs dobásaiból, delta = meccs − szezon. A festékre vonatkozó riportállítások a „Gyűrű + festék együtt” sorra épülnek. Dobáshely-mix index („shot quality”) = a zónaarányok súlyozott összege (gyűrű 1,25 · festék 0,8 · sarok tripla 1,2 · egyéb tripla 0,65 − középtáv 0,9). Csak a dobások **helyét** méri, a találatot nem: a középtáv negatív súlyú, ezért egy jó százalékkal dobott középtávoli sorozat (pl. 4/5) is rontja az értéket – a dobások eredményességét az FG% oszlop mutatja.*`
   );
   return lines;
 }
@@ -1338,13 +1351,22 @@ function postgameRotationToMd(
   return lines;
 }
 
-/** Játékosonkénti trend az utolsó meccseken. */
+/**
+ * Játékosonkénti trend az utolsó meccseken. Akinek ez az első pályára lépése,
+ * az is szerepel (egy értékkel) – különben a meccs egyik fő pontszerzője
+ * kimaradhat a táblából.
+ */
 function postgamePlayerTrendsToMd(trends: PostgamePlayerTrendRow[]): string[] {
-  const rows = trends.filter(item => item.games.length >= 2);
+  const rows = trends.filter(item => item.games.length >= 1);
   if (rows.length === 0) return [];
-  const series = (item: PostgamePlayerTrendRow, pick: (game: PostgamePlayerTrendRow['games'][number]) => number, unit: string) =>
-    item.games.map(game => `${pick(game).toFixed(1)}${unit}`).join(' → ');
+  type TrendGame = PostgamePlayerTrendRow['games'][number];
+  const series = (item: PostgamePlayerTrendRow, pick: (game: TrendGame) => number | null, unit: string) =>
+    item.games.map(game => {
+      const value = pick(game);
+      return value === null ? '–' : `${value.toFixed(1)}${unit}`;
+    }).join(' → ');
   const span = Math.max(...rows.map(item => item.games.length));
+  const hasSingle = rows.some(item => item.games.length === 1);
   return [
     ``,
     `## Játékos trend (utolsó ${span} meccs)`,
@@ -1352,10 +1374,10 @@ function postgamePlayerTrendsToMd(trends: PostgamePlayerTrendRow[]): string[] {
     `| Játékos | Meccsek | TS% | Usage% | VAL/36 |`,
     `|---------|---------|-----|--------|--------|`,
     ...rows.map(item =>
-      `| ${item.player} | ${item.games.map(game => game.label).join(' → ')} | ${series(item, game => game.tsPct, '%')} | ${series(item, game => game.usagePct, '%')} | ${series(item, game => game.valPer36, '')} |`
+      `| ${item.player} | ${item.games.map(game => game.label).join(' → ')}${item.games.length === 1 ? ' (egyetlen meccs)' : ''} | ${series(item, game => game.tsPct, '%')} | ${series(item, game => game.usagePct, '%')} | ${series(item, game => game.valPer36, '')} |`
     ),
     ``,
-    `*Időrendben, az utolsó érték ez a meccs. Csak azok a meccsek szerepelnek, amelyeken a játékos pályára lépett; egy-két meccs kis minta, irányt jelez.*`,
+    `*Időrendben, az utolsó érték ez a meccs. Csak azok a meccsek szerepelnek, amelyeken a játékos pályára lépett; egy-két meccs kis minta, irányt jelez.${hasSingle ? ' „(egyetlen meccs)”: a játékosnak a vizsgált időszakban ez az egyetlen pályára lépése, trend még nincs.' : ''} A TS% „–”, ha a játékosnak azon a meccsen nem volt dobáskísérlete (a mutató ilyenkor nem értelmezhető).*`,
   ];
 }
 
@@ -1371,8 +1393,15 @@ export function postgameReportToMd(
   const baselineLabel = report.baseline?.label ?? 'Szezon átl.';
   const ratings = report.metrics.ratings ?? null;
   const refCell = (v: number | null | undefined) => (v !== null && v !== undefined ? v.toFixed(1) : '–');
-  const deltaCell = (game: number, ref: number | null | undefined) =>
-    ref !== null && ref !== undefined ? signed1(game - ref) : '–';
+  // Irányjelölés: ▲ a saját csapatnak kedvező, ▼ kedvezőtlen eltérés – a
+  // TO rate-nél és a DRtg-nél az alacsonyabb érték a jobb, ezért az előjel
+  // önmagában félrevezető. `higherIsBetter === null`: nem minősített (tempó).
+  const directionMark = (delta: number, higherIsBetter: boolean | null) => {
+    if (higherIsBetter === null || Math.abs(delta) < 0.05) return '';
+    return (delta > 0) === higherIsBetter ? ' ▲' : ' ▼';
+  };
+  const deltaCell = (game: number, ref: number | null | undefined, higherIsBetter: boolean | null = null) =>
+    ref !== null && ref !== undefined ? `${signed1(game - ref)}${directionMark(game - ref, higherIsBetter)}` : '–';
 
   const lines: string[] = [
     `# Postgame elemzés: ${report.teamName} vs ${report.opponentName}`,
@@ -1420,26 +1449,31 @@ export function postgameReportToMd(
     const unit = stat.unit === 'pct' ? '%' : '';
     const gameVal = `${stat.game.toFixed(1)}${unit}`;
     const seasonVal = !comparable ? '–' : `${stat.season.toFixed(1)}${unit}`;
-    const delta = comparable ? signed1(stat.delta, stat.unit === 'pct' ? ' pp' : '') : '–';
+    const higherIsBetter = !LOWER_IS_BETTER_STATS.has(stat.key);
+    const delta = comparable
+      ? `${signed1(stat.delta, stat.unit === 'pct' ? ' pp' : '')}${directionMark(stat.delta, higherIsBetter)}`
+      : '–';
     const league = !showLeague
       ? ''
       : stat.leagueMedian === undefined
         ? ' – | – |'
-        : ` ${stat.leagueMedian.toFixed(1)}${unit} | ${signed1(stat.game - stat.leagueMedian, stat.unit === 'pct' ? ' pp' : '')} |`;
+        : ` ${stat.leagueMedian.toFixed(1)}${unit} | ${signed1(stat.game - stat.leagueMedian, stat.unit === 'pct' ? ' pp' : '')}${directionMark(stat.game - stat.leagueMedian, higherIsBetter)} |`;
     lines.push(`| ${stat.label} | ${gameVal} | ${seasonVal} | ${delta} |${league}`);
   }
 
   if (ratings) {
     lines.push(
-      `| ORtg | ${ratings.ortg.toFixed(1)} | ${refCell(ratings.refOrtg)} | ${deltaCell(ratings.ortg, ratings.refOrtg)} |${noLeague}`,
-      `| DRtg (alacsonyabb a jobb) | ${ratings.drtg.toFixed(1)} | ${refCell(ratings.refDrtg)} | ${deltaCell(ratings.drtg, ratings.refDrtg)} |${noLeague}`,
-      `| Net rating | ${signed1(ratings.net)} | ${ratings.refNet !== null ? signed1(ratings.refNet) : '–'} | ${deltaCell(ratings.net, ratings.refNet)} |${noLeague}`,
+      `| ORtg | ${ratings.ortg.toFixed(1)} | ${refCell(ratings.refOrtg)} | ${deltaCell(ratings.ortg, ratings.refOrtg, true)} |${noLeague}`,
+      `| DRtg (alacsonyabb a jobb) | ${ratings.drtg.toFixed(1)} | ${refCell(ratings.refDrtg)} | ${deltaCell(ratings.drtg, ratings.refDrtg, false)} |${noLeague}`,
+      `| Net rating | ${signed1(ratings.net)} | ${ratings.refNet !== null ? signed1(ratings.refNet) : '–'} | ${deltaCell(ratings.net, ratings.refNet, true)} |${noLeague}`,
     );
   }
 
   lines.push(
     ``,
-    `*Birtoklás = a két csapat (FGA + 0,44·FTA + LV − T-lep) becslésének átlaga – ez a tempó és mindkét rating közös nevezője, így a DRtg megegyezik az ellenfél ORtg-jével. TO rate (Oliver) = LV / (FGA + 0,44·FTA + LV); a Kosarstat TO% (LV / birtoklás) ettől eltér, és csak a Kosarstat blokkban szerepel. FTM rate = értékesített büntető / FGA – a liga medián is erre vonatkozik. ORtg / DRtg = szerzett / kapott pont 100 közös birtoklásra.${showLeague ? ' Liga medián = a liga csapatainak szezonbeli középértéke; „vs liga” = meccs − liga medián.' : ''}*`
+    `*▲ = a saját csapatnak kedvező, ▼ = kedvezőtlen eltérés (a TO rate-nél és a DRtg-nél az alacsonyabb érték a jobb, ezért ott a negatív eltérés kap ▲-t); a tempó nem minősített.*`,
+    ``,
+    `*Birtoklás = a két csapat (FGA + 0,44·FTA + LV − T-lep) becslésének átlaga – ez a tempó és mindkét rating közös nevezője, így a DRtg megegyezik az ellenfél ORtg-jével. TO rate (Oliver) = LV / (FGA + 0,44·FTA + LV); a Kosarstat TO% (LV / birtoklás) ettől eltér, és csak a „Kosarstat csapatmutatók” táblában szerepel. FTM rate = értékesített büntető / FGA – a liga medián is erre vonatkozik. ORtg / DRtg = szerzett / kapott pont 100 közös birtoklásra.${showLeague ? ' Liga medián = a liga csapatainak szezonbeli középértéke; „vs liga” = meccs − liga medián.' : ''}*`
   );
 
   if (extras.kosarstat) {
@@ -1473,11 +1507,31 @@ export function postgameReportToMd(
       `| Mutató | ${report.teamName} | ${report.opponentName} |`,
       `|--------|-------|-------|`,
       `| FG (dobott/kísérlet) | ${shots(box.own.fgm, box.own.fga, box.own.fgPct)} | ${oppCell(o => shots(o.fgm, o.fga, o.fgPct))} |`,
+    );
+    // A 2P / 3P bontás és a számláló statisztikák régi riportobjektumban hiányoznak.
+    const optShots = (made?: number, att?: number, pct?: number) =>
+      made !== undefined && att !== undefined && pct !== undefined ? shots(made, att, pct) : '–';
+    const count = (value: number | undefined) => (value !== undefined ? `${value}` : '–');
+    if (box.own.fga3 !== undefined) {
+      lines.push(
+        `| 2P (dobott/kísérlet) | ${optShots(box.own.fgm2, box.own.fga2, box.own.twoPct)} | ${oppCell(o => optShots(o.fgm2, o.fga2, o.twoPct))} |`,
+        `| 3P (dobott/kísérlet) | ${optShots(box.own.fgm3, box.own.fga3, box.own.threePct)} | ${oppCell(o => optShots(o.fgm3, o.fga3, o.threePct))} |`,
+      );
+    }
+    lines.push(
       `| FT (dobott/kísérlet) | ${shots(box.own.ftm, box.own.fta, box.own.ftPct)} | ${oppCell(o => shots(o.ftm, o.fta, o.ftPct))} |`,
       `| Lepattanó (össz.) | ${box.own.reb} | ${oppCell(o => `${o.reb}`)} |`,
       `| Támadólepattanó | ${box.own.oreb} | ${oppCell(o => `${o.oreb}`)} |`,
       `| Védőlepattanó | ${box.own.dreb} | ${oppCell(o => `${o.dreb}`)} |`,
     );
+    if (box.own.ast !== undefined) {
+      lines.push(
+        `| Gólpassz (AST) | ${count(box.own.ast)} | ${oppCell(o => count(o.ast))} |`,
+        `| Labdavesztés (LV) | ${count(box.own.tov)} | ${oppCell(o => count(o.tov))} |`,
+        `| Labdaszerzés (St) | ${count(box.own.stl)} | ${oppCell(o => count(o.stl))} |`,
+        `| Blokk (Bl) | ${count(box.own.blk)} | ${oppCell(o => count(o.blk))} |`,
+      );
+    }
   }
 
   const sources = report.metrics.pointSources;

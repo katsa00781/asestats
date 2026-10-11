@@ -1638,7 +1638,8 @@ const RECENT_GAMES_WINDOW = 5;
  */
 const LINEUP_MIN_SAMPLE_SECONDS = 300;
 
-type PlayerTrendRow = { gameId: string; dateValue: number; label: string; tsPct: number; usagePct: number; valPer36: number };
+/** `tsPct === null`: a meccsen nem volt dobáskísérlet, a TS% nem értelmezhető. */
+type PlayerTrendRow = { gameId: string; dateValue: number; label: string; tsPct: number | null; usagePct: number; valPer36: number };
 
 /**
  * Egy játékos meccsenkénti TS% / USG% / VAL/36 sora időrendben (a legfrissebb
@@ -1666,7 +1667,7 @@ const buildPlayerTrendRows = (
       const usgRate = computeUsgRate({ usage: rowUsage(target), minutes: target.minutes || 0 }, team);
       const fga = (target.close_attempted || 0) + (target.mid_attempted || 0) + (target.three_attempted || 0);
       const tsDenominator = 2 * (fga + 0.44 * (target.free_throw_attempted || 0));
-      const tsPct = tsDenominator > 0 ? (target.points || 0) / tsDenominator * 100 : 0;
+      const tsPct = tsDenominator > 0 ? (target.points || 0) / tsDenominator * 100 : null;
       const valPer36 = (target.minutes || 0) > 0 ? ((target.valuation || 0) / (target.minutes || 1)) * 36 : 0;
       const dateValue = target.games?.date ? new Date(target.games.date).getTime() : 0;
 
@@ -1676,7 +1677,7 @@ const buildPlayerTrendRows = (
         label: target.games?.date
           ? new Date(target.games.date).toLocaleDateString('hu-HU', { month: 'short', day: 'numeric' })
           : 'Ismeretlen',
-        tsPct: roundValue(tsPct, 1),
+        tsPct: tsPct === null ? null : roundValue(tsPct, 1),
         usagePct: roundValue(usgRate * 100, 1),
         valPer36: roundValue(valPer36, 1),
       };
@@ -16576,7 +16577,7 @@ export function SeasonComparison({
                       {postgameReport.shotMap.coverage.missing > 0
                         ? `${postgameReport.shotMap.coverage.missing} dobás hiányzik a dobástérképről`
                         : `${-postgameReport.shotMap.coverage.missing} dobással több van a dobástérképen`}
-                      : {postgameReport.shotMap.coverage.shotMapAttempts} dobás a box score {postgameReport.shotMap.coverage.boxAttempts} mezőnykísérletével szemben – a zónaadatok és az FG% ehhez mérten értendők.
+                      : {postgameReport.shotMap.coverage.shotMapAttempts} dobás a box score {postgameReport.shotMap.coverage.boxAttempts} mezőnykísérletével szemben{postgameReport.shotMap.coverage.missingDetail ? ` (a box score szerint: ${postgameReport.shotMap.coverage.missingDetail})` : ''} – a zónaadatok és az FG% ehhez mérten értendők.
                     </div>
                   )}
 
@@ -16631,7 +16632,7 @@ export function SeasonComparison({
                       </div>
                     </div>
                     <div className="p-3 bg-surface-2/40 rounded-lg">
-                      <div className="text-xs text-secondary">Shot quality index</div>
+                      <div className="text-xs text-secondary" title="A zónaarányok súlyozott összege (gyűrű 1,25 · festék 0,8 · sarok tripla 1,2 · egyéb tripla 0,65 − középtáv 0,9). Csak a dobások helyét méri, a találatot nem: a középtáv negatív súlyú, ezért a jó százalékkal dobott középtáv is rontja.">Dobáshely-mix index (shot quality)</div>
                       <div className="text-sm text-primary">
                         {postgameReport.shotMap.team.shotQualityIndex.toFixed(2)}
                         <span className={`ml-2 ${shotDeltaTone(postgameReport.shotMap.comparison.shotQualityDelta)}`}>
