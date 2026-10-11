@@ -17,7 +17,7 @@ import type {
   TeamSeasonExportInput,
 } from './team-season-export';
 import { LINEUP_NET_MIN_SECONDS, LINEUP_SLOT_POSITIONS, MAX_TRIOS } from './postgame-lineup-export';
-import { buildPostgameAutoFocus } from './postgame-report';
+import { buildPostgameAutoFocus, composePostgameSummary } from './postgame-report';
 import { trueShootingPct, effectiveFgPct } from './stat-formulas';
 import {
   buildTeamSeasonExport,
@@ -1516,7 +1516,7 @@ export function postgameReportToMd(
     }
     lines.push(
       ``,
-      `*Sorrend és címke az Impact score alapján (VAL/36 45%, TS% 25%, usage 20%, St+Bl 10%), nem a nyers VAL szerint. A meccs legjobbjától legfeljebb 10%-kal elmaradó játékosok ugyanazt a vezető címkét kapják. A „Stabil alappillér” címkéhez legalább 52-es Impact score és 16 perc játékidő kell (kezdőnél 12 perc); „(padról)” = cserejátékos, „(rövid percben)” = alappillér-szintű pontszám ennél kevesebb játékidővel.${hasOfficial ? ' +/- = a Kosarstat játékostáblájának hivatalos értéke (a csapat pontkülönbsége, amíg a játékos a pályán volt).' : ''} Usage% = standard USG% = (FGA + 0,44·FTA + LV) · (csapatperc / 5) / (perc · csapat FGA + 0,44·FTA + LV); átlag ~20%, alacsony ≤ 15%, magas ≥ 25%.*`
+      `*Sorrend és címke az Impact score alapján (VAL/36 45%, TS% 25%, usage 20%, St+Bl 10%), nem a nyers VAL szerint. A meccs legjobbjától legfeljebb 10%-kal elmaradó játékosok ugyanazt a vezető címkét kapják. A „Stabil alappillér” címkéhez legalább 52-es Impact score és 16 perc játékidő kell (kezdőnél 12 perc); „(padról)” = cserejátékos, „(rövid percben)” = alappillér-szintű pontszám ennél kevesebb játékidővel. A „Hatékony szerepjátékos” szerepet jelöl, nem rangot: alacsony usage (≤ 15%) mellett legalább 18-as VAL/36 és 55%-os TS% (legalább 12 perc) – az alacsony usage az Impact score-t lehúzza, ezért a sor a sorrendben lejjebb állhat.${hasOfficial ? ' +/- = a Kosarstat játékostáblájának hivatalos értéke (a csapat pontkülönbsége, amíg a játékos a pályán volt).' : ''} Usage% = standard USG% = (FGA + 0,44·FTA + LV) · (csapatperc / 5) / (perc · csapat FGA + 0,44·FTA + LV); átlag ~20%, alacsony ≤ 15%, magas ≥ 25%.*`
     );
   }
 
@@ -1583,9 +1583,11 @@ export function postgameReportToMd(
     if (report.reflection.risk) lines.push(report.reflection.risk);
   }
 
-  if (report.summary) {
+  // Ugyanabból az objektumból és ugyanazzal a fókuszlistával, mint a fő szekciók.
+  const summary = composePostgameSummary(report, focus);
+  if (summary) {
     lines.push(``, `## Összefoglalás`, ``);
-    lines.push(report.summary);
+    lines.push(summary);
   }
 
   return lines.join('\n');

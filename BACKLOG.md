@@ -1,6 +1,6 @@
 # BACKLOG.md – ASEStats Projekt
 
-_Utoljára frissítve: 2026-10-10 (H17 – post-game riport és Export MD: mind az öt egység kész, böngészős ellenőrzés nyitva)_
+_Utoljára frissítve: 2026-10-11 (H18 – post-game riport második hibalista: A egység kész, B–D folyamatban)_
 
 ---
 
@@ -690,6 +690,53 @@ a nézőpont nem hiba.
   `seasonName` paramétert kap, a fejléc közös `seasonLeagueLine()` segéddel
   „Szezon: 2026/2027” – a Liga csak akkor jelenik meg, ha különbözik. Csak
   webes MD export, mobil jegyzet nem kell.
+
+**H18 – Post-game riport: második hibalista (ASE–Sopron KC 109–80) – folyamatban (2026-10-11)**
+
+Felhasználói hibajelzés a H17 utáni Export MD-re: 8 hiba és 11 pontatlanság.
+Négy egységben (A–D), a felhasználó javasolt sorrendjében, egységenként teszt
+és commit. Ellenőrzés a DB-ben (csak olvasás): a pontforrások a hibalistával
+egyeznek (labdaeladásból 32–16, gyors befejezésből 19–4, második esélyből
+7–10).
+
+*A egység – az Összefoglalás a fő szekciókkal egy objektumból ✓ (2026-10-11)*
+
+- [x] **Az Összefoglalás 1 fókuszpontot írt a fő szekció 3 pontja helyett** –
+  a `report.summary` az `analyzePostGameReport`-ban, a Kosarstat-összefűzés
+  **előtt** készült, a nyers `report.nextFocus`-ból; a fő szekciók az
+  összefűzött riportból és a `buildPostgameAutoFocus` listájából. Új
+  `report.summaryParts` (a kiegészítésektől független sorok) és
+  `composePostgameSummary(report, focus?)`: a döntő tényezők, a
+  játékos-kiemelések és a fókusz a kész objektumból jönnek. A
+  `mergeKosarstatPostgameContext` az összefűzés után újraépíti, az Export MD
+  ugyanazzal a fókuszlistával hívja, mint a „Következő fókusz” szakaszt.
+- [x] **Adatminőségi megjegyzés a fókusz alatt** – a „• Megjegyzés: …” sor a
+  fókuszblokk utolsó pontjaként jelent meg. Kikerült az összefoglalóból: a
+  megjegyzések a webes nézetben, az MD-ben és a mobilban is külön
+  szakaszban látszanak (`report.dataNotes`).
+- [x] **„Egyik fő saját támadómutatónk sem esett a szezonátlag alá”** – a
+  szabály csak a nagy visszaesést figyelte (OREB −6 pp), a TO rate-et
+  egyáltalán nem. Mostantól mind a hat mutató (eFG, 3P%, Assist%, TO rate,
+  OREB%, FTM rate) eltérése számít: 1 pp alatti elmaradás a referencia
+  szintje, e fölött a sor számokkal megnevezi („érdemi visszaesés … nem volt;
+  kisebb elmaradás a szezonátlagtól: OREB% 38,5% vs 42,1% (−3,6 pp); TO rate
+  …”). „Minden … a szezonátlag szintjén vagy felette” csak akkor áll, ha
+  tényleg egyik sem rosszabb.
+- [x] **Young: „Limitált hatás” a táblában, „Kiugró teljesítmény” a
+  kiemelésekben** – két független szabály. Az Impact score-ban a usage 20%-ot
+  ér, ezért az alacsony usage (14,6%) a 37,9-es pontszámot a 38-as küszöb alá
+  húzta, miközben VAL 19, VAL/36 27,4, TS 58%. **Saját döntés, jóváhagyásra**
+  (a hibalista mindkét javaslatát követi): (1) új szabály – alacsony usage
+  (≤ 15%) mellett legalább 18-as VAL/36, 55%-os TS% és 12 perc: az osztály
+  legalább `support`, a címke „Hatékony szerepjátékos” (szerepet jelöl, nem
+  rangot; az MD lábjegyzete leírja); (2) `reconcilePlayerImpact`: `struggling`
+  osztályú játékos nem lehet „Kiugró teljesítmény”, vezető / alappillér
+  osztályú nem kerülhet a gyenge vagy limitált listára.
+- [x] **Teszt** – `tests/postgame-report-rules.test.ts` 3 új esete (összefoglaló
+  = fő szekciók, ellenfél-profil állítása, címke ↔ kiemelés). `tsc --noEmit`,
+  `eslint` tiszta.
+- Mobil jegyzet: `asestatmobile/docs/mobile-sync/2026-10-11-postgame-riport-h18.md`
+  (`@core`: `postgame-report`, `player-postgame`).
 
 **H17 – Post-game riport és Export MD: hibák és hiányzó blokkok ✓ (2026-10-10)** – a kód kész, a böngészős ellenőrzés nyitva
 

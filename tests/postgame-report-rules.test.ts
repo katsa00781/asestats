@@ -1,16 +1,24 @@
 import {
+  analyzePostGameReport,
   buildPostgameAutoFocus,
+  composePostgameSummary,
   mergeKosarstatPostgameContext,
 } from '../lib/postgame-report';
 import { postgameReportToMd } from '../lib/export-to-md';
 import {
+  ASE_GAME,
+  ASE_SEASON,
+  BENCHMARKS,
   GAME_SHOTS,
+  PLAYERS,
   POINT_SOURCES,
   SEASON,
   SEASON_SHOTS,
   SHOT_MAP,
+  SOPRON_GAME,
   kosarstat,
   report,
+  seasonOf,
   shots,
 } from './fixtures/postgame-ase-sopron';
 import assert from 'node:assert/strict';
@@ -122,12 +130,87 @@ test('Az Impact címke rangja az osztályt követi: a padról jövő alappillér
 
   const classRank = { mvp: 3, engine: 2, support: 1, struggling: 0 } as const;
   const labelRank = (label: string) =>
-    label === 'Elsődleges motor' || label === 'Hatékony szerepjátékos' ? 3
+    label === 'Elsődleges motor' ? 3
       : label.startsWith('Stabil alappillér') ? 2
         : label.startsWith('Rotációs hozzájárulás') ? 1 : 0;
   for (const player of players) {
+    // A „Hatékony szerepjátékos” szerepet jelöl, nem rangot (vezető vagy rotációs osztály).
+    if (player.impactLabel === 'Hatékony szerepjátékos') {
+      assert.ok(player.impactClass === 'mvp' || player.impactClass === 'support', player.name);
+      continue;
+    }
     assert.equal(labelRank(player.impactLabel), classRank[player.impactClass], `${player.name}: ${player.impactLabel}`);
   }
+});
+
+test('Címke és kiemelés nem mond ellent: Young hatékony szerepjátékos, nem „Limitált hatás”', () => {
+  const result = report(SHOT_MAP);
+  const young = result.playerReport.players.find(player => player.name === 'YOUNG Kalif Karl');
+  assert.ok(young);
+  // 25 perc, VAL 19 (VAL/36 27,4), TS 58%, usage 14,6% – az Impact score 38 alatt marad.
+  assert.ok(young.impactScore < 38, String(young.impactScore));
+  assert.equal(young.impactLabel, 'Hatékony szerepjátékos');
+  assert.equal(young.impactClass, 'support');
+  assert.ok(result.playerImpact.overperformers.includes('YOUNG Kalif Karl'));
+  assert.ok(!result.playerReport.highlights.struggling.some(player => player.name === 'YOUNG Kalif Karl'));
+
+  // Aki a játékostáblában „Limitált hatás”, az nem lehet „Kiugró teljesítmény”:
+  // 20 perc, VAL 12 (VAL/36 21,6), TS 46%, magas usage → a kiemelés-szabály
+  // átengedné, az Impact osztály viszont `struggling`.
+  const players = PLAYERS.map(player => player.name === 'GÉRINGER Gergő'
+    ? { ...player, minutes: 20, points: 10, fga2: 10, fgm2: 4, fga3: 0, fgm3: 0, fta: 2, ftm: 2, tov: 1, stl: 0, blk: 0, val: 12 }
+    : player);
+  const crafted = analyzePostGameReport(ASE_GAME, SOPRON_GAME, ASE_SEASON, BENCHMARKS, players);
+  const geringer = crafted.playerReport.players.find(player => player.name === 'GÉRINGER Gergő');
+  assert.equal(geringer?.impactClass, 'struggling');
+  assert.ok(!crafted.playerImpact.overperformers.includes('GÉRINGER Gergő'), crafted.playerImpact.overperformers.join(', '));
+  const classByName = new Map(crafted.playerReport.players.map(player => [player.name, player.impactClass]));
+  for (const name of crafted.playerImpact.overperformers) assert.notEqual(classByName.get(name), 'struggling', name);
+});
+
+test('Az Összefoglalás ugyanabból az objektumból készül, mint a fő szekciók', () => {
+  const context = kosarstat();
+  const base = report(SHOT_MAP);
+  const merged = mergeKosarstatPostgameContext(base, context);
+  const focus = buildPostgameAutoFocus(merged, context);
+  assert.equal(focus.length, 3);
+
+  // A fókuszblokk a megjelenített listát hozza, nem az összefűzés előttit.
+  const focusBlock = merged.summary.split('**Következő fókusz**')[1] ?? '';
+  assert.deepEqual(focusBlock.trim().split('\n'), focus.map(item => `• ${item}`));
+  assert.notEqual(merged.summary, base.summary);
+  // Adatminőségi megjegyzés nincs az összefoglalóban (külön szakasz).
+  assert.doesNotMatch(merged.summary, /Megjegyzés:|Dobástérkép lefedettség|Kosarstat negyedek/);
+  assert.ok(merged.dataNotes.some(item => item.startsWith('Dobástérkép lefedettség')));
+
+  // Az MD „Összefoglalás” és „Következő fókusz” szakasza ugyanazt a listát írja ki.
+  const md = postgameReportToMd(merged, SEASON, undefined, { focus });
+  const summary = md.split('## Összefoglalás')[1] ?? '';
+  for (const item of focus) assert.ok(summary.includes(`• ${item}`), item);
+  assert.equal(composePostgameSummary(merged, focus), merged.summary);
+  // Régi riportobjektum (részek nélkül): a tárolt szöveg marad.
+  assert.equal(composePostgameSummary({ ...merged, summaryParts: undefined, summary: 'régi' }), 'régi');
+});
+
+test('Az ellenfél-profil nem állítja, hogy egyik mutató sem esett a referencia alá, ha van elmaradás', () => {
+  // OREB% 42,1% és TO rate 9,9% a szezonban: a meccs 38,5% (−3,6 pp), ill. 11,8% (+1,9 pp).
+  const season = seasonOf('ase', {
+    pointsFor: 98, pointsAgainst: 80, fga2: 40, fgm2: 24, fga3: 24, fgm3: 9, fta: 22, ftm: 18,
+    oreb: 12.5, dreb: 22, ast: 20, tov: 8.1, oppDreb: 17.2, oppPossessions: 76,
+  });
+  const result = analyzePostGameReport(ASE_GAME, SOPRON_GAME, season, BENCHMARKS, PLAYERS);
+  assert.doesNotMatch(result.summary, /sem esett a szezonátlag alá/);
+  assert.match(result.summary, /érdemi visszaesés egyik fő saját támadómutatóban sem volt; kisebb elmaradás a szezonátlagtól:/);
+  assert.match(result.summary, /TO rate 11\.8% vs szezonátlag 9\.9% \(\+1\.9 pp\)/);
+  assert.match(result.summary, /OREB% 38\.5% vs szezonátlag 42\.1% \(-3\.6 pp\)/);
+
+  // Ha minden fő mutató a referencia szintjén vagy felette van, azt mondja ki.
+  const strong = seasonOf('ase', {
+    pointsFor: 90, pointsAgainst: 80, fga2: 40, fgm2: 20, fga3: 24, fgm3: 7, fta: 22, ftm: 12,
+    oreb: 9, dreb: 22, ast: 14, tov: 14, oppDreb: 22, oppPossessions: 76,
+  });
+  const clean = analyzePostGameReport(ASE_GAME, SOPRON_GAME, strong, BENCHMARKS, PLAYERS);
+  assert.match(clean.summary, /minden fő saját támadómutatónk a szezonátlag szintjén vagy felette volt/);
 });
 
 test('A fókuszlista az ellenfél-specifikus periméter-kockázattal indul, és az MD ugyanezt írja ki', () => {

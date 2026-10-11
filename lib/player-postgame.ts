@@ -176,9 +176,27 @@ const ENGINE_MIN_SCORE = 52;
 /** Elég játékidő az `engine` osztályhoz: 16 perc, kezdőnél 12. */
 const hasEngineMinutes = (minutes: number, isStarter: boolean) => minutes >= 16 || (isStarter && minutes >= 12);
 
+/** A „Hatékony szerepjátékos” küszöbei: VAL/36, TS% és játékidő alacsony usage mellett. */
+const ROLE_PLAYER_MIN_VAL_PER36 = 18;
+const ROLE_PLAYER_MIN_TS_PCT = 55;
+const ROLE_PLAYER_MIN_MINUTES = 12;
+
+/**
+ * Hatékony szerepjátékos: alacsony usage (≤ 15%) mellett erős és hatékony
+ * termelés. Az Impact score-ban a usage 20%-ot ér, ezért az ilyen játékos
+ * pontszáma a „Limitált hatás” sávba csúszhat, miközben a meccsszintű
+ * kiemelések közt „Kiugró teljesítmény” – a két szabály ne mondjon ellent.
+ */
+const isEfficientRolePlayer = (context: DerivedPlayerContext, minutes: number) =>
+  context.usageTier === 'low' &&
+  minutes >= ROLE_PLAYER_MIN_MINUTES &&
+  context.valPer36 >= ROLE_PLAYER_MIN_VAL_PER36 &&
+  context.tsPct >= ROLE_PLAYER_MIN_TS_PCT;
+
 /**
  * A címke rangja mindig az impact osztályt követi; a szerep és a játékidő csak
- * jelző. (A korábbi szabály a padról jövő `engine`-t „Rotációs
+ * jelző. Kivétel a „Hatékony szerepjátékos”: az szerepet nevez meg (alacsony
+ * usage melletti hatékony termelés), nem rangot. (A korábbi szabály a padról jövő `engine`-t „Rotációs
  * hozzájárulás”-ra, a sokat játszó kezdő `support`-ot „Stabil alappillér”-re
  * írta át, így a magasabb Impact score alacsonyabb rangú címkét kaphatott.)
  * Ha valaki az alappillér-szintű pontszámot kevés percben éri el, a címke ezt
@@ -192,6 +210,9 @@ const mapContextualImpactLabel = (
   minutes: number
 ) => {
   if (impactClass === 'mvp' && context.usageTier === 'low') {
+    return 'Hatékony szerepjátékos';
+  }
+  if (impactClass === 'support' && isEfficientRolePlayer(context, minutes)) {
     return 'Hatékony szerepjátékos';
   }
   if (impactClass === 'engine' && !context.isStarter) {
@@ -342,6 +363,8 @@ const classifyImpact = (
   if (hasEngineMinutes(minutes, context.isStarter) && score >= ENGINE_MIN_SCORE) return 'engine';
 
   if (score >= 38) return 'support';
+  // Alacsony usage melletti hatékony termelés nem „Limitált hatás”.
+  if (isEfficientRolePlayer(context, minutes)) return 'support';
   return 'struggling';
 };
 
