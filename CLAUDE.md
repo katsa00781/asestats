@@ -119,6 +119,7 @@ asestats/
 │   ├── game-text-report-prompt.ts # Meccs AI-szöveg: prompt, adatkivonat, számok visszaellenőrzése
 │   ├── kosarstat-clutch-parse.ts
 │   ├── kosarstat-pbp-parse.ts  # Eseménylista → pontforrások (második esély, labdaeladásból, gyors befejezés)
+│   ├── kosarstat-substitutions.ts # Cserék játékosonként: eseménylista (elsődleges) / percrács (tartalék) + be/le párosítás-ellenőrzés
 │   ├── player-analysis.ts
 │   ├── player-postgame.ts
 │   ├── player-stat-mapping.ts  # SupabasePlayerStat típus + PlayerStats mapping (egyetlen példány)

@@ -1,6 +1,6 @@
 # BACKLOG.md – ASEStats Projekt
 
-_Utoljára frissítve: 2026-10-11 (H18 – post-game riport második hibalista: A egység kész, B–D folyamatban)_
+_Utoljára frissítve: 2026-10-11 (H18 – post-game riport második hibalista: A–B egység kész, C–D folyamatban)_
 
 ---
 
@@ -737,6 +737,42 @@ egyeznek (labdaeladásból 32–16, gyors befejezésből 19–4, második esély
   `eslint` tiszta.
 - Mobil jegyzet: `asestatmobile/docs/mobile-sync/2026-10-11-postgame-riport-h18.md`
   (`@core`: `postgame-report`, `player-postgame`).
+
+*B egység – rotáció: cserék az eseménylistából, párosítás-ellenőrzés ✓ (2026-10-11)*
+
+A hibalista szerint Chandlernél (4 lecserélés, 2 beállás) és Révésznél (5 / 4)
+a 31. és a 36. perc között hiányzik egy beállás, és a webes csere-lista a
+Q3 03:00-nál véget ér. Két külön ok volt:
+
+- [x] **A percrács percenként egyetlen kódot ad** (1 = végig pályán, 2 =
+  beállt, 3 = lejött). A Q4 4:49-es holtidőben hét csere történt egyszerre:
+  Chandler és Révész beállt és ugyanakkor le is jött, Danielst le-, majd
+  visszacserélték – a rácsban ebből csak egy „3” maradt a 36. percnél (Daniels
+  a 37. percben mégis végig pályán van). A hiányzó esemény tehát nem a Q4-ből
+  hiányzott, hanem a forrás formátumából. Új `lib/kosarstat-substitutions.ts`:
+  az elsődleges forrás a Kosarstat **eseménylistája** („Csere: X helyett Y”,
+  másodpercre pontos, mind az 58 csere; a rövidített nevek a névszűrő-oszlopból
+  teljes névre oldva). A percrács tartalék: `rotationFromMinuteCodes` a pályán /
+  padon állapotból pótolja a hiányzó eseményt és megjelöli (`*`) – a pótlás után
+  a rács percre egyezik az eseménylistával.
+- [x] **A webes csere-lista 40 eseménynél le volt vágva** (`slice(0, 40)`) –
+  ezért ért véget a Q3-nál. A vágás megszűnt (a lista görgethető), a fejléc a
+  forrást mutatja.
+- [x] **Validáció** (`validateRotation`) – kezdőnél a lecserélések száma a
+  beállásokkal egyenlő, vagy eggyel több; cserénél fordítva; az eseményeknek
+  váltakozniuk kell; a meccs végi állapot a percrács utolsó percével (független
+  forrás) egyezik. Hiba esetén a webes lista fölött figyelmeztetés, az MD-ben
+  „Párosítási hiba” sor. A nyers rács (pótlás nélkül) Chandlernél, Révésznél és
+  Danielsnél jelez – a hibalista Danielst nem említette.
+- [x] **Export MD** – a rotációs tábla az eseménylistából: Chandler be 13, 21,
+  36 / le 8, 18, 31, 36; Révész be 12, 21, 28, 36, 38 / le 6, 16, 26, 31, 36. Új
+  „Meccs végén” oszlop (pályán / padon), a lábjegyzet a forrást és az ellenőrzési
+  szabályt írja le.
+- [x] **Teszt** – új `tests/kosarstat-substitutions.test.ts` (6 eset) a valós
+  eseménylistával és percráccsal (`tests/fixtures/kosarstat-ase-sopron-rotation.ts`).
+  64 / 64 teszt, `tsc --noEmit`, `eslint` (csak korábbi figyelmeztetések).
+- Mobil jegyzet a B egységhez nem kell: a mobil nem jelenít meg rotációt, az új
+  modul nem `@core`.
 
 **H17 – Post-game riport és Export MD: hibák és hiányzó blokkok ✓ (2026-10-10)** – a kód kész, a böngészős ellenőrzés nyitva
 

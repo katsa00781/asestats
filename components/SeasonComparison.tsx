@@ -6,7 +6,9 @@ import Image from 'next/image';
 import { Loader2, Download, ClipboardList, Save } from 'lucide-react';
 import { toast } from 'sonner';
 import type { PostgameExportExtras, PostgameLineupsMd } from '@/lib/export-to-md';
+import type { KosarstatPlayerRotation, KosarstatRotationEvent, KosarstatSide } from '@/lib/kosarstat-substitutions';
 import { playerSeasonToMd, pregameReportToMd, postgameReportToMd } from '@/lib/export-to-md';
+import { endsOnCourt, groupRotationByPlayer, parseKosarstatSubstitutions, rotationFromMinuteCodes, validateRotation } from '@/lib/kosarstat-substitutions';
 import { buildPostgameLineupSides, isScoringLineupStint } from '@/lib/postgame-lineup-export';
 import { buildTeamSeasonMd } from '@/lib/team-season-export-data';
 import { useEffect, useMemo, useState } from 'react';
@@ -188,22 +190,23 @@ type KosarstatPlayerMinuteStat = {
   oppPts: number | null;
 };
 
-type KosarstatSubEvent = {
-  gameSecond: number;
-  minute: number;
-  clockLabel: string;
-  type: 'in' | 'out';
-  player: string;
+type KosarstatSubEvent = KosarstatRotationEvent;
+
+/** A játékos beállásai / lecserélései percre; `inferred…`: a percrácsból következtetett események. */
+type KosarstatRotationMinutes = {
+  subInMinutes: number[];
+  subOutMinutes: number[];
+  inferredInMinutes: number[];
+  inferredOutMinutes: number[];
+  endsOnCourt: boolean;
 };
 
-type KosarstatPlayerTimeline = {
+type KosarstatPlayerTimeline = KosarstatRotationMinutes & {
   player: string;
   minuteCodes: string[];
   minutesLabel: string;
   seconds: number;
   plusMinus: number | null;
-  subInMinutes: number[];
-  subOutMinutes: number[];
 };
 
 type KosarstatLineupStint = {
@@ -235,6 +238,10 @@ type KosarstatTeamLineupAnalysis = {
   playerMinutes: KosarstatPlayerMinuteStat[];
   playerTimelines: KosarstatPlayerTimeline[];
   substitutions: KosarstatSubEvent[];
+  /** A cserék forrása: az eseménylista (másodpercre pontos) vagy a percrács. */
+  rotationSource: 'events' | 'grid';
+  /** Játékosok, akiknél a beállások és a lecserélések nem párosíthatók. */
+  rotationIssues: string[];
   stints: KosarstatLineupStint[];
   pairStats: KosarstatComboStat[];
   trioStats: KosarstatComboStat[];
@@ -929,9 +936,71 @@ const buildAggregatedKosarstatLineupTeamAnalysis = (
     playerMinutes,
     playerTimelines: [],
     substitutions: [],
+    rotationSource: 'grid',
+    rotationIssues: [],
     stints,
     pairStats: buildComboStats(allStints, 2),
     trioStats: buildComboStats(allStints, 3),
+  };
+};
+
+const rotationMinutesOf = (rotation: KosarstatPlayerRotation): KosarstatRotationMinutes => {
+  const minutes = (type: 'in' | 'out', inferredOnly: boolean) =>
+    rotation.events.filter(event => event.type === type && (!inferredOnly || event.inferred)).map(event => event.minute);
+  return {
+    subInMinutes: minutes('in', false),
+    subOutMinutes: minutes('out', false),
+    inferredInMinutes: minutes('in', true),
+    inferredOutMinutes: minutes('out', true),
+    endsOnCourt: endsOnCourt(rotation),
+  };
+};
+
+/**
+ * A csapat csere-eseményei és azok ellenőrzése. Az elsődleges forrás az
+ * eseménylista (`events`, másodpercre pontos, az azonos percben történt be- és
+ * lecserélést is tartalmazza); ha nincs, vagy a nevei nem a lineup oldal
+ * nevei, a percrácsból olvasott események maradnak.
+ */
+const applyRotationSource = (
+  team: KosarstatTeamLineupAnalysis,
+  events: KosarstatRotationEvent[] | undefined
+): KosarstatTeamLineupAnalysis => {
+  const lineupPlayers = team.playerTimelines.map(row => row.player);
+  const hasGrid = lineupPlayers.length > 0;
+  const gridStarters = hasGrid ? team.starters : [];
+  // A meccs végi állapot a percrács utolsó percéből – az eseményektől független ellenőrzés.
+  const observedEnd = new Map(team.playerTimelines.map(row => {
+    const lastCode = row.minuteCodes[row.minuteCodes.length - 1] ?? '0';
+    return [row.player, lastCode === '1' || lastCode === '2'] as const;
+  }));
+
+  const fromGrid = (extraIssue?: string): KosarstatTeamLineupAnalysis => {
+    const rotations = groupRotationByPlayer(team.substitutions, gridStarters, observedEnd);
+    return {
+      ...team,
+      rotationSource: 'grid',
+      rotationIssues: [...(extraIssue ? [extraIssue] : []), ...validateRotation(rotations).map(issue => issue.message)],
+    };
+  };
+  if (!events || events.length === 0) return fromGrid();
+
+  const unknown = Array.from(new Set(events.map(event => event.player))).filter(name => hasGrid && !lineupPlayers.includes(name));
+  if (unknown.length > 0) {
+    return fromGrid(`Az eseménylista cseréi nem párosíthatók a lineup oldal neveivel (${unknown.join(', ')}) – a cserék a percrácsból származnak.`);
+  }
+
+  const rotations = groupRotationByPlayer(events, gridStarters, observedEnd);
+  const byPlayer = new Map(rotations.map(rotation => [rotation.player, rotation]));
+  return {
+    ...team,
+    substitutions: events,
+    playerTimelines: team.playerTimelines.map(row => ({
+      ...row,
+      ...rotationMinutesOf(byPlayer.get(row.player) ?? { player: row.player, isStarter: gridStarters.includes(row.player), events: [] }),
+    })),
+    rotationSource: 'events',
+    rotationIssues: validateRotation(rotations).map(issue => issue.message),
   };
 };
 
@@ -1106,65 +1175,24 @@ const parseKosarstatTeamLineupAnalysis = (
         ? rowMinutesLabel
         : formatSecondsAsMmSs(timelineSeconds);
 
-      const firstMinuteCode = minuteCodes.find(item => item.minute === 1)?.code || '';
-      if (firstMinuteCode === '1' || firstMinuteCode === '3') {
-        startersFromGrid.push(player);
-      }
+      // A rács percenként egy kódot ad: ha valaki egy percen belül be is áll
+      // és le is megy, a hiányzó eseményt az állapotból következtetjük.
+      const lastMinute = minuteCodes.reduce((max, item) => Math.max(max, item.minute), 0);
+      const codesByMinute = Array.from({ length: lastMinute }, (_, index) =>
+        minuteCodes.find(item => item.minute === index + 1)?.code ?? ''
+      );
+      const rotation = rotationFromMinuteCodes(player, codesByMinute);
+      if (rotation.isStarter) startersFromGrid.push(player);
 
-      const minuteCodesOnly = minuteCodes.map(item => item.code || '0');
-      const subInMinutes = minuteCodes.filter(item => item.code === '2').map(item => item.minute);
-      const subOutMinutes = minuteCodes.filter(item => item.code === '3').map(item => item.minute);
       playerTimelines.push({
         player,
-        minuteCodes: minuteCodesOnly,
+        minuteCodes: minuteCodes.map(item => item.code || '0'),
         minutesLabel: timelineMinutesLabel,
         seconds: timelineSeconds,
         plusMinus: rowPlusMinus,
-        subInMinutes,
-        subOutMinutes,
+        ...rotationMinutesOf(rotation),
       });
-
-      const hasExplicitCodes = minuteCodes.some(item => item.code === '2' || item.code === '3');
-
-      minuteCodes.forEach(item => {
-        const gameSecond = Math.max(0, (item.minute - 1) * 60);
-        const clockLabel = formatElapsedGameClock(gameSecond);
-
-        if (item.code === '2') {
-          substitutions.push({
-            gameSecond,
-            minute: item.minute,
-            clockLabel,
-            type: 'in',
-            player,
-          });
-        } else if (item.code === '3') {
-          substitutions.push({
-            gameSecond,
-            minute: item.minute,
-            clockLabel,
-            type: 'out',
-            player,
-          });
-        }
-      });
-
-      // Fallback for legacy data where explicit 2/3 event markers are missing.
-      if (!hasExplicitCodes) {
-        let wasOn = false;
-        minuteCodes.forEach(item => {
-          const gameSecond = Math.max(0, (item.minute - 1) * 60);
-          const clockLabel = formatElapsedGameClock(gameSecond);
-          const isOn = item.code !== '' && item.code !== '0';
-          if (!wasOn && isOn) {
-            substitutions.push({ gameSecond, minute: item.minute, clockLabel, type: 'in', player });
-          }
-          if (wasOn && !isOn) {
-            substitutions.push({ gameSecond, minute: item.minute, clockLabel, type: 'out', player });
-          }
-          wasOn = isOn;
-        });
-      }
+      substitutions.push(...rotation.events);
     });
 
     if (startersFromGrid.length >= 5) {
@@ -1275,7 +1303,8 @@ const parseKosarstatTeamLineupAnalysis = (
 
   playerTimelines.sort((a, b) => b.seconds - a.seconds || a.player.localeCompare(b.player, 'hu'));
 
-  substitutions.sort((a, b) => a.gameSecond - b.gameSecond || a.type.localeCompare(b.type));
+  // Stabil rendezés csak idő szerint: azonos percben a játékos saját sorrendje (be → le vagy le → be) megmarad.
+  substitutions.sort((a, b) => a.gameSecond - b.gameSecond);
 
   return {
     teamName,
@@ -1283,6 +1312,8 @@ const parseKosarstatTeamLineupAnalysis = (
     playerMinutes,
     playerTimelines,
     substitutions,
+    rotationSource: 'grid',
+    rotationIssues: [],
     stints,
     pairStats: buildComboStats(stints, 2),
     trioStats: buildComboStats(stints, 3),
@@ -2746,6 +2777,7 @@ export function SeasonComparison({
   const [kosarstatQuarterStats, setKosarstatQuarterStats] = useState<KosarstatQuarterStatRow[]>([]);
   const [kosarstatTeamMetrics, setKosarstatTeamMetrics] = useState<KosarstatTeamMetricRow[]>([]);
   const [kosarstatPointSources, setKosarstatPointSources] = useState<KosarstatPointSourceTotals | null>(null);
+  const [kosarstatSubstitutions, setKosarstatSubstitutions] = useState<Record<KosarstatSide, KosarstatRotationEvent[]> | null>(null);
   const [postgamePbpContext, setPostgamePbpContext] = useState<PostgamePbpContext | null>(null);
   const [kosarstatClutchImportNote, setKosarstatClutchImportNote] = useState<string | null>(null);
   const [seasonKosarstatClutch, setSeasonKosarstatClutch] = useState<PostgamePbpContext['clutch'] | null>(null);
@@ -3137,6 +3169,7 @@ export function SeasonComparison({
           setKosarstatQuarterStats([]);
           setKosarstatTeamMetrics([]);
           setKosarstatPointSources(null);
+          setKosarstatSubstitutions(null);
           setIsLoadingKosarstatPostgame(false);
         }
         return;
@@ -3512,6 +3545,8 @@ export function SeasonComparison({
             setKosarstatQuarterStats([]);
             setKosarstatTeamMetrics([]);
             setKosarstatPointSources(null);
+            setKosarstatSubstitutions(null);
+          setKosarstatSubstitutions(null);
             setIsLoadingKosarstatPostgame(false);
           }
           return;
@@ -3619,6 +3654,7 @@ export function SeasonComparison({
 
         // Pontforrások (második esély, labdaeladásból, gyors befejezés) az eseménylistából.
         let loadedPointSources: KosarstatPointSourceTotals | null = null;
+        let loadedSubstitutions: Record<KosarstatSide, KosarstatRotationEvent[]> | null = null;
         const eventsRawId = Array.isArray(eventsRawResult.data)
           ? String((eventsRawResult.data as Array<{ id?: string }>)[0]?.id || '')
           : '';
@@ -3634,6 +3670,7 @@ export function SeasonComparison({
             if (!headers.includes('home_event')) continue;
             const rows = Array.isArray(table.rows) ? table.rows.filter(Array.isArray).map(item => item as unknown[]) : [];
             loadedPointSources = parseKosarstatPointSources(headers, rows);
+            loadedSubstitutions = parseKosarstatSubstitutions(headers, rows);
             break;
           }
         }
@@ -3642,6 +3679,7 @@ export function SeasonComparison({
           setKosarstatQuarterStats(loadedQuarterStats);
           setKosarstatTeamMetrics(loadedTeamMetrics);
           setKosarstatPointSources(loadedPointSources);
+          setKosarstatSubstitutions(loadedSubstitutions);
           setPostgamePbpContext(loadedClutchContext);
           setKosarstatClutchImportNote(loadedClutchImportNote);
         }
@@ -3871,6 +3909,7 @@ export function SeasonComparison({
           setKosarstatQuarterStats([]);
           setKosarstatTeamMetrics([]);
           setKosarstatPointSources(null);
+          setKosarstatSubstitutions(null);
           setIsLoadingKosarstatPostgame(false);
         }
       }
@@ -9430,8 +9469,13 @@ export function SeasonComparison({
 
   const activeKosarstatTeamAnalysis = useMemo(() => {
     if (!kosarstatLineupAnalysis) return null;
-    return kosarstatLineupAnalysis.selectedTeam || kosarstatLineupAnalysis.homeTeam || kosarstatLineupAnalysis.awayTeam;
-  }, [kosarstatLineupAnalysis]);
+    const { selectedTeam, selectedSide, homeTeam, awayTeam } = kosarstatLineupAnalysis;
+    const team = selectedTeam || homeTeam || awayTeam;
+    if (!team) return null;
+    const side: KosarstatSide | null = selectedTeam ? selectedSide : homeTeam ? 'home' : 'away';
+    // A cserék az eseménylistából jönnek (Q4-gyel és az azonos perces dupla cserékkel együtt).
+    return applyRotationSource(team, side ? kosarstatSubstitutions?.[side] : undefined);
+  }, [kosarstatLineupAnalysis, kosarstatSubstitutions]);
 
   // A post-game Export MD ötös-blokkja: a saját és az ellenfél Kosarstat lineupja,
   // box score névírással. Az ellenfél a lineup oldal másik oldala – a
@@ -9788,7 +9832,17 @@ export function SeasonComparison({
             isStarter: starters.has(row.player),
             subInMinutes: row.subInMinutes,
             subOutMinutes: row.subOutMinutes,
+            inferredInMinutes: row.inferredInMinutes,
+            inferredOutMinutes: row.inferredOutMinutes,
+            endsOnCourt: row.endsOnCourt,
           }))
+        : undefined,
+      rotationSource: lineupUsable ? lineupTeam.rotationSource : undefined,
+      // Az ellenőrzés üzenetei is box score névírással.
+      rotationIssues: lineupUsable
+        ? lineupTeam.rotationIssues.map(issue =>
+            Array.from(matched.entries()).reduce((text, [lineupName, name]) => text.split(lineupName).join(name), issue)
+          )
         : undefined,
       officialPlusMinus,
       playerTrends,
@@ -16061,16 +16115,25 @@ export function SeasonComparison({
                     </div>
 
                     <div className="rounded-md border border-border-subtle bg-base/60 p-3">
-                      <div className="text-sm text-secondary font-medium mb-2">Csere-események (2=be, 3=le)</div>
+                      <div className="text-sm text-secondary font-medium mb-2" title={activeKosarstatTeamAnalysis.rotationSource === 'events' ? 'Forrás: a Kosarstat eseménylistája (másodpercre pontos).' : 'Forrás: a Kosarstat percrácsa – percenként egy kódot ad (2 = be, 3 = le); a * jelölésű esemény a rácsból következtetett.'}>
+                        Csere-események ({activeKosarstatTeamAnalysis.rotationSource === 'events' ? 'eseménylista' : 'percrács'})
+                      </div>
+                      {activeKosarstatTeamAnalysis.rotationIssues.length > 0 && (
+                        <div className="text-xs text-warning mb-2 space-y-1">
+                          {activeKosarstatTeamAnalysis.rotationIssues.map(issue => (
+                            <div key={`rot-issue-${issue}`}>{issue}</div>
+                          ))}
+                        </div>
+                      )}
                       <div className="space-y-1 max-h-56 overflow-y-auto pr-1">
                         {activeKosarstatTeamAnalysis.substitutions.length === 0 && (
                           <div className="text-xs text-muted">Nincs használható csereesemény.</div>
                         )}
-                        {activeKosarstatTeamAnalysis.substitutions.slice(0, 40).map((event, idx) => (
+                        {activeKosarstatTeamAnalysis.substitutions.map((event, idx) => (
                           <div key={`sub-${idx}-${event.player}-${event.gameSecond}-${event.type}`} className="flex items-center justify-between text-xs bg-surface-1/60 rounded px-2 py-1">
                             <span className="text-secondary">{event.clockLabel}</span>
                             <span className={event.type === 'in' ? 'text-positive' : 'text-warning'}>
-                              {event.type === 'in' ? 'be' : 'le'}
+                              {event.type === 'in' ? 'be' : 'le'}{event.inferred ? ' *' : ''}
                             </span>
                             <span className="text-primary truncate pl-2">{event.player}</span>
                           </div>

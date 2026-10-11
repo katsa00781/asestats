@@ -1093,6 +1093,11 @@ export type PostgameRotationRow = {
   /** A játék hányadik percében lépett pályára / ment le (a kezdés nélkül). */
   subInMinutes: number[];
   subOutMinutes: number[];
+  /** A percrácsból következtetett (a forrásban külön nem jelölt) események percei. */
+  inferredInMinutes?: number[];
+  inferredOutMinutes?: number[];
+  /** A meccs végén a pályán volt-e; a párosítás ellenőrzéséhez. */
+  endsOnCourt?: boolean;
 };
 
 /** Egy játékos legutóbbi meccsei időrendben (a legfrissebb az utolsó). */
@@ -1121,8 +1126,12 @@ export type PostgameExportExtras = {
     ownMetrics: KosarstatTeamMetricRow | null;
     oppMetrics: KosarstatTeamMetricRow | null;
   };
-  /** Rotáció a Kosarstat percrácsából, box score névírással. */
+  /** Rotáció a Kosarstat csere-eseményeiből, box score névírással. */
   rotation?: PostgameRotationRow[];
+  /** A cserék forrása: az eseménylista (másodpercre pontos) vagy a percrács. */
+  rotationSource?: 'events' | 'grid';
+  /** Játékosok, akiknél a beállások és a lecserélések nem párosíthatók. */
+  rotationIssues?: string[];
   /** A Kosarstat játékostáblájának +/- értéke box score név szerint. */
   officialPlusMinus?: Record<string, number>;
   /** Játékosonként az utolsó meccsek (TS%, Usage%, VAL/36). */
@@ -1281,22 +1290,52 @@ function postgameShotMapToMd(report: PostGameReport): string[] {
   return lines;
 }
 
-/** Rotáció és cserék a Kosarstat percrácsából. */
-function postgameRotationToMd(rows: PostgameRotationRow[], teamName: string): string[] {
+/**
+ * Rotáció és cserék. Az elsődleges forrás a Kosarstat eseménylistája; a
+ * percrács percenként egy kódot ad, ezért ott az azonos percben történt második
+ * esemény csak következtetett (`*`).
+ */
+function postgameRotationToMd(
+  rows: PostgameRotationRow[],
+  teamName: string,
+  source: 'events' | 'grid' = 'grid',
+  issues: string[] = []
+): string[] {
   if (rows.length === 0) return [];
-  const minutes = (list: number[]) => (list.length > 0 ? list.join(', ') : '–');
-  return [
+  const minutes = (list: number[], inferred: number[] = []) => {
+    if (list.length === 0) return '–';
+    const pending = [...inferred];
+    return list
+      .map(minute => {
+        const index = pending.indexOf(minute);
+        if (index < 0) return `${minute}`;
+        pending.splice(index, 1);
+        return `${minute}*`;
+      })
+      .join(', ');
+  };
+  const hasEnd = rows.some(row => row.endsOnCourt !== undefined);
+  const hasInferred = rows.some(row => (row.inferredInMinutes?.length ?? 0) + (row.inferredOutMinutes?.length ?? 0) > 0);
+  const lines = [
     ``,
     `## Rotáció és cserék – ${teamName}`,
     ``,
-    `| Játékos | Perc | +/- | Kezdő | Be (perc) | Le (perc) |`,
-    `|---------|------|-----|-------|-----------|-----------|`,
+    `| Játékos | Perc | +/- | Kezdő | Be (perc) | Le (perc) |${hasEnd ? ' Meccs végén |' : ''}`,
+    `|---------|------|-----|-------|-----------|-----------|${hasEnd ? '-------------|' : ''}`,
     ...rows.map(row =>
-      `| ${row.player} | ${mmss(row.seconds)} | ${row.plusMinus !== null ? signedInt(row.plusMinus) : '–'} | ${row.isStarter ? 'igen' : '–'} | ${minutes(row.subInMinutes)} | ${minutes(row.subOutMinutes)} |`
+      `| ${row.player} | ${mmss(row.seconds)} | ${row.plusMinus !== null ? signedInt(row.plusMinus) : '–'} | ${row.isStarter ? 'igen' : '–'} | ${minutes(row.subInMinutes, row.inferredInMinutes)} | ${minutes(row.subOutMinutes, row.inferredOutMinutes)} |${hasEnd ? ` ${row.endsOnCourt === undefined ? '–' : row.endsOnCourt ? 'pályán' : 'padon'} |` : ''}`
     ),
-    ``,
-    `*Forrás: a Kosarstat lineup oldalának percrácsa. Be / le = a mérkőzés hányadik játékpercében lépett pályára, illetve ment le a játékos (egész percre kerekítve; a kezdés nem csere). A +/- a Kosarstat játékostáblájának hivatalos értéke.*`,
   ];
+  if (issues.length > 0) {
+    lines.push(``, `> **Párosítási hiba:** a be- és lecserélések nem párosíthatók – ${issues.join('; ')}.`);
+  }
+  lines.push(
+    ``,
+    source === 'events'
+      ? `*Forrás: a Kosarstat eseménylistájának csere-eseményei („Csere: X helyett Y”, másodpercre pontos órával); a perc és a +/- a lineup oldalról. Be / le = a mérkőzés hányadik játékpercében lépett pályára, illetve ment le a játékos (a kezdés nem csere; a negyed végi csere a következő perchez tartozik). Egy percben több esemény is lehet: ugyanabban a holtidőben valaki beállhat és le is jöhet. Ellenőrzés: kezdőnél a lecserélések száma a beállásokkal egyenlő, vagy eggyel több, ha a meccs végén a padon ül; cserénél a beállások száma a lecserélésekkel egyenlő, vagy eggyel több, ha a pályán fejezi be.*`
+      : `*Forrás: a Kosarstat lineup oldalának percrácsa (ehhez a meccshez nincs használható eseménylista). Be / le = a mérkőzés hányadik játékpercében lépett pályára, illetve ment le a játékos (egész percre; a kezdés nem csere). A rács percenként egyetlen kódot ad, ezért ha valaki egy percen belül be is áll és le is megy, az egyik esemény hiányzik belőle${hasInferred ? ' – a * jelölésű perc a pályán / padon állapotból következtetett esemény' : ''}. Ellenőrzés: kezdőnél a lecserélések száma a beállásokkal egyenlő, vagy eggyel több, ha a meccs végén a padon ül; cserénél fordítva. A +/- a Kosarstat játékostáblájának hivatalos értéke.*`
+  );
+  return lines;
 }
 
 /** Játékosonkénti trend az utolsó meccseken. */
@@ -1531,7 +1570,9 @@ export function postgameReportToMd(
     }));
   }
 
-  if (extras.rotation) lines.push(...postgameRotationToMd(extras.rotation, report.teamName));
+  if (extras.rotation) {
+    lines.push(...postgameRotationToMd(extras.rotation, report.teamName, extras.rotationSource, extras.rotationIssues));
+  }
 
   if (report.strengths.length > 0) {
     lines.push(``, `## Erősségek`, ``);
