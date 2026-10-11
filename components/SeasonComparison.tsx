@@ -9,7 +9,7 @@ import type { PostgameExportExtras, PostgameLineupsMd } from '@/lib/export-to-md
 import type { KosarstatPlayerRotation, KosarstatRotationEvent, KosarstatSide } from '@/lib/kosarstat-substitutions';
 import { playerSeasonToMd, pregameReportToMd, postgameReportToMd } from '@/lib/export-to-md';
 import { endsOnCourt, groupRotationByPlayer, parseKosarstatSubstitutions, rotationFromMinuteCodes, validateRotation } from '@/lib/kosarstat-substitutions';
-import { buildPostgameLineupSides, isScoringLineupStint } from '@/lib/postgame-lineup-export';
+import { buildPostgameLineupSides, describeWeakestLineupCore, isScoringLineupStint } from '@/lib/postgame-lineup-export';
 import { buildTeamSeasonMd } from '@/lib/team-season-export-data';
 import { useEffect, useMemo, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, Cell, LabelList, Legend, Line, LineChart, ResponsiveContainer, Scatter, ScatterChart, Tooltip, XAxis, YAxis, ZAxis } from 'recharts';
@@ -9461,9 +9461,27 @@ export function SeasonComparison({
       };
     })();
 
+    // Lineup-alapú probléma: a meccs leggyengébb, legalább 5 percet együtt töltő
+    // magja, box score névírással.
+    const ownLineupModel = activeLineupTeam
+      ? buildPostgameLineupSides({
+          own: {
+            teamName: activeLineupTeam.teamName,
+            starters: activeLineupTeam.starters,
+            stints: activeLineupTeam.stints,
+            officialPlayers: activeLineupTeam.playerMinutes.map(item => ({ player: item.player, plusMinus: item.plusMinus })),
+          },
+          opponent: null,
+          ownBoxNames: teamPlayers.map(resolveBoxName),
+          opponentBoxNames: [],
+        }).own
+      : null;
+    const lineupProblem = ownLineupModel ? describeWeakestLineupCore(ownLineupModel) : null;
+
     return mergeKosarstatPostgameContext(baseReport, kosarstatPostgameContext, {
       extraNotes: [...kosarstatPostgameNotes, ...nameNotes],
       lineupInsights,
+      extraProblems: lineupProblem ? [lineupProblem] : [],
     });
   }, [kosarstatLineupAnalysis, kosarstatPostgameContext, kosarstatPostgameNotes, league, playerGameStats, postgameBenchmarks, postgameOpponentTotalsByTeam, postgameShotContext, pregameReport, rolesByPlayerId, seasonPlayers, selectedGame, resolvedTeamId, selectedTeamStats]);
 

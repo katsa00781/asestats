@@ -1,5 +1,12 @@
 import type { PostgameLineupStintInput } from '../lib/postgame-lineup-export';
-import { buildPostgameLineupExport, buildPostgameLineupSides, LINEUP_NET_MIN_SECONDS, MAX_TRIOS } from '../lib/postgame-lineup-export';
+import {
+  buildPostgameLineupExport,
+  buildPostgameLineupSides,
+  describeWeakestLineupCore,
+  findWeakestLineupCore,
+  LINEUP_NET_MIN_SECONDS,
+  MAX_TRIOS,
+} from '../lib/postgame-lineup-export';
 import { postgameLineupsToMd } from '../lib/export-to-md';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
@@ -252,6 +259,32 @@ test('HALMAI + RÉVÉSZ a meccs legjobb védekező párosa (Def/40 = 29,1)', () 
   assert.ok(pair);
   assert.equal(pair.seconds, 495);
   assert.equal(Math.round((pair.oppPts * 2400 * 10) / pair.seconds) / 10, 29.1);
+});
+
+test('Lineup-alapú probléma: a Krivacevic-mag (−13 pont 6:13 alatt) a meccs leggyengébb együttállása', () => {
+  const sides = buildPostgameLineupSides({
+    own: aseSopronInput(), opponent: null, ownBoxNames: ASE_BOX_NAMES, opponentBoxNames: [],
+  });
+  assert.ok(sides.own);
+  const core = findWeakestLineupCore(sides.own);
+  assert.ok(core);
+  // A négyes minden párosa és hármasa ugyanazt a 6:13-at és 9–22-t mutatja – a mag maga a négyes.
+  assert.deepEqual([...core.players].sort(), [
+    'DANIELS II Clarence Oliver', 'GÉRINGER Gergő', 'HALMAI Dániel', 'KRIVACEVIC Markó',
+  ]);
+  assert.equal(core.seconds, 373);
+  assert.deepEqual([core.teamPts, core.oppPts], [9, 22]);
+  const line = describeWeakestLineupCore(sides.own);
+  assert.match(line ?? '', /^Együttállás: .*KRIVACEVIC Markó.* közös 6:13 perce alatt 9–22 \(-13 pont\) – a meccs leggyengébb, legalább 5 percet együtt töltő négyese \(Kosarstat lineup\)\.$/);
+
+  // Ha nincs legalább −8 pontos, 5 percet együtt töltő egység, nincs problémasor.
+  const balanced = buildPostgameLineupExport({
+    teamName: 'X', starters: [],
+    // A + B + C + D együtt 12:00, 24–26 (−2); az F-fel töltött 2 perc a mintaküszöb alatt van.
+    stints: [stint('A, B, C, D, E', '10:00', 20, 18), stint('A, B, C, D, F', '2:00', 4, 8)],
+  });
+  assert.ok(balanced);
+  assert.equal(describeWeakestLineupCore(balanced), null);
 });
 
 test('Az ellenfél blokk az ellenfél lineupja, a nevek box score írásmódban', () => {

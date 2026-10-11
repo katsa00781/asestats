@@ -1,6 +1,8 @@
 import {
   analyzePostGameReport,
+  buildKosarstatPostgameContext,
   buildPostgameAutoFocus,
+  buildTeamBenchmarks,
   composePostgameSummary,
   mergeKosarstatPostgameContext,
 } from '../lib/postgame-report';
@@ -59,11 +61,19 @@ test('Valódi belső visszaesésnél a sor megmarad, mindkét zóna értékével
 
 test('A dobástérkép hiányzó dobása jelölve van (63 a 64 mezőnykísérletből)', () => {
   const result = report(SHOT_MAP);
-  assert.deepEqual(result.shotMap?.coverage, { shotMapAttempts: 63, boxAttempts: 64, missing: 1 });
+  // A box score 3P 14/30, a dobástérkép 13/29: a hiányzó dobás egy bement hármas.
+  assert.deepEqual(result.shotMap?.coverage, {
+    shotMapAttempts: 63, boxAttempts: 64, missing: 1, missingDetail: '1 értékesített hárompontos',
+  });
   const note = result.dataNotes.find(item => item.startsWith('Dobástérkép lefedettség'));
   assert.ok(note, result.dataNotes.join('\n'));
   assert.match(note, /63 dobás a box score 64 mezőnykísérletéből \(1 hiányzik\)/);
   assert.match(note, /57\.1%.*57\.8% \(37\/64\)/);
+  assert.match(note, /a hiányzó dobás: 1 értékesített hárompontos \(3P a box score-ban 14\/30, a dobástérképen 13\/29/);
+  // Zóna-besorolási eltérésnél (a térkép több kétpontost mutat) nincs állítás a hiányzó dobásról.
+  const shifted = report({ gameShots: [...shots('rim', 26, 18), ...shots('paint', 4, 2), ...shots('mid', 5, 3), ...shots('three', 28, 13)], seasonShots: SEASON_SHOTS });
+  assert.equal(shifted.shotMap?.coverage?.missing, 1);
+  assert.equal(shifted.shotMap?.coverage?.missingDetail, undefined);
 
   // Teljes dobástérképnél nincs megjegyzés.
   const full = report({ gameShots: [...GAME_SHOTS, ...shots('mid', 1, 1)], seasonShots: SEASON_SHOTS });
@@ -85,11 +95,144 @@ test('ORB%-előny negatív második esély mellett nem erősség (7–10)', () =
   const merged = mergeKosarstatPostgameContext(base, context);
   assert.ok(!merged.strengths.some(item => /ORB%|Támadólepattanózás erős/.test(item)), merged.strengths.join('\n'));
   assert.equal(merged.problems.filter(item => item.startsWith('Támadólepattanó-fölény')).length, 1);
-  // A „tartsd fenn” fókusz helyére a pontra váltás lép.
+  // A „tartsd fenn” fókusz helyére a javítandó lép – mindkét oldalra.
   assert.ok(base.nextFocus.some(item => item.startsWith('OREB agresszivitás fenntartása')));
   assert.ok(!merged.nextFocus.some(item => item.startsWith('OREB agresszivitás fenntartása')));
-  assert.equal(merged.nextFocus.filter(item => item.startsWith('Második esélyek pontra váltása')).length, 1);
-  assert.match(merged.nextFocus.join('\n'), /második esélyből 7–10 pont/);
+  const focus = merged.nextFocus.filter(item => /második esélyek pontra váltása/i.test(item));
+  assert.equal(focus.length, 1);
+  assert.match(focus[0], /^Védőlepattanó zárás és második esélyek pontra váltása: boxout .*az ellenfél 9 támadólepattanóból 10 pontot szerzett.*10 támadólepattanóból 7 pont/);
+});
+
+test('A második esély diagnózisa: elsősorban védőlepattanó-gond, ha az ellenfél a liga felett lepattanózott', () => {
+  const merged = mergeKosarstatPostgameContext(report(SHOT_MAP), kosarstat());
+  const problem = merged.problems.find(item => item.startsWith('Támadólepattanó-fölény nem vált pontra'));
+  assert.ok(problem);
+  // Ellenfél: 9 támadólepattanóból 10 pont (1,11), OREB% 31,0% a liga medián felett; saját: 10-ből 7 (0,70).
+  assert.match(problem, /második esélyből 7–10 pont\. Elsősorban védőlepattanó-gond: az ellenfél 9 támadólepattanóból 10 pontot szerzett \(1\.11 pont\/OREB\), OREB%-a 31\.0% a liga medián \(\d+\.\d%\) felett; a saját oldalon 10 támadólepattanóból 7 pont lett \(0\.70 pont\/OREB\)\./);
+
+  // Ha az ellenfél a liga medián alatt lepattanózott, a saját befejezés a fő ok.
+  const weakOpponent = { ...SOPRON_GAME, oreb: 4 };
+  const base = analyzePostGameReport(ASE_GAME, weakOpponent, ASE_SEASON, BENCHMARKS, PLAYERS, undefined, SHOT_MAP);
+  const context = kosarstat({ sources: { ...POINT_SOURCES, away: { ...POINT_SOURCES.away, secondChancePoints: 8 } } });
+  const other = mergeKosarstatPostgameContext(base, context);
+  const line = other.problems.find(item => item.startsWith('Támadólepattanó-fölény nem vált pontra'));
+  assert.match(line ?? '', /Elsősorban a saját befejezésen múlt: a saját oldalon 10 támadólepattanóból 7 pont lett/);
+  assert.ok(other.nextFocus.some(item => item.startsWith('Második esélyek pontra váltása:')));
+});
+
+test('Pontforrás-különbség ≥ 10 pont: döntő tényező és erősség (labdaeladásból, gyors befejezés)', () => {
+  // A valós eseménylistából: labdaeladásból 32–16, gyors befejezésből 19–4, második esélyből 7–10.
+  const sources = {
+    home: { points: 109, secondChancePoints: 7, pointsOffTurnovers: 32, quickFinishPoints: 19 },
+    away: { points: 80, secondChancePoints: 10, pointsOffTurnovers: 16, quickFinishPoints: 4 },
+    quickFinishSeconds: 6,
+  };
+  const base = report(SHOT_MAP);
+  const merged = mergeKosarstatPostgameContext(base, kosarstat({ sources }));
+  assert.deepEqual(merged.decisiveFactors.offense.slice(0, 2), [
+    'Labdaeladásból szerzett pont: 32–16 (+16)',
+    'Gyors befejezésből szerzett pont (≤ 6 mp): 19–4 (+15)',
+  ]);
+  const meta = merged.decisiveFactorMeta.slice(0, 2);
+  assert.deepEqual(meta.map(item => [item.type, item.axis, item.tone, item.source]), [
+    ['Kontroll', 'offense', 'positive', 'opponent'],
+    ['Hatékonyság', 'offense', 'positive', 'opponent'],
+  ]);
+  // A második esély −3 pontja a küszöb alatt van.
+  assert.ok(!merged.decisiveFactors.offense.some(item => item.startsWith('Második esélyből')));
+  assert.equal(merged.decisiveFactorMeta.length, base.decisiveFactorMeta.length + 2);
+  assert.equal(merged.strengths[0], 'Pontforrás-fölény: labdaeladásból 32–16 (+16), gyors befejezésből 19–4 (+15) pont.');
+  // Az összefoglaló „Kulcsmomentumok” sora már ezekkel indul.
+  assert.match(merged.summary, /Kulcsmomentumok: Labdaeladásból szerzett pont: 32–16 \(\+16\); Gyors befejezésből/);
+
+  // Hátránynál a tényező negatív, és a problémák közé kerül.
+  const reversed = mergeKosarstatPostgameContext(base, kosarstat({
+    sources: { ...sources, home: { ...sources.home, pointsOffTurnovers: 6 } },
+  }));
+  const factor = reversed.decisiveFactorMeta.find(item => item.label.startsWith('Labdaeladásból'));
+  assert.equal(factor?.label, 'Labdaeladásból szerzett pont: 6–16 (-10)');
+  assert.equal(factor?.tone, 'negative');
+  assert.ok(reversed.problems.includes('Pontforrás-hátrány: labdaeladásból 6–16 (-10) pont.'));
+  // Érvénytelen eseménylistánál (pontösszeg ≠ végeredmény) nincs pontforrás-tényező.
+  const broken = mergeKosarstatPostgameContext(base, kosarstat({ sources: { ...sources, home: { ...sources.home, points: 100 } } }));
+  assert.ok(!broken.decisiveFactors.offense.some(item => item.startsWith('Labdaeladásból')));
+});
+
+test('Erősségek átfedés nélkül: egy eFG-sor, a félidős trend nem ismétli a negyedet', () => {
+  const quarter = (side: 'home' | 'away', q: number, points: number) => ({ team_side: side, team_name: side, quarter: q, points, cumulative_points: null });
+  const quarters = (home: number[], away: number[]) => [
+    ...home.map((points, index) => quarter('home', index + 1, points)),
+    ...away.map((points, index) => quarter('away', index + 1, points)),
+  ];
+  const context = (home: number[], away: number[]) => buildKosarstatPostgameContext({
+    ownSide: 'home', quarterStats: quarters(home, away),
+    teamMetrics: [
+      { team_side: 'home', efg: 68.75, orb_pct: 30 }, { team_side: 'away', efg: 54.46, orb_pct: 30 },
+    ],
+  });
+
+  // A meccs: +5 / +10 / +13 / +1 – a második félidő (+14) nem jobb az elsőnél (+15).
+  const game = context([32, 29, 23, 25], [27, 19, 10, 24]);
+  assert.ok(game.strengths.includes('Negyed-szintű trend: a Q3 szakaszt +13 ponttal nyertük.'));
+  assert.ok(!game.strengths.some(item => item.startsWith('Második félidős trend')), game.strengths.join('\n'));
+  // Fordítás a szünet után: −6 / −4, majd +7 / +8 – a félidős sor új információ.
+  const turnaround = context([15, 16, 25, 26], [21, 20, 18, 18]);
+  assert.ok(turnaround.strengths.includes('Második félidős trend: Q3-Q4 összesítésben +15 pontot nyertünk (első félidő: -10).'));
+  // Egyetlen negyed adja a második félidőt (Q3 +12, Q4 0): a negyed-sor elég.
+  const single = context([20, 20, 30, 20], [22, 22, 18, 20]);
+  assert.ok(!single.strengths.some(item => item.startsWith('Második félidős trend')));
+
+  const merged = mergeKosarstatPostgameContext(report(SHOT_MAP), game);
+  assert.equal(merged.strengths.filter(item => /eFG|Dobáshatékonyság/.test(item)).length, 1);
+  assert.ok(merged.strengths.includes('Dobáshatékonyság a szezonátlag felett (+10.2 százalékpont; az ellenfélhez mérve +14.3 pp)'));
+});
+
+test('„A liga felett” csak érdemi (≥ 2 pp) eltérésnél, számokkal', () => {
+  // A liga Assist%-a 86,0% körül szór. A szezon a meccsel azonos, így a
+  // szezon-delta sorok nem szorítják ki a liga-sort (az erősségek 3 elemre vágnak).
+  const teams = [0.85, 0.855, 0.86, 0.862, 0.87, 0.9].map((rate, index) => seasonOf(`t${index}`, { fgm2: 20, fgm3: 8, ast: 28 * rate }));
+  const benchmarks = buildTeamBenchmarks([ASE_SEASON, ...teams]);
+  const gameWith = (ast: number) => {
+    const season = seasonOf('ase', {
+      pointsFor: 109, pointsAgainst: 80, fga2: 34, fgm2: 23, fga3: 30, fgm3: 14, fta: 25, ftm: 21,
+      oreb: 10, dreb: 20, ast, tov: 10, oppDreb: 16, oppPossessions: 76,
+    });
+    return analyzePostGameReport({ ...ASE_GAME, ast }, SOPRON_GAME, season, benchmarks, PLAYERS);
+  };
+
+  // +0,5 pp a liga medián felett: a percentilis szerint „felette” volna, de zaj.
+  const noise = gameWith(32);
+  const assist = noise.metrics.keyStats.find(stat => stat.key === 'assist_rate');
+  assert.equal(assist?.game, 86.5);
+  assert.equal(assist?.leagueMedian, 86);
+  assert.ok(!noise.strengths.some(item => item.startsWith('Labdajáratás a liga felett')), noise.strengths.join('\n'));
+  // A sor a zaj-szűrő nélkül megjelent volna: a többi liga-sor ott van.
+  assert.ok(noise.strengths.some(item => item.startsWith('Dobáshatékonyság a liga felett (eFG 68.8% vs liga medián')), noise.strengths.join('\n'));
+
+  // Érdemi különbségnél a sor a számokat is kiírja.
+  const clear = gameWith(36);
+  assert.ok(
+    clear.strengths.includes('Labdajáratás a liga felett (Assist% 97.3% vs liga medián 86.0%, +11.3 pp)'),
+    clear.strengths.join('\n')
+  );
+});
+
+test('Védekezés: a verdikt a DRtg-t és a kikényszerített TO-t is nézi, a negatív tényező a problémák közt is szerepel', () => {
+  const result = report(SHOT_MAP);
+  const defense = result.context.defense;
+  assert.ok(defense);
+  // Ellenfél eFG 54,5% a liga medián körül, de a kikényszerített TO rate 22,4% jóval a medián felett.
+  assert.equal(defense.opponentTurnoverRate, 22.4);
+  assert.ok((defense.leagueTurnoverRate ?? 0) < 19.4);
+  assert.equal(defense.drtg, 106.2);
+  assert.equal(result.context.defenseEfficiencyDelta, 'Higher');
+  assert.match(result.summary, /védekezésben a liga szintjénél jobb volt \(DRtg 106\.2 vs liga medián \d+\.\d; ellenfél eFG 54\.5% vs liga medián \d+\.\d%, [+-]\d+\.\d pp; kikényszerített TO rate 22\.4% vs liga medián \d+\.\d%, \+\d+\.\d pp\)/);
+
+  // A periméter-kockázat döntő tényező és fókusz – és a Problémák között is ott van.
+  assert.ok(result.decisiveFactors.defense.some(item => item.startsWith('Periméter-kockázat')));
+  assert.ok(result.problems.some(item => item.startsWith('Védekezés: Periméter-kockázat (ellenfél 3P 9/23')), result.problems.join('\n'));
+  // A védekezési sor nem indít saját támadó-fókuszt (pl. „Periméter fegyelem”).
+  assert.ok(!result.nextFocus.some(item => item.startsWith('Periméter fegyelem')));
 });
 
 test('A végeredmény ismerete nélkül a kontextus nem ítél, az összefűzés viszont igen', () => {

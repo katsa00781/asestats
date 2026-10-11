@@ -210,6 +210,38 @@ export function buildPostgameLineupExport(input: PostgameLineupInput): PostgameL
   };
 }
 
+/** Ennyi pontos mínusz a mintaküszöb fölötti együttállásnál már kiemelendő probléma. */
+export const WEAK_CORE_MAX_DIFF = -8;
+
+const CORE_SIZE_LABEL: Record<number, string> = { 2: 'párosa', 3: 'hármasa', 4: 'négyese', 5: 'ötöse' };
+
+/**
+ * A meccs leggyengébb „magja”: a legalább `LINEUP_NET_MIN_SECONDS` időt együtt
+ * töltő 2–5 fős együttállások közül a legrosszabb pontkülönbségű, ha az eléri a
+ * `WEAK_CORE_MAX_DIFF` küszöböt. Azonos különbségnél a nagyobb létszámú egység
+ * a pontosabb leírás: ha egy négyes minden párosa és hármasa ugyanazt az időt
+ * és eredményt mutatja, a közös mag maga a négyes.
+ */
+export function findWeakestLineupCore(model: PostgameLineupExport): PostgameLineupUnit | null {
+  const units = [
+    ...model.lineups.filter(lineup => lineup.seconds >= LINEUP_NET_MIN_SECONDS),
+    ...[4, 3, 2].flatMap(size => buildCombos(model.lineups, size)),
+  ].filter(unit => unit.teamPts - unit.oppPts <= WEAK_CORE_MAX_DIFF);
+  const diff = (unit: PostgameLineupUnit) => unit.teamPts - unit.oppPts;
+  return [...units].sort((a, b) =>
+    diff(a) - diff(b) || b.players.length - a.players.length || b.seconds - a.seconds
+  )[0] ?? null;
+}
+
+/** A leggyengébb mag problémasora a riporthoz; `null`, ha nincs kiemelendő együttállás. */
+export function describeWeakestLineupCore(model: PostgameLineupExport): string | null {
+  const core = findWeakestLineupCore(model);
+  if (!core) return null;
+  const clock = `${Math.floor(core.seconds / 60)}:${String(Math.round(core.seconds % 60)).padStart(2, '0')}`;
+  const sizeLabel = CORE_SIZE_LABEL[core.players.length] ?? 'együttállása';
+  return `Együttállás: ${core.players.join(' + ')} közös ${clock} perce alatt ${core.teamPts}–${core.oppPts} (${core.teamPts - core.oppPts} pont) – a meccs leggyengébb, legalább ${LINEUP_NET_MIN_SECONDS / 60} percet együtt töltő ${sizeLabel} (Kosarstat lineup).`;
+}
+
 const lineupPlayerNames = (input: PostgameLineupInput) =>
   Array.from(new Set(input.stints.flatMap(stint => stint.players)));
 

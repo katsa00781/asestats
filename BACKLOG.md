@@ -1,6 +1,6 @@
 # BACKLOG.md – ASEStats Projekt
 
-_Utoljára frissítve: 2026-10-11 (H18 – post-game riport második hibalista: A–B egység kész, C–D folyamatban)_
+_Utoljára frissítve: 2026-10-11 (H18 – post-game riport második hibalista: A–C egység kész, D folyamatban)_
 
 ---
 
@@ -773,6 +773,68 @@ Q3 03:00-nál véget ér. Két külön ok volt:
   64 / 64 teszt, `tsc --noEmit`, `eslint` (csak korábbi figyelmeztetések).
 - Mobil jegyzet a B egységhez nem kell: a mobil nem jelenít meg rotációt, az új
   modul nem `@core`.
+
+*C egység – riportszabályok: pontforrás, védőlepattanó, védekezés, átfedések ✓ (2026-10-11)*
+
+- [x] **A legnagyobb meccsdöntő tényező kimaradt** – a labdaeladásból szerzett
+  pont (32–16, +16) és a gyors befejezés (19–4, +15) sem az erősségek, sem a
+  döntő tényezők között nem volt: a tényezők az `analyzePostGameReport`-ban
+  készülnek, a pontforrás csak a Kosarstat-összefűzéskor ismert. Új szabály a
+  `mergeKosarstatPostgameContext`-ben (a hibalista javaslata):
+  `POINT_SOURCE_DECISIVE_MIN = 10` – ekkora különbségnél a pontforrás döntő
+  tényező (a lista élén, a legnagyobb elöl; hátránynál negatív előjellel), és
+  összevont sorral az erősségek / problémák közé is bekerül („Pontforrás-fölény:
+  labdaeladásból 32–16 (+16), gyors befejezésből 19–4 (+15) pont.”). Az
+  összefoglaló „Kulcsmomentumok” sora így ezekkel indul.
+- [x] **A második esély (7–10) rossz diagnózisa** – a „Támadólepattanó-fölény
+  nem vált pontra” sor és a fókusz csak a saját oldalt kezelte. A sor mostantól
+  a box score-ból diagnosztizál: „Elsősorban védőlepattanó-gond: az ellenfél 9
+  támadólepattanóból 10 pontot szerzett (1,11 pont/OREB), OREB%-a 31,0% a liga
+  medián felett; a saját oldalon 10 támadólepattanóból 7 pont lett (0,70
+  pont/OREB)”. Ha az ellenfél a liga medián alatt lepattanózott: „Elsősorban a
+  saját befejezésen múlt”. A fókusz védőlepattanó-gondnál mindkét oldalt kezeli
+  („Védőlepattanó zárás és második esélyek pontra váltása: boxout …; elöl …”).
+- [x] **„Labdajáratás a liga felett” +0,5 pp-nél** – a liga-sorok csak a
+  percentilist nézték. `LEAGUE_GAP_MIN_PP = 2`: a liga mediántól legalább 2 pp
+  kell (a hibalista javaslata), és a sor a számokat is kiírja („… (Assist%
+  97,3% vs liga medián 86,0%, +11,3 pp)”). Mind a nyolc „liga felett / alatt”
+  sorra érvényes.
+- [x] **Átfedő erősségek** – (1) a Kosarstat eFG-különbség a riport saját
+  eFG-sorába olvad („Dobáshatékonyság a szezonátlag felett (+10,2
+  százalékpont; az ellenfélhez mérve +14,3 pp)”), ugyanígy a problémáknál; (2) a
+  „Második félidős trend” csak akkor jelenik meg, ha a második félidő más képet
+  mutat, mint az első (+14 nem több a +15-nél), és nem egyetlen, már kiírt
+  negyed adja (a „Q3 +13” és a „Q3–Q4 +14” ugyanaz volt). A sor az első félidőt
+  is kiírja.
+- [x] **A védekezés verdiktje csak az ellenfél eFG-jére épült („ligaszintű”)**
+  – `context.defense` új mezői: kikényszerített TO rate és DRtg a liga
+  mediánhoz mérve. A verdikt három jelzés szavazata (eFG ±2,5 pp, TO rate
+  ±3 pp, DRtg ±4 pont / 100 birtoklás), a mondat mindhármat kiírja: „a liga
+  szintjénél jobb volt (DRtg 106,2 vs liga medián …; ellenfél eFG 54,5% vs …;
+  kikényszerített TO rate 22,4% vs …)”.
+- [x] **A periméter-védekezés döntő tényező és fókusz volt, probléma nem** – a
+  védekezési döntő tényezők „Védekezés: …” előtaggal az erősségek (pozitív) és
+  a problémák (negatív) közé is bekerülnek (legfeljebb 2–2). A saját támadó
+  fókusz-szabályok továbbra is csak a saját sorokra illesztenek.
+- [x] **Lineup-alapú probléma (Krivacevic-mag −13, 6:13 alatt)** – a generátor
+  nem állított elő együttállás-problémát. Új
+  `findWeakestLineupCore` / `describeWeakestLineupCore`
+  (`lib/postgame-lineup-export.ts`): a legalább 5 percet együtt töltő 2–5 fős
+  egységek közül a legrosszabb, ha eléri a −8 pontot; azonos eredménynél a
+  nagyobb egység (itt a Daniels + Géringer + Halmai + Krivacevic négyes: 9–22).
+  A web a `mergeKosarstatPostgameContext` új `extraProblems` opcióján adja át.
+- [x] **Elavult adatminőségi sor** („a Kosarstat TO% csak a nyers blokkban”) –
+  átírva: a TO% a „Kosarstat csapatmutatók” táblában szerepel, a riport
+  szabályai nem használják.
+- [x] **A dobástérképről hiányzó dobás típusa** – a box score 2P / 3P
+  számaiból: „a hiányzó dobás: 1 értékesített hárompontos (3P a box score-ban
+  14/30, a dobástérképen 13/29)”; `shotMap.coverage.missingDetail`. Csak tiszta
+  hiánynál állít (zóna-besorolási eltérésnél nem).
+- [x] **Teszt** – `tests/postgame-report-rules.test.ts` 5 új esete,
+  `tests/postgame-lineup-export.test.ts` 1 új esete (a valós ötös-adattal).
+  70 / 70 teszt, `tsc --noEmit`, `eslint` tiszta.
+- Mobil jegyzet: `asestatmobile/docs/mobile-sync/2026-10-11-postgame-riport-h18.md`
+  (`@core`: `postgame-report`).
 
 **H17 – Post-game riport és Export MD: hibák és hiányzó blokkok ✓ (2026-10-10)** – a kód kész, a böngészős ellenőrzés nyitva
 
