@@ -23,6 +23,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip as UiTooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { PostgameShotScatterChart } from '@/components/PostgameShotScatterChart';
+import { PostgameSummary } from '@/components/PostgameSummary';
 import { PostgameZoneHeatmapChart } from '@/components/PostgameZoneHeatmapChart';
 import { supabase, type Database } from '@/lib/supabase';
 import { fetchAllRows } from '@/lib/fetch-all-rows';
@@ -72,6 +73,7 @@ import {
   buildPostgameAutoFocus,
   isNegativeDecisiveLabel,
   mergeKosarstatPostgameContext,
+  parsePostgameSummary,
 } from '@/lib/postgame-report';
 import { parseKosarstatPointSources } from '@/lib/kosarstat-pbp-parse';
 import { computeUsgRate } from '@/lib/player-postgame';
@@ -15844,7 +15846,10 @@ export function SeasonComparison({
 
           {postgameReport && (
             <div className="space-y-4">
-              <div className="text-sm text-primary leading-relaxed">{postgameReport.summary}</div>
+              {/* A Reflexió szakasz alább, külön kiemelve jelenik meg. */}
+              <PostgameSummary
+                sections={parsePostgameSummary(postgameReport.summary).filter(section => section.key !== 'reflection')}
+              />
 
               {(postgameReport.reflection.xFactor || postgameReport.reflection.risk) && (
                 <div className="text-xs text-warning space-y-1">
@@ -15877,8 +15882,16 @@ export function SeasonComparison({
               </div>
 
               {postgameReport.dataNotes.length > 0 && (
-                <div className="text-xs text-secondary">
-                  {postgameReport.dataNotes.join(' ')}
+                <div>
+                  <div className="font-display text-xs uppercase tracking-widest text-secondary mb-1">Adatminőség és megjegyzések</div>
+                  <ul className="space-y-1 text-xs text-secondary">
+                    {postgameReport.dataNotes.map(note => (
+                      <li key={note} className="flex gap-2 leading-relaxed">
+                        <span aria-hidden className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-border-strong" />
+                        <span className="min-w-0 break-words">{note}</span>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
               )}
 

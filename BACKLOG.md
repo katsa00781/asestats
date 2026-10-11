@@ -1,6 +1,6 @@
 # BACKLOG.md – ASEStats Projekt
 
-_Utoljára frissítve: 2026-10-11 (H18 – post-game riport második hibalista: mind a négy egység kész, böngészős ellenőrzés és két saját döntés jóváhagyása nyitva)_
+_Utoljára frissítve: 2026-10-11 (H18 – post-game riport második hibalista: A–E egység kész, böngészős ellenőrzés és három saját döntés jóváhagyása nyitva)_
 
 ---
 
@@ -879,9 +879,31 @@ Nyitott (H18):
   küszöbe (≥ 10 pont pontforrás, ≥ 2 pp liga-eltérés) a javaslat szerint készült.
 - [ ] **Böngészős ellenőrzés** (felhasználói lépés) – ASE–Sopron post-game: a
   csere-lista forrása „eseménylista”, a Q4 eseményei látszanak; Export MD.
-- [ ] **A webes összefoglaló megjelenítése** – a `postgameReport.summary` a
-  nézetben sortörések nélkül, `**` jelekkel jelenik meg (a szöveg soronként
-  tagolt, a kártya nem `whitespace-pre-line`). Stílus-feladat, külön döntés.
+
+*E egység – a webes összefoglaló olvasható nézete ✓ (2026-10-11, felhasználói kérés)*
+
+- [x] **Az összefoglaló egyetlen bekezdésként, `**` jelekkel jelent meg** – a
+  szöveg soronként tagolt (`**Cím**` + „•” pontok), a nézet viszont egy sima
+  `<div>`-be írta, ahol a sortörések elvesznek. Új `parsePostgameSummary`
+  (`lib/postgame-report.ts`): a szöveget szakaszokra bontja (`overview`,
+  `players`, `opponent`, `focus`, `reflection`), és új
+  `components/PostgameSummary.tsx`: szakaszonként kártya, Barlow Condensed
+  címmel és pontokba szedett sorokkal; a „Címke:” előtag kiemelve. A
+  meccs-összefoglaló és a fókusz teljes szélességű (a fókusz narancs
+  kiemeléssel), a játékos-kiemelések és az ellenfél profil két oszlopban;
+  keskeny nézetben egy oszlop. Csak meglévő design tokenek.
+- [x] **A Reflexió a fókuszblokk utolsó pontjaként szerepelt** („• Reflexió: …”
+  – ugyanaz a hiba, mint az A egység adatminőségi sora) – saját `**Reflexió**`
+  szakaszt kapott. A webes nézet ezt a szakaszt nem ismétli: a pre-game
+  visszacsatolás eddig is külön, kiemelve jelent meg az összefoglaló alatt.
+- [x] **Az adatminőségi megjegyzések is egy bekezdésbe voltak fűzve**
+  (`dataNotes.join(' ')`) – pontokba szedett lista lett, címmel.
+- [x] **Ellenőrzés** – ideiglenes előnézeti oldalon, a valódi stíluslappal,
+  1280 és 420 px szélességen lefényképezve (az oldal törölve); új teszt a
+  szakaszbontásra (a szakaszokból a szöveg veszteség nélkül visszaállítható).
+  74 / 74 teszt, `tsc --noEmit`, `eslint` tiszta.
+- Mobil jegyzet: `asestatmobile/docs/mobile-sync/2026-10-11-postgame-riport-h18.md`
+  (14. pont: `parsePostgameSummary`, Reflexió szakasz).
 
 **H17 – Post-game riport és Export MD: hibák és hiányzó blokkok ✓ (2026-10-10)** – a kód kész, a böngészős ellenőrzés nyitva
 

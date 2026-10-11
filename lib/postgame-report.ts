@@ -2250,7 +2250,11 @@ export const composePostgameSummary = (report: PostGameReport, focus?: string[])
     ? ['**Következő fókusz**', ...focusList.map(item => `• ${item}`)]
     : ['**Következő fókusz**', '• Nincs kiemelt fókusz.'];
 
-  const reflectionLine = [report.reflection.xFactor, report.reflection.risk].filter(Boolean).join(' ');
+  // Saját szakasz: a fókuszblokk alá fűzve a fókusz utolsó pontjának látszana.
+  const reflectionItems = [report.reflection.xFactor, report.reflection.risk].filter(Boolean);
+  const reflectionLines = reflectionItems.length > 0
+    ? ['**Reflexió**', ...reflectionItems.map(item => `• ${item}`)]
+    : [];
 
   return [
     ...parts.overview,
@@ -2258,8 +2262,44 @@ export const composePostgameSummary = (report: PostGameReport, focus?: string[])
     ...playerHighlightLines,
     ...parts.opponentProfile,
     ...focusLines,
-    reflectionLine ? `• Reflexió: ${reflectionLine}` : '',
+    ...reflectionLines,
   ].filter(Boolean).join('\n');
+};
+
+export type PostgameSummarySection = {
+  /** A szakasz szerepe a megjelenítéshez; `text`: cím nélküli vagy ismeretlen című rész. */
+  key: 'overview' | 'players' | 'opponent' | 'focus' | 'reflection' | 'text';
+  title: string;
+  items: string[];
+};
+
+const SUMMARY_SECTION_KEYS: Record<string, PostgameSummarySection['key']> = {
+  'Mérkőzés összefoglalója': 'overview',
+  'Játékos kiemelések': 'players',
+  'Ellenfél profil': 'opponent',
+  'Következő fókusz': 'focus',
+  Reflexió: 'reflection',
+};
+
+/**
+ * Az összefoglaló szövege szakaszokra bontva a megjelenítéshez. A szöveg
+ * soronként tagolt: a `**Cím**` sor szakaszt nyit, a többi sor (a vezető „•”
+ * nélkül) a szakasz egy pontja. A cím előtti sorok cím nélküli szakaszba
+ * kerülnek, így tagolatlan (régi) szövegre is használható.
+ */
+export const parsePostgameSummary = (summary: string): PostgameSummarySection[] => {
+  const sections: PostgameSummarySection[] = [];
+  summary.split('\n').map(line => line.trim()).filter(Boolean).forEach(line => {
+    const heading = /^\*\*(.+)\*\*$/.exec(line);
+    if (heading) {
+      const title = heading[1].trim();
+      sections.push({ key: SUMMARY_SECTION_KEYS[title] ?? 'text', title, items: [] });
+      return;
+    }
+    if (sections.length === 0) sections.push({ key: 'text', title: '', items: [] });
+    sections[sections.length - 1].items.push(line.replace(/^•\s*/, ''));
+  });
+  return sections.filter(section => section.items.length > 0);
 };
 
 /** `refNoun === null`: nincs viszonyítási alap, a szöveg nem hivatkozik referenciára. */

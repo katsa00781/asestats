@@ -180,6 +180,7 @@ A komponensek **funkcionalitása változatlan**, csak a vizuális réteg (osztá
 | `FixturesImport.tsx`, `RosterImport.tsx`, `RoundImport.tsx`, `GameQuickImport.tsx`, `JsonImport.tsx` | Import felületek |
 | `PlayersManagement.tsx`, `PlayersImport.tsx`, `GameManagement.tsx` | Admin kezelés |
 | `PostgameShotScatterChart.tsx`, `PostgameZoneHeatmapChart.tsx` | Shot chart vizualizáció (Chart.js) |
+| `PostgameSummary.tsx` | A post-game összefoglaló olvasható nézete: szakaszonként kártya (`parsePostgameSummary` szakaszaiból) |
 | `SeasonSelector.tsx`, `TeamSelector.tsx` | Globális szűrők |
 | `LoginForm.tsx` | Bejelentkezési form (Dark Command Center stílus) |
 | `Updates.tsx` | Frissítések nézet |

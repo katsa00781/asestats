@@ -5,6 +5,7 @@ import {
   buildTeamBenchmarks,
   composePostgameSummary,
   mergeKosarstatPostgameContext,
+  parsePostgameSummary,
 } from '../lib/postgame-report';
 import { postgameReportToMd } from '../lib/export-to-md';
 import {
@@ -333,6 +334,39 @@ test('Az Összefoglalás ugyanabból az objektumból készül, mint a fő szekci
   assert.equal(composePostgameSummary(merged, focus), merged.summary);
   // Régi riportobjektum (részek nélkül): a tárolt szöveg marad.
   assert.equal(composePostgameSummary({ ...merged, summaryParts: undefined, summary: 'régi' }), 'régi');
+});
+
+test('Az összefoglaló szakaszokra bontható: cím + pontok, a Reflexió külön szakasz', () => {
+  const context = kosarstat();
+  const merged = mergeKosarstatPostgameContext(report(SHOT_MAP), context);
+  const sections = parsePostgameSummary(merged.summary);
+  assert.deepEqual(sections.map(section => [section.key, section.title]), [
+    ['overview', 'Mérkőzés összefoglalója'],
+    ['players', 'Játékos kiemelések'],
+    ['opponent', 'Ellenfél profil'],
+    ['focus', 'Következő fókusz'],
+  ]);
+  // A pontok a vezető „•” nélkül, soronként; a fókusz a megjelenített lista.
+  assert.equal(sections[0].items[0], 'Eredmény: Atomerőmű SE győzött Sopron KC ellen (109-80).');
+  assert.ok(sections.every(section => section.items.every(item => !item.startsWith('•') && !item.includes('\n'))));
+  assert.deepEqual(sections[3].items, buildPostgameAutoFocus(merged, context));
+  // A szakaszokból a szöveg veszteség nélkül visszaállítható.
+  const rebuilt = sections.flatMap(section => [`**${section.title}**`, ...section.items.map(item => `• ${item}`)]).join('\n');
+  assert.equal(rebuilt, merged.summary);
+
+  // A pre-game visszacsatolás saját szakasz, nem a fókuszblokk utolsó pontja.
+  const withReflection = { ...merged, reflection: { xFactor: 'X-faktor visszacsatolás: ✓ Periméter kontroll', risk: 'Kockázati helyzet: ✗ OREB' } };
+  const reflected = parsePostgameSummary(composePostgameSummary(withReflection));
+  assert.deepEqual(reflected[reflected.length - 1], {
+    key: 'reflection', title: 'Reflexió', items: ['X-faktor visszacsatolás: ✓ Periméter kontroll', 'Kockázati helyzet: ✗ OREB'],
+  });
+  assert.equal(reflected.find(section => section.key === 'focus')?.items.length, 3);
+
+  // Tagolatlan (régi) szöveg: egyetlen, cím nélküli szakasz; üres szövegre nincs szakasz.
+  assert.deepEqual(parsePostgameSummary('Régi, egy bekezdéses összefoglaló.'), [
+    { key: 'text', title: '', items: ['Régi, egy bekezdéses összefoglaló.'] },
+  ]);
+  assert.deepEqual(parsePostgameSummary(''), []);
 });
 
 test('Az ellenfél-profil nem állítja, hogy egyik mutató sem esett a referencia alá, ha van elmaradás', () => {
