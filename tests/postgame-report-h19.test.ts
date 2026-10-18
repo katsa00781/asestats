@@ -111,3 +111,32 @@ test('Dobástérkép 3P-besorolás: torz zónáknál nincs középtáv / tripla 
   // A riport a valódi zóna-összevetést őrzi; csak a szabályok nem ítélnek belőle.
   assert.ok((distorted.shotMap?.comparison?.midRateDelta ?? 0) >= 6);
 });
+
+test('Mi döntötte el: a pontkülönbség volumen- és hatékonyság-bontása pontosan kiadja a +31-et', () => {
+  const result = report();
+  const breakdown = result.metrics.marginBreakdown;
+  assert.ok(breakdown);
+  assert.equal(breakdown.ownChances, 87.2);
+  assert.equal(breakdown.opponentChances, 69.6);
+  assert.equal(breakdown.ownPointsPerChance, 1.28);
+  assert.equal(breakdown.opponentPointsPerChance, 1.16);
+  assert.equal(breakdown.volume, 20.6);
+  assert.equal(breakdown.efficiency, 10.4);
+  assert.equal(round1(breakdown.volume + breakdown.efficiency), result.metrics.margin);
+  assert.match(result.summary, /• Mi döntötte el \(becslés\): volumen \+20\.6 pont \(87\.2 vs 69\.6 pontot hozó befejezés; OREB% 42\.5% vs 13\.8%, labdavesztés 11–11\); hatékonyság \+10\.4 pont \(1\.28 vs 1\.16 pont \/ befejezés\)\. Elsősorban a volumen döntött\./);
+
+  const md = postgameReportToMd(result, SEASON);
+  assert.match(md, /## Mi döntötte el\? \(becslés\)/);
+  assert.match(md, /\| Pontot hozó befejezés \(FGA \+ 0,44·FTA\) \| 87\.2 \| 69\.6 \| volumen \+20[.,]6 pont \|/);
+});
+
+test('Mi döntötte el: vereségnél negatív komponensek, összegük a pontkülönbség', () => {
+  // A Honvéd szemszöge: ugyanaz a meccs, fordított előjelekkel.
+  const result = analyzePostGameReport(HONVED_GAME, ASE_GAME, ASE_SEASON, BENCHMARKS, []);
+  const breakdown = result.metrics.marginBreakdown;
+  assert.ok(breakdown);
+  assert.ok(breakdown.volume < 0 && breakdown.efficiency < 0, JSON.stringify(breakdown));
+  assert.equal(round1(breakdown.volume + breakdown.efficiency), -31);
+});
+
+const round1 = (value: number) => Math.round(value * 10) / 10;

@@ -203,6 +203,28 @@ export type PostgameOpponentShooting = {
   turnoverRate: number;
 };
 
+/**
+ * „Mi döntötte el?” – a pontkülönbség pontos felbontása. Befejezés = pontot
+ * hozó kísérlet (FGA + 0,44·FTA), pont / befejezés = a hatékonyság.
+ * volumen = (saját − ellenfél befejezés) × ellenfél pont/befejezés,
+ * hatékonyság = saját befejezés × (saját − ellenfél pont/befejezés);
+ * a kettő összege a pontkülönbség. A volumen-különbség forrása a
+ * támadólepattanó és a labdavesztés (mindkettő a befejezések számát mozgatja).
+ */
+export type PostgameMarginBreakdown = {
+  ownChances: number;
+  opponentChances: number;
+  ownPointsPerChance: number;
+  opponentPointsPerChance: number;
+  volume: number;
+  efficiency: number;
+  /** OREB%, %. */
+  ownOrebRate: number;
+  opponentOrebRate: number;
+  ownTurnovers: number;
+  opponentTurnovers: number;
+};
+
 export type PostGameReport = {
   teamId: string;
   teamName: string;
@@ -226,6 +248,8 @@ export type PostGameReport = {
     boxScore?: { own: PostgameBoxScoreLine; opponent: PostgameBoxScoreLine | null };
     /** Kosarstat eseménylistából számolt pontforrások; a kosarstat-kiegészítés tölti ki. */
     pointSources?: PostgamePointSources | null;
+    /** A pontkülönbség volumen- és hatékonyság-bontása; régi riportobjektumban hiányzik. */
+    marginBreakdown?: PostgameMarginBreakdown | null;
   };
   charts: {
     efficiency: PostGameChartDatum[];
@@ -2312,6 +2336,7 @@ const buildSummaryParts = (
   opponent: NormalizedGameStats | null,
   baseline: PostgameBaseline,
   ratings: PostgameRatings | null,
+  marginBreakdown: PostgameMarginBreakdown | null,
   preGame?: PreGameXFactorContext
 ): NonNullable<PostGameReport['summaryParts']> => {
   const refNoun = baseline.noun;
@@ -2385,6 +2410,7 @@ const buildSummaryParts = (
       ratingsLine,
       `• Margin: ${metrics.margin > 0 ? '+' : ''}${metrics.margin.toFixed(1)} (${marginLabel}).`,
       causeLine,
+      marginBreakdown ? describeMarginBreakdown(marginBreakdown) : '',
       sampleLine,
     ].filter(Boolean),
     opponentProfile,
@@ -2697,6 +2723,50 @@ const buildRatings = (
     refNet,
     primaryCause,
   };
+};
+
+/** A pontkülönbség-bontás (lásd `PostgameMarginBreakdown`); ellenfél-adat nélkül `null`. */
+const buildMarginBreakdown = (
+  game: NormalizedGameStats,
+  opponent: NormalizedGameStats | null
+): PostgameMarginBreakdown | null => {
+  if (!opponent) return null;
+  const ownChances = game.fga + 0.44 * game.fta;
+  const opponentChances = opponent.fga + 0.44 * opponent.fta;
+  if (!(ownChances > 0) || !(opponentChances > 0)) return null;
+  const ownPpc = game.pointsFor / ownChances;
+  const opponentPpc = opponent.pointsFor / opponentChances;
+  const volume = round((ownChances - opponentChances) * opponentPpc, 1);
+  return {
+    ownChances: round(ownChances, 1),
+    opponentChances: round(opponentChances, 1),
+    ownPointsPerChance: round(ownPpc, 2),
+    opponentPointsPerChance: round(opponentPpc, 2),
+    volume,
+    // A kerekítés után is pontosan a pontkülönbséget adja ki.
+    efficiency: round(game.pointsFor - opponent.pointsFor - volume, 1),
+    ownOrebRate: toPct(game.orebRate, 1),
+    opponentOrebRate: toPct(opponent.orebRate, 1),
+    ownTurnovers: game.tov,
+    opponentTurnovers: opponent.tov,
+  };
+};
+
+/** Ekkora pontkülönbség-komponens (pont) már meccsdöntő: a mondat megnevezi. */
+const MARGIN_COMPONENT_DECISIVE_MIN = 8;
+
+/** „Mi döntötte el?” összefoglaló sor a pontkülönbség-bontásból. */
+export const describeMarginBreakdown = (breakdown: PostgameMarginBreakdown) => {
+  const signed = (value: number) => `${value >= 0 ? '+' : ''}${value.toFixed(1)}`;
+  const source = `OREB% ${breakdown.ownOrebRate.toFixed(1)}% vs ${breakdown.opponentOrebRate.toFixed(1)}%, labdavesztés ${breakdown.ownTurnovers}–${breakdown.opponentTurnovers}`;
+  const volumeText = `volumen ${signed(breakdown.volume)} pont (${breakdown.ownChances.toFixed(1)} vs ${breakdown.opponentChances.toFixed(1)} pontot hozó befejezés; ${source})`;
+  const efficiencyText = `hatékonyság ${signed(breakdown.efficiency)} pont (${breakdown.ownPointsPerChance.toFixed(2)} vs ${breakdown.opponentPointsPerChance.toFixed(2)} pont / befejezés)`;
+  const leading = Math.abs(breakdown.volume) >= Math.abs(breakdown.efficiency) ? 'volume' : 'efficiency';
+  const leadingValue = leading === 'volume' ? breakdown.volume : breakdown.efficiency;
+  const verdict = Math.abs(leadingValue) >= MARGIN_COMPONENT_DECISIVE_MIN
+    ? ` Elsősorban a ${leading === 'volume' ? 'volumen' : 'hatékonyság'} döntött.`
+    : '';
+  return `• Mi döntötte el (becslés): ${volumeText}; ${efficiencyText}.${verdict}`;
 };
 
 /**
@@ -3042,6 +3112,7 @@ export const analyzePostGameReport = (
   const xFactorReflection = buildXFactorReflection(preGameContext, game, season, opponent, decisiveAnnotations.meta);
 
   const metricsSummary = buildPostgameMetrics(game, season, leagueBenchmarks);
+  const marginBreakdown = buildMarginBreakdown(game, opponent);
   const opponentShooting = buildOpponentShooting(opponent);
 
   const result: 'win' | 'loss' =
@@ -3078,6 +3149,7 @@ export const analyzePostGameReport = (
       ratings,
       opponent: opponentShooting,
       boxScore: { own: buildBoxScoreLine(game), opponent: opponent ? buildBoxScoreLine(opponent) : null },
+      marginBreakdown,
     },
     charts: metricsSummary.charts,
     shotMap: {
@@ -3113,6 +3185,7 @@ export const analyzePostGameReport = (
       opponent,
       baseline,
       ratings,
+      marginBreakdown,
       preGameContext
     ),
     summary: '',

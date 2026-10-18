@@ -1484,6 +1484,22 @@ export function postgameReportToMd(
     `*Birtoklás = a két csapat (FGA + 0,44·FTA + LV − T-lep) becslésének átlaga – ez a tempó és mindkét rating közös nevezője, így a DRtg megegyezik az ellenfél ORtg-jével. TO rate (Oliver) = LV / (FGA + 0,44·FTA + LV); a Kosarstat TO% (LV / birtoklás) ettől eltér, és csak a „Kosarstat csapatmutatók” táblában szerepel. FTM rate = értékesített büntető / FGA – a liga medián is erre vonatkozik. ORtg / DRtg = szerzett / kapott pont 100 közös birtoklásra.${showLeague ? ' Liga medián = a liga csapatainak szezonbeli középértéke; „vs liga” = meccs − liga medián.' : ''}*`
   );
 
+  const breakdown = report.metrics.marginBreakdown;
+  if (breakdown) {
+    lines.push(
+      ``,
+      `## Mi döntötte el? (becslés)`,
+      ``,
+      `| Összetevő | ${report.teamName} | ${report.opponentName} | Hatás a pontkülönbségre |`,
+      `|-----------|------|---------|-------------------------|`,
+      `| Pontot hozó befejezés (FGA + 0,44·FTA) | ${breakdown.ownChances.toFixed(1)} | ${breakdown.opponentChances.toFixed(1)} | volumen ${signed1(breakdown.volume, ' pont')} |`,
+      `| Pont / befejezés | ${breakdown.ownPointsPerChance.toFixed(2)} | ${breakdown.opponentPointsPerChance.toFixed(2)} | hatékonyság ${signed1(breakdown.efficiency, ' pont')} |`,
+      `| Pont | ${report.metrics.pointsFor} | ${report.metrics.pointsAgainst} | összesen ${signed1(breakdown.volume + breakdown.efficiency, ' pont')} |`,
+      ``,
+      `*Volumen = (saját − ellenfél befejezés) × az ellenfél pont / befejezés értéke; hatékonyság = saját befejezés × (saját − ellenfél pont / befejezés). A kettő összege a pontkülönbség. A befejezések számát a támadólepattanó és a labdavesztés mozgatja: OREB% ${breakdown.ownOrebRate.toFixed(1)}% vs ${breakdown.opponentOrebRate.toFixed(1)}%, labdavesztés ${breakdown.ownTurnovers}–${breakdown.opponentTurnovers}.*`
+    );
+  }
+
   if (extras.kosarstat) {
     lines.push(...postgameQuartersToMd(extras.kosarstat.quarterDiffRows, report.teamName, report.opponentName));
   }

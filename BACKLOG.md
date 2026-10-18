@@ -1,6 +1,6 @@
 # BACKLOG.md – ASEStats Projekt
 
-_Utoljára frissítve: 2026-10-18 (H19 – post-game riport harmadik hibalista, ASE–Honvéd: folyamatban)_
+_Utoljára frissítve: 2026-10-18 (H19 – post-game riport harmadik hibalista, ASE–Honvéd: A–F egység kész, böngészős ellenőrzés és a küszöbök jóváhagyása nyitva)_
 
 ---
 
@@ -691,7 +691,7 @@ a nézőpont nem hiba.
   „Szezon: 2026/2027” – a Liga csak akkor jelenik meg, ha különbözik. Csak
   webes MD export, mobil jegyzet nem kell.
 
-**H19 – Post-game riport: harmadik hibalista (ASE–Honvéd 112–81, 2026-10-17)** – folyamatban
+**H19 – Post-game riport: harmadik hibalista (ASE–Honvéd 112–81, 2026-10-17) ✓ (2026-10-18)** – a kód kész, a böngészős ellenőrzés nyitva
 
 Felhasználói hibajelzés (külső elemzés az Export MD-ről): a Kosarstat-egyeztetés
 sikertelen; a „Kiugró teljesítmény” lista ellentmond az Impact score-nak
@@ -817,6 +817,50 @@ Hat egység (A–F), egységenként teszt és commit.
 - [x] **Teszt** – 2 új eset (Honvéd-számok + MD; torz térképen nincs
   középtáv-állítás, egyező box score-ral van). A Sopron „teljes térkép” eset
   változatlanul zöld. 83 / 83 teszt, `tsc --noEmit`, `eslint` tiszta.
+
+*F egység – „Mi döntötte el?” volumen vs. hatékonyság bontás ✓ (2026-10-18)*
+
+- [x] **Új `report.metrics.marginBreakdown`** (`PostgameMarginBreakdown`,
+  opcionális) – befejezés = FGA + 0,44·FTA, pont / befejezés; volumen =
+  (saját − ellenfél befejezés) × ellenfél pont / befejezés, hatékonyság = saját
+  befejezés × (saját − ellenfél pont / befejezés); a kettő összege pontosan a
+  pontkülönbség. ASE–Honvéd: 87,2 vs 69,6 befejezés, 1,28 vs 1,16 pont /
+  befejezés → volumen +20,6, hatékonyság +10,4 (= +31).
+- [x] **Megjelenés** – az összefoglaló „Mérkőzés összefoglalója” szakaszában új
+  sor („Mi döntötte el (becslés): volumen +20.6 pont (…; OREB% 42.5% vs 13.8%,
+  labdavesztés 11–11); hatékonyság +10.4 pont (…). Elsősorban a volumen
+  döntött.” – a verdikt 8 pontos komponenstől); az Export MD-ben „Mi döntötte
+  el? (becslés)” tábla a Kulcs mutatók után, képlet-lábjegyzettel. A webes nézet
+  az összefoglalóból kapja meg.
+- [x] **Eltérés a tervtől** – nem lett külön döntő tényező: a volumen forrása (a
+  „Lepattanó-fölény” és a „Dobáshatékonysági előny”) már döntő tényezőként
+  szerepel, a bontás ezeket számszerűsíti; külön sorként a Kulcsmomentumokban
+  duplikálna.
+- [x] **Teszt** – 2 új eset (a Honvéd-számok + MD; vereségnél negatív
+  komponensek). 85 / 85 teszt, `tsc --noEmit`, `eslint`, `npm run build` tiszta.
+
+Nyitott (H19):
+
+- [ ] **Böngészős ellenőrzés** (felhasználói lépés) – ASE–Honvéd post-game: a
+  Kosarstat-blokk (pontforrások, ötösök, cserék) betölt, és újratöltés után sem
+  nullázódik a link; az Export MD-ben Chandler a „Kiugró” listán, Nagy Dániel
+  nincs a „Limitált hatás” listán, a védekezés „jobb” a védőlepattanó-
+  indoklással, gyűrű-befejezés és faultfegyelem a problémák / fókusz közt,
+  „kontaktkeresés” nincs, 3P-besorolási figyelmeztetés, „Mi döntötte el?” tábla.
+  Ellenőrizendő az is, hogy a Kosarstat-összefűzés után (második esély, gyors
+  befejezés) a riport mit mond a 17 támadólepattanó hozadékáról.
+- [ ] **Saját küszöbök jóváhagyása** – védekezési faktorsávok: OREB% ±4 pp,
+  FTM rate ±3 pp (a faultfegyelem-probléma is ±3 pp); gyűrű-befejezés: ≥ 10
+  kísérlet, ≥ 10 pp elmaradás, legfeljebb 12 pp-es cél-lépés; „szerkezeti”
+  FTM rate: a 3PA-arány ≥ 5 pp-tel a liga medián felett; 3P-besorolás: ≥ 2
+  félrebesorolt hármastól figyelmeztetés; „Mi döntötte el?” verdikt ≥ 8 pontos
+  komponenstől; „Kiugró”: ≥ 12 perc és Impact ≥ 60 (vagy `mvp`); „Limitált
+  hatás”: ≥ 8 perc.
+- [ ] **Mellékhatás tudomásulvétele** – a „DRtg dönt” szabály miatt az
+  ASE–Sopron (2026-10-10) védekezési verdiktje „jobb”-ról „ligaszintű”-re vált
+  (DRtg 106,2, a liga medián ±4-es sávján belül).
+- Mobil jegyzet (egy fájl, mind a hat egység):
+  `asestatmobile/docs/mobile-sync/2026-10-18-postgame-riport-h19.md`.
 
 **H18 – Post-game riport: második hibalista (ASE–Sopron KC 109–80) ✓ (2026-10-11)** – a kód kész, a böngészős ellenőrzés nyitva
 
