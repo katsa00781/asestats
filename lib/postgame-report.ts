@@ -378,6 +378,14 @@ export type PostgameShotMapCoverage = {
    * különbség tiszta hiány, nem zóna-besorolási eltérés.
    */
   missingDetail?: string;
+  /**
+   * Legalább ennyi hárompontos kísérlet kétpontosként (feltehetően
+   * középtávként) került a dobástérképre: a térkép 3P-kísérlete kevesebb, a
+   * 2P-kísérlete több, mint a box score-é. Régi riportobjektumban hiányzik.
+   */
+  misclassifiedThrees?: number;
+  /** Ebből értékesített hárompontos (becslés). */
+  misclassifiedThreesMade?: number;
 };
 
 type ShotZone = 'rim' | 'paint' | 'mid' | 'corner3' | 'aboveBreak3';
@@ -581,7 +589,25 @@ const buildShotMapComparison = (
   seasonRimPct: season.rimPct,
 });
 
-const buildPlayerShotMapContext = (events: ShotMapEventInput[]): PlayerShotMapContext => {
+/**
+ * A dobástérkép zóna-deltái a középtáv / tripla nélkül: félrebesorolt hármasoknál
+ * ezek (és a belőlük számolt dobáshely-mix index) torzak, a gyűrű és a festék nem.
+ */
+const withoutPerimeterZones = (comparison: ShotMapComparison): ShotMapComparison => ({
+  ...comparison,
+  midRateDelta: 0,
+  threeRateDelta: 0,
+  corner3RateDelta: 0,
+  threePctDelta: 0,
+  shotQualityDelta: 0,
+});
+
+/**
+ * Játékosonkénti dobástérkép-összesítő. `zonesDistorted`: félrebesorolt
+ * hármasoknál a középtáv- és tripla-számok kimaradnak, így a játékos-szintű
+ * középtáv / periméter szabályok sem ítélnek belőlük.
+ */
+const buildPlayerShotMapContext = (events: ShotMapEventInput[], zonesDistorted = false): PlayerShotMapContext => {
   const map: PlayerShotMapContext = {};
 
   events.forEach(event => {
@@ -625,6 +651,17 @@ const buildPlayerShotMapContext = (events: ShotMapEventInput[]): PlayerShotMapCo
       if (event.isSuccessful) row.corner3Made += 1;
     }
   });
+
+  if (zonesDistorted) {
+    Object.values(map).forEach(row => {
+      row.midAttempts = 0;
+      row.midMade = 0;
+      row.threeAttempts = 0;
+      row.threeMade = 0;
+      row.corner3Attempts = 0;
+      row.corner3Made = 0;
+    });
+  }
 
   return map;
 };
@@ -2692,6 +2729,30 @@ const describeMissingShots = (summary: TeamShotMapSummary, game: NormalizedGameS
   };
 };
 
+/** Ennyi félrebesorolt hármastól a középtáv / tripla zóna-állítások nem megbízhatók. */
+export const MISCLASSIFIED_THREES_MIN = 2;
+
+/**
+ * Zóna-besorolási eltérés: ha a dobástérképen kevesebb a hárompontos és több a
+ * kétpontos kísérlet, mint a box score-ban, a különbségek kisebbike legalább
+ * ennyi hármas kétpontosként – a hárompontos vonal mögül, tehát feltehetően
+ * középtávként – rögzítve. A találatokra ugyanígy becsül.
+ */
+const describeZoneMisclassification = (summary: TeamShotMapSummary, game: NormalizedGameStats) => {
+  const mapThreeAttempts = summary.zones.corner3.attempts + summary.zones.aboveBreak3.attempts;
+  const mapThreeMade = summary.zones.corner3.made + summary.zones.aboveBreak3.made;
+  const mapTwoAttempts = summary.attempts - mapThreeAttempts;
+  const mapTwoMade = summary.made - mapThreeMade;
+  const attempts = Math.min(game.fga3 - mapThreeAttempts, mapTwoAttempts - game.fga2);
+  if (attempts <= 0) return null;
+  const made = Math.max(0, Math.min(game.fgm3 - mapThreeMade, mapTwoMade - game.fgm2, attempts));
+  return {
+    attempts,
+    made,
+    sentence: `Dobástérkép 3P-besorolás: legalább ${attempts} hárompontos kísérlet${made > 0 ? ` (ebből ${made} értékesített)` : ''} kétpontosként – feltehetően középtávként – került a térképre (3P a box score-ban ${game.fgm3}/${game.fga3}, a dobástérképen ${mapThreeMade}/${mapThreeAttempts}; 2P a box score-ban ${game.fgm2}/${game.fga2}, a dobástérképen ${mapTwoMade}/${mapTwoAttempts}).`,
+  };
+};
+
 /**
  * A dobástérkép dobásszámának egyeztetése a box score FGA-jával. Eltérésnél a
  * dobástérkép hiányos (pl. kimaradt események), így a zóna- és 3P-adatai
@@ -2700,19 +2761,26 @@ const describeMissingShots = (summary: TeamShotMapSummary, game: NormalizedGameS
  */
 const validateShotMap = (summary: TeamShotMapSummary | null, game: NormalizedGameStats) => {
   if (!summary || !(game.fga > 0)) {
-    return { notes: [] as string[], reliable: Boolean(summary), coverage: null as PostgameShotMapCoverage | null };
+    return { notes: [] as string[], reliable: Boolean(summary), coverage: null as PostgameShotMapCoverage | null, zonesDistorted: false };
   }
   const notes: string[] = [];
   const diff = summary.attempts - game.fga;
   const relative = Math.abs(diff) / game.fga;
   const missingDetail = describeMissingShots(summary, game);
+  const misclassified = describeZoneMisclassification(summary, game);
   const coverage: PostgameShotMapCoverage = {
     shotMapAttempts: summary.attempts,
     boxAttempts: game.fga,
     missing: game.fga - summary.attempts,
     ...(missingDetail ? { missingDetail: missingDetail.short } : {}),
+    ...(misclassified ? { misclassifiedThrees: misclassified.attempts, misclassifiedThreesMade: misclassified.made } : {}),
   };
   const detailSentence = missingDetail ? ` ${missingDetail.sentence}` : '';
+  const zonesDistorted = (misclassified?.attempts ?? 0) >= MISCLASSIFIED_THREES_MIN;
+  // Egyetlen félrebesorolt dobás nem ér külön megjegyzést (a `coverage` jelzi).
+  const misclassifiedNote = misclassified && zonesDistorted
+    ? `${misclassified.sentence} A középtáv és a tripla zónaadatai, valamint a dobáshely-mix index ezért torzak, a riport nem von le belőlük következtetést; a gyűrű és a festék zóna állításai érvényesek.`
+    : null;
   if (Math.abs(diff) >= 3 || relative >= 0.05) {
     notes.push(
       `Dobástérkép hiányos: ${summary.attempts} dobás a box score ${game.fga} mezőnykísérletével szemben (${diff > 0 ? '+' : ''}${diff}); a dobástérkép zóna- és 3P-adatai (3P% ${summary.threePct.toFixed(1)}%) csak tájékoztatók, a box score 3P% ${game.threePct.toFixed(1)}%.${detailSentence}`
@@ -2727,13 +2795,14 @@ const validateShotMap = (summary: TeamShotMapSummary | null, game: NormalizedGam
       );
     }
     const shotMapThreeAttempts = Math.round((summary.threeRate / 100) * summary.attempts);
-    if (Math.abs(shotMapThreeAttempts - game.fga3) >= 3) {
+    if (!misclassifiedNote && Math.abs(shotMapThreeAttempts - game.fga3) >= 3) {
       notes.push(
         `Dobástérkép 3P-besorolás eltér: ${shotMapThreeAttempts} tripla a box score ${game.fga3} hárompontos kísérletével szemben – a zónaadatok tájékoztatók.`
       );
     }
   }
-  return { notes, reliable: relative <= 0.1, coverage };
+  if (misclassifiedNote) notes.push(misclassifiedNote);
+  return { notes, reliable: relative <= 0.1, coverage, zonesDistorted };
 };
 
 const buildOpponentShooting = (opponent: NormalizedGameStats | null): PostgameOpponentShooting | null => {
@@ -2929,7 +2998,12 @@ export const analyzePostGameReport = (
     ? buildShotMapComparison(gameShotSummary, seasonShotSummary)
     : null;
 
-  const decisiveResult = buildDecisiveFactors(game, opponent, season, baseline, leagueBenchmarks, shotMapComparison);
+  // Félrebesorolt hármasoknál a szabályok a középtáv / tripla zóna-deltákat és a
+  // dobáshely-mix indexet nem kapják meg; a riportban a valódi összevetés marad.
+  const ruleComparison = shotMapComparison && shotMapValidation.zonesDistorted
+    ? withoutPerimeterZones(shotMapComparison)
+    : shotMapComparison;
+  const decisiveResult = buildDecisiveFactors(game, opponent, season, baseline, leagueBenchmarks, ruleComparison);
   const decisive = { offense: decisiveResult.offense, defense: decisiveResult.defense };
   const decisiveAnnotations = {
     annotated: {
@@ -2939,17 +3013,17 @@ export const analyzePostGameReport = (
     meta: decisiveResult.meta,
   };
   const playerShotMapContext = shotMapContext?.gameShots?.length
-    ? buildPlayerShotMapContext(shotMapContext.gameShots)
+    ? buildPlayerShotMapContext(shotMapContext.gameShots, shotMapValidation.zonesDistorted)
     : undefined;
 
   const playerReport = buildPlayerPostGameReport(players, playerShotMapContext);
   const playerImpact = reconcilePlayerImpact(analyzePlayerImpact(players), playerReport);
-  const ownStrengths = buildStrengths(game, season, leagueBenchmarks, baseline, shotMapComparison);
-  const ownProblems = buildProblems(game, season, leagueBenchmarks, baseline, shotMapComparison);
+  const ownStrengths = buildStrengths(game, season, leagueBenchmarks, baseline, ruleComparison);
+  const ownProblems = buildProblems(game, season, leagueBenchmarks, baseline, ruleComparison);
   // A fókusz-szabályok a saját (támadó) sorok szövegére illesztenek; a
   // faultfegyelem a védekezési kontextusból jön.
   const nextFocus = buildNextFocus(
-    game, season, ownProblems, ownStrengths, leagueBenchmarks, baseline, shotMapComparison, defenseContext
+    game, season, ownProblems, ownStrengths, leagueBenchmarks, baseline, ruleComparison, defenseContext
   );
   const foulDiscipline = describeFoulDiscipline(defenseContext, opponent);
   // A védekezési döntő tényezők az erősségek / problémák közé is bekerülnek –

@@ -1,6 +1,8 @@
 // H19 – a harmadik hibalista szabályai a valós ASE–Honvéd 112–81 adatokon.
 import { analyzePostGameReport, buildPostgameAutoFocus } from '../lib/postgame-report';
-import { ASE_GAME, ASE_SEASON, BENCHMARKS, HONVED_GAME, PLAYERS, report } from './fixtures/postgame-ase-honved';
+import { postgameReportToMd } from '../lib/export-to-md';
+import { ASE_GAME, ASE_SEASON, BENCHMARKS, HONVED_GAME, PLAYERS, SEASON_SHOTS, report } from './fixtures/postgame-ase-honved';
+import { SEASON, shots } from './fixtures/postgame-ase-sopron';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
@@ -76,4 +78,36 @@ test('Büntetők: átlagos triplaaránynál az alacsony FTM rate továbbra is ko
   const result = analyzePostGameReport(insideGame, HONVED_GAME, ASE_SEASON, BENCHMARKS, PLAYERS);
   assert.ok(result.problems.some(item => item.startsWith('FTM rate a liga alatt')), result.problems.join('\n'));
   assert.ok(result.nextFocus.some(item => item.startsWith('Büntetők növelése') && item.includes('kontaktkeresés')), result.nextFocus.join('\n'));
+});
+
+test('Dobástérkép 3P-besorolás: a térkép 14/31 vs box 18/36 – legalább 2 hármas (2 jó) kétpontosként, adatminőségi sor és MD-figyelmeztetés', () => {
+  const result = report();
+  assert.equal(result.shotMap?.coverage?.misclassifiedThrees, 2);
+  assert.equal(result.shotMap?.coverage?.misclassifiedThreesMade, 2);
+  const note = result.dataNotes.find(item => item.startsWith('Dobástérkép 3P-besorolás:'));
+  assert.ok(note, result.dataNotes.join('\n'));
+  assert.match(note, /legalább 2 hárompontos kísérlet \(ebből 2 értékesített\) kétpontosként/);
+  assert.match(note, /3P a box score-ban 18\/36, a dobástérképen 14\/31; 2P a box score-ban 20\/42, a dobástérképen 22\/44/);
+  // A valódi összevetés megmarad a riportban (a webes kártyák ezt mutatják).
+  assert.ok(result.shotMap?.comparison);
+  const md = postgameReportToMd(result, SEASON);
+  assert.match(md, /> \*\*3P-besorolási eltérés:\*\* legalább 2 hárompontos kísérlet \(ebből 2 értékesített\)/);
+});
+
+test('Dobástérkép 3P-besorolás: torz zónáknál nincs középtáv / tripla / dobáshely-mix állítás, a valódi összevetés megmarad', () => {
+  // Sok középtáv a térképen: a box score-ral egyező térképnél ez „túl magas középtávoli arány” problémát ad.
+  const midHeavy = [...shots('rim', 30, 20), ...shots('paint', 10, 5), ...shots('mid', 20, 14), ...shots('three', 25, 11)];
+  const shotMap = { gameShots: midHeavy, seasonShots: SEASON_SHOTS };
+  const matchingBox = { ...ASE_GAME, fga2: 60, fgm2: 39, fga3: 25, fgm3: 11 };
+  const control = analyzePostGameReport(matchingBox, HONVED_GAME, ASE_SEASON, BENCHMARKS, PLAYERS, undefined, shotMap);
+  assert.equal(control.shotMap?.coverage?.misclassifiedThrees, undefined);
+  assert.ok(control.problems.some(item => item.startsWith('Dobástérkép: túl magas középtávoli arány')), control.problems.join('\n'));
+
+  // A box score szerint 11-gyel több hármas és 18-cal kevesebb kétpontos volt: a térkép torz.
+  const distorted = analyzePostGameReport(ASE_GAME, HONVED_GAME, ASE_SEASON, BENCHMARKS, PLAYERS, undefined, shotMap);
+  assert.equal(distorted.shotMap?.coverage?.misclassifiedThrees, 11);
+  assert.ok(!distorted.problems.some(item => item.startsWith('Dobástérkép:')), distorted.problems.join('\n'));
+  assert.ok(!distorted.strengths.some(item => item.startsWith('Dobásszelekció') || item.startsWith('Dobástérkép:')));
+  // A riport a valódi zóna-összevetést őrzi; csak a szabályok nem ítélnek belőle.
+  assert.ok((distorted.shotMap?.comparison?.midRateDelta ?? 0) >= 6);
 });

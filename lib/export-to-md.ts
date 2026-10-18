@@ -17,7 +17,7 @@ import type {
   TeamSeasonExportInput,
 } from './team-season-export';
 import { LINEUP_NET_MIN_SECONDS, LINEUP_SLOT_POSITIONS, MAX_TRIOS } from './postgame-lineup-export';
-import { buildPostgameAutoFocus, composePostgameSummary } from './postgame-report';
+import { MISCLASSIFIED_THREES_MIN, buildPostgameAutoFocus, composePostgameSummary } from './postgame-report';
 import { trueShootingPct, effectiveFgPct } from './stat-formulas';
 import {
   buildTeamSeasonExport,
@@ -1276,6 +1276,14 @@ function postgameShotMapToMd(report: PostGameReport): string[] {
   if (coverage && coverage.missing !== 0) {
     lines.push(
       `> **Hiányos dobástérkép:** ${coverage.shotMapAttempts} dobás a box score ${coverage.boxAttempts} mezőnykísérletével szemben (${coverage.missing > 0 ? `${coverage.missing} dobás hiányzik${coverage.missingDetail ? `; a box score szerint: ${coverage.missingDetail}` : ''}` : `${-coverage.missing} dobás többlet`}) – a zónák kísérletszáma és FG%-a ehhez mérten értendő, a csapat hivatalos dobószázaléka a „Box score alapmutatók” táblában van.`,
+      ``
+    );
+  }
+  const misclassified = coverage?.misclassifiedThrees ?? 0;
+  if (misclassified >= MISCLASSIFIED_THREES_MIN) {
+    const made = coverage?.misclassifiedThreesMade ?? 0;
+    lines.push(
+      `> **3P-besorolási eltérés:** legalább ${misclassified} hárompontos kísérlet${made > 0 ? ` (ebből ${made} értékesített)` : ''} kétpontosként – feltehetően középtávként – került a térképre. A „Középtáv” és a „Tripla” sorok, valamint a dobáshely-mix index ezért torzak; a riport nem von le belőlük következtetést. A gyűrű és a festék sorai érvényesek.`,
       ``
     );
   }

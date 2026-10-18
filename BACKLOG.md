@@ -794,6 +794,30 @@ Hat egység (A–F), egységenként teszt és commit.
   megjelenített fókuszlista; átlagos triplaaránynál a kontaktkeresés-fókusz
   marad). 81 / 81 teszt, `tsc --noEmit`, `eslint` tiszta.
 
+*E egység – dobástérkép 3P-besorolási eltérés ✓ (2026-10-18)*
+
+- [x] **Ok** – a dobástérkép 75 dobása: tripla 14/31, 2P 22/44; a box score 3P
+  18/36, 2P 20/42. A „hiányos” ágban (|eltérés| ≥ 3) a 3P-besorolás nem volt
+  ellenőrizve, a `describeMissingShots` vegyes eltérésnél nem állít; így a
+  középtáv 7/9 és a dobáshely-mix index figyelmeztetés nélkül került a
+  riportba.
+- [x] **Felismerés** (`describeZoneMisclassification`) – ha a térképen kevesebb
+  a hármas és több a kétpontos, a két különbség kisebbike legalább ennyi
+  félrebesorolt hármas (a találatokra ugyanígy): itt legalább 2 (2 értékesített).
+  `coverage.misclassifiedThrees` / `misclassifiedThreesMade` (opcionális).
+  Legalább 2-nél adatminőségi sor („Dobástérkép 3P-besorolás: legalább 2
+  hárompontos kísérlet (ebből 2 értékesített) kétpontosként – feltehetően
+  középtávként – került a térképre (…)”), és az Export MD dobástérkép-szakasza
+  „3P-besorolási eltérés” figyelmeztetést kap. Egyetlen dobásnál nincs külön sor.
+- [x] **Szabályok** – torz zónáknál a döntő tényezők, erősségek, problémák és a
+  fókusz a középtáv / tripla zóna-deltákat és a dobáshely-mix indexet nem kapják
+  meg (`withoutPerimeterZones`); a játékosszintű középtáv / periméter jelzések
+  is kimaradnak. A gyűrű és a festék állításai (a D egység gyűrű-sora is)
+  érvényesek. A riportban a valódi zóna-összevetés megmarad.
+- [x] **Teszt** – 2 új eset (Honvéd-számok + MD; torz térképen nincs
+  középtáv-állítás, egyező box score-ral van). A Sopron „teljes térkép” eset
+  változatlanul zöld. 83 / 83 teszt, `tsc --noEmit`, `eslint` tiszta.
+
 **H18 – Post-game riport: második hibalista (ASE–Sopron KC 109–80) ✓ (2026-10-11)** – a kód kész, a böngészős ellenőrzés nyitva
 
 Felhasználói hibajelzés a H17 utáni Export MD-re: 8 hiba és 11 pontatlanság.
