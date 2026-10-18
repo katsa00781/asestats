@@ -419,6 +419,11 @@ type ShotMapComparison = {
   rimPctDelta: number;
   threePctDelta: number;
   shotQualityDelta: number;
+  /** A meccs gyűrű-zónája és a szezon gyűrű FG%-a; régi riportobjektumban hiányzik. */
+  rimMade?: number;
+  rimAttempts?: number;
+  rimPct?: number;
+  seasonRimPct?: number;
 };
 
 type FactorType = 'Hatékonyság' | 'Volumen' | 'Kontroll';
@@ -570,6 +575,10 @@ const buildShotMapComparison = (
   rimPctDelta: round(game.rimPct - season.rimPct, 1),
   threePctDelta: round(game.threePct - season.threePct, 1),
   shotQualityDelta: round(game.shotQualityIndex - season.shotQualityIndex, 1),
+  rimMade: game.zones.rim.made,
+  rimAttempts: game.zones.rim.attempts,
+  rimPct: game.rimPct,
+  seasonRimPct: season.rimPct,
 });
 
 const buildPlayerShotMapContext = (events: ShotMapEventInput[]): PlayerShotMapContext => {
@@ -1517,6 +1526,59 @@ const describeInteriorShift = (
   return twoRateDelta >= INTERIOR_SHIFT_PP ? `2P-kísérletek aránya nőtt (+${twoRateDelta} százalékpont)` : null;
 };
 
+/** Gyűrű körüli befejezés: ekkora FG%-elmaradás a szezontól, legalább ennyi kísérletnél. */
+const RIM_FINISH_GAP_PP = 10;
+const RIM_FINISH_MIN_ATTEMPTS = 10;
+/** A gyűrű-befejezés célja egy meccsről legfeljebb ennyit léphet (pp). */
+const RIM_GOAL_MAX_STEP_PP = 12;
+const RIM_FINISH_PREFIX = 'Gyűrű körüli befejezés gyenge';
+
+/**
+ * A gyűrű-zóna FG%-a a szezon alatt – a dobásvolumentől függetlenül (a
+ * „gyengült gyűrűtámadás” sor csak akkor jelzett, ha az arány is esett).
+ */
+const describeRimFinishing = (comparison: ShotMapComparison | null | undefined) => {
+  if (!comparison) return null;
+  const { rimMade, rimAttempts, rimPct, seasonRimPct, rimPctDelta } = comparison;
+  if (rimMade === undefined || rimAttempts === undefined || rimPct === undefined || seasonRimPct === undefined) return null;
+  if (rimAttempts < RIM_FINISH_MIN_ATTEMPTS || rimPctDelta > -RIM_FINISH_GAP_PP) return null;
+  return `${RIM_FINISH_PREFIX} (${rimMade}/${rimAttempts}, ${fixed1(rimPct)}% vs szezon ${fixed1(seasonRimPct)}%, ${signedPp(rimPctDelta)})`;
+};
+
+/**
+ * Ennyivel a liga medián feletti 3P-kísérletaránynál az alacsony FTM rate a
+ * dobásmix következménye (a tripla ritkán hoz faultot), nem kontaktkeresési gond.
+ */
+const STRUCTURAL_THREE_RATE_PP = 5;
+const STRUCTURAL_FT_PREFIX = 'Kevés büntető a magas triplaarány mellett';
+
+const describeStructuralFt = (
+  game: NormalizedGameStats,
+  season: NormalizedTeamStats,
+  benchmarks: LeagueTeamBenchmarks
+) => {
+  const threeMedian = getLeagueMedian(benchmarks, season, 'three_rate');
+  if (threeMedian === null || (game.threeRate - threeMedian) * 100 < STRUCTURAL_THREE_RATE_PP) return null;
+  const ftMedian = getLeagueMedian(benchmarks, season, 'ft_rate');
+  const ftPart = ftMedian !== null
+    ? `FTM rate ${fixed1(game.ftRate * 100)}% vs liga medián ${fixed1(ftMedian * 100)}%`
+    : `FTM rate ${fixed1(game.ftRate * 100)}%`;
+  return `${STRUCTURAL_FT_PREFIX} (${ftPart}; 3PA-arány ${fixed1(game.threeRate * 100)}% vs liga medián ${fixed1(threeMedian * 100)}%) – a dobásmix következménye, nem kontaktkeresési gond`;
+};
+
+/** Faultfegyelem: az ellenfél FTM rate-je a liga medián felett (a védekezési faktor sávja). */
+const FOUL_DISCIPLINE_PREFIX = 'Faultfegyelem';
+
+const describeFoulDiscipline = (
+  defense: PostGameReport['context']['defense'],
+  opponent: NormalizedGameStats | null
+) => {
+  if (!defense || !opponent || typeof defense.opponentFtRate !== 'number' || typeof defense.leagueFtRate !== 'number') return null;
+  const gap = round(defense.opponentFtRate - defense.leagueFtRate, 1);
+  if (gap < DEFENSE_FT_BAND) return null;
+  return `${FOUL_DISCIPLINE_PREFIX} – az ellenfél ${opponent.fta} büntetőt dobott ${opponent.fga} mezőnykísérletre (FTM rate ${fixed1(defense.opponentFtRate)}% vs liga medián ${fixed1(defense.leagueFtRate)}%, ${signedPp(gap)})`;
+};
+
 const buildStrengths = (
   game: NormalizedGameStats,
   season: NormalizedTeamStats,
@@ -1591,8 +1653,10 @@ const buildProblems = (
     const interior = describeInteriorShift(twoRateDelta, shotMapComparison, 'down');
     if (interior) problems.push(interior);
     if (orebRateDelta <= -6) problems.push(`Második esély volumen visszaesett (${orebRateDelta} százalékpont OREB)`);
-    if (ftRateDelta <= -6) problems.push(`Alacsony FTM rate (${ftRateDelta} százalékpont)`);
   }
+
+  const rimFinishing = describeRimFinishing(shotMapComparison);
+  if (rimFinishing) problems.push(rimFinishing);
 
   const pushLeague = (line: string | null) => {
     if (line) problems.push(line);
@@ -1601,13 +1665,22 @@ const buildProblems = (
   pushLeague(leagueLine(benchmarks, season, 'efg', game.efg, 1, 'below', 'Dobáshatékonyság a liga alatt', 'eFG'));
   pushLeague(leagueLine(benchmarks, season, 'three_pct', game.threePct, 1, 'below', 'Periméter-hatékonyság a liga alatt', '3P%'));
   pushLeague(leagueLine(benchmarks, season, 'oreb_rate', game.orebRate, 100, 'below', 'OREB volumen a liga alatt', 'OREB%'));
-  pushLeague(leagueLine(benchmarks, season, 'ft_rate', game.ftRate, 100, 'below', 'FTM rate a liga alatt', 'FTM rate'));
+
+  // Alacsony FTM rate: magas triplaaránynál a dobásmix következménye – ilyenkor
+  // egyetlen magyarázó sor jön, és nem indít „kontaktkeresés” fókuszt.
+  const ftLines = [
+    baseline.kind === 'season' && ftRateDelta <= -6 ? `Alacsony FTM rate (${ftRateDelta} százalékpont)` : null,
+    leagueLine(benchmarks, season, 'ft_rate', game.ftRate, 100, 'below', 'FTM rate a liga alatt', 'FTM rate'),
+  ].filter((line): line is string => line !== null);
+  const structuralFt = ftLines.length > 0 ? describeStructuralFt(game, season, benchmarks) : null;
+  if (structuralFt) problems.push(structuralFt);
+  else ftLines.forEach(line => problems.push(line));
 
   if (shotMapComparison) {
     if (shotMapComparison.midRateDelta >= 6 && shotMapComparison.shotQualityDelta <= -4) {
       problems.push('Dobástérkép: túl magas középtávoli arány, romló dobáshely-mix');
     }
-    if (shotMapComparison.rimRateDelta <= -5 && shotMapComparison.rimPctDelta <= -4) {
+    if (!rimFinishing && shotMapComparison.rimRateDelta <= -5 && shotMapComparison.rimPctDelta <= -4) {
       problems.push('Dobástérkép: gyengült gyűrűtámadás és festékbeli befejezés');
     }
     if (shotMapComparison.threeRateDelta >= 6 && shotMapComparison.threePctDelta <= -5) {
@@ -1624,12 +1697,16 @@ const buildNextFocus = (
   problems: string[],
   strengths: string[],
   benchmarks: LeagueTeamBenchmarks,
-  baseline: PostgameBaseline
+  baseline: PostgameBaseline,
+  shotMapComparison?: ShotMapComparison | null,
+  defense?: PostGameReport['context']['defense']
 ) => {
   const focus: string[] = [];
 
   const topicKey = (message: string) => {
     const lower = message.toLowerCase();
+    if (lower.startsWith('faultfegyelem')) return 'foul';
+    if (lower.includes('gyűrű')) return 'rim';
     if (lower.includes('ftm rate') || lower.includes('ft rate') || lower.includes('büntető')) return 'ft';
     if (lower.includes('to-rate') || lower.includes('to ') || lower.includes('turnover') || lower.includes('labda')) return 'to';
     if (lower.includes('oreb') || lower.includes('második esély') || lower.includes('lepattanó')) return 'oreb';
@@ -1642,8 +1719,11 @@ const buildNextFocus = (
 
   const topicPriority = (message: string) => {
     switch (topicKey(message)) {
+      case 'foul':
       case 'ft':
         return 1;
+      case 'rim':
+        return 3;
       case 'to':
         return 2;
       case 'shooting':
@@ -1709,6 +1789,9 @@ const buildNextFocus = (
    * referenciához képest leggyengébb mutató javítása, ennek hiányában a
    * legerősebb megtartása – számokkal, generikus szöveg helyett.
    */
+  // Magas triplaaránynál az alacsony FTM rate nem kontaktkeresési gond.
+  const ftIsStructural = describeStructuralFt(game, season, benchmarks) !== null;
+
   const buildFallbackFocus = () => {
     const referenceFor = (stat: string, seasonValue: number) =>
       baseline.comparable ? seasonValue : getLeagueMedian(benchmarks, season, stat);
@@ -1720,6 +1803,7 @@ const buildNextFocus = (
       { stat: 'assist_rate', label: 'Assist-rate', game: game.assistRate, ref: referenceFor('assist_rate', season.assistRate), multiplier: 100, direction: 'higher' as const, scale: 5, how: 'short roll és skip-pass visszahozása' },
     ]
       .filter((item): item is typeof item & { ref: number } => item.ref !== null && Number.isFinite(item.ref) && item.ref > 0)
+      .filter(item => !(item.stat === 'ft_rate' && ftIsStructural))
       .map(item => {
         const delta = (item.game - item.ref) * item.multiplier;
         return { ...item, score: (item.direction === 'higher' ? delta : -delta) / item.scale };
@@ -1740,6 +1824,35 @@ const buildNextFocus = (
     const strongest = candidates[candidates.length - 1];
     return `${strongest.label} szintjének megtartása: ${round(strongest.game * strongest.multiplier, 1).toFixed(1)}% (referencia ${round(strongest.ref * strongest.multiplier, 1).toFixed(1)}%) – minden fő mutató a referencia szintjén vagy felette.`;
   };
+
+  const opponentFt = defense?.opponentFtRate;
+  const leagueFt = defense?.leagueFtRate;
+  if (typeof opponentFt === 'number' && typeof leagueFt === 'number' && round(opponentFt - leagueFt, 1) >= DEFENSE_FT_BAND) {
+    const goalStep = GOAL_MAX_STEP_PP.ft_rate ?? Number.POSITIVE_INFINITY;
+    const capped = opponentFt - leagueFt > goalStep;
+    const target = capped ? round(opponentFt - goalStep, 1) : leagueFt;
+    addFocus(
+      formatFocusPlan(
+        FOUL_DISCIPLINE_PREFIX,
+        `ellenfél FTM rate ${fixed1(opponentFt)}% → ${fixed1(target)}%${capped ? ` (liga medián ${fixed1(leagueFt)}%)` : ''}`,
+        'függőleges védekezés és kéz fel a dobáskísérletnél, kevesebb reach-in és késői segítő fault'
+      )
+    );
+  }
+
+  const rimFinishing = describeRimFinishing(shotMapComparison);
+  if (rimFinishing && shotMapComparison?.rimPct !== undefined && shotMapComparison.seasonRimPct !== undefined) {
+    const { rimPct, seasonRimPct } = shotMapComparison;
+    const capped = seasonRimPct - rimPct > RIM_GOAL_MAX_STEP_PP;
+    const target = capped ? round(rimPct + RIM_GOAL_MAX_STEP_PP, 1) : seasonRimPct;
+    addFocus(
+      formatFocusPlan(
+        'Befejezés a gyűrűnél',
+        `gyűrű FG% ${fixed1(rimPct)}% → ${fixed1(target)}%${capped ? ` (szezon ${fixed1(seasonRimPct)}%)` : ''}`,
+        'kontakt után is befejezés, pumpfake és extra pass a festékben a forszírozott gyűrűdobás helyett'
+      )
+    );
+  }
 
   if (hasItemStartingWith(problems, 'Sok labdaeladás', 'TO arány a liga felett')) {
     addFocus(
@@ -1802,7 +1915,10 @@ const buildNextFocus = (
     );
   }
 
-  const hasFtProblem = problems.some(item => item.includes('FTM rate') || item.includes('büntető'));
+  const hasFtProblem = problems.some(item =>
+    (item.includes('FTM rate') || item.includes('büntető')) &&
+    !item.startsWith(STRUCTURAL_FT_PREFIX) &&
+    !item.startsWith(FOUL_DISCIPLINE_PREFIX));
   if (hasFtProblem) {
     addFocus(
       formatFocusPlan(
@@ -2830,8 +2946,12 @@ export const analyzePostGameReport = (
   const playerImpact = reconcilePlayerImpact(analyzePlayerImpact(players), playerReport);
   const ownStrengths = buildStrengths(game, season, leagueBenchmarks, baseline, shotMapComparison);
   const ownProblems = buildProblems(game, season, leagueBenchmarks, baseline, shotMapComparison);
-  // A fókusz-szabályok a saját (támadó) sorok szövegére illesztenek.
-  const nextFocus = buildNextFocus(game, season, ownProblems, ownStrengths, leagueBenchmarks, baseline);
+  // A fókusz-szabályok a saját (támadó) sorok szövegére illesztenek; a
+  // faultfegyelem a védekezési kontextusból jön.
+  const nextFocus = buildNextFocus(
+    game, season, ownProblems, ownStrengths, leagueBenchmarks, baseline, shotMapComparison, defenseContext
+  );
+  const foulDiscipline = describeFoulDiscipline(defenseContext, opponent);
   // A védekezési döntő tényezők az erősségek / problémák közé is bekerülnek –
   // különben pl. a periméter-védekezés a fókuszban szerepel, a problémák közt nem.
   const defenseLines = (tone: 'positive' | 'negative') =>
@@ -2840,7 +2960,11 @@ export const analyzePostGameReport = (
       .slice(0, 2)
       .map(item => `${DEFENSE_LINE_PREFIX} ${item.label}`);
   const strengths = [...ownStrengths, ...defenseLines('positive')];
-  const problems = [...ownProblems, ...defenseLines('negative')];
+  const problems = [
+    ...ownProblems,
+    ...(foulDiscipline ? [`${DEFENSE_LINE_PREFIX} ${foulDiscipline}`] : []),
+    ...defenseLines('negative'),
+  ];
   const xFactorReflection = buildXFactorReflection(preGameContext, game, season, opponent, decisiveAnnotations.meta);
 
   const metricsSummary = buildPostgameMetrics(game, season, leagueBenchmarks);
@@ -3659,6 +3783,8 @@ export const POSTGAME_AUTO_FOCUS_LIMIT = 3;
 
 const focusTopic = (text: string) => {
   const lower = text.toLowerCase();
+  if (lower.includes('faultfegyelem')) return 'ft';
+  if (lower.includes('gyűrű')) return 'rim';
   if (lower.includes('ft rate') || lower.includes('büntető')) return 'ft';
   if (lower.includes('to ') || lower.includes('turnover') || lower.includes('labdaeladás')) return 'to';
   if (lower.includes('oreb') || lower.includes('második esély') || lower.includes('lepattanó')) return 'oreb';
@@ -3670,6 +3796,7 @@ const focusTopicPriority = (text: string) => {
   switch (focusTopic(text)) {
     case 'to': return 1;
     case 'ft': return 2;
+    case 'rim': return 3;
     case 'perimeter': return 3;
     case 'oreb': return 4;
     default: return 9;
@@ -3695,9 +3822,13 @@ export const buildPostgameAutoFocus = (
   report.nextFocus.forEach(pushUniqueByTopic);
   (kosarstat?.nextFocus ?? []).forEach(pushUniqueByTopic);
 
-  // Fókusz csak javítandó pontból lesz, saját védekezési sikerből nem.
+  // Fókusz csak javítandó pontból lesz, saját védekezési sikerből nem. Ha a
+  // témára már van konkrét fókuszterv (pl. faultfegyelem a büntető-hátrányra),
+  // a tipp nem foglal külön helyet.
   const factorHint = buildOpponentLinkedBreakdown(report).find(row => row.kind !== 'control')?.detail;
-  if (factorHint) focus.unshift(`Ellenfél-specifikus fókusz: ${factorHint}.`);
+  if (factorHint && !focus.some(item => focusTopic(item) === focusTopic(factorHint))) {
+    focus.unshift(`Ellenfél-specifikus fókusz: ${factorHint}.`);
+  }
 
   if (report.problems.length > 0) pushUniqueByTopic(`Mérkőzés utáni javítás: ${report.problems[0]}.`);
   if (kosarstat && kosarstat.problems.length > 0) pushUniqueByTopic(`Kosarstat javítási pont: ${kosarstat.problems[0]}`);

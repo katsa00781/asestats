@@ -765,6 +765,35 @@ Hat egység (A–F), egységenként teszt és commit.
   védőlepattanózás + faultfegyelem; medián feletti ellenfél-eFG mellett is a
   DRtg dönt). 78 / 78 teszt, `tsc --noEmit`, `eslint` tiszta.
 
+*D egység – gyűrű körüli befejezés, büntetők, faultfegyelem ✓ (2026-10-18)*
+
+- [x] **Gyűrű körüli befejezés** – a dobástérkép-szabály csak akkor jelzett,
+  ha a gyűrű-arány is legalább 5 pp-tel esett; a 12/28 (42,9% vs szezon 60,6%)
+  így rejtve maradt. Új `describeRimFinishing`: legalább 10 gyűrű-kísérletnél
+  és legalább 10 pp elmaradásnál önálló probléma („Gyűrű körüli befejezés gyenge
+  (12/28, 42,9% vs szezon 60,6%, −17,7 pp)”) és fókusz („Befejezés a gyűrűnél:
+  Cél gyűrű FG% 42,9% → 54,9% (szezon 60,6%)”, legfeljebb 12 pp lépés). A
+  `ShotMapComparison` új, opcionális mezői: `rimMade`, `rimAttempts`, `rimPct`,
+  `seasonRimPct`.
+- [x] **„Több kontaktkeresés” 46%-os triplaarány mellett** – ha a meccs
+  3P-kísérletaránya legalább 5 pp-tel a liga medián felett van, az alacsony FTM
+  rate a dobásmix következménye: az „FTM rate a liga alatt” / „Alacsony FTM
+  rate” helyett egy magyarázó sor jön („Kevés büntető a magas triplaarány
+  mellett (…) – a dobásmix következménye, nem kontaktkeresési gond”), és sem a
+  szabály, sem a tartalék-fókusz nem ad „Büntetők növelése” tervet.
+- [x] **Faultfegyelem (új)** – ha az ellenfél FTM rate-je legalább 3 pp-tel (a
+  C egység faktorsávja) a liga medián felett van: probléma („Védekezés:
+  Faultfegyelem – az ellenfél 24 büntetőt dobott 59 mezőnykísérletre (FTM rate
+  32,2% vs liga medián …)”) és első helyű fókusz („Faultfegyelem: Cél ellenfél
+  FTM rate 32,2% → …”).
+- [x] **Fókuszlista** – a faultfegyelem és a gyűrű-befejezés saját témát kap; az
+  „Ellenfél-specifikus fókusz” tipp kimarad, ha a témájára már van konkrét
+  fókuszterv (a büntető-hátrány tippje így nem foglal helyet a faultfegyelem
+  mellett).
+- [x] **Teszt** – 3 új eset (gyűrű; magas triplaarány + faultfegyelem + a
+  megjelenített fókuszlista; átlagos triplaaránynál a kontaktkeresés-fókusz
+  marad). 81 / 81 teszt, `tsc --noEmit`, `eslint` tiszta.
+
 **H18 – Post-game riport: második hibalista (ASE–Sopron KC 109–80) ✓ (2026-10-11)** – a kód kész, a böngészős ellenőrzés nyitva
 
 Felhasználói hibajelzés a H17 utáni Export MD-re: 8 hiba és 11 pontatlanság.
