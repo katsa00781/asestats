@@ -3268,6 +3268,23 @@ export function SeasonComparison({
           };
         };
 
+        // A Kosarstat a szponzoros klubnevet használja („Endo Plus
+        // Service-Honvéd”), ami eltérhet a `games.opponent` névtől. Ha a dátum és
+        // a pontos eredménypár (hazai–vendég sorrendben) egyezik, egy csapatnév
+        // egyezése is elég – ez a ligában egyértelműen azonosítja a meccset.
+        const teamsMatch = (candidate: {
+          ownMatched: boolean;
+          opponentMatched: boolean;
+          dateMatched: boolean;
+          expectedScoreOrderMatched: boolean;
+        }) => {
+          const ownOk = ownTeamNeedle ? candidate.ownMatched : true;
+          const opponentOk = opponentNeedle ? candidate.opponentMatched : true;
+          if (ownOk && opponentOk) return true;
+          const identifiedByResult = hasDateContext && hasScoreContext && candidate.dateMatched && candidate.expectedScoreOrderMatched;
+          return identifiedByResult && (candidate.ownMatched || candidate.opponentMatched);
+        };
+
         const selectedGamePlayerNames = new Set(
           selectedGamePlayerNamesSignatureForPostgame
             ? selectedGamePlayerNamesSignatureForPostgame.split('|').filter(Boolean)
@@ -3358,19 +3375,13 @@ export function SeasonComparison({
             competition_phase?: string | null;
           });
           const directLooksValid =
-            check.ownMatched &&
-            check.opponentMatched &&
+            teamsMatch(check) &&
             (!hasDateContext || check.dateMatched) &&
             (!hasScoreContext || check.expectedScoreOrderMatched);
-          if (!directLooksValid) {
-            if (selectedGameId) {
-              await supabase
-                .from('games' as never)
-                .update({ kosarstat_game_id: null } as never)
-                .eq('id', selectedGameId);
-            }
-            gameId = '';
-          }
+          // Érvénytelennek látszó linknél csak a tartalék keresés fut: a nézet
+          // nem írja felül a scrape által beállított linket (a csapatnév-eltérés
+          // – pl. „Endo Plus Service-Honvéd” – korábban nullázta).
+          if (!directLooksValid) gameId = '';
         }
 
         if (!gameId) {
@@ -3414,11 +3425,9 @@ export function SeasonComparison({
             .sort((a, b) => b.score - a.score);
 
           const strictWithDateCandidates = scoredCandidates.filter(candidate => {
-            const ownOk = ownTeamNeedle ? candidate.ownMatched : true;
-            const opponentOk = opponentNeedle ? candidate.opponentMatched : true;
             const dateOk = hasDateContext ? candidate.dateMatched : true;
             const scoreOk = hasScoreContext ? candidate.expectedScoreOrderMatched : true;
-            return ownOk && opponentOk && dateOk && scoreOk;
+            return teamsMatch(candidate) && dateOk && scoreOk;
           });
 
           const strictCandidates = strictWithDateCandidates.length > 0

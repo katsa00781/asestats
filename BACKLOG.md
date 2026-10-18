@@ -1,6 +1,6 @@
 # BACKLOG.md – ASEStats Projekt
 
-_Utoljára frissítve: 2026-10-11 (H18 – post-game riport második hibalista: A–E egység kész, böngészős ellenőrzés és három saját döntés jóváhagyása nyitva)_
+_Utoljára frissítve: 2026-10-18 (H19 – post-game riport harmadik hibalista, ASE–Honvéd: folyamatban)_
 
 ---
 
@@ -690,6 +690,39 @@ a nézőpont nem hiba.
   `seasonName` paramétert kap, a fejléc közös `seasonLeagueLine()` segéddel
   „Szezon: 2026/2027” – a Liga csak akkor jelenik meg, ha különbözik. Csak
   webes MD export, mobil jegyzet nem kell.
+
+**H19 – Post-game riport: harmadik hibalista (ASE–Honvéd 112–81, 2026-10-17)** – folyamatban
+
+Felhasználói hibajelzés (külső elemzés az Export MD-ről): a Kosarstat-egyeztetés
+sikertelen; a „Kiugró teljesítmény” lista ellentmond az Impact score-nak
+(Chandler 71,1 kimarad, Daniels 47,1 bent); „Limitált hatás” 3 perc alapján
+(Nagy Dániel); a védekezés „ligaszintű” DRtg 102,7 mellett; a gyűrű körüli
+befejezés (12/28 vs szezon 60,6%) és az ellenfél 24 büntetője nem jelenik meg;
+„több kontaktkeresés” fókusz 46%-os triplaarány mellett; a dobástérkép
+3P-besorolási hibája (térkép 14/31 vs box 18/36) torzítja a zónákat.
+Felhasználói döntések (2026-10-18): kódjavítás + a link visszaírása; a
+„Kiugró” lista az Impact score-hoz igazodik; a védekezés verdiktjét a DRtg
+adja, a mondat a négy védekezési faktorból nevezi meg a hajtóerőt; új
+„Mi döntötte el?” (volumen vs. hatékonyság) bontás utolsó egységként.
+Hat egység (A–F), egységenként teszt és commit.
+
+*A egység – Kosarstat link: a webes nézet nem nulláz ✓ (2026-10-18)*
+
+- [x] **Ok** – az ASE `games` sorának (`d8bfe38d…`) `kosarstat_game_id`-je
+  null volt, a Honvéd-tükörsoré `20261017102114`. A scrape 00:07-kor mindkettőt
+  linkelte; a post-game nézet 04:08-kor a böngészőből nullázta az ASE sorét,
+  mert a közvetlen link validálása mindkét csapatnevet kereste a Kosarstat
+  szövegében, és a „Budapesti Honvéd Sportegyesület” nem szerepel benne
+  (Kosarstat: „Endo Plus Service-Honvéd”). A tartalék keresés ugyanezen bukott el.
+- [x] **Javítás** (`components/SeasonComparison.tsx`) – a nézet érvénytelennek
+  látszó linknél nem ír a DB-be, csak a tartalék keresést futtatja; új
+  `teamsMatch`: ha a dátum és a pontos eredménypár (hazai–vendég sorrendben)
+  egyezik, egy csapatnév egyezése is elég. A tervezett `short_name` alapú
+  illesztés nem kellett (a komponensben nincs csapat-törzsadat, és a dátum +
+  eredmény egyértelmű).
+- [x] **Adat** – `npm run kosarstat:backfill-links -- --season 2026/2027`:
+  1 új link (`d8bfe38d…` → `20261017102114`), 55 már linkelt, 0 ütközés.
+- `tsc --noEmit` tiszta, `eslint` csak a korábbi 5 figyelmeztetés.
 
 **H18 – Post-game riport: második hibalista (ASE–Sopron KC 109–80) ✓ (2026-10-11)** – a kód kész, a böngészős ellenőrzés nyitva
 
