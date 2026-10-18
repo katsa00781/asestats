@@ -295,7 +295,9 @@ test('Címke és kiemelés nem mond ellent: Young hatékony szerepjátékos, nem
   assert.ok(young.impactScore < 38, String(young.impactScore));
   assert.equal(young.impactLabel, 'Hatékony szerepjátékos');
   assert.equal(young.impactClass, 'support');
-  assert.ok(result.playerImpact.overperformers.includes('YOUNG Kalif Karl'));
+  // H19: a „Kiugró” lista az Impact score-ból jön; Young a „Pozitív hatás” listán van.
+  assert.ok(result.playerImpact.positive.some(entry => entry.startsWith('YOUNG Kalif Karl')), result.playerImpact.positive.join(', '));
+  assert.ok(!result.playerImpact.negative.includes('YOUNG Kalif Karl'));
   assert.ok(!result.playerReport.highlights.struggling.some(player => player.name === 'YOUNG Kalif Karl'));
 
   // Aki a játékostáblában „Limitált hatás”, az nem lehet „Kiugró teljesítmény”:

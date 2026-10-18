@@ -1368,10 +1368,17 @@ const formatPositiveContributorLabel = (player: PlayerGameStat) => {
   return player.name;
 };
 
+/** Ennyi perc alatt egy meccs nem ad megbízható mintát a játékos minősítéséhez. */
+const PLAYER_RELIABLE_SAMPLE_MINUTES = 8;
+
+/** „Kiugró teljesítmény”: legalább ennyi perc és ekkora Impact score (vagy `mvp` osztály). */
+const OVERPERFORMER_MIN_MINUTES = 12;
+const OVERPERFORMER_MIN_IMPACT = 60;
+const OVERPERFORMER_LIMIT = 4;
+
 const analyzePlayerImpact = (players: PlayerGameStat[]) => {
   const positive: string[] = [];
   const negative: string[] = [];
-  const overperformers: Array<{ name: string; score: number }> = [];
   const underperformers: Array<{ name: string; score: number }> = [];
 
   // Standard, perc-normalizált USG% (0–1), ugyanaz, mint a játékosbontásban.
@@ -1381,28 +1388,12 @@ const analyzePlayerImpact = (players: PlayerGameStat[]) => {
     const usageShare = usageRates.get(player.playerId) ?? 0;
     const ts = computePlayerTrueShooting(player);
     const valPer36 = player.minutes > 0 ? (player.val / player.minutes) * 36 : 0;
-    const hasReliableSample = player.minutes >= 8;
+    const hasReliableSample = player.minutes >= PLAYER_RELIABLE_SAMPLE_MINUTES;
 
-    if (usageShare >= USG_HIGH_MIN && player.val <= 5) negative.push(player.name);
+    // Pár perces mintánál (pl. 3 perc, 1 dobás) a USG% nem ítélet.
+    if (hasReliableSample && usageShare >= USG_HIGH_MIN && player.val <= 5) negative.push(player.name);
     if (hasReliableSample && usageShare <= USG_LOW_MAX && (player.val >= 10 || (player.minutes >= 12 && valPer36 >= 18))) {
       positive.push(formatPositiveContributorLabel(player));
-    }
-
-    // Also include high-efficiency starters who played fewer minutes (e.g. foul trouble,
-    // tactical substitution) but dominated their time (valPer36 ≥ 35, ts ≥ 0.65).
-    const qualifiesOverperformer =
-      (player.minutes >= 18 || (player.minutes >= 12 && valPer36 >= 35 && ts >= 0.65))
-      && (player.val >= 18 || valPer36 >= 20)
-      && (ts >= 0.55 || usageShare >= 0.2);
-
-    if (qualifiesOverperformer) {
-      const score =
-        player.val * 0.45
-        + valPer36 * 0.2
-        + player.points * 0.2
-        + ts * 100 * 0.1
-        + usageShare * 100 * 0.05;
-      overperformers.push({ name: player.name, score });
     }
 
     const qualifiesUnderperformer =
@@ -1419,10 +1410,6 @@ const analyzePlayerImpact = (players: PlayerGameStat[]) => {
   return {
     positive: positive.slice(0, 3),
     negative: negative.slice(0, 3),
-    overperformers: overperformers
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 4)
-      .map(entry => entry.name),
     underperformers: underperformers
       .sort((a, b) => b.score - a.score)
       .slice(0, 3)
@@ -1431,13 +1418,29 @@ const analyzePlayerImpact = (players: PlayerGameStat[]) => {
 };
 
 /**
+ * „Kiugró teljesítmény” a játékostábla Impact score-jából: legalább 12 perc, és
+ * `mvp` osztály vagy legalább 60-as Impact score, a score sorrendjében. Így a
+ * lista nem mondhat ellent a táblának (korábban egy külön VAL-alapú pontszám a
+ * meccs legjobbját – 17 perc, Impact 71,1 – kihagyta, egy 47,1-es játékost
+ * viszont felvett).
+ */
+const selectOverperformers = (playerReport: PlayerPostGameReport) =>
+  [...playerReport.players]
+    .filter(player =>
+      player.minutes >= OVERPERFORMER_MIN_MINUTES &&
+      (player.impactClass === 'mvp' || player.impactScore >= OVERPERFORMER_MIN_IMPACT))
+    .sort((a, b) => b.impactScore - a.impactScore)
+    .slice(0, OVERPERFORMER_LIMIT)
+    .map(player => player.name);
+
+/**
  * A meccsszintű kiemelések és a játékostábla címkéi két külön szabályból
- * jönnek; itt egyeztetjük őket, hogy ne mondjanak ellent: „Limitált hatás”
- * osztályú játékos nem lehet „Kiugró teljesítmény”, és vezető / alappillér
- * osztályú nem kerülhet a gyenge vagy limitált listára.
+ * jönnek; itt egyeztetjük őket, hogy ne mondjanak ellent: a „Kiugró
+ * teljesítmény” az Impact score-ból jön, és vezető / alappillér osztályú
+ * játékos nem kerülhet a gyenge vagy limitált listára.
  */
 const reconcilePlayerImpact = (
-  impact: PostGameReport['playerImpact'],
+  impact: Omit<PostGameReport['playerImpact'], 'overperformers'>,
   playerReport: PlayerPostGameReport
 ): PostGameReport['playerImpact'] => {
   // A „pozitív” lista eleme zárójeles kiegészítést is kaphat a név után.
@@ -1449,7 +1452,7 @@ const reconcilePlayerImpact = (
   };
   return {
     positive: impact.positive,
-    overperformers: impact.overperformers.filter(entry => classOf(entry) !== 'struggling'),
+    overperformers: selectOverperformers(playerReport),
     negative: impact.negative.filter(entry => !isLeading(entry)),
     underperformers: impact.underperformers.filter(entry => !isLeading(entry)),
   };

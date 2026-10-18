@@ -724,6 +724,24 @@ Hat egység (A–F), egységenként teszt és commit.
   1 új link (`d8bfe38d…` → `20261017102114`), 55 már linkelt, 0 ütközés.
 - `tsc --noEmit` tiszta, `eslint` csak a korábbi 5 figyelmeztetés.
 
+*B egység – játékoscímkék: „Kiugró” az Impact score-ból, percküszöb ✓ (2026-10-18)*
+
+- [x] **„Kiugró teljesítmény”** – eddig külön, VAL-alapú pontszám döntött
+  (18 perc, vagy 12 perc + VAL/36 ≥ 35 + TS ≥ 65%): Chandler (17 perc, TS 56,4%,
+  Impact 71,1 – a meccs legjobbja) kimaradt, Daniels (47,1) bekerült. Új
+  `selectOverperformers` (`lib/postgame-report.ts`): legalább 12 perc, és `mvp`
+  osztály vagy Impact score ≥ 60, az Impact sorrendjében, legfeljebb 4. A
+  honvédos meccsen egyedül Chandler.
+- [x] **„Limitált hatás (magas usage)”** – a szabálynak nem volt percküszöbe;
+  Nagy Dániel 3 perc, 1 dobás alapján került rá. Mostantól legalább 8 perc
+  (`PLAYER_RELIABLE_SAMPLE_MINUTES`, ugyanaz, mint a pozitív listán).
+- [x] **H18 Young-teszt frissítve** – az alacsony usage-ú, hatékony Young
+  (Impact < 38) a „Pozitív hatás” listán van, nem a „Kiugró”-n (a jóváhagyott új
+  szabály következménye; a címke ↔ kiemelés ellentmondás továbbra sem lehet).
+- [x] **Teszt** – új `tests/fixtures/postgame-ase-honved.ts` (valós box score
+  mindkét csapatra, valós dobástérkép-zónák) és `tests/postgame-report-h19.test.ts`
+  (2 eset). 76 / 76 teszt, `tsc --noEmit`, `eslint` tiszta.
+
 **H18 – Post-game riport: második hibalista (ASE–Sopron KC 109–80) ✓ (2026-10-11)** – a kód kész, a böngészős ellenőrzés nyitva
 
 Felhasználói hibajelzés a H17 utáni Export MD-re: 8 hiba és 11 pontatlanság.
