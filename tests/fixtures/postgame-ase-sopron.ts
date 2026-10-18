@@ -80,7 +80,7 @@ export const PLAYERS: PlayerGameStat[] = ASE_BOX.map(([name, minutes, points, cl
 }));
 
 /** `count` dobás az adott zónából, az első `made` sikeres. */
-export const ZONE_POINT = { rim: [6, 50], paint: [20, 50], mid: [30, 50], three: [40, 50], corner3: [26, 5] } as const;
+export const ZONE_POINT = { rim: [6, 50], paint: [20, 50], mid: [30, 50], three: [40, 50], corner3: [8, 5] } as const;
 export const shots = (zone: keyof typeof ZONE_POINT, count: number, made: number): ShotMapEventInput[] =>
   Array.from({ length: count }, (_, index) => ({
     playerId: null, x: ZONE_POINT[zone][0], y: ZONE_POINT[zone][1], isSuccessful: index < made, shotSide: 'home' as const,

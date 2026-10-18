@@ -2,6 +2,7 @@
 import {
   analyzePostGameReport,
   buildKosarstatPostgameContext,
+  classifyShotZone,
   buildPostgameAutoFocus,
   mergeKosarstatPostgameContext,
   parsePostgameSummary,
@@ -223,4 +224,27 @@ test('Kezdő ötös vs többi perc: a sor az összefoglaló meccs-szakaszába ke
   assert.ok(overview, merged.summary);
   assert.ok(merged.summary.includes(line));
   assert.ok(merged.summary.indexOf(line) < merged.summary.indexOf('**Játékos kiemelések**'));
+});
+
+test('Saroktripla: az alapvonal közelében és az oldalvonal mellett – nem a szárnyon (valós koordináták)', () => {
+  const zone = (x: number, y: number, shotSide: 'home' | 'away' = 'home') => classifyShotZone({ x, y, shotSide });
+  // Valódi saroktriplák (ASE, 2026/27): alapvonal-közeli, oldalsó pontok.
+  assert.equal(zone(8, 4), 'corner3');
+  assert.equal(zone(7, 97), 'corner3');
+  assert.equal(zone(11, 3), 'corner3');
+  // Vendég oldalon a tükrözött koordinátával.
+  assert.equal(zone(92, 4, 'away'), 'corner3');
+  // A 45°-os szárny-tripla (az egyenes sarokszakaszon túl) nem sarok – a korábbi szabály ezt számolta annak.
+  assert.equal(zone(24, 13), 'aboveBreak3');
+  assert.equal(zone(22, 12), 'aboveBreak3');
+  assert.equal(zone(40, 50), 'aboveBreak3');
+});
+
+test('Saroktripla a riportban: a Honvéd-meccs 9 sarokkísérlete (4 jó) megjelenik a zónák közt', () => {
+  const result = report();
+  assert.equal(result.shotMap?.team?.zones.corner3.attempts, 9);
+  assert.equal(result.shotMap?.team?.zones.corner3.made, 4);
+  assert.equal(result.shotMap?.season?.zones.corner3.attempts, 27);
+  const md = postgameReportToMd(result, SEASON);
+  assert.match(md, /\| Sarok tripla \| 4\/9 \|/);
 });

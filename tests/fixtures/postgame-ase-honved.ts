@@ -56,15 +56,16 @@ export const PLAYERS: PlayerGameStat[] = ASE_BOX.map(([name, minutes, points, tw
 }));
 
 // A dobástérkép valós számai: 75 dobás – gyűrű 12/28, festék 3/7, középtáv
-// 7/9, tripla 14/31 (a box score-ban 3P 18/36, 2P 20/42: a térképen 2 kétpontos
-// találattal több és 4 hármassal kevesebb van).
+// 7/9, tripla 14/31, ebből sarok 4/9 (a box score-ban 3P 18/36, 2P 20/42: a
+// térképen 2 kétpontos találattal több és 4 hármassal kevesebb van).
 export const GAME_SHOTS = [
-  ...shots('rim', 28, 12), ...shots('paint', 7, 3), ...shots('mid', 9, 7), ...shots('three', 31, 14),
+  ...shots('rim', 28, 12), ...shots('paint', 7, 3), ...shots('mid', 9, 7),
+  ...shots('three', 22, 10), ...shots('corner3', 9, 4),
 ];
-// Szezon (a meccsel együtt, 289 dobás): gyűrű 60/99 (60,6%).
+// Szezon (a meccsel együtt, 289 dobás): gyűrű 60/99 (60,6%), sarok 11/27.
 export const SEASON_SHOTS = [
   ...shots('rim', 99, 60), ...shots('paint', 37, 18), ...shots('mid', 45, 22),
-  ...shots('three', 100, 41), ...shots('corner3', 8, 3),
+  ...shots('three', 81, 33), ...shots('corner3', 27, 11),
 ];
 export const SHOT_MAP: PostGameShotMapContext = { gameShots: GAME_SHOTS, seasonShots: SEASON_SHOTS };
 

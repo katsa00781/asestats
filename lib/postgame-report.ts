@@ -513,10 +513,22 @@ const quantile = (sorted: number[], percentile: number) => {
   return sorted[base];
 };
 
-const normalizeOffenseX = (event: ShotMapEventInput) =>
+const normalizeOffenseX = (event: Pick<ShotMapEventInput, 'x' | 'shotSide'>) =>
   event.shotSide === 'away' ? 100 - event.x : event.x;
 
-const classifyShotZone = (event: ShotMapEventInput): ShotZone => {
+/**
+ * Saroktripla: az alapvonal közelében (x ≤ 14) és az oldalvonalak mellett
+ * (y ≤ 14 vagy y ≥ 86). A koordináták normalizálás után a bal palánk felé
+ * támadnak, a kosár az (x ≈ 6, y = 50) pontban van, az x a teljes pályahossz
+ * (100 egység ≈ 28 m): az egyenes sarokszakasz (~3 m) x ≈ 11-ig tart. (A
+ * korábbi `x >= 25` feltétel fordított volt: a szárny-triplákat számolta
+ * saroknak, a valódi saroktriplákat „nem sarok” triplának.)
+ */
+const CORNER3_MAX_X = 14;
+const CORNER3_SIDE_BAND = 14;
+
+/** Dobászóna a dobás helyéből – a webes szezon-nézetek is ezt használják. */
+export const classifyShotZone = (event: Pick<ShotMapEventInput, 'x' | 'y' | 'shotSide'>): ShotZone => {
   const x = normalizeOffenseX(event);
   const y = event.y;
   const dx = x - 6;
@@ -526,7 +538,7 @@ const classifyShotZone = (event: ShotMapEventInput): ShotZone => {
   if (distance <= 9) return 'rim';
   if (distance <= 18) return 'paint';
 
-  const corner3 = x >= 25 && (y <= 14 || y >= 86);
+  const corner3 = x <= CORNER3_MAX_X && (y <= CORNER3_SIDE_BAND || y >= 100 - CORNER3_SIDE_BAND);
   if (corner3) return 'corner3';
 
   if (distance >= 29) return 'aboveBreak3';

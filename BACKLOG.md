@@ -1,6 +1,6 @@
 # BACKLOG.md – ASEStats Projekt
 
-_Utoljára frissítve: 2026-10-18 (H19 – post-game riport harmadik hibalista, ASE–Honvéd: A–H egység kész, böngészős ellenőrzés és a küszöbök jóváhagyása nyitva)_
+_Utoljára frissítve: 2026-10-18 (H19 – post-game riport harmadik hibalista, ASE–Honvéd: A–I egység kész, böngészős ellenőrzés és a küszöbök jóváhagyása nyitva)_
 
 ---
 
@@ -886,6 +886,30 @@ Felhasználói második visszajelzés a H19 utáni riportra („Maradék anomál
   pozitív címkéjű játékos kimarad; a kezdő-sor helye az összefoglalóban; a
   kezdő-sor számai a valós ASE–Körmend lineupon). 91 / 91 teszt, `tsc
   --noEmit`, `eslint` (a korábbi 5 figyelmeztetés), `npm run build` tiszta.
+
+*I egység – saroktripla: fordított zóna-besorolás a riportban ✓ (2026-10-18)*
+
+- [x] **Tünet** – „A saroktriplák nem jelennek meg a statisztikában” (felhasználói
+  jelzés). Az ASE–Honvéd post-game zónatáblájában a „Sarok tripla” 0/0 volt.
+- [x] **Ok** – két külön zóna-besoroló volt. A `SeasonComparison` szezon-nézetei
+  helyesen sorolták be a saroktriplát (`x ≤ 14`, alapvonal-közeli), a
+  `lib/postgame-report.ts` `classifyShotZone` viszont fordítva (`x ≥ 25`): a
+  45°-os szárny-triplákat számolta saroknak, a valódi saroktriplákat „nem
+  sarok” triplának. A 2026/27-es 3676 dobásból az oldalsávban 586 alapvonal-közeli
+  (valódi sarok) és 100 szárny-dobás van. A koordináta: teljes pályahossz,
+  100 egység ≈ 28 m, kosár x ≈ 6; az egyenes sarokszakasz (~3 m) x ≈ 11-ig tart.
+- [x] **Javítás** – a riport-modul besorolója `x ≤ 14` (`CORNER3_MAX_X`,
+  `CORNER3_SIDE_BAND`), exportálva; a `SeasonComparison` a saját példánya
+  helyett ezt használja, így a két besorolás nem térhet el újra.
+- [x] **Hatás** – minden post-game riport (web, Export MD, mobil) zónatáblája,
+  a sarok-szabályok (csapat- és játékosszintű „saroktripla” erősség) és a
+  dobáshely-mix index változik (a sarok súlya 1,2, a többi triplaé 0,65). ASE
+  2026/27: a Honvéd-meccsen sarok 4/9 (eddig 0), a szezonban 11/27 (eddig 3/8).
+- [x] **Teszt** – 2 új eset (valós koordináták: sarok vs szárny, vendég oldali
+  tükrözés; a Honvéd-meccs 9 sarokkísérlete a riportban és az MD-ben). A Sopron
+  fixture sarok-pontja (`[26, 5]`, a hibás szabályhoz igazodott) `[8, 5]`-re, a
+  Honvéd fixture a javított valós zónaszámokra. 93 / 93 teszt, `tsc --noEmit`,
+  `eslint` (a korábbi 5 figyelmeztetés), `npm run build` tiszta.
 
 Nyitott (H19):
 

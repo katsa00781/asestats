@@ -60,6 +60,7 @@ import {
 import {
   analyzePostGameReport,
   buildTeamBenchmarks as buildPostgameBenchmarks,
+  classifyShotZone,
   type PlayerGameStat,
   type PostGameShotMapContext,
   type TeamGameStat,
@@ -2252,29 +2253,6 @@ const formatShotDeltaPp = (value: number) => {
 const shotDeltaTone = (value: number) => {
   if (!Number.isFinite(value) || Math.abs(value) < 0.2) return 'text-secondary';
   return value > 0 ? 'text-positive' : 'text-negative';
-};
-
-const normalizeShotX = (point: ShotPoint) => (point.shotSide === 'away' ? 100 - point.x : point.x);
-
-// Koordináta-konvenció: normalizálás után minden dobás a bal palánk felé támad,
-// a kosár a (x≈6, y=50) pontban van a 0–100-as pályahossz/pályaszélesség skálán.
-// A sarok-hármas ezért az alapvonal KÖZELÉBEN (kis x) és az oldalvonalaknál
-// (szélső y) van – nem nagy x-nél.
-const classifyShotZone = (point: ShotPoint): ShotZoneKey => {
-  const x = normalizeShotX(point);
-  const y = point.y;
-  const dx = x - 6;
-  const dy = y - 50;
-  const distance = Math.sqrt(dx * dx + dy * dy);
-
-  if (distance <= 9) return 'rim';
-  if (distance <= 18) return 'paint';
-
-  const isCorner3 = x <= 14 && (y <= 14 || y >= 86);
-  if (isCorner3) return 'corner3';
-
-  if (distance >= 29) return 'aboveBreak3';
-  return 'mid';
 };
 
 const toShotPoints = (rows: ShotEventRow[]): ShotPoint[] => {
