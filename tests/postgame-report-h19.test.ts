@@ -1,8 +1,13 @@
 // H19 – a harmadik hibalista szabályai a valós ASE–Honvéd 112–81 adatokon.
-import { analyzePostGameReport, buildPostgameAutoFocus } from '../lib/postgame-report';
+import {
+  analyzePostGameReport,
+  buildKosarstatPostgameContext,
+  buildPostgameAutoFocus,
+  mergeKosarstatPostgameContext,
+} from '../lib/postgame-report';
 import { postgameReportToMd } from '../lib/export-to-md';
 import { ASE_GAME, ASE_SEASON, BENCHMARKS, HONVED_GAME, PLAYERS, SEASON_SHOTS, report } from './fixtures/postgame-ase-honved';
-import { SEASON, shots } from './fixtures/postgame-ase-sopron';
+import { SEASON, seasonOf, shots } from './fixtures/postgame-ase-sopron';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
@@ -59,8 +64,8 @@ test('Gyűrű körüli befejezés: 12/28 (42,9%) vs szezon 60,6% probléma és f
 
 test('Büntetők: magas triplaaránynál nincs „kontaktkeresés” fókusz, a faultfegyelem probléma és fókusz', () => {
   const result = report();
-  assert.ok(result.problems.some(item => item.startsWith('Kevés büntető a magas triplaarány mellett (FTM rate 23.1%')), result.problems.join('\n'));
-  assert.ok(!result.problems.some(item => item.startsWith('FTM rate a liga alatt')));
+  // Magas triplaarány, átlagos gyűrű-arány (37,3% vs szezon 34,3%): a saját FTM rate nem probléma.
+  assert.ok(!result.problems.some(item => item.includes('FTM rate a liga alatt') || item.startsWith('Alacsony FTM rate')), result.problems.join('\n'));
   assert.ok(result.problems.includes('Védekezés: Faultfegyelem – az ellenfél 24 büntetőt dobott 59 mezőnykísérletre (FTM rate 32.2% vs liga medián 28.1%, +4.1 pp)'), result.problems.join('\n'));
 
   const focus = buildPostgameAutoFocus(result);
@@ -140,3 +145,47 @@ test('Mi döntötte el: vereségnél negatív komponensek, összegük a pontkül
 });
 
 const round1 = (value: number) => Math.round(value * 10) / 10;
+
+test('Büntetők: magas triplaarány mellett is probléma, ha a gyűrű-arány a szezon felett van (sok gyűrűtámadás, kevés büntető)', () => {
+  // Gyűrű 40/75 = 53,3% a szezon 34,3%-ával szemben.
+  const rimHeavy = [...shots('rim', 40, 22), ...shots('paint', 4, 2), ...shots('three', 31, 14)];
+  const result = report({ gameShots: rimHeavy, seasonShots: SEASON_SHOTS });
+  assert.ok(result.problems.some(item => item.startsWith('FTM rate a liga alatt')), result.problems.join('\n'));
+});
+
+test('Ellenfél profil: az 1 pp alatti romlás is kisebb elmaradás, nem „szintjén vagy felette”', () => {
+  // A TO rate 1 pp-nél kevesebbet romlik: a Kulcs mutatók ▼-et ad, a profil sem hallgathatja el.
+  const season = seasonOf('ase', {
+    pointsFor: 105, pointsAgainst: 84, fga2: 38, fgm2: 22, fga3: 30, fgm3: 12, fta: 22, ftm: 15,
+    oreb: 12, dreb: 24, ast: 24, tov: 9.5, oppDreb: 22, oppPossessions: 76,
+  });
+  const result = analyzePostGameReport(ASE_GAME, HONVED_GAME, season, BENCHMARKS, PLAYERS);
+  const toStat = result.metrics.keyStats.find(stat => stat.key === 'turnover_rate');
+  assert.ok(toStat && toStat.delta > 0 && toStat.delta < 1, JSON.stringify(toStat));
+  assert.doesNotMatch(result.summary, /szintjén vagy felette volt/);
+  assert.match(result.summary, /kisebb elmaradás a szezonátlagtól: .*TO rate \d+\.\d% vs szezonátlag \d+\.\d% \(\+0\.\d pp\)/);
+});
+
+test('Erősségek: a második esély pontforrás-fölénye és az ORB%-különbség egy sor', () => {
+  const context = buildKosarstatPostgameContext({
+    ownSide: 'home',
+    teamName: 'Atomerőmű SE',
+    quarterStats: [],
+    teamMetrics: [
+      { team_side: 'home', team_name: 'Atomerőmű SE', poss: 81.2, ortg: 137.9, efg: 60.3, tov_pct: 13.5, orb_pct: 42.5, ftm_rate: 0.231 },
+      { team_side: 'away', team_name: 'Endo Plus Service-Honvéd', poss: 76.6, ortg: 105.8, efg: 52.5, tov_pct: 14.4, orb_pct: 13.8, ftm_rate: 0.322 },
+    ],
+    pointSources: {
+      home: { points: 112, secondChancePoints: 17, pointsOffTurnovers: 14, quickFinishPoints: 12 },
+      away: { points: 81, secondChancePoints: 2, pointsOffTurnovers: 12, quickFinishPoints: 9 },
+      quickFinishSeconds: 6,
+    },
+    expectedPoints: { own: 112, opponent: 81 },
+  });
+  const merged = mergeKosarstatPostgameContext(report(), context);
+  const pointLine = merged.strengths.find(item => item.startsWith('Pontforrás-fölény'));
+  assert.ok(pointLine, merged.strengths.join('\n'));
+  assert.match(pointLine, /második esélyből 17–2 \(\+15\) pont; a második esély forrása: .*ORB% különbség \+28\.7 pp/);
+  assert.ok(!merged.strengths.some(item => item.startsWith('Második esély: ORB%')), merged.strengths.join('\n'));
+  assert.ok(!merged.strengths.some(item => item.startsWith('Támadólepattanózás erős')), merged.strengths.join('\n'));
+});

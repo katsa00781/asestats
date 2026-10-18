@@ -1608,23 +1608,23 @@ const describeRimFinishing = (comparison: ShotMapComparison | null | undefined) 
 
 /**
  * Ennyivel a liga medián feletti 3P-kísérletaránynál az alacsony FTM rate a
- * dobásmix következménye (a tripla ritkán hoz faultot), nem kontaktkeresési gond.
+ * dobásmix következménye (a tripla ritkán hoz faultot), nem probléma – kivéve,
+ * ha a gyűrű-zóna aránya is legalább `STRUCTURAL_FT_RIM_RATE_PP`-vel a szezon
+ * felett van: sok gyűrűtámadás mellett a kevés büntető valódi gond.
  */
 const STRUCTURAL_THREE_RATE_PP = 5;
-const STRUCTURAL_FT_PREFIX = 'Kevés büntető a magas triplaarány mellett';
+const STRUCTURAL_FT_RIM_RATE_PP = 5;
 
-const describeStructuralFt = (
+const isStructurallyLowFt = (
   game: NormalizedGameStats,
   season: NormalizedTeamStats,
-  benchmarks: LeagueTeamBenchmarks
+  benchmarks: LeagueTeamBenchmarks,
+  shotMapComparison: ShotMapComparison | null | undefined
 ) => {
   const threeMedian = getLeagueMedian(benchmarks, season, 'three_rate');
-  if (threeMedian === null || (game.threeRate - threeMedian) * 100 < STRUCTURAL_THREE_RATE_PP) return null;
-  const ftMedian = getLeagueMedian(benchmarks, season, 'ft_rate');
-  const ftPart = ftMedian !== null
-    ? `FTM rate ${fixed1(game.ftRate * 100)}% vs liga medián ${fixed1(ftMedian * 100)}%`
-    : `FTM rate ${fixed1(game.ftRate * 100)}%`;
-  return `${STRUCTURAL_FT_PREFIX} (${ftPart}; 3PA-arány ${fixed1(game.threeRate * 100)}% vs liga medián ${fixed1(threeMedian * 100)}%) – a dobásmix következménye, nem kontaktkeresési gond`;
+  if (threeMedian === null || (game.threeRate - threeMedian) * 100 < STRUCTURAL_THREE_RATE_PP) return false;
+  const rimHeavy = (shotMapComparison?.rimRateDelta ?? Number.NEGATIVE_INFINITY) >= STRUCTURAL_FT_RIM_RATE_PP;
+  return !rimHeavy;
 };
 
 /** Faultfegyelem: az ellenfél FTM rate-je a liga medián felett (a védekezési faktor sávja). */
@@ -1727,15 +1727,12 @@ const buildProblems = (
   pushLeague(leagueLine(benchmarks, season, 'three_pct', game.threePct, 1, 'below', 'Periméter-hatékonyság a liga alatt', '3P%'));
   pushLeague(leagueLine(benchmarks, season, 'oreb_rate', game.orebRate, 100, 'below', 'OREB volumen a liga alatt', 'OREB%'));
 
-  // Alacsony FTM rate: magas triplaaránynál a dobásmix következménye – ilyenkor
-  // egyetlen magyarázó sor jön, és nem indít „kontaktkeresés” fókuszt.
-  const ftLines = [
-    baseline.kind === 'season' && ftRateDelta <= -6 ? `Alacsony FTM rate (${ftRateDelta} százalékpont)` : null,
-    leagueLine(benchmarks, season, 'ft_rate', game.ftRate, 100, 'below', 'FTM rate a liga alatt', 'FTM rate'),
-  ].filter((line): line is string => line !== null);
-  const structuralFt = ftLines.length > 0 ? describeStructuralFt(game, season, benchmarks) : null;
-  if (structuralFt) problems.push(structuralFt);
-  else ftLines.forEach(line => problems.push(line));
+  // Alacsony FTM rate: magas triplaaránynál (sok gyűrűtámadás nélkül) a
+  // dobásmix következménye – nem probléma, és nem indít „kontaktkeresés” fókuszt.
+  if (!isStructurallyLowFt(game, season, benchmarks, shotMapComparison)) {
+    if (baseline.kind === 'season' && ftRateDelta <= -6) problems.push(`Alacsony FTM rate (${ftRateDelta} százalékpont)`);
+    pushLeague(leagueLine(benchmarks, season, 'ft_rate', game.ftRate, 100, 'below', 'FTM rate a liga alatt', 'FTM rate'));
+  }
 
   if (shotMapComparison) {
     if (shotMapComparison.midRateDelta >= 6 && shotMapComparison.shotQualityDelta <= -4) {
@@ -1850,8 +1847,8 @@ const buildNextFocus = (
    * referenciához képest leggyengébb mutató javítása, ennek hiányában a
    * legerősebb megtartása – számokkal, generikus szöveg helyett.
    */
-  // Magas triplaaránynál az alacsony FTM rate nem kontaktkeresési gond.
-  const ftIsStructural = describeStructuralFt(game, season, benchmarks) !== null;
+  // Magas triplaaránynál (sok gyűrűtámadás nélkül) az alacsony FTM rate nem kontaktkeresési gond.
+  const ftIsStructural = isStructurallyLowFt(game, season, benchmarks, shotMapComparison);
 
   const buildFallbackFocus = () => {
     const referenceFor = (stat: string, seasonValue: number) =>
@@ -1977,9 +1974,7 @@ const buildNextFocus = (
   }
 
   const hasFtProblem = problems.some(item =>
-    (item.includes('FTM rate') || item.includes('büntető')) &&
-    !item.startsWith(STRUCTURAL_FT_PREFIX) &&
-    !item.startsWith(FOUL_DISCIPLINE_PREFIX));
+    (item.includes('FTM rate') || item.includes('büntető')) && !item.startsWith(FOUL_DISCIPLINE_PREFIX));
   if (hasFtProblem) {
     addFocus(
       formatFocusPlan(
@@ -2016,8 +2011,12 @@ const buildNextFocus = (
     .slice(0, 2);
 };
 
-/** Ennyi százalékpontnyi elmaradás alatt a mutató a referencia szintjén van. */
-const REFERENCE_GAP_MIN_PP = 1;
+/**
+ * Ennyi (kerekített) százalékpontnyi elmaradástól a mutató „kisebb elmaradás” –
+ * a Kulcs mutatók ▼ jelölésével összhangban bármilyen romlás látszik (korábban
+ * az 1 pp alatti romlást a „szintjén vagy felette” mondat elfedte).
+ */
+const REFERENCE_GAP_MIN_PP = 0.1;
 
 const buildOpponentProfileSection = (
   opponentName: string,
@@ -3466,6 +3465,23 @@ const POINT_SOURCE_STRENGTH_PREFIX = 'Pontforrás-fölény';
 const POINT_SOURCE_PROBLEM_PREFIX = 'Pontforrás-hátrány';
 
 /**
+ * A második esély pontforrás-fölénye és a lepattanó-fölény sorai („Második
+ * esély: ORB% különbség”, „Támadólepattanózás erős”) ugyanarról a tényezőről
+ * szólnak: a lepattanó-bizonyíték a pontforrás-sorba olvad, külön sor nem marad.
+ */
+const foldSecondChanceIntoPointSource = (strengths: string[]) => {
+  const pointLine = strengths.find(item =>
+    item.startsWith(POINT_SOURCE_STRENGTH_PREFIX) && item.includes('második esélyből'));
+  if (!pointLine) return strengths;
+  const evidence = strengths.map(secondChanceEvidence).filter((item): item is string => item !== null);
+  if (evidence.length === 0) return strengths;
+  const folded = `${pointLine.replace(/\.$/, '')}; a második esély forrása: ${evidence.join('; ')}.`;
+  return strengths
+    .filter(item => secondChanceEvidence(item) === null)
+    .map(item => (item === pointLine ? folded : item));
+};
+
+/**
  * A Kosarstat eFG-különbség (saját vs. ellenfél) ugyanarról a mutatóról szól,
  * mint a riport saját eFG-sora (szezonhoz / ligához mérve) – egy sorba
  * kerülnek, hogy az eFG ne szerepeljen kétszer.
@@ -3818,6 +3834,17 @@ export const mergeKosarstatPostgameContext = (
     ['Dobáshatékonyság visszaesett', 'Dobáshatékonyság a liga alatt']
   );
 
+  const reconciled = reconcileSecondChance(
+    {
+      strengths: mergedStrengths,
+      problems: mergedProblems,
+      nextFocus: mergeUniqueLines(report.nextFocus, context.nextFocus),
+    },
+    validSources,
+    secondChanceDetail
+  );
+  const secondChanceLines = { ...reconciled, strengths: foldSecondChanceIntoPointSource(reconciled.strengths) };
+
   const merged: PostGameReport = {
     ...report,
     metrics: validSources
@@ -3842,15 +3869,7 @@ export const mergeKosarstatPostgameContext = (
     decisiveFactorMeta: [...newFactors, ...report.decisiveFactorMeta],
     // A riport saját lepattanó-erőssége („Támadólepattanózás erős”) is átesik
     // az ellentmondás-ellenőrzésen – itt már ismert a pontforrás érvényessége.
-    ...reconcileSecondChance(
-      {
-        strengths: mergedStrengths,
-        problems: mergedProblems,
-        nextFocus: mergeUniqueLines(report.nextFocus, context.nextFocus),
-      },
-      validSources,
-      secondChanceDetail
-    ),
+    ...secondChanceLines,
     lineupInsights,
   };
   // Az összefoglaló a kiegészített riportból és a megjelenített fókuszlistából

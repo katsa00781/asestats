@@ -839,6 +839,29 @@ Hat egység (A–F), egységenként teszt és commit.
 - [x] **Teszt** – 2 új eset (a Honvéd-számok + MD; vereségnél negatív
   komponensek). 85 / 85 teszt, `tsc --noEmit`, `eslint`, `npm run build` tiszta.
 
+*G egység – maradék anomáliák: FTM rate, ellenfél profil, duplikáció ✓ (2026-10-18)*
+
+Felhasználói második visszajelzés a H19 utáni riportra („Maradék anomáliák”).
+
+- [x] **A saját FTM rate „Probléma” maradt** – a D egység magyarázó sora is a
+  problémák közé került. Felhasználói döntés: magas triplaaránynál (≥ 5 pp a
+  liga medián felett) az alacsony FTM rate csak akkor probléma, ha a gyűrű-zóna
+  aránya is legalább 5 pp-tel a szezon felett van (`isStructurallyLowFt`);
+  különben nincs sor és „kontaktkeresés” fókusz sem. ASE–Honvéd: gyűrű 37,3% vs
+  szezon 34,3% → nincs probléma.
+- [x] **Ellenfél profil: „minden fő mutató a szintjén vagy felette”, holott a TO
+  rate +0,9 pp-et romlott** (a Kulcs mutatók ▼-et ad) – a H18-as 1 pp-es
+  „referencia szintje” sáv elfedte. `REFERENCE_GAP_MIN_PP = 0,1`: bármilyen
+  romlás „kisebb elmaradásként” látszik.
+- [x] **Duplikáció az Erősségekben** – „Pontforrás-fölény: második esélyből
+  17–2” és „Második esély: ORB% különbség +28,7 pp” ugyanaz a tényező. Új
+  `foldSecondChanceIntoPointSource`: a lepattanó-bizonyíték (a „Támadólepattanózás
+  erős” sorral együtt) a pontforrás-sorba olvad („…; a második esély forrása:
+  ORB% különbség +28.7 pp; …”).
+- [x] **Teszt** – 3 új eset (magas gyűrű-aránynál marad a probléma; 1 pp alatti
+  romlás; egy sorba olvadó második esély), a D egység büntető-tesztje frissítve.
+  88 / 88 teszt, `tsc --noEmit`, `eslint` tiszta.
+
 Nyitott (H19):
 
 - [ ] **Böngészős ellenőrzés** (felhasználói lépés) – ASE–Honvéd post-game: a
@@ -855,7 +878,8 @@ Nyitott (H19):
   FTM rate: a 3PA-arány ≥ 5 pp-tel a liga medián felett; 3P-besorolás: ≥ 2
   félrebesorolt hármastól figyelmeztetés; „Mi döntötte el?” verdikt ≥ 8 pontos
   komponenstől; „Kiugró”: ≥ 12 perc és Impact ≥ 60 (vagy `mvp`); „Limitált
-  hatás”: ≥ 8 perc.
+  hatás”: ≥ 8 perc. (A szerkezeti FTM rate gyűrű-feltétele – ≥ 5 pp a szezon
+  felett – felhasználói döntés, 2026-10-18.)
 - [ ] **Mellékhatás tudomásulvétele** – a „DRtg dönt” szabály miatt az
   ASE–Sopron (2026-10-10) védekezési verdiktje „jobb”-ról „ligaszintű”-re vált
   (DRtg 106,2, a liga medián ±4-es sávján belül).
