@@ -1,5 +1,6 @@
 // H19 – a harmadik hibalista szabályai a valós ASE–Honvéd 112–81 adatokon.
-import { report } from './fixtures/postgame-ase-honved';
+import { analyzePostGameReport } from '../lib/postgame-report';
+import { ASE_GAME, ASE_SEASON, BENCHMARKS, HONVED_GAME, PLAYERS, report } from './fixtures/postgame-ase-honved';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
@@ -23,4 +24,26 @@ test('„Limitált hatás (magas usage)” csak megbízható mintán: 3 perc nem
   const result = report();
   assert.ok(!result.playerImpact.negative.includes('NAGY Dániel'), result.playerImpact.negative.join(', '));
   assert.doesNotMatch(result.summary, /Limitált hatás: NAGY Dániel/);
+});
+
+test('Védekezés: a DRtg dönt, a mondat megnevezi a hajtóerőt (védőlepattanózás) és ami ellene szólt (faultfegyelem)', () => {
+  const result = report();
+  const defense = result.context.defense;
+  assert.ok(defense);
+  assert.equal(defense.drtg, 102.7);
+  assert.equal(defense.opponentOrebRate, 13.8);
+  assert.equal(defense.opponentFtRate, 32.2);
+  assert.equal(result.context.defenseEfficiencyDelta, 'Higher');
+  assert.match(
+    result.summary,
+    /védekezésben a liga szintjénél jobb volt \(DRtg 102\.7 vs liga medián \d+\.\d; elsősorban: védőlepattanózás \(ellenfél OREB% 13\.8% vs liga medián \d+\.\d%, -\d+\.\d pp\); ellene szólt: faultfegyelem \(ellenfél FTM rate 32\.2%/
+  );
+});
+
+test('Védekezés: medián feletti ellenfél-eFG mellett is a DRtg dönt (a szavazás „ligaszintűt” adott volna)', () => {
+  // Ugyanannyi kapott pont, de több mezőny- és kevesebb büntetőpont: eFG 57,6%.
+  const sharperOpponent = { ...HONVED_GAME, fgm2: 19, ftm: 13 };
+  const result = analyzePostGameReport(ASE_GAME, sharperOpponent, ASE_SEASON, BENCHMARKS, PLAYERS);
+  assert.equal(result.context.defenseEfficiencyDelta, 'Higher');
+  assert.match(result.summary, /ellene szólt: dobásvédekezés \(ellenfél eFG 57\.6%/);
 });

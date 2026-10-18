@@ -218,7 +218,7 @@ test('„A liga felett” csak érdemi (≥ 2 pp) eltérésnél, számokkal', ()
   );
 });
 
-test('Védekezés: a verdikt a DRtg-t és a kikényszerített TO-t is nézi, a negatív tényező a problémák közt is szerepel', () => {
+test('Védekezés: a verdiktet a DRtg adja, a mondat a négy faktort is kiírja, a negatív tényező a problémák közt is szerepel', () => {
   const result = report(SHOT_MAP);
   const defense = result.context.defense;
   assert.ok(defense);
@@ -226,8 +226,9 @@ test('Védekezés: a verdikt a DRtg-t és a kikényszerített TO-t is nézi, a n
   assert.equal(defense.opponentTurnoverRate, 22.4);
   assert.ok((defense.leagueTurnoverRate ?? 0) < 19.4);
   assert.equal(defense.drtg, 106.2);
-  assert.equal(result.context.defenseEfficiencyDelta, 'Higher');
-  assert.match(result.summary, /védekezésben a liga szintjénél jobb volt \(DRtg 106\.2 vs liga medián \d+\.\d; ellenfél eFG 54\.5% vs liga medián \d+\.\d%, [+-]\d+\.\d pp; kikényszerített TO rate 22\.4% vs liga medián \d+\.\d%, \+\d+\.\d pp\)/);
+  // H19: a DRtg dönt – 106,2 a liga medián ±4 pontos sávján belül van.
+  assert.equal(result.context.defenseEfficiencyDelta, 'Similar');
+  assert.match(result.summary, /védekezésben ligaszintű volt \(DRtg 106\.2 vs liga medián \d+\.\d; jobb a ligánál: labdaszerzés \(kikényszerített TO rate 22\.4% vs liga medián \d+\.\d%, \+\d+\.\d pp\); gyengébb a ligánál: faultfegyelem \(ellenfél FTM rate 33\.9%/);
 
   // A periméter-kockázat döntő tényező és fókusz – és a Problémák között is ott van.
   assert.ok(result.decisiveFactors.defense.some(item => item.startsWith('Periméter-kockázat')));

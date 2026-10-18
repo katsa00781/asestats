@@ -244,11 +244,13 @@ export type PostGameReport = {
     offenseEfficiencyDelta: 'Higher' | 'Lower' | 'Similar';
     defenseEfficiencyDelta: 'Higher' | 'Lower' | 'Similar';
     /**
-     * A védekezés viszonyítása a liga mediánhoz: az ellenfél meccs-eFG%-a, a
-     * kikényszerített labdavesztés (az ellenfél TO rate-je, %) és a DRtg. A
-     * `defenseEfficiencyDelta` a DRtg-re épül, ha van liga-referenciája;
-     * különben az eFG és a TO együttesére. `null`, ha nincs ellenfél-adat vagy
-     * liga benchmark. A TO / DRtg mezők régi riportobjektumban hiányoznak.
+     * A védekezés viszonyítása a liga mediánhoz: a DRtg és a négy faktor – az
+     * ellenfél meccs-eFG%-a, a kikényszerített labdavesztés (az ellenfél TO
+     * rate-je), az ellenfél OREB%-a (védőlepattanózás) és FTM rate-je
+     * (faultfegyelem), mind %. A `defenseEfficiencyDelta` a DRtg-re épül, ha van
+     * liga-referenciája; különben a négy faktor szavaz. `null`, ha nincs
+     * ellenfél-adat vagy liga benchmark. A TO / DRtg / OREB / FT mezők régi
+     * riportobjektumban hiányoznak.
      */
     defense?: {
       opponentEfg: number;
@@ -257,6 +259,10 @@ export type PostGameReport = {
       leagueTurnoverRate?: number | null;
       drtg?: number | null;
       leagueDrtg?: number | null;
+      opponentOrebRate?: number;
+      leagueOrebRate?: number | null;
+      opponentFtRate?: number;
+      leagueFtRate?: number | null;
     } | null;
   };
   dataNotes: string[];
@@ -2037,61 +2043,103 @@ const buildOpponentProfileSection = (
   return lines;
 };
 
-/** A védekezés liga-szintje körüli sáv: DRtg (pont / 100 birtoklás), eFG és TO rate (pp). */
+/** A védekezés liga-szintje körüli sáv: DRtg (pont / 100 birtoklás), a négy faktor (pp). */
 const DEFENSE_DRTG_BAND = 4;
 const DEFENSE_EFG_BAND = 2.5;
 const DEFENSE_TO_BAND = 3;
+const DEFENSE_OREB_BAND = 4;
+const DEFENSE_FT_BAND = 3;
+
+type DefenseFactor = {
+  /** A faktor neve a mondatban (pl. „védőlepattanózás”). */
+  name: string;
+  /** A mért érték a liga mediánnal (pl. „ellenfél OREB% 13,8% vs liga medián 29,4%, −15,6 pp”). */
+  evidence: string;
+  /** A védekezés szempontjából: `Higher` = jobb a ligánál, `Lower` = gyengébb. */
+  verdict: 'Higher' | 'Lower' | 'Similar';
+};
 
 /**
- * A védekezés verdiktje a liga mediánhoz mérve, három jelzésből: DRtg (kapott
- * pont / 100 birtoklás), az ellenfél eFG%-a és a kikényszerített TO rate.
- * Mindegyik a saját sávján kívül „jobb” vagy „gyengébb” szavazat; a verdikt a
- * szavazatok előjele. Így az átlagos dobásengedés önmagában nem minősít
- * „ligaszintűnek” egy sok labdát szerző, kevés pontot engedő védekezést – és
- * fordítva. Hiányzó liga-referenciánál az adott jelzés nem szavaz.
+ * A védekezés négy faktora (Dean Oliver) a liga mediánhoz mérve: ellenfél eFG,
+ * kikényszerített TO rate, ellenfél OREB% (= a saját védőlepattanózás) és az
+ * ellenfél FTM rate-je (= faultfegyelem). Hiányzó liga-referenciánál a faktor
+ * kimarad.
+ */
+const buildDefenseFactors = (defense: NonNullable<PostGameReport['context']['defense']>): DefenseFactor[] => {
+  const signed = (value: number) => `${value >= 0 ? '+' : ''}${value.toFixed(1)}`;
+  const factor = (
+    name: string,
+    label: string,
+    value: number | null | undefined,
+    league: number | null | undefined,
+    band: number,
+    lowerIsBetter: boolean
+  ): DefenseFactor | null => {
+    if (typeof value !== 'number' || typeof league !== 'number') return null;
+    const diff = round(value - league, 1);
+    return {
+      name,
+      evidence: `${label} ${value.toFixed(1)}% vs liga medián ${league.toFixed(1)}%, ${signed(diff)} pp`,
+      verdict: classifyDelta(lowerIsBetter ? -diff : diff, band),
+    };
+  };
+  return [
+    factor('dobásvédekezés', 'ellenfél eFG', defense.opponentEfg, defense.leagueEfg, DEFENSE_EFG_BAND, true),
+    factor('labdaszerzés', 'kikényszerített TO rate', defense.opponentTurnoverRate, defense.leagueTurnoverRate, DEFENSE_TO_BAND, false),
+    factor('védőlepattanózás', 'ellenfél OREB%', defense.opponentOrebRate, defense.leagueOrebRate, DEFENSE_OREB_BAND, true),
+    factor('faultfegyelem', 'ellenfél FTM rate', defense.opponentFtRate, defense.leagueFtRate, DEFENSE_FT_BAND, true),
+  ].filter((item): item is DefenseFactor => item !== null);
+};
+
+/**
+ * A védekezés verdiktje a liga mediánhoz mérve. Az eredményt a DRtg (kapott pont
+ * / 100 birtoklás) méri, ezért ha van liga-referenciája, ő dönt (±4 pont sáv); a
+ * négy faktor csak megmagyarázza. (A faktorok szavazása „ligaszintűnek”
+ * minősítette a 102,7-es DRtg-t, mert a védőlepattanózást nem nézte.) DRtg
+ * nélkül a négy faktor szavaz.
  */
 const classifyDefense = (defense: NonNullable<PostGameReport['context']['defense']>) => {
-  const votes = [
-    classifyDelta(defense.leagueEfg - defense.opponentEfg, DEFENSE_EFG_BAND),
-    typeof defense.opponentTurnoverRate === 'number' && typeof defense.leagueTurnoverRate === 'number'
-      ? classifyDelta(defense.opponentTurnoverRate - defense.leagueTurnoverRate, DEFENSE_TO_BAND)
-      : 'Similar',
-    typeof defense.drtg === 'number' && typeof defense.leagueDrtg === 'number'
-      ? classifyDelta(defense.leagueDrtg - defense.drtg, DEFENSE_DRTG_BAND)
-      : 'Similar',
-  ];
-  const total = votes.reduce((sum, vote) => sum + (vote === 'Higher' ? 1 : vote === 'Lower' ? -1 : 0), 0);
+  if (typeof defense.drtg === 'number' && typeof defense.leagueDrtg === 'number') {
+    return classifyDelta(defense.leagueDrtg - defense.drtg, DEFENSE_DRTG_BAND);
+  }
+  const total = buildDefenseFactors(defense)
+    .reduce((sum, item) => sum + (item.verdict === 'Higher' ? 1 : item.verdict === 'Lower' ? -1 : 0), 0);
   return total > 0 ? 'Higher' : total < 0 ? 'Lower' : 'Similar';
 };
 
 /**
- * Védekezési mondat a viszonyítási alappal együtt: a verdikt mellett a DRtg, az
- * ellenfél eFG%-a és a kikényszerített TO rate a liga mediánhoz mérve.
+ * Védekezési mondat: a verdikt a DRtg-vel, utána a faktorok – előbb ami a
+ * verdikt irányába hajtott, aztán ami ellene szólt, végül a medián körüliek.
  */
 const describeDefense = (context: PostGameReport['context']) => {
   const defense = context.defense;
   if (!defense) return 'nincs viszonyítási alap (ellenfél-adat vagy liga benchmark hiányzik)';
-  const signed = (value: number) => `${value >= 0 ? '+' : ''}${value.toFixed(1)}`;
-  const evidence: string[] = [];
-  if (typeof defense.drtg === 'number' && typeof defense.leagueDrtg === 'number') {
-    evidence.push(`DRtg ${defense.drtg.toFixed(1)} vs liga medián ${defense.leagueDrtg.toFixed(1)}`);
-  } else if (typeof defense.drtg === 'number') {
-    evidence.push(`DRtg ${defense.drtg.toFixed(1)}`);
-  }
-  evidence.push(
-    `ellenfél eFG ${defense.opponentEfg.toFixed(1)}% vs liga medián ${defense.leagueEfg.toFixed(1)}%, ${signed(round(defense.opponentEfg - defense.leagueEfg, 1))} pp`
-  );
-  if (typeof defense.opponentTurnoverRate === 'number' && typeof defense.leagueTurnoverRate === 'number') {
-    evidence.push(
-      `kikényszerített TO rate ${defense.opponentTurnoverRate.toFixed(1)}% vs liga medián ${defense.leagueTurnoverRate.toFixed(1)}%, ${signed(round(defense.opponentTurnoverRate - defense.leagueTurnoverRate, 1))} pp`
-    );
-  }
   const verdict = context.defenseEfficiencyDelta === 'Higher'
     ? 'a liga szintjénél jobb volt'
     : context.defenseEfficiencyDelta === 'Lower'
       ? 'a liga szintjénél gyengébb volt'
       : 'ligaszintű volt';
-  return `${verdict} (${evidence.join('; ')})`;
+  const parts: string[] = [];
+  if (typeof defense.drtg === 'number' && typeof defense.leagueDrtg === 'number') {
+    parts.push(`DRtg ${defense.drtg.toFixed(1)} vs liga medián ${defense.leagueDrtg.toFixed(1)}`);
+  } else if (typeof defense.drtg === 'number') {
+    parts.push(`DRtg ${defense.drtg.toFixed(1)}`);
+  }
+  const factors = buildDefenseFactors(defense);
+  const describe = (items: DefenseFactor[]) => items.map(item => `${item.name} (${item.evidence})`).join(', ');
+  const better = factors.filter(item => item.verdict === 'Higher');
+  const worse = factors.filter(item => item.verdict === 'Lower');
+  const neutral = factors.filter(item => item.verdict === 'Similar');
+  const [drivers, against] = context.defenseEfficiencyDelta === 'Lower' ? [worse, better] : [better, worse];
+  if (context.defenseEfficiencyDelta === 'Similar') {
+    if (better.length > 0) parts.push(`jobb a ligánál: ${describe(better)}`);
+    if (worse.length > 0) parts.push(`gyengébb a ligánál: ${describe(worse)}`);
+  } else {
+    if (drivers.length > 0) parts.push(`${drivers.length > 1 ? 'mögötte' : 'elsősorban'}: ${describe(drivers)}`);
+    if (against.length > 0) parts.push(`ellene szólt: ${describe(against)}`);
+  }
+  if (neutral.length > 0) parts.push(`a liga medián körül: ${neutral.map(item => item.evidence).join(', ')}`);
+  return `${verdict} (${parts.join('; ')})`;
 };
 
 /**
@@ -2735,6 +2783,8 @@ export const analyzePostGameReport = (
   const leagueMedianEfg = getLeagueMedian(leagueBenchmarks, season, 'efg');
   const leagueMedianTo = getLeagueMedian(leagueBenchmarks, season, 'turnover_rate');
   const leagueMedianDrtg = getLeagueMedian(leagueBenchmarks, season, 'drtg');
+  const leagueMedianOreb = getLeagueMedian(leagueBenchmarks, season, 'oreb_rate');
+  const leagueMedianFt = getLeagueMedian(leagueBenchmarks, season, 'ft_rate');
   const ratings = buildRatings(game, season, baseline);
   const defenseContext: PostGameReport['context']['defense'] = opponent && leagueMedianEfg !== null
     ? {
@@ -2744,6 +2794,10 @@ export const analyzePostGameReport = (
         leagueTurnoverRate: leagueMedianTo !== null ? toPct(leagueMedianTo, 1) : null,
         drtg: ratings?.drtg ?? null,
         leagueDrtg: leagueMedianDrtg !== null ? round(leagueMedianDrtg, 1) : null,
+        opponentOrebRate: toPct(opponent.orebRate, 1),
+        leagueOrebRate: leagueMedianOreb !== null ? toPct(leagueMedianOreb, 1) : null,
+        opponentFtRate: toPct(opponent.ftRate, 1),
+        leagueFtRate: leagueMedianFt !== null ? toPct(leagueMedianFt, 1) : null,
       }
     : null;
   const defenseDelta = defenseContext ? classifyDefense(defenseContext) : 'Similar';

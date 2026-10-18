@@ -742,6 +742,29 @@ Hat egység (A–F), egységenként teszt és commit.
   mindkét csapatra, valós dobástérkép-zónák) és `tests/postgame-report-h19.test.ts`
   (2 eset). 76 / 76 teszt, `tsc --noEmit`, `eslint` tiszta.
 
+*C egység – védekezés: a DRtg dönt, a négy faktor magyaráz ✓ (2026-10-18)*
+
+- [x] **„Ligaszintű” 102,7-es DRtg mellett** – a H18-as verdikt három jelzés
+  (eFG, TO, DRtg) szavazata volt; a védőlepattanózást (ellenfél OREB% 13,8%)
+  egyik sem nézte, és egy medián körüli / ellentétes eFG-szavazat kioltotta a
+  DRtg-t. Mostantól a verdiktet a **DRtg** adja a liga mediánhoz mérve (±4 pont
+  / 100 birtoklás); DRtg-referencia nélkül a négy faktor szavaz.
+- [x] **Négy faktor a mondatban** (`buildDefenseFactors`) – ellenfél eFG
+  (dobásvédekezés, ±2,5 pp), kikényszerített TO rate (labdaszerzés, ±3 pp),
+  ellenfél OREB% (védőlepattanózás, ±4 pp), ellenfél FTM rate (faultfegyelem,
+  ±3 pp). A mondat előbb a verdikt irányába hajtó faktort nevezi meg
+  („elsősorban: védőlepattanózás (ellenfél OREB% 13,8% vs liga medián …)”),
+  aztán ami ellene szólt („ellene szólt: faultfegyelem (ellenfél FTM rate
+  32,2% …)”), végül a medián körülieket. `context.defense` új, opcionális
+  mezői: `opponentOrebRate`, `leagueOrebRate`, `opponentFtRate`, `leagueFtRate`.
+- [x] **Mellékhatás a Sopron-meccsen** – a DRtg 106,2 a liga medián ±4-es sávján
+  belül van, ezért a verdikt „jobb”-ról „ligaszintű”-re vált; a mondat a
+  kikényszerített TO-t „jobb a ligánál”, a faultfegyelmet „gyengébb a ligánál”
+  részként írja ki. (A jóváhagyott „DRtg dönt” szabály következménye.)
+- [x] **Teszt** – a H18 védekezés-teszt az új mondatra; 2 új eset (Honvéd:
+  védőlepattanózás + faultfegyelem; medián feletti ellenfél-eFG mellett is a
+  DRtg dönt). 78 / 78 teszt, `tsc --noEmit`, `eslint` tiszta.
+
 **H18 – Post-game riport: második hibalista (ASE–Sopron KC 109–80) ✓ (2026-10-11)** – a kód kész, a böngészős ellenőrzés nyitva
 
 Felhasználói hibajelzés a H17 utáni Export MD-re: 8 hiba és 11 pontatlanság.
