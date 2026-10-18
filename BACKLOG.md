@@ -1,6 +1,6 @@
 # BACKLOG.md – ASEStats Projekt
 
-_Utoljára frissítve: 2026-10-18 (H19 – post-game riport harmadik hibalista, ASE–Honvéd: A–F egység kész, böngészős ellenőrzés és a küszöbök jóváhagyása nyitva)_
+_Utoljára frissítve: 2026-10-18 (H19 – post-game riport harmadik hibalista, ASE–Honvéd: A–H egység kész, böngészős ellenőrzés és a küszöbök jóváhagyása nyitva)_
 
 ---
 
@@ -862,6 +862,31 @@ Felhasználói második visszajelzés a H19 utáni riportra („Maradék anomál
   romlás; egy sorba olvadó második esély), a D egység büntető-tesztje frissítve.
   88 / 88 teszt, `tsc --noEmit`, `eslint` tiszta.
 
+*H egység – lineup az összefoglalóban: on/off-figyelmeztetés, kezdő ötös vs többi perc ✓ (2026-10-18)*
+
+- [x] **Halmai / Géringer: „Stabil alappillér (padról)” on −1 / off +32, ill.
+  on 0 / off +31 mellett** – a címke csak box score alapú. Felhasználói döntés:
+  figyelmeztetés, a címke és az Impact score nem változik (az egymeccses on/off
+  zajos, és a mobil @core riportban nincs lineup). Új `describeOnOffConflicts`
+  (`lib/postgame-report.ts`): `mvp` / `engine` osztály, „Hatékony
+  szerepjátékos”, „Pozitív hatás” vagy „Kiugró” listás játékos, legalább 10
+  perc (`ON_OFF_CONFLICT_MIN_SECONDS`), és a nélküle mért különbség legalább 25
+  ponttal jobb (`ON_OFF_CONFLICT_MIN_GAP`) → „• On/off ellentmondás (Kosarstat
+  lineup): HALMAI Dániel („Stabil alappillér (padról)”, „Pozitív hatás”):
+  pályán -1 (…), nélküle +32 …” a Játékos kiemelések szakaszban.
+- [x] **Kezdő ötös vs többi perc** – új `describeStarterSplit`
+  (`lib/postgame-lineup-export.ts`): a kezdő ötös együttes ideje, eredménye és
+  Net/40-e (5 perc fölött) a meccs többi percével szemben; az összefoglaló
+  meccs-szakaszában, a „Mi döntötte el” sor után.
+- [x] **Bekötés** – a `mergeKosarstatPostgameContext` új opciói: `starterSplit`,
+  `onOff`; új, opcionális `report.lineupSummary` (`starterSplit`,
+  `onOffWarnings`). A web (`components/SeasonComparison.tsx`) a saját
+  lineup-modellből adja át.
+- [x] **Teszt** – 3 új eset (on/off: 2 figyelmeztetés, a rövid mintás és nem
+  pozitív címkéjű játékos kimarad; a kezdő-sor helye az összefoglalóban; a
+  kezdő-sor számai a valós ASE–Körmend lineupon). 91 / 91 teszt, `tsc
+  --noEmit`, `eslint` (a korábbi 5 figyelmeztetés), `npm run build` tiszta.
+
 Nyitott (H19):
 
 - [ ] **Böngészős ellenőrzés** (felhasználói lépés) – ASE–Honvéd post-game: a
@@ -879,7 +904,8 @@ Nyitott (H19):
   félrebesorolt hármastól figyelmeztetés; „Mi döntötte el?” verdikt ≥ 8 pontos
   komponenstől; „Kiugró”: ≥ 12 perc és Impact ≥ 60 (vagy `mvp`); „Limitált
   hatás”: ≥ 8 perc. (A szerkezeti FTM rate gyűrű-feltétele – ≥ 5 pp a szezon
-  felett – felhasználói döntés, 2026-10-18.)
+  felett – felhasználói döntés, 2026-10-18.) On/off ellentmondás: ≥ 10 perc és
+  ≥ 25 pont (a felhasználó javaslata).
 - [ ] **Mellékhatás tudomásulvétele** – a „DRtg dönt” szabály miatt az
   ASE–Sopron (2026-10-10) védekezési verdiktje „jobb”-ról „ligaszintű”-re vált
   (DRtg 106,2, a liga medián ±4-es sávján belül).

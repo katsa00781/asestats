@@ -210,6 +210,11 @@ export function buildPostgameLineupExport(input: PostgameLineupInput): PostgameL
   };
 }
 
+const formatClock = (seconds: number) =>
+  `${Math.floor(seconds / 60)}:${String(Math.round(seconds % 60)).padStart(2, '0')}`;
+
+const signedOne = (value: number) => `${value >= 0 ? '+' : ''}${(Math.round(value * 10) / 10).toFixed(1)}`;
+
 /** Ennyi pontos mínusz a mintaküszöb fölötti együttállásnál már kiemelendő probléma. */
 export const WEAK_CORE_MAX_DIFF = -8;
 
@@ -237,9 +242,34 @@ export function findWeakestLineupCore(model: PostgameLineupExport): PostgameLine
 export function describeWeakestLineupCore(model: PostgameLineupExport): string | null {
   const core = findWeakestLineupCore(model);
   if (!core) return null;
-  const clock = `${Math.floor(core.seconds / 60)}:${String(Math.round(core.seconds % 60)).padStart(2, '0')}`;
+  const clock = formatClock(core.seconds);
   const sizeLabel = CORE_SIZE_LABEL[core.players.length] ?? 'együttállása';
   return `Együttállás: ${core.players.join(' + ')} közös ${clock} perce alatt ${core.teamPts}–${core.oppPts} (${core.teamPts - core.oppPts} pont) – a meccs leggyengébb, legalább ${LINEUP_NET_MIN_SECONDS / 60} percet együtt töltő ${sizeLabel} (Kosarstat lineup).`;
+}
+
+/**
+ * „Kezdő ötös vs többi perc” összefoglaló sor: a kezdő ötös együtt töltött ideje
+ * és eredménye a meccs többi percével szemben. A Net/40 csak
+ * `LINEUP_NET_MIN_SECONDS` fölött jelenik meg (rövid mintából irreális). `null`,
+ * ha a kezdő ötös nem ismert, vagy együtt nem volt pályán.
+ */
+export function describeStarterSplit(model: PostgameLineupExport): string | null {
+  if (model.starters.length !== 5) return null;
+  const starterKey = [...model.starters].sort(byName).join('|');
+  const starters = model.lineups.find(lineup => [...lineup.players].sort(byName).join('|') === starterKey);
+  if (!starters || starters.seconds <= 0) return null;
+  const rest = {
+    seconds: model.totalSeconds - starters.seconds,
+    teamPts: model.totalFor - starters.teamPts,
+    oppPts: model.totalAgainst - starters.oppPts,
+  };
+  const describe = (unit: { seconds: number; teamPts: number; oppPts: number }) => {
+    const diff = unit.teamPts - unit.oppPts;
+    const net40 = unit.seconds >= LINEUP_NET_MIN_SECONDS ? `, Net/40 ${signedOne((diff / unit.seconds) * 2400)}` : '';
+    return `${formatClock(unit.seconds)} alatt ${unit.teamPts}–${unit.oppPts} (${diff > 0 ? '+' : ''}${diff}${net40})`;
+  };
+  const restText = rest.seconds > 0 ? `; a többi perc ${describe(rest)}` : '';
+  return `• Kezdő ötös vs többi perc (Kosarstat lineup): a kezdő ötös ${describe(starters)}${restText}.`;
 }
 
 const lineupPlayerNames = (input: PostgameLineupInput) =>

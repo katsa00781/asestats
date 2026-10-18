@@ -4,6 +4,7 @@ import {
   buildKosarstatPostgameContext,
   buildPostgameAutoFocus,
   mergeKosarstatPostgameContext,
+  parsePostgameSummary,
 } from '../lib/postgame-report';
 import { postgameReportToMd } from '../lib/export-to-md';
 import { ASE_GAME, ASE_SEASON, BENCHMARKS, HONVED_GAME, PLAYERS, SEASON_SHOTS, report } from './fixtures/postgame-ase-honved';
@@ -188,4 +189,38 @@ test('Erősségek: a második esély pontforrás-fölénye és az ORB%-különbs
   assert.match(pointLine, /második esélyből 17–2 \(\+15\) pont; a második esély forrása: .*ORB% különbség \+28\.7 pp/);
   assert.ok(!merged.strengths.some(item => item.startsWith('Második esély: ORB%')), merged.strengths.join('\n'));
   assert.ok(!merged.strengths.some(item => item.startsWith('Támadólepattanózás erős')), merged.strengths.join('\n'));
+});
+
+test('On/off ellentmondás: pozitív címke, de pályán ≥ 25 ponttal rosszabb – figyelmeztetés a címke mellett', () => {
+  const base = report();
+  const halmai = base.playerReport.players.find(player => player.name === 'HALMAI Dániel');
+  assert.equal(halmai?.impactLabel, 'Stabil alappillér (padról)');
+  const merged = mergeKosarstatPostgameContext(base, buildKosarstatPostgameContext(null), {
+    onOff: [
+      { player: 'HALMAI Dániel', onSeconds: 1200, onDiff: -1, offDiff: 32 },
+      { player: 'GÉRINGER Gergő', onSeconds: 960, onDiff: 0, offDiff: 31 },
+      // Nincs ellentmondás: pályán is erős.
+      { player: 'CHANDLER III. John Watson', onSeconds: 1020, onDiff: 20, offDiff: 11 },
+      // Rövid minta és nem pozitív címke: nem jelez.
+      { player: 'NAGY Dániel', onSeconds: 180, onDiff: -5, offDiff: 36 },
+      { player: 'BENKE Szilárd', onSeconds: 1440, onDiff: -2, offDiff: 33 },
+    ],
+  });
+  const warnings = merged.lineupSummary?.onOffWarnings ?? [];
+  assert.equal(warnings.length, 2, warnings.join('\n'));
+  assert.equal(warnings[0], 'HALMAI Dániel („Stabil alappillér (padról)”, „Pozitív hatás”): pályán -1 (20:00), nélküle +32');
+  assert.match(warnings[1], /^GÉRINGER Gergő \(„Stabil alappillér \(padról\)”\): pályán 0 \(16:00\), nélküle \+31$/);
+  // A címke nem változik, a figyelmeztetés az összefoglaló játékos-szakaszában van.
+  assert.equal(merged.playerReport.players.find(player => player.name === 'HALMAI Dániel')?.impactLabel, 'Stabil alappillér (padról)');
+  assert.match(merged.summary, /• On\/off ellentmondás \(Kosarstat lineup\): HALMAI Dániel/);
+});
+
+test('Kezdő ötös vs többi perc: a sor az összefoglaló meccs-szakaszába kerül', () => {
+  const line = '• Kezdő ötös vs többi perc (Kosarstat lineup): a kezdő ötös 8:30 alatt 30–10 (+20, Net/40 +94.1); a többi perc 31:30 alatt 82–71 (+11, Net/40 +14.0).';
+  const merged = mergeKosarstatPostgameContext(report(), buildKosarstatPostgameContext(null), { starterSplit: line });
+  const sections = parsePostgameSummary(merged.summary);
+  const overview = sections.find(section => section.key === 'overview');
+  assert.ok(overview, merged.summary);
+  assert.ok(merged.summary.includes(line));
+  assert.ok(merged.summary.indexOf(line) < merged.summary.indexOf('**Játékos kiemelések**'));
 });

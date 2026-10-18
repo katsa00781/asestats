@@ -313,6 +313,15 @@ export type PostGameReport = {
     xFactor: string;
     risk: string;
   };
+  /**
+   * A Kosarstat lineupból számolt összefoglaló sorok (csak a webes
+   * összefűzés tölti ki): „kezdő ötös vs többi perc” és az on/off
+   * ellentmondások a pozitív címkéjű játékosoknál.
+   */
+  lineupSummary?: {
+    starterSplit: string | null;
+    onOffWarnings: string[];
+  };
   lineupInsights?: {
     available: boolean;
     totalStints: number;
@@ -2473,6 +2482,12 @@ export const composePostgameSummary = (report: PostGameReport, focus?: string[])
   if (playerImpact.underperformers.length > 0) {
     playerHighlightLines.push(`• Gyenge meccs: ${playerImpact.underperformers.map(name => formatPlayerContext(name, 'under')).join(', ')}.`);
   }
+  const onOffWarnings = report.lineupSummary?.onOffWarnings ?? [];
+  if (onOffWarnings.length > 0) {
+    playerHighlightLines.push(
+      `• On/off ellentmondás (Kosarstat lineup): ${onOffWarnings.join('; ')}. A címke a box score-ból jön; az egymeccses on/off a csapattársaktól is függ.`
+    );
+  }
 
   const focusList = focus ?? buildPostgameAutoFocus(report);
   const focusLines = focusList.length > 0
@@ -2487,6 +2502,7 @@ export const composePostgameSummary = (report: PostGameReport, focus?: string[])
 
   return [
     ...parts.overview,
+    report.lineupSummary?.starterSplit ?? '',
     decisiveText ? `• Kulcsmomentumok: ${decisiveText}.` : '',
     ...playerHighlightLines,
     ...parts.opponentProfile,
@@ -3756,6 +3772,45 @@ const mergeUniqueLines = (base: string[], extra: string[]) => {
   return out;
 };
 
+/** Egy játékos on/off adata a Kosarstat lineupból (pont-különbség, pályán / padon). */
+export type PostgameOnOffInput = {
+  player: string;
+  onSeconds: number;
+  onDiff: number;
+  offDiff: number;
+};
+
+/** On/off ellentmondás: legalább ennyi pályán töltött idő és ennyi ponttal rosszabb „on” az „off”-nál. */
+export const ON_OFF_CONFLICT_MIN_SECONDS = 600;
+export const ON_OFF_CONFLICT_MIN_GAP = 25;
+
+/**
+ * A box score alapú pozitív / vezető címke és az on/off ellentmondása: aki
+ * `mvp` / `engine` osztályú, „Hatékony szerepjátékos”, vagy a „Pozitív hatás” /
+ * „Kiugró teljesítmény” listán van, de amíg pályán volt, a csapat legalább
+ * `ON_OFF_CONFLICT_MIN_GAP` ponttal rosszabbul állt, mint nélküle. A címke nem
+ * változik (az egymeccses on/off zajos, a csapattársaktól is függ) – a
+ * figyelmeztetés a számokkal együtt jelenik meg.
+ */
+const describeOnOffConflicts = (report: PostGameReport, onOff: PostgameOnOffInput[]) => {
+  const listed = (list: string[], name: string) => list.some(entry => entry === name || entry.startsWith(`${name} (`));
+  const signed = (value: number) => `${value > 0 ? '+' : ''}${value}`;
+  const clock = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.round(seconds % 60)).padStart(2, '0')}`;
+  return onOff
+    .filter(row => row.onSeconds >= ON_OFF_CONFLICT_MIN_SECONDS && row.offDiff - row.onDiff >= ON_OFF_CONFLICT_MIN_GAP)
+    .map(row => {
+      const player = report.playerReport.players.find(item => item.name === row.player);
+      if (!player) return null;
+      const positive = listed(report.playerImpact.positive, player.name);
+      const leading = player.impactClass === 'mvp' || player.impactClass === 'engine' ||
+        player.impactLabel === 'Hatékony szerepjátékos' || listed(report.playerImpact.overperformers, player.name);
+      if (!positive && !leading) return null;
+      const labels = [`„${player.impactLabel}”`, ...(positive ? ['„Pozitív hatás”'] : [])].join(', ');
+      return `${player.name} (${labels}): pályán ${signed(row.onDiff)} (${clock(row.onSeconds)}), nélküle ${signed(row.offDiff)}`;
+    })
+    .filter((line): line is string => line !== null);
+};
+
 /**
  * A kosarstat-kiegészítés ráfűzése az `analyzePostGameReport` riportjára.
  * `extraNotes`: a hívó import-állapot megjegyzései (a `dataNotes` elé kerülnek
@@ -3770,11 +3825,18 @@ export const mergeKosarstatPostgameContext = (
     lineupInsights?: PostGameReport['lineupInsights'];
     /** A hívó saját problémasorai (pl. a lineup-elemzés leggyengébb együttállása). */
     extraProblems?: string[];
+    /** „Kezdő ötös vs többi perc” sor a lineup-modellből (`describeStarterSplit`). */
+    starterSplit?: string | null;
+    /** Játékosonkénti on/off a lineup-modellből – a címke-ellentmondás ellenőrzéséhez. */
+    onOff?: PostgameOnOffInput[];
   } = {}
 ): PostGameReport => {
   const extraNotes = options.extraNotes ?? [];
   const lineupInsights = options.lineupInsights;
   const extraProblems = options.extraProblems ?? [];
+  const starterSplit = options.starterSplit ?? null;
+  const onOffWarnings = options.onOff ? describeOnOffConflicts(report, options.onOff) : [];
+  const lineupSummary = starterSplit || onOffWarnings.length > 0 ? { starterSplit, onOffWarnings } : undefined;
 
   // A pontforrás csak akkor kerül a riportba, ha az eseménylistából összeadott
   // pontszám mindkét oldalon egyezik a végeredménnyel (teljes az eseménylista).
@@ -3797,6 +3859,7 @@ export const mergeKosarstatPostgameContext = (
     extraNotes.length === 0 &&
     extraProblems.length === 0 &&
     !lineupInsights &&
+    !lineupSummary &&
     sources === null &&
     context.strengths.length === 0 &&
     context.problems.length === 0 &&
@@ -3871,6 +3934,7 @@ export const mergeKosarstatPostgameContext = (
     // az ellentmondás-ellenőrzésen – itt már ismert a pontforrás érvényessége.
     ...secondChanceLines,
     lineupInsights,
+    lineupSummary,
   };
   // Az összefoglaló a kiegészített riportból és a megjelenített fókuszlistából
   // épül újra – különben az összefűzés előtti állapotot mutatná.

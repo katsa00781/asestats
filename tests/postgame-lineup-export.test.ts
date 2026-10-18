@@ -2,6 +2,7 @@ import type { PostgameLineupStintInput } from '../lib/postgame-lineup-export';
 import {
   buildPostgameLineupExport,
   buildPostgameLineupSides,
+  describeStarterSplit,
   describeWeakestLineupCore,
   findWeakestLineupCore,
   LINEUP_NET_MIN_SECONDS,
@@ -352,4 +353,25 @@ test('Eltérő hivatalos +/- esetén az MD megnevezi az érintett játékosokat'
   assert.match(md, /BENKE Szilárd \(számolt \+25, hivatalos \+26\)/);
   assert.match(md, /HALMAI Dániel \(számolt \+15, hivatalos \+16\)/);
   assert.doesNotMatch(md, /RÉVÉSZ Ádám \(számolt/);
+});
+
+test('Kezdő ötös vs többi perc: a kezdő ötös együttes ideje és eredménye a többi perccel szemben', () => {
+  const model = buildPostgameLineupExport({ teamName: 'Atomerőmű SE', starters: STARTERS, stints: ASE });
+  assert.ok(model);
+  const key = [...STARTERS].sort().join('|');
+  const starters = model.lineups.find(lineup => [...lineup.players].sort().join('|') === key);
+  assert.ok(starters);
+  const line = describeStarterSplit(model);
+  assert.ok(line);
+  const clock = (value: number) => `${Math.floor(value / 60)}:${String(value % 60).padStart(2, '0')}`;
+  const diff = starters.teamPts - starters.oppPts;
+  const restFor = model.totalFor - starters.teamPts;
+  const restAgainst = model.totalAgainst - starters.oppPts;
+  assert.ok(line.startsWith(`• Kezdő ötös vs többi perc (Kosarstat lineup): a kezdő ötös ${clock(starters.seconds)} alatt ${starters.teamPts}–${starters.oppPts} (${diff > 0 ? '+' : ''}${diff}, Net/40 `), line);
+  assert.match(line, new RegExp(`; a többi perc ${clock(model.totalSeconds - starters.seconds)} alatt ${restFor}–${restAgainst} `));
+
+  // Ismeretlen kezdő ötösnél nincs sor.
+  const noStarters = buildPostgameLineupExport({ teamName: 'Atomerőmű SE', starters: [], stints: ASE });
+  assert.ok(noStarters);
+  assert.equal(describeStarterSplit(noStarters), null);
 });

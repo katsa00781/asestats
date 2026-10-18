@@ -9,7 +9,7 @@ import type { PostgameExportExtras, PostgameLineupsMd } from '@/lib/export-to-md
 import type { KosarstatPlayerRotation, KosarstatRotationEvent, KosarstatSide } from '@/lib/kosarstat-substitutions';
 import { playerSeasonToMd, pregameReportToMd, postgameReportToMd } from '@/lib/export-to-md';
 import { endsOnCourt, groupRotationByPlayer, parseKosarstatSubstitutions, rotationFromMinuteCodes, validateRotation } from '@/lib/kosarstat-substitutions';
-import { buildPostgameLineupSides, describeWeakestLineupCore, isScoringLineupStint } from '@/lib/postgame-lineup-export';
+import { buildPostgameLineupSides, describeStarterSplit, describeWeakestLineupCore, isScoringLineupStint } from '@/lib/postgame-lineup-export';
 import { buildTeamSeasonMd } from '@/lib/team-season-export-data';
 import { useEffect, useMemo, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, Cell, LabelList, Legend, Line, LineChart, ResponsiveContainer, Scatter, ScatterChart, Tooltip, XAxis, YAxis, ZAxis } from 'recharts';
@@ -9494,6 +9494,13 @@ export function SeasonComparison({
       extraNotes: [...kosarstatPostgameNotes, ...nameNotes],
       lineupInsights,
       extraProblems: lineupProblem ? [lineupProblem] : [],
+      starterSplit: ownLineupModel ? describeStarterSplit(ownLineupModel) : null,
+      onOff: ownLineupModel?.onOff.map(row => ({
+        player: row.player,
+        onSeconds: row.onSeconds,
+        onDiff: row.onFor - row.onAgainst,
+        offDiff: row.offFor - row.offAgainst,
+      })),
     });
   }, [kosarstatLineupAnalysis, kosarstatPostgameContext, kosarstatPostgameNotes, league, playerGameStats, postgameBenchmarks, postgameOpponentTotalsByTeam, postgameShotContext, pregameReport, rolesByPlayerId, seasonPlayers, selectedGame, resolvedTeamId, selectedTeamStats]);
 
