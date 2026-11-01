@@ -334,7 +334,7 @@ const emptyAggregate = (): TeamExportAggregate => ({
   possessions: 0, ratingPointsFor: 0, ratingPointsAgainst: 0,
 });
 
-const aggregateGames = (games: TeamExportGame[]): TeamExportAggregate => {
+export const aggregateGames = (games: TeamExportGame[]): TeamExportAggregate => {
   const agg = emptyAggregate();
   games.forEach(game => {
     agg.games += 1;

@@ -430,7 +430,7 @@ export function playerSeasonToMd(player: PlayerStats): string {
   return lines.join('\n');
 }
 
-type TeamRateSet = {
+export type TeamRateSet = {
   efg: number;
   ts: number;
   threeRate: number;
@@ -440,7 +440,7 @@ type TeamRateSet = {
   assistRate: number;
 };
 
-function teamRates(line: TeamBoxLine): TeamRateSet {
+export function teamRates(line: TeamBoxLine): TeamRateSet {
   const fga = lineFga(line);
   const fgm = lineFgm(line);
   const usage = lineUsage(line);
@@ -456,12 +456,12 @@ function teamRates(line: TeamBoxLine): TeamRateSet {
 }
 
 /** OREB%: saját T-lep / (saját T-lep + a másik csapat V-lepattanója). */
-function orebPct(line: TeamBoxLine, other: TeamBoxLine): number {
+export function orebPct(line: TeamBoxLine, other: TeamBoxLine): number {
   const chances = line.oreb + other.dreb;
   return chances > 0 ? (line.oreb / chances) * 100 : 0;
 }
 
-function aggregateRatings(agg: TeamExportAggregate) {
+export function aggregateRatings(agg: TeamExportAggregate) {
   const hasRating = agg.possessions > 0 && agg.boxGames > 0;
   const ortg = hasRating ? (agg.ratingPointsFor / agg.possessions) * 100 : null;
   const drtg = hasRating ? (agg.ratingPointsAgainst / agg.possessions) * 100 : null;

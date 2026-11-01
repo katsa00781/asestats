@@ -16,6 +16,7 @@ import { StandingsImport } from '@/components/StandingsImport';
 import { StandingsView } from '@/components/StandingsView';
 import { PlayerComparison } from '@/components/PlayerComparison';
 import { TeamComparison } from '@/components/TeamComparison';
+import { TeamSeasonCompare } from '@/components/TeamSeasonCompare';
 import { GameLog } from '@/components/GameLog';
 import { GameManagement } from '@/components/GameManagement';
 import { LoginForm } from '@/components/LoginForm';
@@ -42,6 +43,7 @@ export default function Home() {
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [showComparison, setShowComparison] = useState(false);
   const [showTeamComparison, setShowTeamComparison] = useState(false);
+  const [showSeasonCompare, setShowSeasonCompare] = useState(false);
   const [standingsRefresh, setStandingsRefresh] = useState(0);
   const [selectedSeasonId, setSelectedSeasonId] = useState<string | null>(null);
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
@@ -195,9 +197,25 @@ export default function Home() {
                 currentTeamId={selectedTeamId}
                 onBack={() => setShowTeamComparison(false)}
               />
+            ) : showSeasonCompare ? (
+              <TeamSeasonCompare
+                allSeasons={allSeasons}
+                allTeams={allTeams}
+                currentSeasonId={selectedSeasonId}
+                currentTeamId={selectedTeamId}
+                onBack={() => setShowSeasonCompare(false)}
+              />
             ) : (
               <div className="space-y-4">
-                <div className="flex justify-end">
+                <div className="flex flex-wrap justify-end gap-2">
+                  <Button
+                    onClick={() => setShowSeasonCompare(true)}
+                    variant="secondary"
+                    size="sm"
+                    className="gap-2"
+                  >
+                    Idei vs. tavalyi csapat
+                  </Button>
                   <Button
                     onClick={() => setShowTeamComparison(true)}
                     variant="secondary"

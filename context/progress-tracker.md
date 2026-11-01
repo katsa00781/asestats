@@ -40,6 +40,12 @@ Update this file after every meaningful implementation change.
 
 ## In Progress
 
+- **Idei vs. tavalyi csapat összehasonlítás (2026-11-01):** 1. lépés kész –
+  új `TeamSeasonCompare` nézet az Áttekintés fülön (`lib/team-season-compare.ts`,
+  `hooks/useTeamSeasonModel.ts`), a tavalyi alapszakasz első N meccsét veti
+  össze az idei alapszakasszal a `buildTeamSeasonExport` modellre építve.
+  Számok az ASE valós adatán kézi összegzéssel ellenőrizve; böngészős
+  ellenőrzés nyitva. Hátra: 2. lépés – keretváltozás szakasz. Részletek: `BACKLOG.md`.
 - **Játékosmozgás import API/UI (2026-09-21):** új admin-only route és
   `LeaguePlayerMovementsImport` az Import tabon; 3/4 szezonos időtáv,
   opcionális csapatszűrő, futászár, időkorlát, hiba esetén is látható napló.
@@ -66,7 +72,8 @@ Update this file after every meaningful implementation change.
   0 böngészős kivétel. Hátra: kézi view-migráció és éles view/RLS ellenőrzés.
   Az alaptáblák RLS-e külön READ ONLY szerepkörteszten megfelelt:
   `authenticated` alatt a besorolás SELECT-je 726 mozgást ad, `anon` alatt
-  0 tagság látható. A nézet még nem létezik az adatbázisban.
+  0 tagság látható. (2026-11-01 ellenőrzés: a nézet már létezik az
+  adatbázisban, service role olvasással 726 sor – a korábbi „nem létezik” elavult.)
   A buildhez a Deno-mappa tsconfig-kizárásának jóváhagyása függőben.
   A felhasználó kérésére `npm install` és újabb production build lefutott:
   a függőségek naprakészek, verzióváltozás nincs; a fordítás sikeres,

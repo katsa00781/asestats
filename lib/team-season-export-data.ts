@@ -163,6 +163,110 @@ async function loadLeague(
   };
 }
 
+/** Egy csapat-szezon `buildTeamSeasonExport` bemenete. */
+export type TeamSeasonModelInput = {
+  games: TeamGame[];
+  statRows: TeamExportStatRow[];
+};
+
+/**
+ * Egyetlen csapat-szezon export-bemenete: a csapat meccsei (Kosarstat
+ * versenyszakasz-címkével, ellenfél-nézetű tükörmeccs azonosítóval) és ezek
+ * saját + ellenfél játékos-sorai. A `loadLeague`-gel ellentétben nem tölti be
+ * az egész liga sorait, ezért az idei–tavalyi összehasonlítás két szezont is
+ * olcsón lekér.
+ */
+export async function loadTeamSeasonModelInput(params: {
+  seasonId: string;
+  seasonName: string;
+  teamId: string;
+}): Promise<TeamSeasonModelInput> {
+  const statsTable = getSeasonStatsTable(params.seasonName);
+  if (statsTable === 'player_game_stats') {
+    throw new Error(`ismeretlen szezon: „${params.seasonName}” – nincs hozzá szezontábla`);
+  }
+
+  // A teljes szezon meccs-sorai kellenek: a tükörmeccs az ellenfél saját sora,
+  // és csak ID nélküli régi soroknál nem hivatkozik vissza a csapatra.
+  const [seasonGames, phaseRows] = await Promise.all([
+    fetchAllRows<LeagueGameRow>((from, to) =>
+      supabase
+        .from('games')
+        .select('id, date, opponent, home_away, our_score, opp_score, result, our_team_id, opponent_team_id, round, kosarstat_game_id')
+        .eq('season_id', params.seasonId)
+        .order('date', { ascending: true })
+        .order('id', { ascending: true })
+        .range(from, to)
+    ),
+    fetchAllRows<PhaseRow>((from, to) =>
+      supabase
+        .from('kosarstat_game_pages_raw' as never)
+        .select('kosarstat_game_id, competition_phase')
+        .eq('season_id', params.seasonId)
+        .eq('page_type', 'game')
+        .order('kosarstat_game_id', { ascending: true })
+        .range(from, to)
+    ),
+  ]);
+
+  const phaseByKosarstatId = new Map<string, string>();
+  phaseRows.forEach(row => {
+    if (row.kosarstat_game_id && row.competition_phase) {
+      phaseByKosarstatId.set(String(row.kosarstat_game_id), row.competition_phase);
+    }
+  });
+
+  const rowByTeamAndDate = new Map(seasonGames.map(row => [`${row.date}::${row.our_team_id}::${row.opponent_team_id ?? ''}`, row]));
+  const phaseOf = (row: LeagueGameRow | undefined) =>
+    row?.kosarstat_game_id ? phaseByKosarstatId.get(row.kosarstat_game_id) : undefined;
+
+  const mirrorIds: string[] = [];
+  const games: TeamGame[] = seasonGames
+    .filter(row => row.our_team_id === params.teamId)
+    .map(row => {
+      const mirror = row.opponent_team_id
+        ? rowByTeamAndDate.get(`${row.date}::${row.opponent_team_id}::${row.our_team_id}`)
+        : undefined;
+      if (mirror) mirrorIds.push(mirror.id);
+      return {
+        id: row.id,
+        date: row.date,
+        opponent: row.opponent,
+        homeAway: row.home_away,
+        ourScore: row.our_score,
+        oppScore: row.opp_score,
+        result: row.result,
+        kosarstatGameId: row.kosarstat_game_id,
+        players: [],
+        opponentGameId: mirror?.id,
+        opponentTeamId: row.opponent_team_id,
+        round: row.round,
+        // A Kosarstat-link sokszor csak a meccs egyik nézetén van meg.
+        competitionPhase: phaseOf(row) ?? phaseOf(mirror) ?? null,
+      };
+    });
+
+  const gameIds = [...games.map(game => game.id), ...mirrorIds];
+  const chunks: string[][] = [];
+  for (let index = 0; index < gameIds.length; index += GAME_ID_CHUNK) {
+    chunks.push(gameIds.slice(index, index + GAME_ID_CHUNK));
+  }
+  const statChunks = await Promise.all(
+    chunks.map(chunk =>
+      fetchAllRows<TeamExportStatRow>((from, to) =>
+        supabase
+          .from(statsTable as never)
+          .select(STAT_COLUMNS)
+          .in('game_id', chunk)
+          .order('id', { ascending: true })
+          .range(from, to)
+      )
+    )
+  );
+
+  return { games, statRows: statChunks.flat() };
+}
+
 export async function loadTeamSeasonExportExtras(params: {
   seasonId: string;
   seasonName: string;

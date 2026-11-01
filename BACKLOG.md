@@ -1,6 +1,6 @@
 # BACKLOG.md – ASEStats Projekt
 
-_Utoljára frissítve: 2026-10-18 (H19 – post-game riport harmadik hibalista, ASE–Honvéd: A–I egység kész, böngészős ellenőrzés és a küszöbök jóváhagyása nyitva)_
+_Utoljára frissítve: 2026-11-01 (idei vs. tavalyi csapat összehasonlítás: 1. lépés kész, keretváltozás szakasz és böngészős ellenőrzés nyitva; előtte 2026-10-18: H19 – post-game riport harmadik hibalista, A–I egység kész)_
 
 ---
 
@@ -202,6 +202,19 @@ használjuk, a `profile_url` mezőben mentjük a linket
 kézi ellenőrzéshez); szezonon belüli (mid-season) átigazolás tiszta
 elkülönítése a `LAG`/`LEAD` modellben; automatikus cron-be kötés
 (`.github/workflows/scrape.yml`) – külön döntés, nem automatikus.
+
+---
+
+## Aktív sprint – Idei vs. tavalyi csapat összehasonlítás (2026-11-01)
+
+Cél: ugyanazon csapat két szezonja közti különbségek és „melyik csapat mennyivel jobb”. Felhasználói döntések: az alap a **tavalyi alapszakasz első N meccse** (N = az idei alapszakasz-meccsek száma; váltható a teljes alapszakaszra), a számítás a **meglévő `buildTeamSeasonExport` modellre** épül, és a nézet a csapatstatok mellett a **keretváltozást** is mutatja.
+
+- [x] **1. lépés – csapatstat összevetés (2026-11-01).** Új: `lib/team-season-compare.ts` (mintaválasztás: csak `phase === 'regular'`, időrendben az első N; 27 mutató 4 csoportban – eredmény / támadás / védekezés / csapatjáték – irányított „jobb” oldallal; pontkülönbség-változás megbízhatósága a meccsek közti szórásból, kb. 2×SE; szabály alapú összegző mondatok), `hooks/useTeamSeasonModel.ts` (csapat-szezon modell, elavult válasz eldobásával), `components/TeamSeasonCompare.tsx` (csapat/szezon választó, mintaméret-jelzés, `StatCard` sor, `DataTable` csoportonként, adatminőségi megjegyzések). `lib/team-season-export-data.ts`: új `loadTeamSeasonModelInput` – csak a csapat meccseit és a tükörmeccsek játékos-sorait kéri le (nem az egész ligát). Meglévő segédek exportálva, viselkedés nélküli változtatással: `aggregateGames` (`team-season-export.ts`), `teamRates` / `orebPct` / `aggregateRatings` (`export-to-md.ts`) – a képletek így nem duplikálódnak (architecture.md 10. invariáns). Belépés: Áttekintés fül, „Idei vs. tavalyi csapat” gomb (`app/page.tsx`).
+  - Ellenőrzés: `tsc --noEmit`, `eslint`, `npm run build` tiszta. Az ASE 2026/27 (7 meccs) ↔ 2025/26 első 7 alapszakasz-meccs számai (pont, kapott pont, pontkülönbség, eFG%) egyeznek a nyers sorokból, a modultól függetlenül számolt értékekkel. A tavalyi 39 meccs besorolása: 26 alapszakasz + 2 nem azonosítható (feltehetően kupa) + 11 rájátszás.
+  - **Böngészős ellenőrzés nyitva** (bejelentkezés nélkül nem futtatható): szezon-/csapatváltás, üres szezon, mobil szélesség.
+  - Mobil jegyzet **nem kell**: a módosított modulok nincsenek a mobil `sync-core` `MODULES` listáján, az exportok viselkedést nem változtatnak.
+- [ ] **2. lépés – keretváltozás szakasz** (`usePlayerMovements` + a minta játékos-sorai): érkezők / távozók / maradók, és hogy a tavalyi pontokból mennyit adtak a távozók, az idei pontokból mennyit az érkezők.
+- [ ] Opcionális: meccsenkénti kumulált pontkülönbség-grafikon a két szezonról (a `lib/chart-theme.ts` konstansaival).
 
 ---
 
