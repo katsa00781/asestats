@@ -40,12 +40,13 @@ Update this file after every meaningful implementation change.
 
 ## In Progress
 
-- **Idei vs. tavalyi csapat összehasonlítás (2026-11-01):** 1. lépés kész –
-  új `TeamSeasonCompare` nézet az Áttekintés fülön (`lib/team-season-compare.ts`,
-  `hooks/useTeamSeasonModel.ts`), a tavalyi alapszakasz első N meccsét veti
-  össze az idei alapszakasszal a `buildTeamSeasonExport` modellre építve.
-  Számok az ASE valós adatán kézi összegzéssel ellenőrizve; böngészős
-  ellenőrzés nyitva. Hátra: 2. lépés – keretváltozás szakasz. Részletek: `BACKLOG.md`.
+- **Idei vs. tavalyi csapat összehasonlítás (2026-11-01):** kész – új
+  `TeamSeasonCompare` nézet az Áttekintés fülön (`lib/team-season-compare.ts`,
+  `lib/team-season-roster.ts`, `hooks/useTeamSeasonModel.ts`), a tavalyi
+  alapszakasz első N meccsét veti össze az idei alapszakasszal a
+  `buildTeamSeasonExport` modellre építve, keretváltozással együtt. Számok az
+  ASE valós adatán kézi összegzéssel ellenőrizve; **böngészős ellenőrzés
+  nyitva**. Részletek: `BACKLOG.md`.
 - **Játékosmozgás import API/UI (2026-09-21):** új admin-only route és
   `LeaguePlayerMovementsImport` az Import tabon; 3/4 szezonos időtáv,
   opcionális csapatszűrő, futászár, időkorlát, hiba esetén is látható napló.

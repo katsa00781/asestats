@@ -1,6 +1,6 @@
 # BACKLOG.md – ASEStats Projekt
 
-_Utoljára frissítve: 2026-11-01 (idei vs. tavalyi csapat összehasonlítás: 1. lépés kész, keretváltozás szakasz és böngészős ellenőrzés nyitva; előtte 2026-10-18: H19 – post-game riport harmadik hibalista, A–I egység kész)_
+_Utoljára frissítve: 2026-11-01 (idei vs. tavalyi csapat összehasonlítás: csapatstat és keretváltozás kész, böngészős ellenőrzés nyitva; előtte 2026-10-18: H19 – post-game riport harmadik hibalista, A–I egység kész)_
 
 ---
 
@@ -213,7 +213,9 @@ Cél: ugyanazon csapat két szezonja közti különbségek és „melyik csapat 
   - Ellenőrzés: `tsc --noEmit`, `eslint`, `npm run build` tiszta. Az ASE 2026/27 (7 meccs) ↔ 2025/26 első 7 alapszakasz-meccs számai (pont, kapott pont, pontkülönbség, eFG%) egyeznek a nyers sorokból, a modultól függetlenül számolt értékekkel. A tavalyi 39 meccs besorolása: 26 alapszakasz + 2 nem azonosítható (feltehetően kupa) + 11 rájátszás.
   - **Böngészős ellenőrzés nyitva** (bejelentkezés nélkül nem futtatható): szezon-/csapatváltás, üres szezon, mobil szélesség.
   - Mobil jegyzet **nem kell**: a módosított modulok nincsenek a mobil `sync-core` `MODULES` listáján, az exportok viselkedést nem változtatnak.
-- [ ] **2. lépés – keretváltozás szakasz** (`usePlayerMovements` + a minta játékos-sorai): érkezők / távozók / maradók, és hogy a tavalyi pontokból mennyit adtak a távozók, az idei pontokból mennyit az érkezők.
+- [x] **2. lépés – keretváltozás szakasz (2026-11-01).** Új: `lib/team-season-roster.ts` (`buildRosterLines`, `buildRosterChange`: maradók / érkezők / távozók, az idei percek folytonossága, a tavalyi pontokból a távozók és az idei pontokból az érkezők részaránya), `components/TeamSeasonRoster.tsx` (három `DataTable`). A `useTeamSeasonModel` a játékos-sorokat is kiadja; a `loadTeamSeasonModelInput` a játékosnevet join-nal kéri (`STAT_COLUMNS_WITH_NAME`, a `loadLeague` oszloplistája változatlan).
+  - **Eltérés a tervtől:** a terv a `usePlayerMovements` / `league_player_movements` nézetet jelölte forrásnak. Helyette a vizsgált meccsek box score-ja szolgál, mert a nézet csak az egyetlen előző szezonhoz képest ad mozgást (tetszőleges szezonpárra nem), más játékosazonosítót (Kosarstat) használ, és nem ugyanarra a meccshalmazra (első N) vonatkozik, mint a mutatók. Az „hova távozott / honnan jött” kiegészítés a nézetből később ráépíthető.
+  - Ellenőrzés: `tsc`, `eslint`, `build` tiszta. ASE 2026/27 ↔ 2025/26 első 7: a sorok pontösszege egyezik a jegyzőkönyvi eredményekkel (719 / 632), minden sorhoz van játékosnév; 7 maradó, 5 érkező, 6 távozó. Ismert jelenség: aki tavaly csak az első N meccs után lépett pályára (pl. J. Yousef), érkezőként látszik – a nézet láblécben jelzi.
 - [ ] Opcionális: meccsenkénti kumulált pontkülönbség-grafikon a két szezonról (a `lib/chart-theme.ts` konstansaival).
 
 ---

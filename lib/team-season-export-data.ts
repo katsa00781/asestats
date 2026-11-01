@@ -38,6 +38,9 @@ type PhaseRow = { kosarstat_game_id: string | null; competition_phase: string | 
 // Egyetlen string literál: összefűzött stringből a Supabase kliens nem tud sortípust levezetni.
 const STAT_COLUMNS = 'game_id, player_id, minutes, points, close_made, close_attempted, mid_made, mid_attempted, three_made, three_attempted, free_throw_made, free_throw_attempted, offensive_rebounds, defensive_rebounds, total_rebounds, assists, steals, blocks, turnovers, fouls_committed, valuation';
 
+// Az idei–tavalyi összehasonlítás a játékosnevet is kéri (keretváltozás): egyetlen string literál, ugyanezekkel az oszlopokkal.
+const STAT_COLUMNS_WITH_NAME = 'game_id, player_id, minutes, points, close_made, close_attempted, mid_made, mid_attempted, three_made, three_attempted, free_throw_made, free_throw_attempted, offensive_rebounds, defensive_rebounds, total_rebounds, assists, steals, blocks, turnovers, fouls_committed, valuation, players:player_id (name)';
+
 /** Ennyi meccs játékos-sorait kérjük le egy lekérdezésben (URL-hossz korlát). */
 const GAME_ID_CHUNK = 50;
 
@@ -256,7 +259,7 @@ export async function loadTeamSeasonModelInput(params: {
       fetchAllRows<TeamExportStatRow>((from, to) =>
         supabase
           .from(statsTable as never)
-          .select(STAT_COLUMNS)
+          .select(STAT_COLUMNS_WITH_NAME)
           .in('game_id', chunk)
           .order('id', { ascending: true })
           .range(from, to)

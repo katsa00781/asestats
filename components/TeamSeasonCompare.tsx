@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { DataTable } from '@/components/ui/data-table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { StatCard } from '@/components/ui/stat-card';
+import { TeamSeasonRoster } from '@/components/TeamSeasonRoster';
 import { useTeamSeasonModel } from '@/hooks/useTeamSeasonModel';
 import {
   GROUP_LABELS,
@@ -19,6 +20,7 @@ import {
   formatSigned,
   selectRegularSample,
 } from '@/lib/team-season-compare';
+import { buildRosterChange, buildRosterLines } from '@/lib/team-season-roster';
 
 type TeamSeasonCompareProps = {
   allSeasons: { id: string; name: string }[];
@@ -74,6 +76,14 @@ export function TeamSeasonCompare({ allSeasons, allTeams, currentSeasonId, curre
 
   const comparison = view?.comparison ?? null;
   const verdict = useMemo(() => (comparison ? buildComparisonVerdict(comparison) : []), [comparison]);
+  const roster = useMemo(() => {
+    if (!view?.prevSample || !comparison) return null;
+    const idsOf = (games: { id: string }[]) => new Set(games.map(game => game.id));
+    return buildRosterChange(
+      buildRosterLines(prev.statRows, idsOf(view.prevSample.games)),
+      buildRosterLines(cur.statRows, idsOf(view.curSample.games)),
+    );
+  }, [view, comparison, prev.statRows, cur.statRows]);
   const metric = (key: string) => comparison?.metrics.find(item => item.key === key) ?? null;
   const dataNotes = [
     ...(cur.model?.dataNotes ?? []).map(note => `${curSeason?.name}: ${note}`),
@@ -292,6 +302,14 @@ export function TeamSeasonCompare({ allSeasons, allTeams, currentSeasonId, curre
             </CardContent>
           </Card>
 
+          {roster && (
+            <TeamSeasonRoster
+              roster={roster}
+              prevSeasonName={prevSeason?.name ?? 'Előző'}
+              curSeasonName={curSeason?.name ?? 'Aktuális'}
+            />
+          )}
+
           {GROUP_ORDER.map(group => (
             <Card key={group}>
               <CardHeader>
@@ -310,7 +328,7 @@ export function TeamSeasonCompare({ allSeasons, allTeams, currentSeasonId, curre
           {dataNotes.length > 0 && (
             <details className="rounded-lg border border-border-subtle bg-surface-1/40 p-4 text-sm text-secondary">
               <summary className="cursor-pointer text-primary">Adatminőségi megjegyzések ({dataNotes.length})</summary>
-              <ul className="mt-2 list-disc space-y-1 pl-5 break-words">
+              <ul className="mt-2 list-disc space-y-1 pl-5 wrap-break-word">
                 {dataNotes.map(note => <li key={note}>{note}</li>)}
               </ul>
             </details>

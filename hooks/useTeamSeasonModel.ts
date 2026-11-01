@@ -1,11 +1,19 @@
 'use client';
 
-import type { TeamSeasonExport } from '@/lib/team-season-export';
+import type { TeamExportStatRow, TeamSeasonExport } from '@/lib/team-season-export';
 import { buildTeamSeasonExport } from '@/lib/team-season-export';
 import { loadTeamSeasonModelInput } from '@/lib/team-season-export-data';
 import { useEffect, useMemo, useState } from 'react';
 
-type ModelResult = { request: object; model: TeamSeasonExport | null; error: string | null };
+type ModelResult = {
+  request: object;
+  model: TeamSeasonExport | null;
+  /** A szezon játékos-sorai (saját és tükörmeccs) – a keretváltozás forrása. */
+  statRows: TeamExportStatRow[];
+  error: string | null;
+};
+
+const NO_ROWS: TeamExportStatRow[] = [];
 
 /**
  * Egy csapat-szezon export-modellje (meccssorok versenyszakasz-besorolással,
@@ -35,10 +43,10 @@ export function useTeamSeasonModel(teamId: string | null, season: { id: string; 
           players: [],
           seasonName: requestSeasonName,
         });
-        if (active) setResult({ request, model, error: null });
+        if (active) setResult({ request, model, statRows: input.statRows, error: null });
       } catch (error) {
         console.error('Csapat-szezon modell betöltése sikertelen:', error);
-        if (active) setResult({ request, model: null, error: 'A szezon adatai nem töltődtek be. Próbáld újra.' });
+        if (active) setResult({ request, model: null, statRows: NO_ROWS, error: 'A szezon adatai nem töltődtek be. Próbáld újra.' });
       }
     };
     void load();
@@ -49,6 +57,7 @@ export function useTeamSeasonModel(teamId: string | null, season: { id: string; 
   const idle = !teamId || !seasonId || !seasonName;
   return {
     model: current?.model ?? null,
+    statRows: current?.statRows ?? NO_ROWS,
     loading: !idle && !current,
     error: current?.error ?? null,
   };
