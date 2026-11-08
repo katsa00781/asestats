@@ -126,8 +126,14 @@ Update this file after every meaningful implementation change.
    + `pg_net` extension ellenőrzése → ~~`supabase functions deploy live-scan`~~
    (kész: 2026-09-04, `--use-api`) → `cron.schedule(...)` a HOWTO 3. pontjából.
    Éles validáció csak a 2026/27 szezon indulása (2026-09-25) után lehetséges.
+6. **H22 – 2024/25-ös dobástérképek átkötése** (2026-11-08):
+   `migrations/fix-move-2024-25-shotcharts-from-2025-26-season.sql` – előbb az
+   1. lépés (előnézet, várt értékek a fájlban), majd a 2. lépés egyben, végül a 3.
+   (ellenőrzés). Még NEM futott. Részletek: `BACKLOG.md` H22.
 
 ## Completed (legutóbbi)
+
+- **H22 – 2024/25-ös dobástérképek átkötő SQL-je (adattartalom)** (2026-11-08): 138 `hunbasket_shotchart_raw` sor (`x2425`) és 17 202 dobás a 2025/26-os `season_id`-n volt, a dobások `player_id`-je a 2025/26-os játékos-sorokon. A felhasználó az SQL-es átkötést választotta. Az új kézi migráció a `player_id`-t is átköti (csapat + név: 17 076; a hibásan Hawkinshoz kötött 7 dobás Josephé), majd a `season_id`-t; minden darabszám őrzött, eltérésnél semmi nem íródik. Kézi futtatás nyitva. Érintett: `migrations/fix-move-2024-25-shotcharts-from-2025-26-season.sql`. Mobil jegyzet: `asestatmobile/docs/mobile-sync/2026-11-08-dobasterkep-zonak-h21.md` (összesítő).
 
 - **H21 – dobástérkép zónák valós méretarányú geometriával (`@core`)** (2026-11-08): a `classifyShotZone` nyers egységekben mért távolságot, holott az x 28 m-es, az y 15 m-es tengely; a „festék” egy gyűrű volt, nem a festett téglalap (ASE–Kecskemét: festék 0/2 a valós 5/7 helyett). Új FIBA-geometria méterben: tripla 6,75 m / sarokszakasz, gyűrű 1,25 m (felhasználói döntés), festék 4,9 × 5,8 m. A térkép 3PA-ja a 2026/27-es 108 csapat-meccsből 104-ben egyezik a box score-ral (korábban 11-ben). Minden zónatábla és a dobáshely-mix index változik. Érintett: `lib/postgame-report.ts`, `tests/shot-zone-geometry.test.ts`, fixture-ök. Mobil jegyzet: `asestatmobile/docs/mobile-sync/2026-11-08-dobasterkep-zonak-h21.md`. Nyitott lelet: 138 db 2024/25-ös dobástérkép a 2025/26-os `season_id`-n (`BACKLOG.md` H22).
 

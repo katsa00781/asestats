@@ -1,6 +1,6 @@
 # BACKLOG.md – ASEStats Projekt
 
-_Utoljára frissítve: 2026-11-08 (H22 felvéve – 138 db 2024/25-ös dobástérkép a 2025/26-os szezonhoz kötve, nyitott; H21 – a dobástérkép zónái valós méretarányú FIBA-geometriával: a festék / tripla besorolás javítva; előtte H20 – a hunbasket menetrend-oldal átalakulása miatt leállt `hunbasket:fixtures` javítva, éles újrafuttatás nyitva; előtte 2026-11-01: idei vs. tavalyi csapat összehasonlítás: csapatstat és keretváltozás kész, böngészős ellenőrzés nyitva; előtte 2026-10-18: H19 – post-game riport harmadik hibalista, A–I egység kész)_
+_Utoljára frissítve: 2026-11-08 (H22 – a 138 db 2024/25-ös dobástérkép átkötő SQL-je kész, kézi futtatás nyitva; H21 – a dobástérkép zónái valós méretarányú FIBA-geometriával: a festék / tripla besorolás javítva; előtte H20 – a hunbasket menetrend-oldal átalakulása miatt leállt `hunbasket:fixtures` javítva, éles újrafuttatás nyitva; előtte 2026-11-01: idei vs. tavalyi csapat összehasonlítás: csapatstat és keretváltozás kész, böngészős ellenőrzés nyitva; előtte 2026-10-18: H19 – post-game riport harmadik hibalista, A–I egység kész)_
 
 ---
 
@@ -741,7 +741,7 @@ középtávként, az alapvonal melletti kétpontosok triplaként jelentek meg.
 - [ ] **Böngészős ellenőrzés** – az ASE–Kecskemét post-game dobástérkép-zónái.
 - Külön lelet: 2024/25-ös dobástérképek a 2025/26-os szezonon → **H22**.
 
-**H22 – 2024/25-ös dobástérképek a 2025/26-os szezonhoz kötve (adathiba) – NYITOTT (felvéve 2026-11-08)**
+**H22 – 2024/25-ös dobástérképek a 2025/26-os szezonhoz kötve (adathiba) – SQL kész, kézi futtatás nyitva (2026-11-08)**
 
 Lelet a H21 ellenőrzése közben. Javítás nem történt; adatjavításról és a
 megoldás módjáról felhasználói döntés kell.
@@ -764,11 +764,31 @@ post-game összevetésben, ellenfél- és engedett dobásprofil, pregame / csapa
 két szezon dobásait keveri; pl. a 2024-11-29-i Kecskemét–ASE meccs a 2025/26-os
 egymás elleni meccsek közt jelenik meg. A 2024/25-ös szezonnézetben nincs dobástérkép.
 
-- [ ] **Döntés:** átkötés a 2024/25-ös `season_id`-ra (adatjavító SQL), vagy törlés és újraimport `x2425`-tel
-- [ ] Adatjavító SQL a `migrations/` mappába (kézi futtatás a Supabase SQL Editorban): a 138 `hunbasket_shotchart_raw` és a 17 202 `hunbasket_shot_events` sor `season_id`-ja; előtte ellenőrizni a UNIQUE kulcsokat (`season_id, game_code`) ütközésre
+- [x] **Döntés (felhasználó, 2026-11-08):** SQL-lel átkötni a 2024/25-ös szezonra, ha biztonságosan elvégezhető.
+- [x] **Biztonsági felmérés (csak olvasás, 2026-11-08):** a 2024/25 szezonban 0
+  dobástérkép-sor és 0 dobás van → a `UNIQUE (season_id, game_code)` és a dobás-UNIQUE
+  kulcs nem ütközhet; a 138 `game_code` nincs a 2025/26-os (`x2526`) sorok közt.
+  **Kiderült:** a dobások `player_id`-je a 2025/26-os `players` sorokra mutat (206 játékos) –
+  csak a `season_id` átírása idegen szezonú játékosokat hagyna. Párosítás a 2024/25-ös
+  sorra (azonos `team_id` + `lower(trim(name))`, a `players` egyedi kulcsa): 17 076 / 17 083
+  egyértelmű; a maradék 7 dobást a régi hozzárendelés HAWKINS Elijah Jamilhez kötötte, de
+  a Hunbasket-név „YASIIN Yousef Joseph” (kód `SPIh3`, 2024-10-04), és a box score szerint
+  Joseph Yasiin Yousef játszott → ő kapja. 119 dobás játékos nélküli (marad).
+- [x] **Adatjavító SQL:** `migrations/fix-move-2024-25-shotcharts-from-2025-26-season.sql` –
+  1. előnézet (csak olvas, várt értékekkel), 2. egyetlen `DO` blokk: darabszám-, ütközés- és
+  párosítás-őrök (138 / 17 202 / 17 076 / 7, maradék idegen szezonú játékos 0), bármely
+  eltérésnél kivétel és **semmi nem íródik**; előbb `player_id`, aztán `season_id`
+  (dobások, majd nyers sorok); 3. ellenőrzés. Nem töröl, a `players` és a
+  `hunbasket_player_links` táblához nem nyúl. Helyi Postgres nincs, a szkriptet nem
+  lehetett próbafuttatni – az őrök ezt fedezik.
+- [ ] **Kézi futtatás a Supabase SQL Editorban** (felhasználó) – előbb az 1. lépés, majd a 2. egyben, végül a 3.
+- [ ] Futtatás után: a fájl `ÁLLAPOT` sora és a mobil jegyzet „Kézi lépések” része frissítve
 - [ ] A 2024/25-ös szezon hiányzó része (2025-03-01 után) – újraimport `HUNBASKET_SEASON_SLUG=x2425`, `HUNBASKET_SEASON_NAME=2024/2025`
-- [ ] Ellenőrzés: szezononként a `season_slug` ↔ `season_id` egyezése, 2025/26 szezon-zónák újraszámolva
-- [ ] Mobil jegyzet (adattartalom-változás) a javítás commitjával
+- [ ] Utómunka (külön döntés): a 2026-02-i és 2026-04-i hibás (x2425) box-score importok 2025/26-os `players`
+  sorai közül 123-nak nincs 2025/26-os statisztikája (a 206-ból csak 83-nak van) –
+  az átkötés után ezekre semmi nem hivatkozik a dobásokból; törlésük / megtartásuk vizsgálandó.
+  Ugyanígy a 2025/26-os `hunbasket_player_links` sorok közt lehetnek 2024/25-ös maradványok.
+- Mobil jegyzet: `asestatmobile/docs/mobile-sync/2026-11-08-dobasterkep-zonak-h21.md` (összesítővé bővítve: H21 + H22).
 
 **H20 – `hunbasket:fixtures` leállt: „A menetrend oldalról egyetlen mérkőzés sem olvasható ki” ✓ (2026-11-08)** – mindhárom menetrend-olvasó átállítva, az éles újrafuttatás (GitHub Actions) nyitva
 
