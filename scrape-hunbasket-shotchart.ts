@@ -28,6 +28,7 @@ import {
   matchesTeamFilter,
   isRoundFilterEmpty,
   assertDatesMatchSeason,
+  scrapeHunbasketScheduleRows,
   type SeasonDateRange,
 } from './scrape-utils';
 
@@ -171,51 +172,30 @@ const scrapePlayedGames = async (page: Page, season: SeasonRecord): Promise<Sche
   await page.waitForTimeout(2500);
   await dismissCookieBanner(page);
 
-  const rows = await page.$$eval('table tbody tr', tableRows => {
-    return tableRows
-      .map(row => {
-        const cells = row.querySelectorAll('td');
-        if (cells.length < 5) return null;
+  const scheduleRows = await scrapeHunbasketScheduleRows(page);
+  const rows: ScheduleGame[] = [];
 
-        const roundText = (cells[0]?.textContent || '').trim();
-        const homeTeam = (cells[1]?.textContent || '').trim();
-        const scoreText = (cells[2]?.textContent || '').trim();
-        const awayTeam = (cells[3]?.textContent || '').trim();
-        const dateText = (cells[4]?.textContent || '').trim();
-        const matchAnchor = row.querySelector('a[href*="/merkozes/"]') as HTMLAnchorElement | null;
+  scheduleRows.forEach(row => {
+    // Csak a lejátszott, linkelt, érvényes eredményű meccs kell.
+    if (!row.gameUrl || !row.gameDate) return;
+    const scoreMatch = row.score.match(/(\d+)\s*[–-]\s*(\d+)/);
+    if (!scoreMatch) return;
+    const homeScore = parseInt(scoreMatch[1], 10);
+    const awayScore = parseInt(scoreMatch[2], 10);
+    if (homeScore === 0 && awayScore === 0) return;
+    if (!row.gameCode || !/^hun_\d+$/i.test(row.gameCode)) return;
 
-        if (!matchAnchor) return null;
-
-        const scoreMatch = scoreText.match(/(\d+)\s*[–-]\s*(\d+)/);
-        if (!scoreMatch) return null;
-
-        const homeScore = parseInt(scoreMatch[1], 10);
-        const awayScore = parseInt(scoreMatch[2], 10);
-        if (Number.isNaN(homeScore) || Number.isNaN(awayScore) || (homeScore === 0 && awayScore === 0)) {
-          return null;
-        }
-
-        const dateMatch = dateText.match(/(\d{4})\.\s*(\d{1,2})\.\s*(\d{1,2})/);
-        if (!dateMatch) return null;
-
-        const gameCodeMatch = matchAnchor.href.match(/\/merkozes\/[^/]+\/[^/]+\/(hun_\d+)/i);
-        if (!gameCodeMatch) return null;
-
-        const roundMatch = roundText.match(/\d+/);
-
-        return {
-          round: roundMatch ? parseInt(roundMatch[0], 10) : null,
-          stage: roundText || null,
-          date: `${dateMatch[1]}-${dateMatch[2].padStart(2, '0')}-${dateMatch[3].padStart(2, '0')}`,
-          homeTeam,
-          awayTeam,
-          homeScore,
-          awayScore,
-          matchUrl: matchAnchor.href,
-          gameCode: gameCodeMatch[1],
-        };
-      })
-      .filter((item): item is NonNullable<typeof item> => item !== null);
+    rows.push({
+      round: row.round,
+      stage: row.stage,
+      date: row.gameDate,
+      homeTeam: row.homeTeam,
+      awayTeam: row.awayTeam,
+      homeScore,
+      awayScore,
+      matchUrl: row.gameUrl,
+      gameCode: row.gameCode,
+    });
   });
 
   const games = rows.map(row => ({
