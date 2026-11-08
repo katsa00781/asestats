@@ -1,6 +1,6 @@
 # BACKLOG.md – ASEStats Projekt
 
-_Utoljára frissítve: 2026-11-08 (H21 – a dobástérkép zónái valós méretarányú FIBA-geometriával: a festék / tripla besorolás javítva; előtte H20 – a hunbasket menetrend-oldal átalakulása miatt leállt `hunbasket:fixtures` javítva, éles újrafuttatás nyitva; előtte 2026-11-01: idei vs. tavalyi csapat összehasonlítás: csapatstat és keretváltozás kész, böngészős ellenőrzés nyitva; előtte 2026-10-18: H19 – post-game riport harmadik hibalista, A–I egység kész)_
+_Utoljára frissítve: 2026-11-08 (H22 felvéve – 138 db 2024/25-ös dobástérkép a 2025/26-os szezonhoz kötve, nyitott; H21 – a dobástérkép zónái valós méretarányú FIBA-geometriával: a festék / tripla besorolás javítva; előtte H20 – a hunbasket menetrend-oldal átalakulása miatt leállt `hunbasket:fixtures` javítva, éles újrafuttatás nyitva; előtte 2026-11-01: idei vs. tavalyi csapat összehasonlítás: csapatstat és keretváltozás kész, böngészős ellenőrzés nyitva; előtte 2026-10-18: H19 – post-game riport harmadik hibalista, A–I egység kész)_
 
 ---
 
@@ -739,11 +739,36 @@ középtávként, az alapvonal melletti kétpontosok triplaként jelentek meg.
   újragenerálásuk opcionális. A H19 / E védőháló (`misclassifiedThrees`) marad.
 - Mobil jegyzet: `asestatmobile/docs/mobile-sync/2026-11-08-dobasterkep-zonak-h21.md` (`@core`).
 - [ ] **Böngészős ellenőrzés** – az ASE–Kecskemét post-game dobástérkép-zónái.
-- [ ] **Külön lelet (nem javítva, döntés kell):** a `hunbasket_shotchart_raw`
-  138 sora (`season_slug = x2425`, 2024/25-ös dátumok) a **2025/26-os** `season_id`-val
-  van tárolva, a hozzájuk tartozó `hunbasket_shot_events` sorokkal együtt – a 2025/26-os
-  szezon-dobásképek így a 2024/25-ös dobásokat is tartalmazzák. Javítás: adatjavító
-  SQL (kézi futtatás) és / vagy a dobástérkép-import szezonhozzárendelésének vizsgálata.
+- Külön lelet: 2024/25-ös dobástérképek a 2025/26-os szezonon → **H22**.
+
+**H22 – 2024/25-ös dobástérképek a 2025/26-os szezonhoz kötve (adathiba) – NYITOTT (felvéve 2026-11-08)**
+
+Lelet a H21 ellenőrzése közben. Javítás nem történt; adatjavításról és a
+megoldás módjáról felhasználói döntés kell.
+
+Tény (service role olvasással, 2026-11-08):
+- `hunbasket_shotchart_raw`: **138 sor** `season_slug = x2425`, meccsdátum
+  2024-09-27 – 2025-02-28, de `season_id` = **2025/2026**
+  (`d80abb1c-e7b7-4290-88bd-62c9df93bf6f`) a 2024/2025 (`f1e3c96f-b260-4691-8f92-012c27f24369`) helyett.
+- A hozzájuk tartozó `hunbasket_shot_events`: **17 202 dobás**, szintén a 2025/26-os `season_id`-val.
+- A 2024/25-ös szezonhoz egyetlen dobástérkép-sor sincs; a 2025/26 (`x2526`, 221 sor)
+  és a 2026/27 (`x2627`, 54 sor) helyesen van kötve.
+- Import ideje: 2026-04-20 22:20–22:49 – valószínűleg `HUNBASKET_SEASON_SLUG=x2425`
+  mellett a szezonnév 2025/2026 maradt (`scrape-hunbasket-shotchart.ts` a
+  `HUNBASKET_SEASON_NAME` alapján keresi a `season_id`-t). A dátum-ellenőrzés
+  (`assertDatesMatchSeason`) azóta ezt írás előtt megállítaná.
+- A 2024/25-ös adat 2025-02-28-án véget ér – a szezon második fele valószínűleg nem importálódott.
+
+Hatás: minden 2025/26-os szezon-szintű dobáskép (szezon-zónák, szezonátlag a
+post-game összevetésben, ellenfél- és engedett dobásprofil, pregame / csapatelemzés)
+két szezon dobásait keveri; pl. a 2024-11-29-i Kecskemét–ASE meccs a 2025/26-os
+egymás elleni meccsek közt jelenik meg. A 2024/25-ös szezonnézetben nincs dobástérkép.
+
+- [ ] **Döntés:** átkötés a 2024/25-ös `season_id`-ra (adatjavító SQL), vagy törlés és újraimport `x2425`-tel
+- [ ] Adatjavító SQL a `migrations/` mappába (kézi futtatás a Supabase SQL Editorban): a 138 `hunbasket_shotchart_raw` és a 17 202 `hunbasket_shot_events` sor `season_id`-ja; előtte ellenőrizni a UNIQUE kulcsokat (`season_id, game_code`) ütközésre
+- [ ] A 2024/25-ös szezon hiányzó része (2025-03-01 után) – újraimport `HUNBASKET_SEASON_SLUG=x2425`, `HUNBASKET_SEASON_NAME=2024/2025`
+- [ ] Ellenőrzés: szezononként a `season_slug` ↔ `season_id` egyezése, 2025/26 szezon-zónák újraszámolva
+- [ ] Mobil jegyzet (adattartalom-változás) a javítás commitjával
 
 **H20 – `hunbasket:fixtures` leállt: „A menetrend oldalról egyetlen mérkőzés sem olvasható ki” ✓ (2026-11-08)** – mindhárom menetrend-olvasó átállítva, az éles újrafuttatás (GitHub Actions) nyitva
 
