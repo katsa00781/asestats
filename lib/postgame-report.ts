@@ -517,12 +517,37 @@ const normalizeOffenseX = (event: Pick<ShotMapEventInput, 'x' | 'shotSide'>) =>
   event.shotSide === 'away' ? 100 - event.x : event.x;
 
 /**
- * Saroktripla: az alapvonal közelében (x ≤ 14) és az oldalvonalak mellett
- * (y ≤ 14 vagy y ≥ 86). A koordináták normalizálás után a bal palánk felé
- * támadnak, a kosár az (x ≈ 6, y = 50) pontban van, az x a teljes pályahossz
- * (100 egység ≈ 28 m): az egyenes sarokszakasz (~3 m) x ≈ 11-ig tart. (A
- * korábbi `x >= 25` feltétel fordított volt: a szárny-triplákat számolta
- * saroknak, a valódi saroktriplákat „nem sarok” triplának.)
+ * Pályageometria (FIBA) a Hunbasket-koordinátákhoz. Normalizálás után a
+ * támadás a bal palánk felé megy; az x a teljes pályahossz (0–100 = 28 m), az
+ * y a pályaszélesség (0–100 = 15 m) – a két tengely egysége tehát NEM azonos,
+ * a távolságot méterben kell számolni. (A korábbi besoroló a nyers egységekkel
+ * számolt, ezért oldalirányban ~1,9-szer messzebbre látott: a festék oldalsó
+ * részéből leadott dobások „középtáv”-ként, a tetőn leadott triplák egy része
+ * „középtáv”-ként, az alapvonal melletti kétpontosok „tripla”-ként jelentek meg.)
+ * Ellenőrzés a box score-ral: a 2026/27-es 108 csapat-meccsből 104-ben pontosan
+ * egyezik a térkép 3PA-ja (2025/26: 423 / 440).
+ */
+const COURT_LENGTH_M = 28;
+const COURT_WIDTH_M = 15;
+/** A kosár közepe az alapvonaltól (FIBA: 1,575 m), a pálya közepén. */
+const BASKET_X_M = 1.575;
+const BASKET_Y_M = COURT_WIDTH_M / 2;
+/** Gyűrű: a no-charge félkör (FIBA, 1,25 m) – felhasználói döntés, 2026-11-08. */
+const RIM_RADIUS_M = 1.25;
+/** Festék (FIBA): 4,9 m széles, 5,8 m hosszú téglalap az alapvonaltól. */
+const PAINT_HALF_WIDTH_M = 2.45;
+const PAINT_LENGTH_M = 5.8;
+/** Hárompontos vonal: 6,75 m-es ív, a sarkokban egyenes szakasz 0,9 m-re az oldalvonaltól, 2,99 m-ig. */
+const THREE_ARC_M = 6.75;
+const THREE_CORNER_LINE_M = BASKET_Y_M - 0.9;
+const THREE_CORNER_STRAIGHT_MAX_X_M = 2.99;
+/** Az y-rács felbontása 0,15 m: a sarokvonalra eső pont (y = 6 / 94) még hármas. */
+const THREE_CORNER_TOLERANCE_M = 0.15;
+
+/**
+ * Saroktripla (a hármasokon belül): az alapvonal közelében (x ≤ 14) és az
+ * oldalvonalak mellett (y ≤ 14 vagy y ≥ 86), nyers egységben. (A korábbi
+ * `x >= 25` feltétel fordított volt: a szárny-triplákat számolta saroknak.)
  */
 const CORNER3_MAX_X = 14;
 const CORNER3_SIDE_BAND = 14;
@@ -531,17 +556,21 @@ const CORNER3_SIDE_BAND = 14;
 export const classifyShotZone = (event: Pick<ShotMapEventInput, 'x' | 'y' | 'shotSide'>): ShotZone => {
   const x = normalizeOffenseX(event);
   const y = event.y;
-  const dx = x - 6;
-  const dy = y - 50;
+  const xM = (x / 100) * COURT_LENGTH_M;
+  const yM = (y / 100) * COURT_WIDTH_M;
+  const dx = xM - BASKET_X_M;
+  const dy = yM - BASKET_Y_M;
   const distance = Math.sqrt(dx * dx + dy * dy);
 
-  if (distance <= 9) return 'rim';
-  if (distance <= 18) return 'paint';
+  const isThree = distance >= THREE_ARC_M
+    || (xM <= THREE_CORNER_STRAIGHT_MAX_X_M && Math.abs(dy) >= THREE_CORNER_LINE_M - THREE_CORNER_TOLERANCE_M);
+  if (isThree) {
+    const corner3 = x <= CORNER3_MAX_X && (y <= CORNER3_SIDE_BAND || y >= 100 - CORNER3_SIDE_BAND);
+    return corner3 ? 'corner3' : 'aboveBreak3';
+  }
 
-  const corner3 = x <= CORNER3_MAX_X && (y <= CORNER3_SIDE_BAND || y >= 100 - CORNER3_SIDE_BAND);
-  if (corner3) return 'corner3';
-
-  if (distance >= 29) return 'aboveBreak3';
+  if (distance <= RIM_RADIUS_M) return 'rim';
+  if (xM <= PAINT_LENGTH_M && Math.abs(dy) <= PAINT_HALF_WIDTH_M) return 'paint';
   return 'mid';
 };
 

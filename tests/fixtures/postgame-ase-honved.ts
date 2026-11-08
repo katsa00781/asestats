@@ -55,9 +55,10 @@ export const PLAYERS: PlayerGameStat[] = ASE_BOX.map(([name, minutes, points, tw
   oreb, dreb, ast, tov, stl, blk, val, roles: [],
 }));
 
-// A dobástérkép valós számai: 75 dobás – gyűrű 12/28, festék 3/7, középtáv
-// 7/9, tripla 14/31, ebből sarok 4/9 (a box score-ban 3P 18/36, 2P 20/42: a
-// térképen 2 kétpontos találattal több és 4 hármassal kevesebb van).
+// A dobástérkép számai a H21 előtti (nem méretarányos) besorolóval: 75 dobás –
+// gyűrű 12/28, festék 3/7, középtáv 7/9, tripla 14/31, ebből sarok 4/9 (a box
+// score-ban 3P 18/36, 2P 20/42). A H21 óta a valós térkép 3P-je 18/36, egyezik a
+// box score-ral; ez a zónakép a 3P-besorolási védőháló (H19 / E) bemenete maradt.
 export const GAME_SHOTS = [
   ...shots('rim', 28, 12), ...shots('paint', 7, 3), ...shots('mid', 9, 7),
   ...shots('three', 22, 10), ...shots('corner3', 9, 4),

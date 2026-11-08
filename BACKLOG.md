@@ -1,6 +1,6 @@
 # BACKLOG.md – ASEStats Projekt
 
-_Utoljára frissítve: 2026-11-08 (H20 – a hunbasket menetrend-oldal átalakulása miatt leállt `hunbasket:fixtures` javítva, éles újrafuttatás nyitva; előtte 2026-11-01: idei vs. tavalyi csapat összehasonlítás: csapatstat és keretváltozás kész, böngészős ellenőrzés nyitva; előtte 2026-10-18: H19 – post-game riport harmadik hibalista, A–I egység kész)_
+_Utoljára frissítve: 2026-11-08 (H21 – a dobástérkép zónái valós méretarányú FIBA-geometriával: a festék / tripla besorolás javítva; előtte H20 – a hunbasket menetrend-oldal átalakulása miatt leállt `hunbasket:fixtures` javítva, éles újrafuttatás nyitva; előtte 2026-11-01: idei vs. tavalyi csapat összehasonlítás: csapatstat és keretváltozás kész, böngészős ellenőrzés nyitva; előtte 2026-10-18: H19 – post-game riport harmadik hibalista, A–I egység kész)_
 
 ---
 
@@ -705,6 +705,45 @@ a nézőpont nem hiba.
   `seasonName` paramétert kap, a fejléc közös `seasonLeagueLine()` segéddel
   „Szezon: 2026/2027” – a Liga csak akkor jelenik meg, ha különbözik. Csak
   webes MD export, mobil jegyzet nem kell.
+
+**H21 – Dobástérkép: a festékből leadott dobások nem a festékbe kerültek (ASE–Kecskemét 112–66, 2026-11-07) ✓ (2026-11-08)** – kész, böngészős ellenőrzés nyitva
+
+Tünet (felhasználói jelzés): a Kecskemét elleni meccsen a dobástérkép alig
+számolt festékből leadott dobást (ASE festék 0/2).
+
+Ok: a `classifyShotZone` (`lib/postgame-report.ts`) a nyers Hunbasket-egységekben
+számolt távolságot, holott az x a pályahossz (0–100 = 28 m), az y a pályaszélesség
+(0–100 = 15 m) – oldalirányban ~1,9-szer messzebbre „látott”. A „festék” egy
+9–18 egységes gyűrű volt, nem a festett téglalap. Következmény: a festék oldalsó
+részéből leadott dobások középtávként, a tetőn leadott triplák egy része
+középtávként, az alapvonal melletti kétpontosok triplaként jelentek meg.
+
+- [x] **Új besorolás valós FIBA-geometriával (méterben)** – tripla: 6,75 m-es ív,
+  ill. az egyenes sarokszakasz (0,9 m-re az oldalvonaltól, 2,99 m-ig); gyűrű:
+  no-charge félkör, **1,25 m** (felhasználói döntés, 2026-11-08); festék: a 4,9 × 5,8 m-es
+  téglalap a gyűrűn kívül; minden más kétpontos középtáv. A saroktripla-sáv
+  (`x ≤ 14`, `y ≤ 14 / ≥ 86`, H19 / I) változatlan, de csak hármasra érvényes.
+- [x] **Ellenőrzés a box score-ral** (csapat-meccsenként a térkép 3PA-ja vs box 3PA):
+  2026/27: **104 / 108** pontos egyezés (régi besoroló: 11 / 108);
+  2025/26: 423 / 440 (régi: 70 / 440). ASE–Kecskemét: ASE 3P 12/32 (box 12/32,
+  régi térkép 11/30), festék **5/7** (régi 0/2); Kecskemét 3P 5/20 (box 5/20,
+  régi 7/23). ASE–Honvéd (H19 / E esete): 3P 18/36 = box (régi 14/31) – a
+  „3P-besorolási eltérés” figyelmeztetés ennél a meccsnél megszűnik.
+- [x] **Tesztek** – új `tests/shot-zone-geometry.test.ts` (a Kecskemét-meccs valós
+  koordinátái); a fixture-ök „középtáv” reprezentatív pontja [30, 50] → [22, 50]
+  (az előbbi 6,8 m – tripla); a Honvéd-fixture megjegyzése pontosítva. 97 / 97 teszt,
+  `tsc --noEmit`, `eslint` tiszta.
+- **Hatás:** minden zónatábla (post-game, szezon-dobásprofil, pregame / csapatelemzés
+  zónái), a dobáshely-mix index és a zónákra épülő riportszabályok számai változnak.
+  A korábban mentett AI-szövegek (`game_text_reports`) a régi zónákkal készültek –
+  újragenerálásuk opcionális. A H19 / E védőháló (`misclassifiedThrees`) marad.
+- Mobil jegyzet: `asestatmobile/docs/mobile-sync/2026-11-08-dobasterkep-zonak-h21.md` (`@core`).
+- [ ] **Böngészős ellenőrzés** – az ASE–Kecskemét post-game dobástérkép-zónái.
+- [ ] **Külön lelet (nem javítva, döntés kell):** a `hunbasket_shotchart_raw`
+  138 sora (`season_slug = x2425`, 2024/25-ös dátumok) a **2025/26-os** `season_id`-val
+  van tárolva, a hozzájuk tartozó `hunbasket_shot_events` sorokkal együtt – a 2025/26-os
+  szezon-dobásképek így a 2024/25-ös dobásokat is tartalmazzák. Javítás: adatjavító
+  SQL (kézi futtatás) és / vagy a dobástérkép-import szezonhozzárendelésének vizsgálata.
 
 **H20 – `hunbasket:fixtures` leállt: „A menetrend oldalról egyetlen mérkőzés sem olvasható ki” ✓ (2026-11-08)** – mindhárom menetrend-olvasó átállítva, az éles újrafuttatás (GitHub Actions) nyitva
 
