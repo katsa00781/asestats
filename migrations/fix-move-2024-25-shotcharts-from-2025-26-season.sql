@@ -31,7 +31,10 @@
 -- Utána a 3. lépés (ellenőrzés). Újrafuttatva az előnézet 0 sort ad, a 2. lépés
 -- „0 sor” hibával leáll (nincs mit átkötni) – ez a várt viselkedés.
 --
--- ÁLLAPOT: még NEM futott.
+-- ÁLLAPOT: lefuttatva 2026-11-08-án (138 meccs, 17 202 dobás, 17 076 játékos-átkötés
+-- + 7 Joseph-javítás). Ellenőrzés (csak olvasás): szezon ↔ slug 2024/2025 x2425 138 ·
+-- 2025/2026 x2526 221 · 2026/2027 x2627 54; szezonon kívüli meccs 0; meccs- és
+-- játékos-szezon eltérés 0 / 0.
 -- =====================================================================
 
 -- ---------------------------------------------------------------------

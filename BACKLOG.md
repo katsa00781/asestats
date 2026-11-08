@@ -1,6 +1,6 @@
 # BACKLOG.md – ASEStats Projekt
 
-_Utoljára frissítve: 2026-11-08 (H22 – a 138 db 2024/25-ös dobástérkép átkötő SQL-je kész, kézi futtatás nyitva; H21 – a dobástérkép zónái valós méretarányú FIBA-geometriával: a festék / tripla besorolás javítva; előtte H20 – a hunbasket menetrend-oldal átalakulása miatt leállt `hunbasket:fixtures` javítva, éles újrafuttatás nyitva; előtte 2026-11-01: idei vs. tavalyi csapat összehasonlítás: csapatstat és keretváltozás kész, böngészős ellenőrzés nyitva; előtte 2026-10-18: H19 – post-game riport harmadik hibalista, A–I egység kész)_
+_Utoljára frissítve: 2026-11-08 (H22 – a 138 db 2024/25-ös dobástérkép átkötve a helyes szezonra, ellenőrizve; H21 – a dobástérkép zónái valós méretarányú FIBA-geometriával: a festék / tripla besorolás javítva; előtte H20 – a hunbasket menetrend-oldal átalakulása miatt leállt `hunbasket:fixtures` javítva, éles újrafuttatás nyitva; előtte 2026-11-01: idei vs. tavalyi csapat összehasonlítás: csapatstat és keretváltozás kész, böngészős ellenőrzés nyitva; előtte 2026-10-18: H19 – post-game riport harmadik hibalista, A–I egység kész)_
 
 ---
 
@@ -741,7 +741,7 @@ középtávként, az alapvonal melletti kétpontosok triplaként jelentek meg.
 - [ ] **Böngészős ellenőrzés** – az ASE–Kecskemét post-game dobástérkép-zónái.
 - Külön lelet: 2024/25-ös dobástérképek a 2025/26-os szezonon → **H22**.
 
-**H22 – 2024/25-ös dobástérképek a 2025/26-os szezonhoz kötve (adathiba) – SQL kész, kézi futtatás nyitva (2026-11-08)**
+**H22 – 2024/25-ös dobástérképek a 2025/26-os szezonhoz kötve (adathiba) ✓ (2026-11-08)** – átkötve; a 2024/25 második fele és az utómunka nyitva
 
 Lelet a H21 ellenőrzése közben. Javítás nem történt; adatjavításról és a
 megoldás módjáról felhasználói döntés kell.
@@ -781,8 +781,8 @@ egymás elleni meccsek közt jelenik meg. A 2024/25-ös szezonnézetben nincs do
   (dobások, majd nyers sorok); 3. ellenőrzés. Nem töröl, a `players` és a
   `hunbasket_player_links` táblához nem nyúl. Helyi Postgres nincs, a szkriptet nem
   lehetett próbafuttatni – az őrök ezt fedezik.
-- [ ] **Kézi futtatás a Supabase SQL Editorban** (felhasználó) – előbb az 1. lépés, majd a 2. egyben, végül a 3.
-- [ ] Futtatás után: a fájl `ÁLLAPOT` sora és a mobil jegyzet „Kézi lépések” része frissítve
+- [x] **Kézi futtatás a Supabase SQL Editorban** (felhasználó, 2026-11-08). Utóellenőrzés (service role olvasás): szezon ↔ slug 2024/25 `x2425` 138 · 2025/26 `x2526` 221 · 2026/27 `x2627` 54; szezonon kívüli meccs 0; dobások szezononként 2024/25 17 202 (119 játékos nélkül) · 2025/26 27 966 · 2026/27 6 940; meccs- és játékos-szezon eltérés 0 / 0; a 7 `SPIh3` dobás Josephé, Hawkinsnak 2024/25-ben 0.
+- [x] Futtatás után: a fájl `ÁLLAPOT` sora és a mobil jegyzet „Kézi lépések” része frissítve
 - [ ] A 2024/25-ös szezon hiányzó része (2025-03-01 után) – újraimport `HUNBASKET_SEASON_SLUG=x2425`, `HUNBASKET_SEASON_NAME=2024/2025`
 - [ ] Utómunka (külön döntés): a 2026-02-i és 2026-04-i hibás (x2425) box-score importok 2025/26-os `players`
   sorai közül 123-nak nincs 2025/26-os statisztikája (a 206-ból csak 83-nak van) –
