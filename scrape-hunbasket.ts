@@ -33,6 +33,7 @@ import {
   dedupeShotEvents,
   cleanPlayerName,
   assertDatesMatchSeason,
+  scrapeHunbasketScheduleRows,
   type SeasonDateRange,
 } from './scrape-utils';
 
@@ -323,46 +324,24 @@ const getGameLinks = async (page: Page, season: SeasonRecord): Promise<GameLink[
   await page.goto(HUNBASKET_SCHEDULE_URL, { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(3000);
 
-  const games = await page.$$eval('table tbody tr', rows => {
-    const entries: { date: string; url: string; gameCode: string; homeTeam: string; awayTeam: string; score: string; stage: string | null; round: number | null }[] = [];
+  const scheduleRows = await scrapeHunbasketScheduleRows(page);
+  const games: { date: string; url: string; gameCode: string; homeTeam: string; awayTeam: string; score: string; stage: string | null; round: number | null }[] = [];
 
-    rows.forEach(row => {
-      const cells = row.querySelectorAll('td');
-      if (cells.length < 5) return;
+  scheduleRows.forEach(row => {
+    // Csak a lejátszott, linkelt meccs kell (az „Előzetes” sorokban nincs eredmény).
+    if (!row.gameUrl || !row.gameCode) return;
+    if (!row.score.match(/\d+\s*[–-]\s*\d+/)) return;
 
-      const roundText = (cells[0]?.textContent || '').trim();
-      const stage = roundText || null;
-      const roundMatch = roundText.match(/\d+/);
-      const round = roundMatch ? parseInt(roundMatch[0] || '0', 10) || null : null;
-      const homeTeam = (cells[1]?.textContent || '').trim();
-      const scoreText = (cells[2]?.textContent || '').trim();
-      const awayTeam = (cells[3]?.textContent || '').trim();
-      const dateText = (cells[4]?.textContent || '').trim();
-      const summaryLink = row.querySelector('a[href*="merkozes"]') as HTMLAnchorElement | null;
-
-      if (!summaryLink) return;
-      if (!scoreText.match(/\d+\s*[–-]\s*\d+/)) return;
-      const gameCodeMatch = summaryLink.href.match(/\/merkozes\/[^/]+\/[^/]+\/([a-z0-9_]+)/i);
-      if (!gameCodeMatch) return;
-
-      const dateMatch = dateText.match(/(\d{4})\.\s*(\d{1,2})\.\s*(\d{1,2})/);
-      const isoDate = dateMatch
-        ? `${dateMatch[1]}-${dateMatch[2].padStart(2, '0')}-${dateMatch[3].padStart(2, '0')}`
-        : new Date().toISOString().split('T')[0];
-
-      entries.push({
-        date: isoDate,
-        url: summaryLink.href,
-        gameCode: gameCodeMatch[1],
-        homeTeam,
-        awayTeam,
-        score: scoreText,
-        stage,
-        round,
-      });
+    games.push({
+      date: row.gameDate || new Date().toISOString().split('T')[0],
+      url: row.gameUrl,
+      gameCode: row.gameCode,
+      homeTeam: row.homeTeam,
+      awayTeam: row.awayTeam,
+      score: row.score,
+      stage: row.stage,
+      round: row.round,
     });
-
-    return entries;
   });
 
   // A teljes (szűretlen) menetrendre: rossz slug/szezon párosításnál írás előtt leáll.

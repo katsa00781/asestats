@@ -3,6 +3,7 @@
 // findTeamInCache és a Supabase kliens bootstrap 4 szkriptben volt
 // szó szerint duplikálva – ez a modul az egyetlen példány.
 
+import type { Page } from 'playwright';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import * as dotenv from 'dotenv';
 
@@ -456,4 +457,81 @@ export const createScriptClient = (): SupabaseClient => {
   }
 
   return createClient(url, key, { auth: { persistSession: false } });
+};
+
+/** A Hunbasket menetrend-oldal egy meccssora (a csapatnevek még nincsenek `cleanTeamName`-en átengedve). */
+export type HunbasketScheduleRow = {
+  /** A forduló oszlop szövege („2.”, szöveges körnél pl. „Elődöntő”); üres, ha nincs. */
+  stage: string | null;
+  round: number | null;
+  homeTeam: string;
+  awayTeam: string;
+  /** „75–97”, a le nem játszott meccsnél „Előzetes” vagy üres. */
+  score: string;
+  /** ISO dátum (YYYY-MM-DD); üres, ha az oldalon nem olvasható ki. */
+  gameDate: string;
+  /** A meccs összefoglaló oldala; nincs, ha a sorban nincs link. */
+  gameUrl: string | null;
+  /** A meccs azonosítója az URL-ből (pl. „hun_134763”). */
+  gameCode: string | null;
+};
+
+/**
+ * A menetrend-oldal meccssorai. Az oldal 2026 novemberében átalakult: a korábbi
+ * 5 cellás sor (forduló, hazai, eredmény, vendég, dátum) helyett meccsenként egy
+ * 3 cellás sor van (forduló | hazai–eredmény–vendég elemei | dátum), mellé külön
+ * infósor (pálya, játékvezetők), a mobil nézet pedig más szerkezetű táblában
+ * ismétli a meccseket. A meccssort a `.home-team-name` / `.away-team-name`
+ * elemek azonosítják – az infósorokban és a mobil táblákban nincsenek –, így
+ * a meccsek nem duplázódnak. Minden menetrend-olvasó szkript ezt használja.
+ */
+export const scrapeHunbasketScheduleRows = async (page: Page): Promise<HunbasketScheduleRow[]> => {
+  // A callback a böngészőben fut: nincs benne névvel ellátott belső függvény
+  // (a tsx `__name` segédje nem létezik az oldal kontextusában).
+  const raw = await page.$$eval('table tbody tr', tableRows => {
+    const entries: { stage: string; home: string; away: string; score: string; dateText: string; url: string }[] = [];
+    tableRows.forEach(row => {
+      const homeEl = row.querySelector('.home-team-name');
+      const awayEl = row.querySelector('.away-team-name');
+      if (!homeEl || !awayEl) return;
+      const firstCell = row.querySelector('td');
+      const scoreEl = row.querySelector('.game-cell');
+      const dateEl = row.querySelector('.long-date') || row.querySelector('.game-date');
+      const linkEl = row.querySelector('.game-cell a') as HTMLAnchorElement | null;
+      entries.push({
+        stage: (firstCell?.textContent || '').replace(/\s+/g, ' ').trim(),
+        home: (homeEl.textContent || '').replace(/\s+/g, ' ').trim(),
+        away: (awayEl.textContent || '').replace(/\s+/g, ' ').trim(),
+        score: (scoreEl?.textContent || '').replace(/\s+/g, ' ').trim(),
+        dateText: (dateEl?.textContent || '').replace(/\s+/g, ' ').trim(),
+        url: linkEl?.href || '',
+      });
+    });
+    return entries;
+  });
+
+  const seen = new Set<string>();
+  const rows: HunbasketScheduleRow[] = [];
+  for (const item of raw) {
+    const roundMatch = item.stage.match(/\d+/);
+    const dateMatch = item.dateText.match(/(\d{4})\.\s*(\d{1,2})\.\s*(\d{1,2})/);
+    const gameDate = dateMatch ? `${dateMatch[1]}-${dateMatch[2].padStart(2, '0')}-${dateMatch[3].padStart(2, '0')}` : '';
+    const codeMatch = item.url.match(/\/merkozes\/[^/]+\/[^/]+\/([a-z0-9_]+)/i);
+
+    const key = `${gameDate}|${item.home}|${item.away}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    rows.push({
+      stage: item.stage || null,
+      round: roundMatch ? parseInt(roundMatch[0], 10) : null,
+      homeTeam: item.home,
+      awayTeam: item.away,
+      score: item.score,
+      gameDate,
+      gameUrl: item.url || null,
+      gameCode: codeMatch ? codeMatch[1] : null,
+    });
+  }
+  return rows;
 };

@@ -1,6 +1,6 @@
 import { chromium, type Page } from 'playwright';
 import * as dotenv from 'dotenv';
-import { cleanTeamName, findTeamByNameFuzzy, createScriptClient } from './scrape-utils';
+import { cleanTeamName, findTeamByNameFuzzy, createScriptClient, scrapeHunbasketScheduleRows } from './scrape-utils';
 
 dotenv.config({ path: '.env.local' });
 
@@ -232,29 +232,7 @@ const scrapeSchedule = async (page: Page): Promise<ScheduleRow[]> => {
   await page.waitForTimeout(2500);
   await dismissCookieBanner(page);
 
-  const rows = await page.$$eval('table tbody tr', tableRows => {
-    return tableRows.map(row => {
-      const cells = row.querySelectorAll('td');
-      const roundText = (cells[0]?.textContent || '').trim();
-      const homeTeam = (cells[1]?.textContent || '').trim();
-      const score = (cells[2]?.textContent || '').trim();
-      const awayTeam = (cells[3]?.textContent || '').trim();
-      const dateText = (cells[4]?.textContent || '').trim();
-      const roundMatch = roundText.match(/\d+/);
-      const dateMatch = dateText.match(/(\d{4})\.\s*(\d{1,2})\.\s*(\d{1,2})/);
-      const gameDate = dateMatch
-        ? `${dateMatch[1]}-${dateMatch[2].padStart(2, '0')}-${dateMatch[3].padStart(2, '0')}`
-        : '';
-
-      return {
-        round: roundMatch ? parseInt(roundMatch[0], 10) : null,
-        homeTeam,
-        awayTeam,
-        score,
-        gameDate,
-      };
-    });
-  });
+  const rows = await scrapeHunbasketScheduleRows(page);
 
   return rows
     .filter(item => item.homeTeam && item.awayTeam && item.gameDate)

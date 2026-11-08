@@ -1,6 +1,6 @@
 # BACKLOG.md – ASEStats Projekt
 
-_Utoljára frissítve: 2026-11-01 (idei vs. tavalyi csapat összehasonlítás: csapatstat és keretváltozás kész, böngészős ellenőrzés nyitva; előtte 2026-10-18: H19 – post-game riport harmadik hibalista, A–I egység kész)_
+_Utoljára frissítve: 2026-11-08 (H20 – a hunbasket menetrend-oldal átalakulása miatt leállt `hunbasket:fixtures` javítva, éles újrafuttatás nyitva; előtte 2026-11-01: idei vs. tavalyi csapat összehasonlítás: csapatstat és keretváltozás kész, böngészős ellenőrzés nyitva; előtte 2026-10-18: H19 – post-game riport harmadik hibalista, A–I egység kész)_
 
 ---
 
@@ -705,6 +705,19 @@ a nézőpont nem hiba.
   `seasonName` paramétert kap, a fejléc közös `seasonLeagueLine()` segéddel
   „Szezon: 2026/2027” – a Liga csak akkor jelenik meg, ha különbözik. Csak
   webes MD export, mobil jegyzet nem kell.
+
+**H20 – `hunbasket:fixtures` leállt: „A menetrend oldalról egyetlen mérkőzés sem olvasható ki” ✓ (2026-11-08)** – a kód kész, az éles újrafuttatás (GitHub Actions) nyitva
+
+Tünet: a `scrape.yml` első lépése `Parsed fixtures: 0` után `exit 1`-gyel leállt, így a menetrend, a tabella, a box score és a Kosarstat lépés sem futott.
+
+Ok: a hunbasket menetrend-oldal (`menetrend-teljes/ferfi/x2627/hun`) átalakult. A régi 5 cellás sor (forduló, hazai, eredmény, vendég, dátum) helyett meccsenként 3 cellás sor van (forduló | hazai–eredmény–vendég elemei | dátum), mellé külön infósor (pálya, játékvezetők), a mobil nézet pedig más szerkezetű táblában ismétli a meccseket. A `cells[1..4]` alapú olvasó így 0 sort adott. (A tabella és a meccsoldal szerkezete változatlan: a tabella 14 sora 13 cellával, a meccsoldal játékossorai 32 cellával olvashatók.)
+
+- [x] **`scrape-utils.ts`** – új közös `scrapeHunbasketScheduleRows(page)` + `HunbasketScheduleRow`: a meccssort a `.home-team-name` / `.away-team-name` azonosítja (az infósorokban és a mobil táblákban nincs, így nincs duplázás), a dátum a `.long-date`, az eredmény a `.game-cell`, a meccs-link a `.game-cell a`; minden menetrend-olvasó ezt használja.
+- [x] **`scrape-hunbasket-fixtures.ts`** – a saját `$$eval` helyett a közös olvasót hívja.
+- [x] **`scrape-hunbasket.ts`** (box score) – ugyanaz a törés (`cells.length < 5` → 0 meccs), ugyanarra az olvasóra átállítva; a szűrési szabályok (link, eredmény, meccskód, dátum-fallback) változatlanok.
+- [ ] **`scrape-hunbasket-shotchart.ts` nincs átállítva** – ugyanaz az 5 cellás olvasó van benne, a `scrape.yml` nem futtatja; kézi futtatás előtt ugyanerre az olvasóra kell cserélni.
+- Ellenőrzés: `tsc`, `eslint` tiszta. Éles oldalon az olvasó 182 sort ad (54 lejátszott, 128 „Előzetes”), minden sornak van dátuma, a 14 csapatnév feloldódik a `teams` táblában, a szezonon kívül egy sor sincs (írás nem történt). A legutóbbi lejátszott meccs 2026-11-07, 8. forduló (az ASE-nek a DB-ben 7 meccse van, tehát a 8. még nem importálódott).
+- **Teendő:** push után a `scrape.yml`-t `workflow_dispatch`-csel újra kell futtatni. Mobil jegyzet nem kell (az adatforma változatlan).
 
 **H19 – Post-game riport: harmadik hibalista (ASE–Honvéd 112–81, 2026-10-17) ✓ (2026-10-18)** – a kód kész, a böngészős ellenőrzés nyitva
 
