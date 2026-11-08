@@ -784,10 +784,31 @@ egymás elleni meccsek közt jelenik meg. A 2024/25-ös szezonnézetben nincs do
 - [x] **Kézi futtatás a Supabase SQL Editorban** (felhasználó, 2026-11-08). Utóellenőrzés (service role olvasás): szezon ↔ slug 2024/25 `x2425` 138 · 2025/26 `x2526` 221 · 2026/27 `x2627` 54; szezonon kívüli meccs 0; dobások szezononként 2024/25 17 202 (119 játékos nélkül) · 2025/26 27 966 · 2026/27 6 940; meccs- és játékos-szezon eltérés 0 / 0; a 7 `SPIh3` dobás Josephé, Hawkinsnak 2024/25-ben 0.
 - [x] Futtatás után: a fájl `ÁLLAPOT` sora és a mobil jegyzet „Kézi lépések” része frissítve
 - [ ] A 2024/25-ös szezon hiányzó része (2025-03-01 után) – újraimport `HUNBASKET_SEASON_SLUG=x2425`, `HUNBASKET_SEASON_NAME=2024/2025`
-- [ ] Utómunka (külön döntés): a 2026-02-i és 2026-04-i hibás (x2425) box-score importok 2025/26-os `players`
-  sorai közül 123-nak nincs 2025/26-os statisztikája (a 206-ból csak 83-nak van) –
-  az átkötés után ezekre semmi nem hivatkozik a dobásokból; törlésük / megtartásuk vizsgálandó.
-  Ugyanígy a 2025/26-os `hunbasket_player_links` sorok közt lehetnek 2024/25-ös maradványok.
+- [x] **Utómunka – döntés (felhasználó, 2026-11-08):** ami semmire nem hivatkozik és szemét adat, törlődik.
+- [x] **Felmérés (csak olvasás, 2026-11-08)** – a 2025/26-os `players` sorok (399) hivatkozásai
+  a szezonos statisztikákból, riportokból, dobásokból, `live_player_lines` / `hunbasket_pbp_events`
+  táblából és a linkekből. **Szemétnek bizonyult (törlendő):**
+  - **74 játékos-sor** (14 csapat, ebből ASE 10, pl. Chandler, Lockett, Dukes, Oduro): nincs rájuk
+    hivatkozás (csak a hibás futás linkjei), mindnek van 2024/25-ös csapat + név párja, és a
+    Kosarstat szezonos keret-adata (`league_player_team_seasons`) szerint egyik sem volt az adott
+    csapat 2025/26-os keretében. Létrehozás: 2026-04-20 (50), 2026-02-07 (19), egyéb napok (5);
+  - **78 link-sor** (`hunbasket_player_links`, 2025/26, first_seen = last_seen = 2026-04-20):
+    70 a fenti játékosokra mutat, 8 játékos nélküli, a kódjuk csak a 2024/25-ös dobásokban szerepel.
+
+  **Megmarad (nem bizonyíthatóan szemét):** KOLLÁR Bence (NKA Universitas Pécs) – nincs rá hivatkozás,
+  de a Kosarstat szerint a 2025/26-os keret tagja volt; 23 hivatkozás nélküli, 2024/25-ös pár nélküli
+  2025/26-os játékos a keret-importokból (2025-11-16, 2026-01-26, 2026-03-16) – lásd lent; a hibás
+  futás 70 olyan linkje, amely valódi 2025/26-os játékosra mutat (az azonosítás helyes).
+- [x] **Törlő SQL:** `migrations/fix-delete-2024-25-leftover-players-from-2025-26-season.sql` – explicit
+  azonosító-listák (74 + 78), egytáblás előnézet (ellenőrzés | érték | várt), egyetlen `DO` blokk:
+  sor-szintű feltételek, előbb a linkek törlése, utána a `players`-re mutató **összes** idegen kulcs
+  ellenőrzése a katalógusból (`pg_constraint`, dinamikusan) – bármely hivatkozásnál kivétel, semmi
+  nem törlődik; az `ON DELETE CASCADE` így statisztikát nem vihet. Helyi Postgres nincs, próbafuttatás nem volt.
+- [ ] **Kézi futtatás** (felhasználó): a) 0. + 1. lépés együtt (előnézet), b) 0. + 2. + 3. lépés együtt.
+- [ ] **Külön vizsgálandó (nem a hibás futásból):** a 23 hivatkozás nélküli 2025/26-os játékos közül 19
+  nincs a Kosarstat 2025/26-os keretében; több név két csapatnál is szerepel (pl. Csuti Kornél,
+  Peringer Balázs, Randolph Brandon Kenneth, Davis-Mcmurrin Gage Andrew a `d96c…` és a `be99…`
+  csapatnál) – keret-import csapat-hozzárendelési hiba gyanúja, döntés előtt nem nyúltunk hozzá.
 - Mobil jegyzet: `asestatmobile/docs/mobile-sync/2026-11-08-dobasterkep-zonak-h21.md` (összesítővé bővítve: H21 + H22).
 
 **H20 – `hunbasket:fixtures` leállt: „A menetrend oldalról egyetlen mérkőzés sem olvasható ki” ✓ (2026-11-08)** – mindhárom menetrend-olvasó átállítva, az éles újrafuttatás (GitHub Actions) nyitva

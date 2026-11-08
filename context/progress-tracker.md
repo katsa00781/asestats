@@ -130,6 +130,10 @@ Update this file after every meaningful implementation change.
    `migrations/fix-move-2024-25-shotcharts-from-2025-26-season.sql` – előbb az
    1. lépés (előnézet, várt értékek a fájlban), majd a 2. lépés egyben, végül a 3.
    (ellenőrzés). ✓ Lefuttatva 2026-11-08, ellenőrizve. Részletek: `BACKLOG.md` H22.
+7. **H22 utómunka – 2024/25-ös maradvány játékos- és link-sorok törlése** (2026-11-08):
+   `migrations/fix-delete-2024-25-leftover-players-from-2025-26-season.sql` – a) a 0. és
+   az 1. lépés együtt (előnézet, egy táblázat: érték | várt), b) a 0., 2. és 3. lépés együtt.
+   74 `players` + 78 `hunbasket_player_links` sor. Még NEM futott. Részletek: `BACKLOG.md` H22.
 
 ## Completed (legutóbbi)
 
