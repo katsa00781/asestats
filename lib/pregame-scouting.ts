@@ -1,3 +1,4 @@
+import type { TeamOpponentBox } from './team-analysis';
 import { parsePositionBuckets, type Position } from './positions';
 import { DEFENSE_STYLE_LABELS, OFFENSE_STYLE_LABELS, finalizeDefenseStyle, finalizeOffenseStyle } from './style-vocabulary';
 export type { Position };
@@ -24,17 +25,12 @@ export type TeamSeasonStat = {
   blk: number;
   fouls: number;
   val: number;
-  opponent?: {
-    fga2: number;
-    fgm2: number;
-    fga3: number;
-    fgm3: number;
-    fta: number;
-    ftm: number;
-    oreb: number;
-    dreb: number;
-    tov: number;
-  };
+  /**
+   * Az ellenfelek box score-ja a párosított meccseken (lásd
+   * `team-analysis.ts` `buildOpponentBoxTotals`). Hiányában az OREB% nem
+   * számolható, a tempó pedig csak a saját birtoklásbecslés.
+   */
+  opponent?: TeamOpponentBox;
 };
 
 export type PlayerSeasonStat = {
@@ -261,11 +257,28 @@ export type ScoutingReport = {
     notes: string[];
     defenseNotes: string[];
   };
+  /**
+   * Csapatszintű mutatók (%-ban). Az `orebRate` `null`, ha nincs párosított
+   * (mindkét oldali box score-os) meccs; a `paceFromOwnOnly` jelzi, hogy a tempó
+   * ellenfél-birtoklás nélkül, csak a saját becslésből jön.
+   */
   teamStats?: {
-    own: { pace: number; efg: number; threeRate: number; threePct: number; turnoverRate: number; ftRate: number; orebRate: number; assistRate: number };
-    opponent: { pace: number; efg: number; threeRate: number; threePct: number; turnoverRate: number; ftRate: number; orebRate: number; assistRate: number };
+    own: PregameTeamStatLine;
+    opponent: PregameTeamStatLine;
   };
   summary: string;
+};
+
+export type PregameTeamStatLine = {
+  pace: number;
+  paceFromOwnOnly: boolean;
+  efg: number;
+  threeRate: number;
+  threePct: number;
+  turnoverRate: number;
+  ftRate: number;
+  orebRate: number | null;
+  assistRate: number;
 };
 
 type XFactorCandidate = {
@@ -494,7 +507,8 @@ const getStatValue = (team: NormalizedTeamStats, stat: string) => {
     case 'turnover_rate':
       return team.turnoverRate;
     case 'oreb_rate':
-      return team.orebRate;
+      // Ellenfél-lepattanó nélkül nincs értelmes OREB% – a benchmarkból kimarad.
+      return team.hasOpponentBox ? team.orebRate : Number.NaN;
     case 'two_rate':
       return team.twoRate;
     case 'three_rate':
@@ -531,50 +545,35 @@ export type NormalizedTeamStats = TeamSeasonStat & {
   ftRate: number;
   efg: number;
   valPerGame: number;
+  /** Van-e párosított (mindkét oldali box score-os) meccs – az OREB% csak ekkor értelmes. */
+  hasOpponentBox: boolean;
 };
+
+const computePossessions = (fga2: number, fga3: number, fta: number, oreb: number, tov: number) =>
+  Math.max(fga2 + fga3 + 0.44 * fta + tov - oreb, 0);
 
 export const normalizeTeamStats = (raw: TeamSeasonStat): NormalizedTeamStats => {
   const games = raw.games || 1;
   const fga = raw.fga2 + raw.fga3;
   const fgm = raw.fgm2 + raw.fgm3;
-  const opponent = raw.opponent ?? {
-    fga2: 0,
-    fgm2: 0,
-    fga3: 0,
-    fgm3: 0,
-    fta: 0,
-    ftm: 0,
-    oreb: 0,
-    dreb: 0,
-    tov: 0,
-  };
-  const computePossessions = (
-    fga2: number,
-    fga3: number,
-    fta: number,
-    oreb: number,
-    tov: number
-  ) => {
-    const totalFga = fga2 + fga3;
-    const attempts = totalFga + 0.44 * fta + tov;
-    const possessions = attempts - oreb;
-    return Math.max(possessions, 0);
-  };
+  const opponent = raw.opponent;
+  const opponentGames = opponent?.games ?? 0;
+  const hasOpponentBox = Boolean(opponent) && opponentGames > 0;
 
-  const teamPossessions = computePossessions(raw.fga2, raw.fga3, raw.fta, raw.oreb, raw.tov);
-  const opponentPossessions = computePossessions(
-    opponent.fga2,
-    opponent.fga3,
-    opponent.fta,
-    opponent.oreb,
-    opponent.tov
-  );
-  const teamPossessionsPerGame = games > 0 ? teamPossessions / games : 0;
-  const opponentPossessionsPerGame = games > 0 ? opponentPossessions / games : 0;
-  const pace = Math.max((teamPossessionsPerGame + opponentPossessionsPerGame) / 2, 0);
+  const teamPossessionsPerGame = computePossessions(raw.fga2, raw.fga3, raw.fta, raw.oreb, raw.tov) / games;
+  const opponentPossessionsPerGame = opponent && hasOpponentBox
+    ? computePossessions(opponent.fga2, opponent.fga3, opponent.fta, opponent.oreb, opponent.tov) / opponentGames
+    : 0;
+  // Tempó: a két csapat birtoklásbecslésének átlaga; ellenfél box score nélkül
+  // csak a saját becslés (nem felezve).
+  const pace = opponentPossessionsPerGame > 0
+    ? (teamPossessionsPerGame + opponentPossessionsPerGame) / 2
+    : teamPossessionsPerGame;
   const assistRate = fgm > 0 ? raw.ast / fgm : 0;
   const turnoverRate = teamPossessionsPerGame > 0 ? (raw.tov / games) / teamPossessionsPerGame : 0;
-  const orebRate = (raw.oreb + opponent.dreb) > 0 ? raw.oreb / (raw.oreb + opponent.dreb) : 0;
+  // OREB%: saját T-lep / (saját T-lep + ellenfél V-lep), azonos (párosított) mintán.
+  const orebDenominator = opponent && hasOpponentBox ? opponent.ownOreb + opponent.dreb : 0;
+  const orebRate = opponent && orebDenominator > 0 ? opponent.ownOreb / orebDenominator : 0;
   const twoRate = fga > 0 ? raw.fga2 / fga : 0;
   const threeRate = fga > 0 ? raw.fga3 / fga : 0;
   const threePct = raw.fga3 > 0 ? (raw.fgm3 / raw.fga3) * 100 : 0;
@@ -596,6 +595,7 @@ export const normalizeTeamStats = (raw: TeamSeasonStat): NormalizedTeamStats => 
     ftRate: round(ftRate, 3),
     efg: round(efg, 1),
     valPerGame: round(valPerGame, 1),
+    hasOpponentBox: hasOpponentBox && orebDenominator > 0,
   };
 };
 
@@ -2214,22 +2214,24 @@ export const analyzePreGameScouting = (
     teamStats: {
       own: {
         pace: normalizedOwn.pace,
+        paceFromOwnOnly: !normalizedOwn.hasOpponentBox,
         efg: normalizedOwn.efg,
         threeRate: round(normalizedOwn.threeRate * 100, 1),
         threePct: normalizedOwn.threePct,
         turnoverRate: round(normalizedOwn.turnoverRate * 100, 1),
         ftRate: round(normalizedOwn.ftRate * 100, 1),
-        orebRate: round(normalizedOwn.orebRate * 100, 1),
+        orebRate: normalizedOwn.hasOpponentBox ? round(normalizedOwn.orebRate * 100, 1) : null,
         assistRate: round(normalizedOwn.assistRate * 100, 1),
       },
       opponent: {
         pace: normalizedOpponent.pace,
+        paceFromOwnOnly: !normalizedOpponent.hasOpponentBox,
         efg: normalizedOpponent.efg,
         threeRate: round(normalizedOpponent.threeRate * 100, 1),
         threePct: normalizedOpponent.threePct,
         turnoverRate: round(normalizedOpponent.turnoverRate * 100, 1),
         ftRate: round(normalizedOpponent.ftRate * 100, 1),
-        orebRate: round(normalizedOpponent.orebRate * 100, 1),
+        orebRate: normalizedOpponent.hasOpponentBox ? round(normalizedOpponent.orebRate * 100, 1) : null,
         assistRate: round(normalizedOpponent.assistRate * 100, 1),
       },
     },

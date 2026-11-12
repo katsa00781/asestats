@@ -824,14 +824,19 @@ export function pregameReportToMd(report: ScoutingReport, seasonName?: string): 
     lines.push(``, `## Csapatszintű statisztikák összehasonlítás`, ``);
     lines.push(`| Mutató | ${report.ownTeamName} | ${report.opponentTeamName} |`);
     lines.push(`|--------|---|---|`);
-    lines.push(`| Tempó (possz./meccs) | ${ts.own.pace.toFixed(1)} | ${ts.opponent.pace.toFixed(1)} |`);
+    const paceCell = (line: typeof ts.own) => `${line.pace.toFixed(1)}${line.paceFromOwnOnly ? '¹' : ''}`;
+    const orebCell = (line: typeof ts.own) => (line.orebRate === null ? '–' : `${line.orebRate.toFixed(1)}%`);
+    lines.push(`| Tempó (birtoklás/meccs) | ${paceCell(ts.own)} | ${paceCell(ts.opponent)} |`);
     lines.push(`| eFG% | ${ts.own.efg.toFixed(1)}% | ${ts.opponent.efg.toFixed(1)}% |`);
     lines.push(`| 3P arány | ${ts.own.threeRate.toFixed(1)}% | ${ts.opponent.threeRate.toFixed(1)}% |`);
     lines.push(`| 3P% | ${ts.own.threePct.toFixed(1)}% | ${ts.opponent.threePct.toFixed(1)}% |`);
     lines.push(`| TO rate | ${ts.own.turnoverRate.toFixed(1)}% | ${ts.opponent.turnoverRate.toFixed(1)}% |`);
     lines.push(`| FT arány | ${ts.own.ftRate.toFixed(1)}% | ${ts.opponent.ftRate.toFixed(1)}% |`);
-    lines.push(`| OREB% | ${ts.own.orebRate.toFixed(1)}% | ${ts.opponent.orebRate.toFixed(1)}% |`);
+    lines.push(`| OREB% | ${orebCell(ts.own)} | ${orebCell(ts.opponent)} |`);
     lines.push(`| Assziszt arány | ${ts.own.assistRate.toFixed(1)}% | ${ts.opponent.assistRate.toFixed(1)}% |`);
+    lines.push(``, `*Tempó = a két csapat (FGA + 0,44·FTA + LV − T-lep) birtoklásbecslésének meccsenkénti átlaga. OREB% = saját T-lep / (saját T-lep + ellenfél V-lep) a mindkét oldali box score-os meccseken. FT arány = FTA / FGA.${
+      ts.own.paceFromOwnOnly || ts.opponent.paceFromOwnOnly ? ' ¹ Ellenfél box score nélkül: csak a saját birtoklásbecslés.' : ''
+    }*`);
   }
 
   if (report.ownTeamProfile) {

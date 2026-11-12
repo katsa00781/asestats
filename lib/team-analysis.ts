@@ -26,17 +26,13 @@ export type TeamSeasonStat = {
   blk: number;
   fouls: number;
   val: number;
-  opponent: {
-    fga2: number;
-    fgm2: number;
-    fga3: number;
-    fgm3: number;
-    fta: number;
-    ftm: number;
-    oreb: number;
-    dreb: number;
-    tov: number;
-  };
+  /**
+   * Az ellenfelek box score-ja a csapat **párosított** meccsein (ahol mindkét
+   * oldal box score-ja megvan), lásd `buildOpponentBoxTotals`. `games` = a
+   * párosított meccsek száma, `ownOreb` / `ownDreb` = a saját lepattanók
+   * ugyanezeken a meccseken (az OREB% / DREB% csak azonos mintán számolható).
+   */
+  opponent: TeamOpponentBox;
   roster: Array<{
     playerId: string;
     name: string;
@@ -50,6 +46,132 @@ export type TeamSeasonStat = {
     heightCm?: number;
     roles: string[];
   }>;
+};
+
+/** Egy csapat egy meccsre (vagy meccsek összegére) számolt box score-ja. */
+export type TeamBoxTotals = {
+  fga2: number;
+  fgm2: number;
+  fga3: number;
+  fgm3: number;
+  fta: number;
+  ftm: number;
+  oreb: number;
+  dreb: number;
+  tov: number;
+};
+
+/** Az ellenfelek box score-ja a párosított meccseken + a saját lepattanók ugyanott. */
+export type TeamOpponentBox = TeamBoxTotals & {
+  games: number;
+  ownOreb: number;
+  ownDreb: number;
+};
+
+export const emptyTeamBoxTotals = (): TeamBoxTotals => ({
+  fga2: 0, fgm2: 0, fga3: 0, fgm3: 0, fta: 0, ftm: 0, oreb: 0, dreb: 0, tov: 0,
+});
+
+export const emptyTeamOpponentBox = (): TeamOpponentBox => ({
+  ...emptyTeamBoxTotals(),
+  games: 0,
+  ownOreb: 0,
+  ownDreb: 0,
+});
+
+/** Egy játékos-meccs sor box oszlopai (a szezon stat-tábla mezőnevei). */
+export type BoxStatRow = {
+  close_made?: number | null;
+  close_attempted?: number | null;
+  mid_made?: number | null;
+  mid_attempted?: number | null;
+  three_made?: number | null;
+  three_attempted?: number | null;
+  free_throw_made?: number | null;
+  free_throw_attempted?: number | null;
+  offensive_rebounds?: number | null;
+  defensive_rebounds?: number | null;
+  turnovers?: number | null;
+};
+
+/** Játékos-meccs sorok összegzése egy csapat-box score-rá. */
+export const sumBoxRows = (rows: BoxStatRow[]): TeamBoxTotals =>
+  rows.reduce((acc, row) => {
+    acc.fga2 += (row.close_attempted || 0) + (row.mid_attempted || 0);
+    acc.fgm2 += (row.close_made || 0) + (row.mid_made || 0);
+    acc.fga3 += row.three_attempted || 0;
+    acc.fgm3 += row.three_made || 0;
+    acc.fta += row.free_throw_attempted || 0;
+    acc.ftm += row.free_throw_made || 0;
+    acc.oreb += row.offensive_rebounds || 0;
+    acc.dreb += row.defensive_rebounds || 0;
+    acc.tov += row.turnovers || 0;
+    return acc;
+  }, emptyTeamBoxTotals());
+
+const addBox = (target: TeamOpponentBox, box: TeamBoxTotals) => {
+  target.fga2 += box.fga2;
+  target.fgm2 += box.fgm2;
+  target.fga3 += box.fga3;
+  target.fgm3 += box.fgm3;
+  target.fta += box.fta;
+  target.ftm += box.ftm;
+  target.oreb += box.oreb;
+  target.dreb += box.dreb;
+  target.tov += box.tov;
+};
+
+/** Egy `games` sor a saját box score-jával (a `games` tábla csapat-nézetű). */
+export type LeagueGameBox = {
+  gameId: string;
+  date: string;
+  ourTeamId: string;
+  opponentTeamId: string | null;
+  box: TeamBoxTotals | null;
+};
+
+export type OpponentBoxTotals = {
+  /** Csapatonként az ellenfél-box a párosított meccseken. */
+  byTeam: Map<string, TeamOpponentBox>;
+  /** Meccsenként (a csapat saját `games.id`-ja) az ellenfél-box, `games` = 1. */
+  byGame: Map<string, TeamOpponentBox>;
+};
+
+/**
+ * Az ellenfél-box score párosítása. A `games` tábla csapat-nézetű: egy meccs két
+ * sorban él (mindkét csapat `our_team_id`-jával), egy `game_id` alatt csak az
+ * egyik csapat játékosai vannak. A tükörsor kulcsa: azonos dátum, és a másik sor
+ * `our_team_id`-ja = ennek az `opponent_team_id`-ja. Csak az a meccs számít, ahol
+ * mindkét oldal box score-ja megvan – így az OREB% és a közös birtoklás azonos
+ * mintán számolódik.
+ */
+export const buildOpponentBoxTotals = (games: LeagueGameBox[]): OpponentBoxTotals => {
+  const byKey = new Map<string, LeagueGameBox>();
+  games.forEach(game => byKey.set(`${game.date}|${game.ourTeamId}`, game));
+
+  const byTeam = new Map<string, TeamOpponentBox>();
+  const byGame = new Map<string, TeamOpponentBox>();
+  games.forEach(game => {
+    if (!game.box || !game.opponentTeamId) return;
+    const mirror = byKey.get(`${game.date}|${game.opponentTeamId}`);
+    if (!mirror?.box || mirror.opponentTeamId !== game.ourTeamId) return;
+
+    const single = emptyTeamOpponentBox();
+    addBox(single, mirror.box);
+    single.games = 1;
+    single.ownOreb = game.box.oreb;
+    single.ownDreb = game.box.dreb;
+    byGame.set(game.gameId, single);
+
+    const total = byTeam.get(game.ourTeamId) ?? emptyTeamOpponentBox();
+    addBox(total, mirror.box);
+    total.games += 1;
+    total.ownOreb += game.box.oreb;
+    total.ownDreb += game.box.dreb;
+    byTeam.set(game.ourTeamId, total);
+  });
+
+  return { byTeam, byGame };
 };
 
 export type NormalizedTeamStats = TeamSeasonStat & {
@@ -621,8 +743,8 @@ const buildDefensiveProfile = (
       ? 'Proxy alapján vállalható perimétervédekezés'
       : 'A perimétervédekezés bizonytalanabb';
 
-  const drebDenominator = team.dreb + team.opponent.oreb;
-  const drebRate = team.hasOpponentReb && drebDenominator > 0 ? team.dreb / drebDenominator : null;
+  const drebDenominator = team.opponent.ownDreb + team.opponent.oreb;
+  const drebRate = team.hasOpponentReb && drebDenominator > 0 ? team.opponent.ownDreb / drebDenominator : null;
   const rebounding = drebRate !== null
     ? drebRate >= 0.74
       ? 'Erős védelmi lepattanózás'
@@ -663,7 +785,8 @@ const getStatValue = (team: NormalizedTeamStats, stat: string) => {
     case 'turnover_rate':
       return team.turnoverRate;
     case 'oreb_rate':
-      return team.orebRate;
+      // Ellenfél-lepattanó nélkül nincs értelmes OREB% – a benchmarkból kimarad.
+      return team.hasOpponentReb ? team.orebRate : Number.NaN;
     case 'two_rate':
       return team.twoRate;
     case 'three_rate':
@@ -676,18 +799,20 @@ const getStatValue = (team: NormalizedTeamStats, stat: string) => {
       return team.efg;
     case 'ortg':
       return team.ortg;
+    // Az ellenfél-oldali mutatók csak párosított meccsekből ismertek; hiányuk
+    // NaN, hogy a 0 ne torzítsa a liga-benchmarkot.
     case 'drtg':
-      return team.drtg;
+      return team.hasOpponentShooting ? team.drtg : Number.NaN;
     case 'net_rtg':
-      return team.netRtg;
+      return team.hasOpponentShooting ? team.netRtg : Number.NaN;
     case 'val_per_game':
       return team.valPerGame;
     case 'opp2_pct':
-      return team.opp2Pct;
+      return team.hasOpponentShooting ? team.opp2Pct : Number.NaN;
     case 'opp3_pct':
-      return team.opp3Pct;
+      return team.hasOpponentShooting ? team.opp3Pct : Number.NaN;
     case 'opp_to_rate':
-      return team.oppTurnoverRate;
+      return team.hasOpponentTo ? team.oppTurnoverRate : Number.NaN;
     case 'stl_per_game':
       return team.games > 0 ? team.stl / team.games : 0;
     case 'blk_per_game':
@@ -703,9 +828,12 @@ export const normalizeTeamStats = (raw: TeamSeasonStat): NormalizedTeamStats => 
   const games = raw.games || 1;
   const fga = raw.fga2 + raw.fga3;
   const fgm = raw.fgm2 + raw.fgm3;
-  const hasOpponentShooting = raw.opponent.fga2 + raw.opponent.fga3 > 0;
-  const hasOpponentReb = raw.opponent.dreb + raw.opponent.oreb > 0;
-  const hasOpponentTo = raw.opponent.tov > 0;
+  // Az ellenfél-oldal csak a párosított meccseken ismert (`opponent.games`).
+  const opponentGames = raw.opponent.games;
+  const hasOpponentBox = opponentGames > 0;
+  const hasOpponentShooting = hasOpponentBox && raw.opponent.fga2 + raw.opponent.fga3 > 0;
+  const hasOpponentReb = hasOpponentBox && raw.opponent.dreb + raw.opponent.oreb > 0;
+  const hasOpponentTo = hasOpponentBox && raw.opponent.tov > 0;
   const computePossessions = (
     fga2: number,
     fga3: number,
@@ -728,17 +856,26 @@ export const normalizeTeamStats = (raw: TeamSeasonStat): NormalizedTeamStats => 
     raw.opponent.tov
   );
   const teamPossessionsPerGame = games > 0 ? teamPossessions / games : 0;
-  const opponentPossessionsPerGame = games > 0 ? opponentPossessions / games : 0;
-  const pace = (teamPossessionsPerGame + opponentPossessionsPerGame) / 2;
+  const opponentPossessionsPerGame = hasOpponentBox ? opponentPossessions / opponentGames : 0;
+  // Tempó: a két csapat birtoklásbecslésének átlaga; ellenfél box score nélkül
+  // csak a saját becslés (nem felezve).
+  const pace = hasOpponentBox && opponentPossessionsPerGame > 0
+    ? (teamPossessionsPerGame + opponentPossessionsPerGame) / 2
+    : teamPossessionsPerGame;
   const assistRate = fgm > 0 ? raw.ast / fgm : 0;
   const turnoverRate = teamPossessionsPerGame > 0 ? (raw.tov / games) / teamPossessionsPerGame : 0;
   const ortg = teamPossessions > 0 ? (raw.pointsFor / teamPossessions) * 100 : 0;
-  const drtg = opponentPossessions > 0 ? (raw.pointsAgainst / opponentPossessions) * 100 : 0;
+  // DRtg: meccsenkénti kapott pont / az ellenfél meccsenkénti birtoklása (a
+  // párosított meccsekből), mert az ellenfél-oldal csak ott ismert.
+  const drtg = opponentPossessionsPerGame > 0
+    ? ((raw.pointsAgainst / games) / opponentPossessionsPerGame) * 100
+    : 0;
   // A netRtg akkor számolható, ha mindkét oldal birtoklásszáma ismert – egy
   // legitim 0 értékű rating nem nullázhatja ki a különbséget.
-  const netRtg = teamPossessions > 0 && opponentPossessions > 0 ? ortg - drtg : 0;
-  const orebDenominator = raw.oreb + raw.opponent.dreb;
-  const orebRate = orebDenominator > 0 ? raw.oreb / orebDenominator : 0;
+  const netRtg = teamPossessions > 0 && opponentPossessionsPerGame > 0 ? ortg - drtg : 0;
+  // OREB%: saját T-lep / (saját T-lep + ellenfél V-lep), azonos (párosított) mintán.
+  const orebDenominator = raw.opponent.ownOreb + raw.opponent.dreb;
+  const orebRate = hasOpponentReb && orebDenominator > 0 ? raw.opponent.ownOreb / orebDenominator : 0;
   const twoRate = fga > 0 ? raw.fga2 / fga : 0;
   const threeRate = fga > 0 ? raw.fga3 / fga : 0;
   const threePct = raw.fga3 > 0 ? (raw.fgm3 / raw.fga3) * 100 : 0;
@@ -748,7 +885,7 @@ export const normalizeTeamStats = (raw: TeamSeasonStat): NormalizedTeamStats => 
   const opp2Pct = raw.opponent.fga2 > 0 ? (raw.opponent.fgm2 / raw.opponent.fga2) * 100 : 0;
   const opp3Pct = raw.opponent.fga3 > 0 ? (raw.opponent.fgm3 / raw.opponent.fga3) * 100 : 0;
   const oppTurnoverRate = opponentPossessionsPerGame > 0
-    ? (raw.opponent.tov / games) / opponentPossessionsPerGame
+    ? (raw.opponent.tov / opponentGames) / opponentPossessionsPerGame
     : 0;
 
   return {

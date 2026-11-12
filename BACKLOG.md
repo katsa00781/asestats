@@ -811,6 +811,40 @@ egymás elleni meccsek közt jelenik meg. A 2024/25-ös szezonnézetben nincs do
   csapatnál) – keret-import csapat-hozzárendelési hiba gyanúja, döntés előtt nem nyúltunk hozzá.
 - Mobil jegyzet: `asestatmobile/docs/mobile-sync/2026-11-08-dobasterkep-zonak-h21.md` (összesítővé bővítve: H21 + H22).
 
+**H23 – Pregame elemzés: számítási hibák, ellentmondások, szöveghibák, hiányzó kontextus (2026-11-12)** – 1. fázis kész, 2–5. nyitva
+
+A pregame scouting riport (ASE–Alba futás) 11 hibája. Felhasználói döntések: az
+ellenfél-összesítő közös forrásban, liga-szintű kliens-hookkal (sémaváltozás
+nélkül); a hazai módosító ligaadatból (zsugorítva, ±6 pp); a „Kevés büntető”
+helyett az ellenfél *engedett* FTA/FGA-ja a gyengeség.
+
+- [x] **1. fázis – ellenfél-box a párosított meccseken (OREB% 100%, tempó ~39, `@core`)**: a
+  `teamSeasonStats` `opponent` blokkja sosem töltődött, ezért OREB% = `oreb/(oreb+0)`, tempó =
+  `(saját+0)/2`. A meccsek két `games` sorban élnek (egy `game_id` alatt csak egy csapat box-a), a
+  tükörpár kulcsa: azonos dátum + `opponent_team_id` (2026/27: 122/122, 2025/26: 444/444 sor párosítható).
+  Új `hooks/useLeagueTeamBoxTotals.ts` (liga `games` + szezon stat-tábla box oszlopai, `fetchAllRows`,
+  50-es `game_id` csomagok) → `lib/team-analysis.ts` `buildOpponentBoxTotals` (csak mindkét oldali
+  box score-os meccs; `byTeam` + `byGame`). A `TeamSeasonStat.opponent` = `TeamOpponentBox`
+  (+ `games`, `ownOreb`, `ownDreb`). Mindkét `normalizeTeamStats`: ellenfél-birtoklás párosított
+  meccsre vetítve, tempó ellenfél nélkül a saját becslés (nem felezve), OREB% azonos mintán; a hiányzó
+  ellenfél-mutató `NaN` a benchmarkban. `SeasonComparison`: csapat-összesítő, pregame bemenetek,
+  `buildRecentTeamStat`, `subtractGameFromTeamAggregate`, `blendPregameTeamStats` kezeli. Export:
+  OREB% „–”, ha nincs párosított meccs; képlet-lábjegyzet. Valós adat (2026/27): tempó 74,4–85,3,
+  OREB% 20,1–43,2% (ASE 77,3 / 43,2%, Alba 76,7 / 31,4%).
+- [ ] **2. fázis – modell-konzisztencia**: forgatókönyvek közös forrásból, variancia → kockázati
+  trigger, tempó-sáv percentilis-ranggal + pár-tolerancia, „Sokat faultoló védekezés” (engedett FT
+  arány), zóna-matchup pps alapján, Δ arány / Δ FG% külön oszlop.
+- [ ] **3. fázis – szövegminőség**: eltérő másodlagos X-faktor, egy X-faktor mondat, a/az névelő,
+  „Félpályás támadás támadást”, dupla pont.
+- [ ] **4. fázis – mérkőzés-kontextus**: pályaválasztó, mérleg, forma (utolsó 5), H2H, hazai módosító,
+  hiányzók VAL/36-hatása az exportban.
+- [ ] **5. fázis – PER*/WS* skála**: képlet és ligaátlag lábjegyzetben.
+- [ ] **Külön tétel (nem H23):** a post-game `postgameOpponentTotalsByTeam`
+  (`SeasonComparison.tsx`) `game_id`-nként két csapatot vár, ami a valós adatban sosem fordul elő,
+  ezért a post-game liga-benchmark OREB% / közös birtoklás ellenfél-oldala üres. A
+  `useLeagueTeamBoxTotals` `byTeam` térképével javítható – külön döntés.
+- Mobil jegyzet: `asestatmobile/docs/mobile-sync/2026-11-12-pregame-riport-h23.md` (fázisonként bővül).
+
 **H20 – `hunbasket:fixtures` leállt: „A menetrend oldalról egyetlen mérkőzés sem olvasható ki” ✓ (2026-11-08)** – mindhárom menetrend-olvasó átállítva, az éles újrafuttatás (GitHub Actions) nyitva
 
 Tünet: a `scrape.yml` első lépése `Parsed fixtures: 0` után `exit 1`-gyel leállt, így a menetrend, a tabella, a box score és a Kosarstat lépés sem futott.
