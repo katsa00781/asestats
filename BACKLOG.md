@@ -811,7 +811,7 @@ egymás elleni meccsek közt jelenik meg. A 2024/25-ös szezonnézetben nincs do
   csapatnál) – keret-import csapat-hozzárendelési hiba gyanúja, döntés előtt nem nyúltunk hozzá.
 - Mobil jegyzet: `asestatmobile/docs/mobile-sync/2026-11-08-dobasterkep-zonak-h21.md` (összesítővé bővítve: H21 + H22).
 
-**H23 – Pregame elemzés: számítási hibák, ellentmondások, szöveghibák, hiányzó kontextus ✓ (2026-11-12)** – az 5 fázis kész; böngészős ellenőrzés és a post-game ellenfél-összesítő külön tétel nyitva
+**H23 – Pregame elemzés: számítási hibák, ellentmondások, szöveghibák, hiányzó kontextus ✓ (2026-11-12)** – az 5 fázis és a post-game utómunka kész; a böngészős ellenőrzés nyitva
 
 A pregame scouting riport (ASE–Alba futás) 11 hibája. Felhasználói döntések: az
 ellenfél-összesítő közös forrásban, liga-szintű kliens-hookkal (sémaváltozás
@@ -866,10 +866,13 @@ helyett az ellenfél *engedett* FTA/FGA-ja a gyengeség.
   tooltipben és az export lábjegyzetében. 2026/27: ligaátlag PER* 6,1 (a legjobbak ~10–11).
 - [x] `npx tsc --noEmit`, `npm run lint` (0 hiba, csak a korábbi 5 figyelmeztetés), `npm run build` rendben.
 - [ ] **Böngészős ellenőrzés** (felhasználó): Elemzések → pregame ASE–Alba, MD export – a 11 pont.
-- [ ] **Külön tétel (nem H23):** a post-game `postgameOpponentTotalsByTeam`
-  (`SeasonComparison.tsx`) `game_id`-nként két csapatot vár, ami a valós adatban sosem fordul elő,
-  ezért a post-game liga-benchmark OREB% / közös birtoklás ellenfél-oldala üres. A
-  `useLeagueTeamBoxTotals` `byTeam` térképével javítható – külön döntés.
+- [x] **Post-game ellenfél-összesítő (H23 utómunka, 2026-11-12)**: a `postgameOpponentTotalsByTeam`
+  (`SeasonComparison.tsx`) `game_id`-nként két csapatot várt, ami a valós adatban sosem fordul elő, ezért
+  a post-game liga-benchmark és a szezon-referencia OREB%-a a saját lepattanókból számolt közelítés, a
+  tempó / ORtg / DRtg csak a saját birtoklásbecslés volt. Most a `teamSeasonStats` ellenfél-box-ából
+  (liga-szintű tükörmeccs-párosítás) jön, a párosított mintát a csapat meccsszámára vetítve. 2026/27
+  benchmark: OREB% P10/P50/P90 0,237/0,278/0,357 → 0,226/0,270/0,392; tempó-medián 77,2 → 77,0. Webes
+  javítás – a mobil `lib/postgame-data.ts` már eddig is a tükörmeccsből adta az `oppDreb` / `oppPossessions`-t.
 - Mobil jegyzet: `asestatmobile/docs/mobile-sync/2026-11-12-pregame-riport-h23.md` (fázisonként bővül).
 
 **H20 – `hunbasket:fixtures` leállt: „A menetrend oldalról egyetlen mérkőzés sem olvasható ki” ✓ (2026-11-08)** – mindhárom menetrend-olvasó átállítva, az éles újrafuttatás (GitHub Actions) nyitva

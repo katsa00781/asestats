@@ -137,6 +137,7 @@ Update this file after every meaningful implementation change.
 
 ## Completed (legutóbbi)
 
+- **H23 utómunka – post-game ellenfél-összesítő** (2026-11-12): a `postgameOpponentTotalsByTeam` a `teamSeasonStats` ellenfél-box-ából számol (eddig `game_id`-nként két csapatot várt, így mindig üres volt); a post-game OREB% referencia és a közös birtoklás most a valódi definíciót követi.
 - **H23 / 5 – PER*/WS* skála (`@core`)** (2026-11-12): a PER* és WS* képlete és a liga percekkel súlyozott PER*-átlaga (2026/27: 6,1) a UI-ban és az exportban. A H23 mind az 5 fázisa kész.
 - **H23 / 4 – pregame mérkőzés-kontextus (`@core`)** (2026-11-12): `buildPregameMatchContext` (pályaválasztó, mérleg, forma, H2H a fixture-ökből), ligaadatból számolt hazai módosító (±6 pp, zsugorítva) a győzelmi valószínűségen, hiányzók kieső VAL/36-ja a riportban és az exportban.
 - **H23 / 3 – pregame szövegminőség (`@core`)** (2026-11-12): eltérő másodlagos X-faktor, egy X-faktor mondat, a/az névelő, „Félpályás támadás támadást” javítva, dupla pont eltávolítva.

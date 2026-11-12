@@ -9174,42 +9174,27 @@ export function SeasonComparison({
   // Csapatonként az ellenfelek szezonos védő lepattanói és birtoklásbecslése:
   // a postgame OREB% (T-lep + ellenfél V-lep) és a közös birtoklásszám
   // ugyanazzal a definícióval számol a referenciában, mint a meccsértéknél.
+  // Forrás a `teamSeasonStats` ellenfél-box-a (liga-szintű tükörmeccs-párosítás,
+  // `useLeagueTeamBoxTotals`). A párosított mintát a csapat meccsszámára
+  // vetítjük (meccsenkénti átlag × meccsszám), mert a post-game a saját
+  // szezon-összegekkel veti össze; egy hiányzó tükörmeccs így nem torzít.
   const postgameOpponentTotalsByTeam = useMemo(() => {
-    const playerToTeam = new Map<string, string>();
-    seasonPlayers.forEach(player => {
-      if (player.teamId) playerToTeam.set(player.id, player.teamId);
-    });
-
-    type SideTotals = { dreb: number; possessions: number };
-    const byGame = new Map<string, Map<string, SideTotals>>();
-    playerGameStats.forEach(row => {
-      if (resolvedSeasonId && String(row.games?.season_id ?? '') !== String(resolvedSeasonId)) return;
-      const teamId = row.players?.team_id ?? playerToTeam.get(row.player_id);
-      if (!teamId) return;
-      if (!byGame.has(row.game_id)) byGame.set(row.game_id, new Map());
-      const byTeam = byGame.get(row.game_id)!;
-      const current = byTeam.get(teamId) ?? { dreb: 0, possessions: 0 };
-      const fga = (row.close_attempted || 0) + (row.mid_attempted || 0) + (row.three_attempted || 0);
-      current.dreb += row.defensive_rebounds || 0;
-      current.possessions += fga + 0.44 * (row.free_throw_attempted || 0) + (row.turnovers || 0) - (row.offensive_rebounds || 0);
-      byTeam.set(teamId, current);
-    });
-
-    const result = new Map<string, SideTotals>();
-    byGame.forEach(teamMap => {
-      // Csak a két csapatos meccs ad megbízható ellenfél-oldalt.
-      if (teamMap.size !== 2) return;
-      const sides = Array.from(teamMap.entries());
-      sides.forEach(([teamId], index) => {
-        const opponentSide = sides[1 - index][1];
-        const current = result.get(teamId) ?? { dreb: 0, possessions: 0 };
-        current.dreb += opponentSide.dreb;
-        current.possessions += Math.max(opponentSide.possessions, 0);
-        result.set(teamId, current);
+    const result = new Map<string, { dreb: number; possessions: number }>();
+    teamSeasonStats.forEach(team => {
+      const opponent = team.opponent;
+      if (!opponent.games) return;
+      const scale = (team.games || opponent.games) / opponent.games;
+      const possessions = Math.max(
+        opponent.fga2 + opponent.fga3 + 0.44 * opponent.fta + opponent.tov - opponent.oreb,
+        0
+      );
+      result.set(team.teamId, {
+        dreb: opponent.dreb * scale,
+        possessions: possessions * scale,
       });
     });
     return result;
-  }, [playerGameStats, resolvedSeasonId, seasonPlayers]);
+  }, [teamSeasonStats]);
 
   const postgameBenchmarks = useMemo(() => {
     if (teamSeasonStats.length === 0) return null;
