@@ -361,6 +361,8 @@ export type PregameTeamStatLine = {
   ftRate: number;
   orebRate: number | null;
   assistRate: number;
+  /** A csapat védekezése által engedett FTA/FGA (%); `null`, ha nincs párosított meccs. */
+  oppFtRateAllowed: number | null;
 };
 
 /** Egy bajnoki fixture (`league_fixtures`) a mérkőzés-kontextushoz. */
@@ -1224,18 +1226,19 @@ const buildShotProfileContext = (
 
 /** A PER* és WS* skála magyarázata (UI és export közös szövege). */
 export const PROXY_PER_DEFINITION =
-  'PER* = saját proxy, nem a Hollinger-féle PER: 36 percre vetítve 0,35·pont + 0,22·assziszt + 0,26·szerzett labda + 0,17·blokk − 0,20·eladott labda (lepattanó és dobáshatékonyság nélkül).';
+  'PER* = saját proxy, nem a Hollinger-féle PER: 36 percre vetítve 0,35·pont + 0,22·assziszt + 0,26·szerzett labda + 0,17·blokk + 0,10·támadó lepattanó + 0,05·védő lepattanó − 0,20·eladott labda (dobáshatékonyság nélkül).';
 export const PROXY_WIN_SHARE_DEFINITION =
   'WS* = a játékos VAL-részesedése a csapat teljes szezon-VAL-jából × a csapat tényleges győzelmeinek száma × hatékonysági szorzó (VAL/meccs ÷ 18, 0,5–1,5 között); becsült győzelem-hozzájárulás, csak új eredménnyel változik. Mérkőzés-kontextus (mérleg) nélkül nem számolható.';
 
 /** A PER* számításához szükséges játékosmezők (szezon-összegek). */
-type ProxyPerInput = Pick<PlayerSeasonStat, 'minutes' | 'points' | 'ast' | 'stl' | 'blk' | 'tov'>;
+type ProxyPerInput = Pick<PlayerSeasonStat, 'minutes' | 'points' | 'ast' | 'stl' | 'blk' | 'tov' | 'oreb' | 'dreb'>;
 
 /**
  * PER* – saját, egyszerűsített teljesítmény-proxy, **nem** a Hollinger-féle PER:
  * 36 percre vetítve 0,35·pont + 0,22·assziszt + 0,26·szerzett labda +
- * 0,17·blokk − 0,20·eladott labda (alsó korlát 0). Lepattanót és dobás-
- * hatékonyságot nem tartalmaz; csak a ligaátlaghoz mérve értelmezhető.
+ * 0,17·blokk + 0,10·T-lep + 0,05·V-lep − 0,20·eladott labda (alsó korlát 0).
+ * A lepattanósúly nélkül a magas posztokat alulértékelte. Dobáshatékonyságot
+ * nem tartalmaz; csak a ligaátlaghoz mérve értelmezhető.
  */
 export const computeProxyPer = (player: ProxyPerInput) => {
   const minutes = Math.max(player.minutes || 0, 1);
@@ -1244,11 +1247,15 @@ export const computeProxyPer = (player: ProxyPerInput) => {
   const stlPer36 = (player.stl / minutes) * 36;
   const blkPer36 = (player.blk / minutes) * 36;
   const tovPer36 = (player.tov / minutes) * 36;
+  const orebPer36 = ((player.oreb || 0) / minutes) * 36;
+  const drebPer36 = ((player.dreb || 0) / minutes) * 36;
   const score =
     pointsPer36 * 0.35 +
     astPer36 * 0.22 +
     stlPer36 * 0.26 +
-    blkPer36 * 0.17 -
+    blkPer36 * 0.17 +
+    orebPer36 * 0.10 +
+    drebPer36 * 0.05 -
     tovPer36 * 0.20;
   return round(Math.max(score, 0), 1);
 };
@@ -1559,8 +1566,14 @@ const buildThreats = (team: NormalizedTeamStats, benchmarks: LeagueTeamBenchmark
   return threats;
 };
 
-/** Gyengeség-címke: az ellenfél védekezése sok büntetőt enged (FTA/FGA a liga felső 40%-ában). */
+/** Gyengeség-címke: az ellenfél védekezése sok büntetőt enged (engedett FTA/FGA a liga 70. percentilise felett). */
 export const FOUL_PRONE_DEFENSE_VULNERABILITY = 'Sokat faultoló védekezés';
+const FOUL_PRONE_DEFENSE_RANK = 70;
+
+/** Az engedett FTA/FGA valódi liga-percentilis rangja ≥ 70 (csak párosított meccsekből). */
+const isFoulProneDefense = (team: NormalizedTeamStats, benchmarks: LeagueTeamBenchmarks) =>
+  team.hasOpponentBox
+  && getPercentileRank(benchmarks, team, 'opp_ft_rate_allowed', team.oppFtRateAllowed) >= FOUL_PRONE_DEFENSE_RANK;
 
 const buildVulnerabilities = (team: NormalizedTeamStats, benchmarks: LeagueTeamBenchmarks) => {
   const vulnerabilities: string[] = [];
@@ -1569,12 +1582,21 @@ const buildVulnerabilities = (team: NormalizedTeamStats, benchmarks: LeagueTeamB
   if (scoreBelow(benchmarks, team, 'efg', 40)) vulnerabilities.push('Alacsony dobáshatékonyság');
   // Kihasználható gyengeség az ellenfél *védekezése* által engedett büntető:
   // a saját FTA/FGA-ja (kevés kiharcolt büntető) nem nekünk ad előnyt.
-  if (team.hasOpponentBox && scoreAbove(benchmarks, team, 'opp_ft_rate_allowed', 60)) {
+  if (isFoulProneDefense(team, benchmarks)) {
     vulnerabilities.push(FOUL_PRONE_DEFENSE_VULNERABILITY);
   }
   if (scoreBelow(benchmarks, team, 'three_pct', 40)) vulnerabilities.push('Gyenge periméter-hatékonyság');
   if (scoreBelow(benchmarks, team, 'oreb_rate', 40)) vulnerabilities.push('Gyenge támadólepattanózás');
   return vulnerabilities;
+};
+
+/** Az OREB%-különbség z-értéke (saját − ellenfél) / liga-σ; `null`, ha nem számolható. */
+const OREB_EDGE_Z = 1;
+const getOrebEdge = (ownTeam: NormalizedTeamStats, opponent: NormalizedTeamStats, benchmarks: LeagueTeamBenchmarks) => {
+  if (!ownTeam.hasOpponentBox || !opponent.hasOpponentBox) return null;
+  const std = estimateLeagueStd(benchmarks, ownTeam, 'oreb_rate');
+  if (std === null) return null;
+  return { z: (ownTeam.orebRate - opponent.orebRate) / std, own: ownTeam.orebRate, opponent: opponent.orebRate };
 };
 
 const buildFocusPoints = (
@@ -1585,6 +1607,12 @@ const buildFocusPoints = (
 ) => {
   const focus: string[] = [];
   let contingencyFocus: string | null = null;
+
+  // Egyértelmű lepattanó-előny (z ≥ 1) elsődleges fókusz, nem „ha nem működik” ág.
+  const orebEdge = getOrebEdge(ownTeam, opponent, benchmarks);
+  if (orebEdge && orebEdge.z >= OREB_EDGE_Z) {
+    focus.push(`T-lep támadás: ${(orebEdge.own * 100).toFixed(1)}% vs ${(orebEdge.opponent * 100).toFixed(1)}% OREB% (z = +${orebEdge.z.toFixed(1)}) – második esélyek maximalizálása`);
+  }
 
   if (scoreAbove(benchmarks, opponent, 'three_rate', 60)) {
     focus.push('Periméter-védekezés kiemelt, agresszív kilépések a triplákon');
@@ -1625,8 +1653,7 @@ const buildFocusPoints = (
     focus.push('Festékelőny erőltetése (ellenfél alacsony 2P-fókusz)');
   }
   if (
-    opponent.hasOpponentBox
-    && scoreAbove(benchmarks, opponent, 'opp_ft_rate_allowed', 60)
+    isFoulProneDefense(opponent, benchmarks)
     && scoreAbove(benchmarks, ownTeam, 'two_rate', 55)
   ) {
     focus.push('Festéktámadásból büntetők kiharcolása, drive-and-kick és korai belső érintések erőltetése');
@@ -1635,7 +1662,11 @@ const buildFocusPoints = (
   if (scoreAbove(benchmarks, opponent, 'stl_per_game', 60) && scoreAbove(benchmarks, ownTeam, 'turnover_rate', 50)) {
     focus.push('Labdabiztonság vs labdanyomás, egyszerűsített döntések, letámadás-bontó sémák');
   }
-  if (scoreAbove(benchmarks, ownTeam, 'oreb_rate', 60) && scoreBelow(benchmarks, opponent, 'oreb_rate', 40)) {
+  if (
+    !(orebEdge && orebEdge.z >= OREB_EDGE_Z)
+    && scoreAbove(benchmarks, ownTeam, 'oreb_rate', 60)
+    && scoreBelow(benchmarks, opponent, 'oreb_rate', 40)
+  ) {
     focus.push('OREB agresszivitás növelése, második esélyek kihasználása');
   }
 
@@ -1774,9 +1805,13 @@ const buildXFactors = (
   const hasReboundOpportunity = vulnerabilities.some(item => item.toLowerCase().includes('lepattanó'));
   const tempoScore = getPercentileScore(benchmarks, opponent, 'pace');
 
+  const orebEdge = getOrebEdge(ownTeam, opponent, benchmarks);
+  if (orebEdge && orebEdge.z >= OREB_EDGE_Z) candidates.push(X_FACTOR_CANDIDATES.rebound_edge);
   if (hasPerimeterThreat) candidates.push(X_FACTOR_CANDIDATES.perimeter);
   if (hasTurnoverWeakness) candidates.push(X_FACTOR_CANDIDATES.turnover);
-  if (hasReboundOpportunity) candidates.push(X_FACTOR_CANDIDATES.rebound_edge);
+  if (hasReboundOpportunity && !candidates.some(item => item.key === 'rebound_edge')) {
+    candidates.push(X_FACTOR_CANDIDATES.rebound_edge);
+  }
   if (tempoScore >= 70) candidates.push(X_FACTOR_CANDIDATES.tempo);
   if (!candidates.some(item => item.key === 'paint')) candidates.push(X_FACTOR_CANDIDATES.paint);
 
@@ -2885,6 +2920,7 @@ export const analyzePreGameScouting = (
         ftRate: round(normalizedOwn.ftRate * 100, 1),
         orebRate: normalizedOwn.hasOpponentBox ? round(normalizedOwn.orebRate * 100, 1) : null,
         assistRate: round(normalizedOwn.assistRate * 100, 1),
+        oppFtRateAllowed: normalizedOwn.hasOpponentBox ? round(normalizedOwn.oppFtRateAllowed * 100, 1) : null,
       },
       opponent: {
         pace: normalizedOpponent.pace,
@@ -2896,6 +2932,7 @@ export const analyzePreGameScouting = (
         ftRate: round(normalizedOpponent.ftRate * 100, 1),
         orebRate: normalizedOpponent.hasOpponentBox ? round(normalizedOpponent.orebRate * 100, 1) : null,
         assistRate: round(normalizedOpponent.assistRate * 100, 1),
+        oppFtRateAllowed: normalizedOpponent.hasOpponentBox ? round(normalizedOpponent.oppFtRateAllowed * 100, 1) : null,
       },
     },
     riskFlags: riskNotes.flags,

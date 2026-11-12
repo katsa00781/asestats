@@ -137,6 +137,7 @@ Update this file after every meaningful implementation change.
 
 ## Completed (legutóbbi)
 
+- **H24 / P3 – pregame finomhangolás (`@core`)** (2026-11-12): engedett FT arány sor és 70. percentilis küszöb, forgatókönyv-képletek lábjegyzetben, OREB-előny elsődleges fókusz z ≥ 1-nél, PER* lepattanósúllyal. A H24 kész.
 - **H24 / P2 – pregame taktikai tartalom (`@core`)** (2026-11-12): zóna-FG% shrinkage (K = 20), zárd/engedd dobástérkép-védekezés, döntő tengely a legnagyobb standardizált különbségből.
 - **H24 / P1 – pregame log-odds esély, hiányzók, WS* (`@core`)** (2026-11-12): a győzelmi esély logit-láncban (alap → matchup → hazai → hiányzók), puha 3–97%-os sávval, bontással; hiányzók meccsátlagban, „Keret ellenőrizve” jelölővel; WS* a tényleges győzelmekből.
 - **H23 utómunka – post-game ellenfél-összesítő** (2026-11-12): a `postgameOpponentTotalsByTeam` a `teamSeasonStats` ellenfél-box-ából számol (eddig `game_id`-nként két csapatot várt, így mindig üres volt); a post-game OREB% referencia és a közös birtoklás most a valódi definíciót követi.

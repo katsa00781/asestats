@@ -811,7 +811,7 @@ egymás elleni meccsek közt jelenik meg. A 2024/25-ös szezonnézetben nincs do
   csapatnál) – keret-import csapat-hozzárendelési hiba gyanúja, döntés előtt nem nyúltunk hozzá.
 - Mobil jegyzet: `asestatmobile/docs/mobile-sync/2026-11-08-dobasterkep-zonak-h21.md` (összesítővé bővítve: H21 + H22).
 
-**H24 – Pregame riportgenerátor: 2. javítási lista (2026-11-12)** – P1–P2 kész, P3 nyitva
+**H24 – Pregame riportgenerátor: 2. javítási lista ✓ (2026-11-12)** – P1–P3 kész, böngészős ellenőrzés nyitva
 
 Felhasználói döntések: hiányzó-szorzó k = 2,5 (logit), csapatonkénti „Keret ellenőrizve” jelölő,
 PER* lepattanósúllyal; a hazai módosító ±0,24 logit (≈ ±6 pp 50%-nál, a H23 döntés logit-megfelelője).
@@ -836,8 +836,14 @@ PER* lepattanósúllyal; a hazai módosító ±0,24 logit (≈ ±6 pp 50%-nál, 
   mutató tengelye (tempó, periméter, festék – új `two_pct` benchmark –, büntető, lepattanó,
   labdabiztonság); summary „Döntő tengely: …”, UI kártya, `llmContext.matchupAxis`. ASE–Alba: periméter
   (3P% 40,7 vs 32,3, z = +2,2; az OREB% z ≈ +1,8).
-- [ ] **P3 – finomhangolás**: engedett FT arány sor + 70. percentilis, forgatókönyv-lábjegyzet,
-  OREB-fókusz z ≥ 1-nél, PER* lepattanósúly.
+- [x] **P3 – finomhangolás (`@core`)**: (7) új `teamStats.*.oppFtRateAllowed` sor („Engedett FT arány”),
+  a „Sokat faultoló védekezés” valódi percentilis-rang ≥ 70-nél (ASE 36,7% / Alba 41,0% → Alba címkét
+  kap). (8) A +3,9 / −3,9 egyezés véletlen volt (független képletek); a forgatókönyv-lábjegyzet mindkét
+  képletet kimondja. (9) OREB%-különbség z ≥ 1: első fókuszpont „T-lep támadás: 43,2% vs 31,4%
+  (z = +1,8)”, és a `rebound_edge` az elsődleges X-faktor. (10) PER* +0,10·T-lep/36 + 0,05·V-lep/36;
+  ligaátlag 6,1 → 6,5.
+- [x] `npx tsc --noEmit`, `npm run lint` (0 hiba, a korábbi 5 figyelmeztetés), `npm run build` rendben.
+- [ ] **Böngészős ellenőrzés** (felhasználó): pregame ASE–Alba, „Keret ellenőrizve” jelölő, MD export.
 - Mobil jegyzet: `asestatmobile/docs/mobile-sync/2026-11-12-pregame-riport-h24.md`.
 
 **H23 – Pregame elemzés: számítási hibák, ellentmondások, szöveghibák, hiányzó kontextus ✓ (2026-11-12)** – az 5 fázis és a post-game utómunka kész; a böngészős ellenőrzés nyitva

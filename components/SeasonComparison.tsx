@@ -7782,6 +7782,8 @@ export function SeasonComparison({
         stl: player.steals || 0,
         blk: player.blocks || 0,
         tov: player.turnovers || 0,
+        oreb: player.rebounds?.offensive || 0,
+        dreb: player.rebounds?.defensive || 0,
       })),
       teamGames
     );

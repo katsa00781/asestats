@@ -908,8 +908,10 @@ export function pregameReportToMd(report: ScoutingReport, seasonName?: string): 
     lines.push(`| TO rate | ${ts.own.turnoverRate.toFixed(1)}% | ${ts.opponent.turnoverRate.toFixed(1)}% |`);
     lines.push(`| FT arány | ${ts.own.ftRate.toFixed(1)}% | ${ts.opponent.ftRate.toFixed(1)}% |`);
     lines.push(`| OREB% | ${orebCell(ts.own)} | ${orebCell(ts.opponent)} |`);
+    const allowedFtCell = (line: typeof ts.own) => (line.oppFtRateAllowed === null ? '–' : `${line.oppFtRateAllowed.toFixed(1)}%`);
+    lines.push(`| Engedett FT arány (ellenfél FTA/FGA ellenük) | ${allowedFtCell(ts.own)} | ${allowedFtCell(ts.opponent)} |`);
     lines.push(`| Assziszt arány | ${ts.own.assistRate.toFixed(1)}% | ${ts.opponent.assistRate.toFixed(1)}% |`);
-    lines.push(``, `*Tempó = a két csapat (FGA + 0,44·FTA + LV − T-lep) birtoklásbecslésének meccsenkénti átlaga. OREB% = saját T-lep / (saját T-lep + ellenfél V-lep) a mindkét oldali box score-os meccseken. FT arány = FTA / FGA.${
+    lines.push(``, `*Tempó = a két csapat (FGA + 0,44·FTA + LV − T-lep) birtoklásbecslésének meccsenkénti átlaga. OREB% = saját T-lep / (saját T-lep + ellenfél V-lep) a mindkét oldali box score-os meccseken. FT arány = FTA / FGA; engedett FT arány = az ellenfelek FTA / FGA-ja a csapat ellen (a „Sokat faultoló védekezés” címke a liga 70. percentilise felett).${
       ts.own.paceFromOwnOnly || ts.opponent.paceFromOwnOnly ? ' ¹ Ellenfél box score nélkül: csak a saját birtoklásbecslés.' : ''
     }*`);
   }
@@ -1025,9 +1027,7 @@ export function pregameReportToMd(report: ScoutingReport, seasonName?: string): 
     if (impact) {
       lines.push(
         ``,
-        `*A kontrollált forgatókönyv az X-faktorok kombinált modellhatása (+${impact.combinedDeltaPct.toFixed(1)} pp)${
-          impact.controlledScenarioCapped ? ', a 8–92%-os modellsávra vágva' : ''
-        }. A magas varianciájú forgatókönyv a kockázati tábla triggereiből és a variancia-forrásokból számol.*`
+        `*A két forgatókönyv független változókból számol, egy esetleges azonos nagyságú eltérés véletlen. Kontrollált = az X-faktorok modellhatása (elsődleges + másodlagos, logitban hozzáadva; itt +${impact.combinedDeltaPct.toFixed(1)} pp). Magas variancia = −(variancia-büntetés × bizonyosság-szorzó + 0,32 × a kockázati triggerek negatív swingjének összege), ahol a variancia-büntetés 0,9 + 1,15 × variancia-források száma + 0,16 × a negatív swingek összege (1,2–8,6 pp), logitban levonva. Mindkettő a végső (valószínűség-bontás szerinti) esélyhez képest.*`
       );
     }
   }
