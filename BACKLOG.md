@@ -845,8 +845,11 @@ helyett az ellenfél *engedett* FTA/FGA-ja a gyengeség.
   (saját pps + az ellenfél ligánál nagyobb engedett pps-e), „kedvező” csak ha ≥ a saját teljes pps.
   (3) Export: `Arány | Δ arány | FG% | Δ FG% | pont/dobás` mindkét csapatra, jelmagyarázattal.
   ASE–Alba (valós csapatadat): tempó 77,3 / 76,7 → mindkettő „Közepes”; kontrollált +3,1 pp mindenhol.
-- [ ] **3. fázis – szövegminőség**: eltérő másodlagos X-faktor, egy X-faktor mondat, a/az névelő,
-  „Félpályás támadás támadást”, dupla pont.
+- [x] **3. fázis – szövegminőség (`@core`)**: a másodlagos X-faktor sosem azonos az elsődlegessel
+  (`X_FACTOR_CANDIDATES`, a maradék tengelyek közül a legerősebb jelzésű lép be), a „Ha X nem működik →
+  Y” csak eltérő X/Y esetén; egyetlen „X-faktorok:” mondat a számokkal; `withArticle()` (a/az) a pozíciós
+  mondatokban; „Kontextus: az ellenfél …; támadás: …; védekezés: …”; `tidySentence()` a dupla pontra és
+  szóközre a summary minden során; a „Saját kockázati pontok” az aktív triggereket nevezi meg.
 - [ ] **4. fázis – mérkőzés-kontextus**: pályaválasztó, mérleg, forma (utolsó 5), H2H, hazai módosító,
   hiányzók VAL/36-hatása az exportban.
 - [ ] **5. fázis – PER*/WS* skála**: képlet és ligaátlag lábjegyzetben.

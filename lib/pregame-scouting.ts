@@ -336,6 +336,19 @@ export type PreGameXFactorContext = {
   riskFlags?: string[];
 };
 
+/** Határozott névelő a szó elé: „az” magánhangzóval kezdődő szónál, különben „a”. */
+const withArticle = (word: string) => `${/^[aáeéiíoóöőuúüű]/i.test(word.trim()) ? 'az' : 'a'} ${word}`;
+
+/**
+ * Egy összefűzött sor írásjeleinek rendbetétele: a mondatvégi írásjel utáni
+ * újabb pont (pl. „… visszafogása..”) és a dupla szóköz eltűnik.
+ */
+const tidySentence = (line: string) =>
+  line
+    .replace(/([.!?])\.+(?=\s|$)/g, '$1')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+
 const round = (value: number, digits = 2) => {
   const factor = Math.pow(10, digits);
   return Math.round(value * factor) / factor;
@@ -1356,7 +1369,7 @@ const buildFocusPoints = (
     focus.push('OREB agresszivitás növelése, második esélyek kihasználása');
   }
 
-  if (xFactors && !focus.some(item => item.startsWith('Ha '))) {
+  if (xFactors && xFactors.primary.short !== xFactors.secondary.short && !focus.some(item => item.startsWith('Ha '))) {
     contingencyFocus = `Ha ${xFactors.primary.short} nem működik → ${xFactors.secondary.short}`;
   }
 
@@ -1446,13 +1459,13 @@ const buildCriticalMatchupNote = (
 
   if (biggestNegative) {
     parts.push(
-      `a ${POSITION_LABELS[biggestNegative.position]} poszton van a legnagyobb rés (${biggestNegative.deltaValPer36} VAL/36)`
+      `${withArticle(POSITION_LABELS[biggestNegative.position])} poszton van a legnagyobb rés (${biggestNegative.deltaValPer36} VAL/36)`
     );
   }
 
   if (biggestPositive) {
     parts.push(
-      `${ownTeamName} legerősebb visszaütési pontja a ${POSITION_LABELS[biggestPositive.position]} poszt (${biggestPositive.deltaValPer36 >= 0 ? '+' : ''}${biggestPositive.deltaValPer36} VAL/36)`
+      `${ownTeamName} legerősebb visszaütési pontja ${withArticle(POSITION_LABELS[biggestPositive.position])} poszt (${biggestPositive.deltaValPer36 >= 0 ? '+' : ''}${biggestPositive.deltaValPer36} VAL/36)`
     );
   }
 
@@ -1469,6 +1482,14 @@ const buildCriticalMatchupNote = (
   return parts.length > 0 ? `Megjegyzés: ${parts.join(', ')}.` : '';
 };
 
+const X_FACTOR_CANDIDATES: Record<'perimeter' | 'turnover' | 'rebound_edge' | 'tempo' | 'paint', XFactorCandidate> = {
+  perimeter: { key: 'perimeter', label: 'periméter kontrollja és tripla-variancia kezelése', short: 'periméter kontroll' },
+  turnover: { key: 'turnover', label: 'labdaszerzések és extra támadások menedzselése', short: 'labdaszerzés / extra támadások' },
+  rebound_edge: { key: 'rebound_edge', label: 'támadólepattanó fókusz és második esélyek maximalizálása', short: 'OREB / második esély' },
+  tempo: { key: 'tempo', label: 'átmeneti futások kontrollja és visszarendeződés', short: 'tempó kontroll' },
+  paint: { key: 'paint', label: 'festék kontrollja és faultterhelés menedzselése', short: 'festék kontroll' },
+};
+
 const buildXFactors = (
   opponent: NormalizedTeamStats,
   ownTeam: NormalizedTeamStats,
@@ -1483,26 +1504,27 @@ const buildXFactors = (
   const hasReboundOpportunity = vulnerabilities.some(item => item.toLowerCase().includes('lepattanó'));
   const tempoScore = getPercentileScore(benchmarks, opponent, 'pace');
 
-  if (hasPerimeterThreat) {
-    candidates.push({ key: 'perimeter', label: 'periméter kontrollja és tripla-variancia kezelése', short: 'periméter kontroll' });
-  }
-  if (hasTurnoverWeakness) {
-    candidates.push({ key: 'turnover', label: 'labdaszerzések és extra támadások menedzselése', short: 'labdaszerzés / extra támadások' });
-  }
-  if (hasReboundOpportunity) {
-    candidates.push({ key: 'rebound_edge', label: 'támadólepattanó fókusz és második esélyek maximalizálása', short: 'OREB / második esély' });
-  }
-  if (tempoScore >= 70) {
-    candidates.push({ key: 'tempo', label: 'átmeneti futások kontrollja és visszarendeződés', short: 'tempó kontroll' });
-  }
-
-  const defaultCandidate = { key: 'paint', label: 'festék kontrollja és faultterhelés menedzselése', short: 'festék kontroll' };
-  if (!candidates.some(item => item.key === defaultCandidate.key)) {
-    candidates.push(defaultCandidate);
-  }
+  if (hasPerimeterThreat) candidates.push(X_FACTOR_CANDIDATES.perimeter);
+  if (hasTurnoverWeakness) candidates.push(X_FACTOR_CANDIDATES.turnover);
+  if (hasReboundOpportunity) candidates.push(X_FACTOR_CANDIDATES.rebound_edge);
+  if (tempoScore >= 70) candidates.push(X_FACTOR_CANDIDATES.tempo);
+  if (!candidates.some(item => item.key === 'paint')) candidates.push(X_FACTOR_CANDIDATES.paint);
 
   const primary = candidates[0];
-  const secondary = candidates.find(item => item.key !== primary.key) || defaultCandidate;
+  // A másodlagos X-faktor sosem lehet azonos az elsődlegessel. Ha a szabályok
+  // csak egy jelöltet adnak, a maradék tengelyek közül a legerősebb jelzésű lép
+  // be (saját OREB, ellenfél labdaeladás, ellenfél tripla-profil, ellenfél tempó).
+  const fallbackIntensity: Record<string, number> = {
+    rebound_edge: getPercentileScore(benchmarks, ownTeam, 'oreb_rate'),
+    turnover: getPercentileScore(benchmarks, opponent, 'turnover_rate'),
+    perimeter: (getPercentileScore(benchmarks, opponent, 'three_rate') + getPercentileScore(benchmarks, opponent, 'three_pct')) / 2,
+    tempo: tempoScore,
+    paint: (getPercentileScore(benchmarks, ownTeam, 'two_rate') + getPercentileScore(benchmarks, ownTeam, 'ft_rate')) / 2,
+  };
+  const secondary = candidates.find(item => item.key !== primary.key)
+    ?? Object.values(X_FACTOR_CANDIDATES)
+      .filter(item => item.key !== primary.key)
+      .sort((a, b) => (fallbackIntensity[b.key] ?? 0) - (fallbackIntensity[a.key] ?? 0))[0];
 
   return { primary, secondary };
 };
@@ -2014,7 +2036,7 @@ const buildSummary = (
     : '';
 
   const varianceNote = varianceDrivers.length > 0
-    ? `Magas varianciájú mérkőzés: ${varianceDrivers.join(' + ')}.`
+    ? `${tempoControlNote ? 'Magas' : 'magas'} varianciájú mérkőzés (${varianceDrivers.join(' + ')}).`
     : '';
   const tempoLineParts = [tempoControlNote, varianceNote].filter(Boolean);
   const tempoLine = tempoLineParts.length > 0
@@ -2042,7 +2064,7 @@ const buildSummary = (
     viewpointLine,
     probabilityLine,
     confidenceReasonLine,
-    `Kontextus: Az ellenfél ${tempo}, ${offense} támadást játszik, védekezése ${defense}. Domináns tengely: ${axisLabel}.`,
+    `Kontextus: az ellenfél ${tempo}; támadás: ${offense}; védekezés: ${defense}. Domináns tengely: ${axisLabel}.`,
     `Fő veszélyek: ${threatText}.`,
     `Feltételes sebezhetőségek (ellenfél): ${vulnText}.`,
     `Saját kockázati pontok: ${ownRiskText}.`,
@@ -2056,7 +2078,7 @@ const buildSummary = (
     riskScenarioLine,
     fanLine,
   ]
-    .map(line => line.trim())
+    .map(tidySentence)
     .filter(line => line.length > 0);
 
   return sections.join('\n');
