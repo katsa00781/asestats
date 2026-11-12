@@ -871,7 +871,8 @@ export function pregameReportToMd(report: ScoutingReport, seasonName?: string): 
     lines.push(`| Forgatókönyv | Trigger | Azonnali válasz | Saját swing |`);
     lines.push(`|---|---|---|---|`);
     for (const s of report.riskScenarios) {
-      const swing = s.estimatedOwnSwingPct >= 0 ? `+${s.estimatedOwnSwingPct.toFixed(1)}%` : `${s.estimatedOwnSwingPct.toFixed(1)}%`;
+      // A swing pp-ben értendő; trigger nélküli alapsornál nincs modellezett swing.
+      const swing = s.estimatedOwnSwingPct < 0 ? `${s.estimatedOwnSwingPct.toFixed(1)} pp` : '–';
       lines.push(`| ${s.title} | ${s.trigger} | ${s.instantResponse} | ${swing} |`);
     }
   }
@@ -899,20 +900,22 @@ export function pregameReportToMd(report: ScoutingReport, seasonName?: string): 
     const { ownZones, opponentZones } = report.shotProfileContext;
     if (ownZones.length > 0 || opponentZones.length > 0) {
       lines.push(``, `## Dobástérkép összehasonlítás`, ``);
-      lines.push(`| Zóna | Saját arány | Saját % | Δ ligától | Ellenfél arány | Ellenfél % | Δ ligától |`);
-      lines.push(`|------|------------|---------|-----------|----------------|------------|-----------|`);
+      // Két külön eltérés: a zóna aránya (dobásmix) és a zóna FG%-a a ligához
+      // mérve – a szöveges jegyzetek az FG%-eltérésre hivatkoznak.
+      lines.push(`| Zóna | Saját arány | Δ arány | Saját FG% | Δ FG% | Saját pont/dobás | Ellenfél arány | Δ arány | Ellenfél FG% | Δ FG% | Ellenfél pont/dobás |`);
+      lines.push(`|------|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|`);
       const allLabels = Array.from(new Set([...ownZones.map(z => z.label), ...opponentZones.map(z => z.label)]));
+      const signedPp = (v: number) => `${v >= 0 ? '+' : ''}${v.toFixed(1)} pp`;
+      const zoneCells = (zone: (typeof ownZones)[number] | undefined) =>
+        zone
+          ? `${zone.rate.toFixed(1)}% | ${signedPp(zone.rateDeltaVsLeague)} | ${zone.pct.toFixed(1)}% | ${signedPp(zone.pctDeltaVsLeague)} | ${zone.pps.toFixed(2)}`
+          : '– | – | – | – | –';
       for (const label of allLabels) {
         const own = ownZones.find(z => z.label === label);
         const opp = opponentZones.find(z => z.label === label);
-        const ownRateStr = own ? `${own.rate.toFixed(1)}%` : '–';
-        const ownPctStr = own ? `${own.pct.toFixed(1)}%` : '–';
-        const ownDeltaStr = own ? `${own.rateDeltaVsLeague >= 0 ? '+' : ''}${own.rateDeltaVsLeague.toFixed(1)}pp` : '–';
-        const oppRateStr = opp ? `${opp.rate.toFixed(1)}%` : '–';
-        const oppPctStr = opp ? `${opp.pct.toFixed(1)}%` : '–';
-        const oppDeltaStr = opp ? `${opp.rateDeltaVsLeague >= 0 ? '+' : ''}${opp.rateDeltaVsLeague.toFixed(1)}pp` : '–';
-        lines.push(`| ${label} | ${ownRateStr} | ${ownPctStr} | ${ownDeltaStr} | ${oppRateStr} | ${oppPctStr} | ${oppDeltaStr} |`);
+        lines.push(`| ${label} | ${zoneCells(own)} | ${zoneCells(opp)} |`);
       }
+      lines.push(``, `*Δ arány = a zóna dobásaránya a ligaátlaghoz képest; Δ FG% = a zóna találati aránya a ligaátlaghoz képest (mindkettő százalékpont). Pont/dobás = 2 × FG% a kétpontos, 3 × FG% a hárompontos zónákban.*`);
       if (report.shotProfileContext.clashZones.length > 0) {
         lines.push(``, `**Zónaütközés:** ${report.shotProfileContext.clashZones.join(', ')}`);
       }
@@ -925,11 +928,20 @@ export function pregameReportToMd(report: ScoutingReport, seasonName?: string): 
 
   if (report.scenarioOutcomes && report.scenarioOutcomes.length > 0) {
     lines.push(``, `## Forgatókönyv valószínűségek`, ``);
-    lines.push(`| Forgatókönyv | ${report.ownTeamName} | ${report.opponentTeamName} | Delta (alaptól) |`);
+    lines.push(`| Forgatókönyv | ${report.ownTeamName} | ${report.opponentTeamName} | Eltérés az alaptól |`);
     lines.push(`|---|---|---|---|`);
     for (const s of report.scenarioOutcomes) {
-      const deltaStr = s.deltaVsBase >= 0 ? `+${s.deltaVsBase.toFixed(1)}%` : `${s.deltaVsBase.toFixed(1)}%`;
+      const deltaStr = s.deltaVsBase >= 0 ? `+${s.deltaVsBase.toFixed(1)} pp` : `${s.deltaVsBase.toFixed(1)} pp`;
       lines.push(`| ${s.label} | ${s.ownPct.toFixed(1)}% | ${s.opponentPct.toFixed(1)}% | ${deltaStr} |`);
+    }
+    const impact = report.xFactorImpact;
+    if (impact) {
+      lines.push(
+        ``,
+        `*A kontrollált forgatókönyv az X-faktorok kombinált modellhatása (+${impact.combinedDeltaPct.toFixed(1)} pp)${
+          impact.controlledScenarioCapped ? ', a 8–92%-os modellsávra vágva' : ''
+        }. A magas varianciájú forgatókönyv a kockázati tábla triggereiből és a variancia-forrásokból számol.*`
+      );
     }
   }
 

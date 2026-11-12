@@ -54,6 +54,8 @@ import {
 } from '@/lib/team-analysis';
 import { useLeagueTeamBoxTotals } from '@/hooks/useLeagueTeamBoxTotals';
 import {
+  BASELINE_RISK_SCENARIO_TITLE,
+  FOUL_PRONE_DEFENSE_VULNERABILITY,
   analyzePreGameScouting,
   buildTeamBenchmarks as buildPregameBenchmarks,
   normalizeTeamStats as normalizePregameTeamStats,
@@ -9027,10 +9029,13 @@ export function SeasonComparison({
   }, [pregameBaseKeyMatchups, pregameOpponentKeyPlayerFingerprints, pregameOpponentPlayers, pregameOptimalLineup, pregameOwnKeyPlayerFingerprints, pregameOwnPlayers, pregameReport]);
 
   const pregameVulnerabilityPlaybook = useMemo(() => {
-    if (!pregameReport?.vulnerabilities.includes('Kevés büntető') || !pregameEfficiencyBaseline) return null;
+    if (!pregameReport?.vulnerabilities.includes(FOUL_PRONE_DEFENSE_VULNERABILITY) || !pregameEfficiencyBaseline) return null;
+    if (!pregameOpponentTeam) return null;
 
+    // Az ellenfél védekezése által engedett FTA/FGA a gyengeség – ezt vetjük össze
+    // a saját kiharcolt büntetőarányunkkal.
     const ownFtRate = pregameEfficiencyBaseline.own.ftRatePct;
-    const opponentFtRate = pregameEfficiencyBaseline.opponent.ftRatePct;
+    const opponentFtRate = normalizePregameTeamStats(pregameOpponentTeam).oppFtRateAllowed * 100;
     const targetFta = Math.max(20, Math.round(pregameEfficiencyBaseline.own.fta));
     const pgName = pregameOptimalLineup?.best.roleAssignments.find(item => item.role === 'PG')?.name ?? null;
     const centerName = pregameOptimalLineup?.best.roleAssignments.find(item => item.role === 'C')?.name ?? null;
@@ -9040,7 +9045,7 @@ export function SeasonComparison({
       .slice(0, 2) ?? [];
 
     return {
-      title: 'Kevés büntető',
+      title: FOUL_PRONE_DEFENSE_VULNERABILITY,
       ownFtRatePct: roundValue(ownFtRate, 1),
       opponentFtRatePct: roundValue(opponentFtRate, 1),
       targetFta,
@@ -9051,10 +9056,10 @@ export function SeasonComparison({
       ],
       expectedImpact: `Ha a csapat eléri a ${targetFta}+ FTA-sávot, az várhatóan 4-6 pont extra stabilitást adhat a támadásoknak.`,
     };
-  }, [pregameEfficiencyBaseline, pregameOptimalLineup, pregameReport]);
+  }, [pregameEfficiencyBaseline, pregameOpponentTeam, pregameOptimalLineup, pregameReport]);
 
   const controlledScenarioGuidance = useMemo(() => {
-    const controlledScenario = (pregameReport?.riskScenarios ?? []).find(item => item.title === 'Kontrollált alapforgatókönyv') ?? null;
+    const controlledScenario = (pregameReport?.riskScenarios ?? []).find(item => item.title === BASELINE_RISK_SCENARIO_TITLE) ?? null;
     if (!controlledScenario) return null;
 
     const ownTeamLabel = pregameOwnTeam?.teamName ?? pregameReport?.ownTeamName ?? 'Saját csapat';
@@ -14195,6 +14200,7 @@ export function SeasonComparison({
                 ownPct,
                 opponentPct,
                 deltaVsBase: ownPct - pregameReport.winProbability.ownPct,
+                modelDeltaVsBase: scenario.deltaVsBase,
               };
             });
 
@@ -14944,7 +14950,7 @@ export function SeasonComparison({
                                 {pregameVulnerabilityPlaybook && (
                                   <div className="mt-2 rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning space-y-1">
                                     <div>
-                                      {pregameVulnerabilityPlaybook.title} ({ownLabel} {pregameVulnerabilityPlaybook.ownFtRatePct.toFixed(1)}% FT rate vs {opponentLabel} {pregameVulnerabilityPlaybook.opponentFtRatePct.toFixed(1)}%)
+                                      {pregameVulnerabilityPlaybook.title} ({ownLabel} kiharcolt FTA/FGA {pregameVulnerabilityPlaybook.ownFtRatePct.toFixed(1)}% · {opponentLabel} által engedett {pregameVulnerabilityPlaybook.opponentFtRatePct.toFixed(1)}%)
                                     </div>
                                     {pregameVulnerabilityPlaybook.actions.map(action => (
                                       <div key={action}>• {action}</div>
@@ -15360,6 +15366,9 @@ export function SeasonComparison({
                             <span className="text-primary font-mono tabular-nums font-medium">{item.label}</span>
                             <span className={item.deltaVsBase >= 0 ? 'text-positive' : 'text-negative'}>
                               {item.deltaVsBase >= 0 ? '+' : ''}{item.deltaVsBase.toFixed(1)} pp vs alap
+                              {Math.abs(item.deltaVsBase - item.modelDeltaVsBase) >= 0.05 && (
+                                <span className="text-secondary"> (modell: {item.modelDeltaVsBase >= 0 ? '+' : ''}{item.modelDeltaVsBase.toFixed(1)}, fókuszsúlyokkal módosítva)</span>
+                              )}
                             </span>
                           </div>
                           <div className="mt-1 text-secondary">{item.note}</div>
@@ -15518,9 +15527,13 @@ export function SeasonComparison({
                           <div key={item.title} className="bg-surface-1/60 border border-border-subtle rounded-md px-3 py-2">
                             <div className="flex items-center justify-between text-sm">
                               <span className="text-primary">{item.title}</span>
-                              <span className="text-negative">{item.estimatedOwnSwingPct.toFixed(1)} pp</span>
+                              {item.estimatedOwnSwingPct < 0 ? (
+                                <span className="text-negative">{item.estimatedOwnSwingPct.toFixed(1)} pp</span>
+                              ) : (
+                                <span className="text-secondary">nincs swing</span>
+                              )}
                             </div>
-                            {item.title === 'Kontrollált alapforgatókönyv' && controlledScenarioGuidance ? (
+                            {item.title === BASELINE_RISK_SCENARIO_TITLE && controlledScenarioGuidance ? (
                               <div className="mt-1 space-y-1 text-xs">
                                 <div className="text-secondary">Triggerek:</div>
                                 {controlledScenarioGuidance.triggers.map(trigger => (
@@ -15559,15 +15572,22 @@ export function SeasonComparison({
                         </div>
                         <div className="bg-surface-1/60 border border-border-subtle rounded-md px-3 py-2 text-sm text-primary">
                           Kombinált modellhatás: <span className="text-positive">+{xFactorImpact.combinedDeltaPct.toFixed(1)}%</span>
+                          {xFactorImpact.controlledScenarioCapped && xFactorImpact.controlledScenarioDeltaPct !== undefined && (
+                            <span className="text-secondary"> · a {'92%'}-os modellsáv miatt a kontrollált forgatókönyvben +{xFactorImpact.controlledScenarioDeltaPct.toFixed(1)} pp</span>
+                          )}
                         </div>
-                        {adjustedScenarioOutcomes.find(item => item.key === 'controlled_tempo') && (
-                          <div className="bg-positive/10 border border-positive/30 rounded-md px-3 py-2 text-xs text-positive">
-                            Jelenlegi fókuszsúlyok mellett a kontrollált forgatókönyv tényleges modell-eltolása: {(() => {
-                              const controlledScenario = adjustedScenarioOutcomes.find(item => item.key === 'controlled_tempo');
-                              return `${controlledScenario && controlledScenario.deltaVsBase >= 0 ? '+' : ''}${controlledScenario?.deltaVsBase.toFixed(1)} pp vs alap`;
-                            })()}
-                          </div>
-                        )}
+                        {(() => {
+                          // A fókuszsúly-csúszkák a modellértéket interaktívan módosítják;
+                          // csak akkor mutatjuk külön, ha ténylegesen eltér a modelltől.
+                          const weighted = adjustedScenarioOutcomes.find(item => item.key === 'controlled_tempo');
+                          const modelDelta = xFactorImpact.controlledScenarioDeltaPct;
+                          if (!weighted || modelDelta === undefined || Math.abs(weighted.deltaVsBase - modelDelta) < 0.05) return null;
+                          return (
+                            <div className="bg-positive/10 border border-positive/30 rounded-md px-3 py-2 text-xs text-positive">
+                              A fókuszsúlyokkal módosított kontrollált forgatókönyv: {weighted.deltaVsBase >= 0 ? '+' : ''}{weighted.deltaVsBase.toFixed(1)} pp vs alap (modell: {modelDelta >= 0 ? '+' : ''}{modelDelta.toFixed(1)} pp).
+                            </div>
+                          );
+                        })()}
                       </div>
                     ) : (
                       <div className="text-sm text-secondary">Nincs számszerűsíthető x-faktor hatás.</div>

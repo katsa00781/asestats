@@ -831,9 +831,20 @@ helyett az ellenfél *engedett* FTA/FGA-ja a gyengeség.
   `buildRecentTeamStat`, `subtractGameFromTeamAggregate`, `blendPregameTeamStats` kezeli. Export:
   OREB% „–”, ha nincs párosított meccs; képlet-lábjegyzet. Valós adat (2026/27): tempó 74,4–85,3,
   OREB% 20,1–43,2% (ASE 77,3 / 43,2%, Alba 76,7 / 31,4%).
-- [ ] **2. fázis – modell-konzisztencia**: forgatókönyvek közös forrásból, variancia → kockázati
-  trigger, tempó-sáv percentilis-ranggal + pár-tolerancia, „Sokat faultoló védekezés” (engedett FT
-  arány), zóna-matchup pps alapján, Δ arány / Δ FG% külön oszlop.
+- [x] **2. fázis – modell-konzisztencia (`@core`)**: (5) a kontrollált forgatókönyv = az X-faktorok
+  `combinedDeltaPct`-je, a 8–92%-os sávra vágva; a realizált érték `xFactorImpact.controlledScenarioDeltaPct`
+  (+ `controlledScenarioCapped`), ezt írja a tábla, az X-faktor mondat és a UI; a kockázati fallback sor
+  `BASELINE_RISK_SCENARIO_TITLE` („Alapforgatókönyv – nincs kockázati trigger”), swing 0, nem negatív;
+  a UI fókuszsúly-korrekciója külön, jelölten látszik. (6) A variancia-forrás kockázati sort ad
+  („Tripla-variancia” / „Faultterhelés felpörgése”), a „Saját kockázati pontok” is ezt nevezi meg.
+  (7) Tempó-sáv: valódi percentilis-rang (P10…P90 interpoláció), harmadok, és 1,5 birtoklásnál kisebb
+  eltérésnél a pár közös sávot kap (`TEMPO_PAIR_TOLERANCE`). (4) „Kevés büntető” helyett
+  `FOUL_PRONE_DEFENSE_VULNERABILITY` („Sokat faultoló védekezés”): az ellenfél által **engedett** FTA/FGA
+  (`opp_ft_rate_allowed`) ≥ 60. percentilis; a fókuszpont és a UI playbook is erre áll, az AI prompt
+  szövege igazítva. (8) Zónák: `pps`, `ppsDeltaVsLeague`; a zóna-matchup a várható pont/dobáson megy
+  (saját pps + az ellenfél ligánál nagyobb engedett pps-e), „kedvező” csak ha ≥ a saját teljes pps.
+  (3) Export: `Arány | Δ arány | FG% | Δ FG% | pont/dobás` mindkét csapatra, jelmagyarázattal.
+  ASE–Alba (valós csapatadat): tempó 77,3 / 76,7 → mindkettő „Közepes”; kontrollált +3,1 pp mindenhol.
 - [ ] **3. fázis – szövegminőség**: eltérő másodlagos X-faktor, egy X-faktor mondat, a/az névelő,
   „Félpályás támadás támadást”, dupla pont.
 - [ ] **4. fázis – mérkőzés-kontextus**: pályaválasztó, mérleg, forma (utolsó 5), H2H, hazai módosító,
