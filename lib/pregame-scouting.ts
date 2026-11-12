@@ -281,6 +281,8 @@ export type ScoutingReport = {
     own: PregameTeamStatLine;
     opponent: PregameTeamStatLine;
   };
+  matchContext?: PregameMatchContext;
+  injuryImpact?: { own: PregameInjuryImpact; opponent: PregameInjuryImpact };
   summary: string;
 };
 
@@ -312,6 +314,65 @@ export type PregameTeamStatLine = {
   ftRate: number;
   orebRate: number | null;
   assistRate: number;
+};
+
+/** Egy bajnoki fixture (`league_fixtures`) a mérkőzés-kontextushoz. */
+export type PregameFixture = {
+  homeTeamId: string;
+  awayTeamId: string;
+  date: string;
+  homeScore: number | null;
+  awayScore: number | null;
+};
+
+export type PregameTeamRecord = {
+  wins: number;
+  losses: number;
+  homeWins: number;
+  homeLosses: number;
+  awayWins: number;
+  awayLosses: number;
+  /** Az utolsó (legfeljebb 5) eredmény, a legrégebbitől a legfrissebbig. */
+  last5: Array<'W' | 'L'>;
+};
+
+export type PregameHeadToHeadGame = {
+  date: string;
+  venue: 'home' | 'away';
+  ownScore: number;
+  opponentScore: number;
+};
+
+/**
+ * A meccs körülményei: pályaválasztó, mérlegek, forma, egymás elleni
+ * eredmények és a liga hazai győzelmi aránya. Történeti nézetben csak a
+ * meccs előtti eredmények számítanak (`beforeDate`).
+ */
+export type PregameMatchContext = {
+  venue: 'home' | 'away' | 'unknown';
+  matchDate: string | null;
+  ownRecord: PregameTeamRecord;
+  opponentRecord: PregameTeamRecord;
+  headToHead: PregameHeadToHeadGame[];
+  /** A liga hazai győzelmi aránya (%) a figyelembe vett meccseken; `null`, ha nincs minta. */
+  leagueHomeWinPct: number | null;
+  leagueGames: number;
+  /** A saját győzelmi valószínűség hazai pálya korrekciója (pp, előjeles). */
+  homeAdjustmentPct: number;
+};
+
+/** A hiányzók kiesett termelése (a kulcsjátékosok szezonátlagából, 36 percre). */
+export type PregameInjuryImpact = {
+  valPer36: number;
+  pointsPer36: number;
+  coreNames: string[];
+};
+
+/** Az `analyzePreGameScouting` opcionális, komponensből érkező kiegészítői. */
+export type PregameScoutingExtras = {
+  matchContext?: PregameMatchContext | null;
+  injuryImpact?: { own: PregameInjuryImpact; opponent: PregameInjuryImpact } | null;
+  leagueProxyPerAverage?: number | null;
 };
 
 type XFactorCandidate = {
@@ -1908,6 +1969,30 @@ const buildFanSummary = (
   };
 };
 
+const formatRecord = (record: PregameTeamRecord) =>
+  `${record.wins}–${record.losses} (otthon ${record.homeWins}–${record.homeLosses}, idegenben ${record.awayWins}–${record.awayLosses})`;
+
+const formatForm = (record: PregameTeamRecord) =>
+  record.last5.length > 0 ? record.last5.map(item => (item === 'W' ? 'Gy' : 'V')).join('-') : 'nincs eredmény';
+
+/** A mérkőzés-kontextus egy mondatban (summary és export). */
+export const describeMatchContext = (context: PregameMatchContext, ownTeamName: string, opponentTeamName: string) => {
+  const venueText = context.venue === 'home'
+    ? `${ownTeamName} hazai pályán${context.matchDate ? ` (${context.matchDate})` : ''}`
+    : context.venue === 'away'
+      ? `${ownTeamName} idegenben${context.matchDate ? ` (${context.matchDate})` : ''}`
+      : 'pályaválasztó nem ismert';
+  const h2hText = context.headToHead.length > 0
+    ? context.headToHead
+      .map(game => `${game.date} ${game.venue === 'home' ? 'otthon' : 'idegenben'} ${game.ownScore}–${game.opponentScore}`)
+      .join(', ')
+    : 'idén még nem találkoztak';
+  const homeText = context.homeAdjustmentPct !== 0
+    ? `; hazai pálya korrekció ${context.homeAdjustmentPct > 0 ? '+' : ''}${context.homeAdjustmentPct.toFixed(1)} pp`
+    : '';
+  return `Mérkőzés-kontextus: ${venueText}. Mérleg: ${ownTeamName} ${formatRecord(context.ownRecord)}, ${opponentTeamName} ${formatRecord(context.opponentRecord)}. Forma (utolsó 5): ${ownTeamName} ${formatForm(context.ownRecord)}, ${opponentTeamName} ${formatForm(context.opponentRecord)}. Egymás ellen: ${h2hText}${homeText}.`;
+};
+
 const buildSummary = (
   opponent: NormalizedTeamStats,
   ownTeam: NormalizedTeamStats,
@@ -1931,7 +2016,9 @@ const buildSummary = (
   injuryContext?: { own: string[]; opponent: string[] },
   confidenceReasons: string[] = [],
   shotProfileNotes: string[] = [],
-  shotDefenseNotes: string[] = []
+  shotDefenseNotes: string[] = [],
+  matchContext?: PregameMatchContext | null,
+  injuryImpact?: { own: PregameInjuryImpact; opponent: PregameInjuryImpact } | null
 ) => {
   const tempo = describeTempo(opponent, benchmarks, ownTeam);
   const offense = profile.offense.length > 0 ? profile.offense.join(', ') : 'kiegyensúlyozott';
@@ -1987,15 +2074,21 @@ const buildSummary = (
       ? activeRiskTitles.join('; ')
       : 'nincs aktív kockázati trigger';
   const injuryLine = (() => {
+    const impactText = (impact?: PregameInjuryImpact) =>
+      impact && impact.valPer36 > 0 ? ` (kieső termelés: ${impact.valPer36.toFixed(1)} VAL/36, ${impact.pointsPer36.toFixed(1)} pont/36)` : '';
     const parts: string[] = [];
     if (injuryContext?.own?.length) {
-      parts.push(`${ownTeamName}: ${injuryContext.own.join(', ')}`);
+      parts.push(`${ownTeamName}: ${injuryContext.own.join(', ')}${impactText(injuryImpact?.own)}`);
     }
     if (injuryContext?.opponent?.length) {
-      parts.push(`${opponent.teamName}: ${injuryContext.opponent.join(', ')}`);
+      parts.push(`${opponent.teamName}: ${injuryContext.opponent.join(', ')}${impactText(injuryImpact?.opponent)}`);
     }
-    return parts.length > 0 ? `Sérülések: ${parts.join(' | ')}.` : '';
+    return parts.length > 0
+      ? `Hiányzók: ${parts.join(' | ')}; a pozíciós VAL/36 már csak az elérhető játékosokból számol.`
+      : '';
   })();
+
+  const matchContextLine = matchContext ? describeMatchContext(matchContext, ownTeamName, opponent.teamName) : '';
 
   const { perimeterDelta, frontcourtDelta } = summarizePositionDeltas(positionComparison);
   const posSummary = perimeterDelta >= 3 && frontcourtDelta >= 3
@@ -2068,6 +2161,7 @@ const buildSummary = (
     `Fő veszélyek: ${threatText}.`,
     `Feltételes sebezhetőségek (ellenfél): ${vulnText}.`,
     `Saját kockázati pontok: ${ownRiskText}.`,
+    matchContextLine,
     injuryLine,
     positionSection,
     shotProfileLine,
@@ -2201,6 +2295,136 @@ const applyMatchupAdjustment = (
   };
 };
 
+/** A hazai módosító zsugorítása: ennyi meccsnyi „semleges” minta húzza 50% felé. */
+const HOME_ADVANTAGE_PRIOR_GAMES = 40;
+/** A hazai módosító felső korlátja (pp). */
+const HOME_ADVANTAGE_CAP = 6;
+
+const emptyRecord = (): PregameTeamRecord => ({
+  wins: 0, losses: 0, homeWins: 0, homeLosses: 0, awayWins: 0, awayLosses: 0, last5: [],
+});
+
+/**
+ * Mérkőzés-kontextus a bajnoki fixture-ökből. A pályaválasztó sorrendje:
+ * `venueOverride` (történeti nézetben a kiválasztott meccs), különben a két
+ * csapat következő (`asOfDate` utáni) kiírt meccse. A hazai módosító a liga
+ * hazai győzelmi arányából jön: `(arány − 50) × n / (n + 40)`, ±6 pp-re vágva.
+ */
+export const buildPregameMatchContext = (params: {
+  playedFixtures: PregameFixture[];
+  scheduledFixtures: Array<Pick<PregameFixture, 'homeTeamId' | 'awayTeamId' | 'date'>>;
+  ownTeamId: string;
+  opponentTeamId: string;
+  /** Csak az e dátum előtti eredmények számítanak (történeti nézet). */
+  beforeDate?: string | null;
+  /** A következő meccs keresésének kezdőnapja (YYYY-MM-DD). */
+  asOfDate?: string | null;
+  venueOverride?: { venue: 'home' | 'away'; date: string } | null;
+}): PregameMatchContext => {
+  const { ownTeamId, opponentTeamId, beforeDate } = params;
+  const played = params.playedFixtures
+    .filter(item => item.homeScore !== null && item.awayScore !== null && item.homeScore !== item.awayScore)
+    .filter(item => !beforeDate || item.date < beforeDate)
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  const recordFor = (teamId: string) => {
+    const record = emptyRecord();
+    const results: Array<'W' | 'L'> = [];
+    played.forEach(item => {
+      const isHome = item.homeTeamId === teamId;
+      if (!isHome && item.awayTeamId !== teamId) return;
+      const own = (isHome ? item.homeScore : item.awayScore) as number;
+      const opp = (isHome ? item.awayScore : item.homeScore) as number;
+      const won = own > opp;
+      results.push(won ? 'W' : 'L');
+      if (won) record.wins += 1; else record.losses += 1;
+      if (isHome) {
+        if (won) record.homeWins += 1; else record.homeLosses += 1;
+      } else if (won) {
+        record.awayWins += 1;
+      } else {
+        record.awayLosses += 1;
+      }
+    });
+    record.last5 = results.slice(-5);
+    return record;
+  };
+
+  const headToHead: PregameHeadToHeadGame[] = played
+    .filter(item =>
+      (item.homeTeamId === ownTeamId && item.awayTeamId === opponentTeamId)
+      || (item.homeTeamId === opponentTeamId && item.awayTeamId === ownTeamId))
+    .map(item => {
+      const ownHome = item.homeTeamId === ownTeamId;
+      return {
+        date: item.date,
+        venue: ownHome ? 'home' as const : 'away' as const,
+        ownScore: (ownHome ? item.homeScore : item.awayScore) as number,
+        opponentScore: (ownHome ? item.awayScore : item.homeScore) as number,
+      };
+    });
+
+  let venue: PregameMatchContext['venue'] = 'unknown';
+  let matchDate: string | null = null;
+  if (params.venueOverride) {
+    venue = params.venueOverride.venue;
+    matchDate = params.venueOverride.date;
+  } else {
+    const next = params.scheduledFixtures
+      .filter(item =>
+        (item.homeTeamId === ownTeamId && item.awayTeamId === opponentTeamId)
+        || (item.homeTeamId === opponentTeamId && item.awayTeamId === ownTeamId))
+      .filter(item => !params.asOfDate || item.date >= params.asOfDate)
+      .sort((a, b) => a.date.localeCompare(b.date))[0];
+    if (next) {
+      venue = next.homeTeamId === ownTeamId ? 'home' : 'away';
+      matchDate = next.date;
+    }
+  }
+
+  const leagueGames = played.length;
+  const homeWins = played.filter(item => (item.homeScore as number) > (item.awayScore as number)).length;
+  const leagueHomeWinPct = leagueGames > 0 ? (homeWins / leagueGames) * 100 : null;
+  const shrunk = leagueHomeWinPct === null
+    ? 0
+    : (leagueHomeWinPct - 50) * (leagueGames / (leagueGames + HOME_ADVANTAGE_PRIOR_GAMES));
+  const magnitude = clamp(shrunk, -HOME_ADVANTAGE_CAP, HOME_ADVANTAGE_CAP);
+  const homeAdjustmentPct = venue === 'home' ? round(magnitude, 1) : venue === 'away' ? round(-magnitude, 1) : 0;
+
+  return {
+    venue,
+    matchDate,
+    ownRecord: recordFor(ownTeamId),
+    opponentRecord: recordFor(opponentTeamId),
+    headToHead,
+    leagueHomeWinPct: leagueHomeWinPct === null ? null : round(leagueHomeWinPct, 1),
+    leagueGames,
+    homeAdjustmentPct,
+  };
+};
+
+/** A hazai pálya korrekció ráhelyezése a győzelmi valószínűségre. */
+const applyHomeAdjustment = (
+  baseProb: ReturnType<typeof computeWinProbability>,
+  matchContext?: PregameMatchContext | null
+): ReturnType<typeof computeWinProbability> => {
+  if (!matchContext || matchContext.homeAdjustmentPct === 0) return baseProb;
+  const newOwnPct = round(clamp(baseProb.ownPct + matchContext.homeAdjustmentPct, WIN_PROB_FLOOR, WIN_PROB_CEILING), 1);
+  const absDiff = Math.abs(newOwnPct - 50);
+  const predictedWinner: 'own' | 'opponent' | 'even' = absDiff < 2 ? 'even' : newOwnPct > 50 ? 'own' : 'opponent';
+  const adj = matchContext.homeAdjustmentPct;
+  return {
+    ...baseProb,
+    ownPct: newOwnPct,
+    opponentPct: round(100 - newOwnPct, 1),
+    predictedWinner,
+    confidenceReasons: [
+      ...baseProb.confidenceReasons,
+      `${matchContext.venue === 'home' ? 'hazai pálya' : 'idegenbeli meccs'} ${adj > 0 ? '+' : ''}${adj.toFixed(1)} pp (liga hazai győzelmi arány ${matchContext.leagueHomeWinPct?.toFixed(1)}%, ${matchContext.leagueGames} meccs)`,
+    ],
+  };
+};
+
 export const analyzePreGameScouting = (
   opponentTeam: TeamSeasonStat,
   opponentPlayers: PlayerSeasonStat[],
@@ -2214,7 +2438,8 @@ export const analyzePreGameScouting = (
     league?: ShotProfileSummary | null;
     ownAllowed?: ShotProfileSummary | null;
     opponentAllowed?: ShotProfileSummary | null;
-  }
+  },
+  extras?: PregameScoutingExtras
 ): ScoutingReport => {
   const normalizedOpponent = normalizeTeamStats(opponentTeam);
   const normalizedOwn = normalizeTeamStats(ownTeam);
@@ -2266,9 +2491,12 @@ export const analyzePreGameScouting = (
   const threats = buildThreats(normalizedOpponent, leagueBenchmarks, usageShare);
   const vulnerabilities = buildVulnerabilities(normalizedOpponent, leagueBenchmarks);
   const positionComparison = buildPositionComparison(ownPlayers, opponentPlayers);
-  const winProbability = applyMatchupAdjustment(
-    computeWinProbability(normalizedOwn, normalizedOpponent, leagueBenchmarks),
-    positionComparison
+  const winProbability = applyHomeAdjustment(
+    applyMatchupAdjustment(
+      computeWinProbability(normalizedOwn, normalizedOpponent, leagueBenchmarks),
+      positionComparison
+    ),
+    extras?.matchContext
   );
   const xFactors = buildXFactors(normalizedOpponent, normalizedOwn, leagueBenchmarks, threats, vulnerabilities);
   const baseXFactorImpact = buildXFactorImpact(xFactors, normalizedOpponent, normalizedOwn, leagueBenchmarks);
@@ -2433,6 +2661,8 @@ export const analyzePreGameScouting = (
       },
     },
     riskFlags: riskNotes.flags,
+    matchContext: extras?.matchContext ?? undefined,
+    injuryImpact: extras?.injuryImpact ?? undefined,
     positionComparisonNote: positionComparisonNote || undefined,
     llmContext,
     summary: buildSummary(
@@ -2458,7 +2688,9 @@ export const analyzePreGameScouting = (
       injuryContext,
       winProbability.confidenceReasons,
       shotProfileContext?.notes ?? [],
-      shotProfileContext?.defenseNotes ?? []
+      shotProfileContext?.defenseNotes ?? [],
+      extras?.matchContext,
+      extras?.injuryImpact
     ),
     injuryContext,
   };

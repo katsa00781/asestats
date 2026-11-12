@@ -57,6 +57,7 @@ import {
   BASELINE_RISK_SCENARIO_TITLE,
   FOUL_PRONE_DEFENSE_VULNERABILITY,
   analyzePreGameScouting,
+  buildPregameMatchContext,
   buildTeamBenchmarks as buildPregameBenchmarks,
   normalizeTeamStats as normalizePregameTeamStats,
   type PlayerSeasonStat,
@@ -7681,6 +7682,81 @@ export function SeasonComparison({
     useRecentFormPregame,
   ]);
 
+  const pregameInjuryImpactEstimate = useMemo(() => {
+    const ownMissing = activeSeasonPlayers.filter(
+      player => String(player.teamId ?? '') === String(resolvedTeamId) && pregameOwnInjuries.includes(player.id)
+    );
+    const opponentMissing = activeSeasonPlayers.filter(
+      player => String(player.teamId ?? '') === String(selectedOpponentTeamId) && pregameOpponentInjuries.includes(player.id)
+    );
+
+    const summarizeMissing = (players: PlayerStats[]) => {
+      const eligiblePlayers = players.filter(player => {
+        const games = Math.max(player.gamesPlayed || 0, 0);
+        const minutesPerGame = games > 0 ? (player.minutes || 0) / games : 0;
+        return games >= 4 && minutesPerGame >= 8;
+      });
+
+      const totals = eligiblePlayers.reduce(
+        (acc, player) => {
+          const games = Math.max(player.gamesPlayed || 0, 1);
+          const minutesPerGame = (player.minutes || 0) / games;
+          const valuationPerGame = player.valuation || 0;
+          const pointsPerGame = player.points || 0;
+          acc.valPer36 += minutesPerGame > 0 ? (valuationPerGame / minutesPerGame) * 36 : 0;
+          acc.pointsPer36 += minutesPerGame > 0 ? (pointsPerGame / minutesPerGame) * 36 : 0;
+          if (valuationPerGame >= 12) acc.coreNames.push(player.name);
+          return acc;
+        },
+        { valPer36: 0, pointsPer36: 0, coreNames: [] as string[] }
+      );
+
+      return {
+        valPer36: roundValue(totals.valPer36, 1),
+        pointsPer36: roundValue(totals.pointsPer36, 1),
+        coreNames: totals.coreNames.slice(0, 4),
+      };
+    };
+
+    return {
+      own: summarizeMissing(ownMissing),
+      opponent: summarizeMissing(opponentMissing),
+    };
+  }, [
+    activeSeasonPlayers,
+    pregameOpponentInjuries,
+    pregameOwnInjuries,
+    resolvedTeamId,
+    selectedOpponentTeamId,
+  ]);
+
+  // Mérkőzés-kontextus (pályaválasztó, mérleg, forma, H2H, hazai módosító) a
+  // bajnoki fixture-ökből; történeti nézetben csak a kiválasztott meccs előtti
+  // eredmények, a pályaválasztó a kiválasztott meccsé.
+  const pregameMatchContext = useMemo(() => {
+    if (!resolvedTeamId || resolvedTeamId === 'all' || !selectedOpponentTeamId) return null;
+    const historical = shouldUseHistoricalPregameSnapshot && selectedGame ? selectedGame : null;
+    return buildPregameMatchContext({
+      playedFixtures: seasonPlayedFixtures.map(fixture => ({
+        homeTeamId: fixture.home_team_id,
+        awayTeamId: fixture.away_team_id,
+        date: fixture.game_date,
+        homeScore: fixture.home_score,
+        awayScore: fixture.away_score,
+      })),
+      scheduledFixtures: seasonFixtures.map(fixture => ({
+        homeTeamId: fixture.home_team_id,
+        awayTeamId: fixture.away_team_id,
+        date: fixture.game_date,
+      })),
+      ownTeamId: resolvedTeamId,
+      opponentTeamId: selectedOpponentTeamId,
+      beforeDate: historical?.date ?? null,
+      asOfDate: new Date().toISOString().split('T')[0],
+      venueOverride: historical ? { venue: historical.homeAway, date: historical.date } : null,
+    });
+  }, [resolvedTeamId, seasonFixtures, seasonPlayedFixtures, selectedGame, selectedOpponentTeamId, shouldUseHistoricalPregameSnapshot]);
+
   const pregameReport = useMemo(() => {
     if (!pregameBenchmarks || !pregameOwnTeam || !pregameOpponentTeam) return null;
     if (pregameOpponentPlayers.length === 0) return null;
@@ -7697,11 +7773,17 @@ export function SeasonComparison({
         league: leagueSeasonShotSummary,
         ownAllowed: teamAllowedSeasonShotSummary,
         opponentAllowed: opponentAllowedSeasonShotSummary,
+      },
+      {
+        matchContext: pregameMatchContext,
+        injuryImpact: pregameInjuryContext ? pregameInjuryImpactEstimate : null,
       }
     );
   }, [
     pregameBenchmarks,
     pregameInjuryContext,
+    pregameInjuryImpactEstimate,
+    pregameMatchContext,
     pregameOpponentPlayers,
     pregameOpponentTeam,
     pregameOwnPlayers,
@@ -7778,54 +7860,6 @@ export function SeasonComparison({
       opponentSuppression: roundValue(pregameEfficiencyBaseline.opponent.expectedPoints - opponent.expectedPoints, 1),
     };
   }, [pregameEfficiencyBaseline, pregameEfficiencyInputs]);
-
-  const pregameInjuryImpactEstimate = useMemo(() => {
-    const ownMissing = activeSeasonPlayers.filter(
-      player => String(player.teamId ?? '') === String(resolvedTeamId) && pregameOwnInjuries.includes(player.id)
-    );
-    const opponentMissing = activeSeasonPlayers.filter(
-      player => String(player.teamId ?? '') === String(selectedOpponentTeamId) && pregameOpponentInjuries.includes(player.id)
-    );
-
-    const summarizeMissing = (players: PlayerStats[]) => {
-      const eligiblePlayers = players.filter(player => {
-        const games = Math.max(player.gamesPlayed || 0, 0);
-        const minutesPerGame = games > 0 ? (player.minutes || 0) / games : 0;
-        return games >= 4 && minutesPerGame >= 8;
-      });
-
-      const totals = eligiblePlayers.reduce(
-        (acc, player) => {
-          const games = Math.max(player.gamesPlayed || 0, 1);
-          const minutesPerGame = (player.minutes || 0) / games;
-          const valuationPerGame = player.valuation || 0;
-          const pointsPerGame = player.points || 0;
-          acc.valPer36 += minutesPerGame > 0 ? (valuationPerGame / minutesPerGame) * 36 : 0;
-          acc.pointsPer36 += minutesPerGame > 0 ? (pointsPerGame / minutesPerGame) * 36 : 0;
-          if (valuationPerGame >= 12) acc.coreNames.push(player.name);
-          return acc;
-        },
-        { valPer36: 0, pointsPer36: 0, coreNames: [] as string[] }
-      );
-
-      return {
-        valPer36: roundValue(totals.valPer36, 1),
-        pointsPer36: roundValue(totals.pointsPer36, 1),
-        coreNames: totals.coreNames.slice(0, 4),
-      };
-    };
-
-    return {
-      own: summarizeMissing(ownMissing),
-      opponent: summarizeMissing(opponentMissing),
-    };
-  }, [
-    activeSeasonPlayers,
-    pregameOpponentInjuries,
-    pregameOwnInjuries,
-    resolvedTeamId,
-    selectedOpponentTeamId,
-  ]);
 
   type PregameKeyPlayerFingerprint = {
     playerId: string;

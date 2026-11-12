@@ -850,8 +850,16 @@ helyett az ellenfél *engedett* FTA/FGA-ja a gyengeség.
   Y” csak eltérő X/Y esetén; egyetlen „X-faktorok:” mondat a számokkal; `withArticle()` (a/az) a pozíciós
   mondatokban; „Kontextus: az ellenfél …; támadás: …; védekezés: …”; `tidySentence()` a dupla pontra és
   szóközre a summary minden során; a „Saját kockázati pontok” az aktív triggereket nevezi meg.
-- [ ] **4. fázis – mérkőzés-kontextus**: pályaválasztó, mérleg, forma (utolsó 5), H2H, hazai módosító,
-  hiányzók VAL/36-hatása az exportban.
+- [x] **4. fázis – mérkőzés-kontextus (`@core`)**: új `buildPregameMatchContext()` a `league_fixtures`
+  played + scheduled soraiból (új lekérdezés nélkül): pályaválasztó (a két csapat következő kiírt meccse;
+  történeti nézetben a kiválasztott meccs `homeAway`-e), mérleg (otthon / idegenben), forma (utolsó 5),
+  szezonos H2H; történeti nézetben csak a meccs előtti eredmények. Hazai módosító a győzelmi
+  valószínűségen: `(liga hazai gy% − 50) × n/(n+40)`, ±6 pp, a bizonyosság-okok között kiírva. Új
+  opcionális `extras` paraméter (`matchContext`, `injuryImpact`); a `pregameInjuryImpactEstimate` a
+  riport elé került és bekerül a riportba. Summary: „Mérkőzés-kontextus” és „Hiányzók” sor; export:
+  „Mérkőzés-kontextus” és „Hiányzók” szakasz (a pozíciós VAL/36 a sérültek nélkül számol – ez eddig is
+  így volt, most ki is van írva); a bizonyosság magyarul. ASE–Alba: ASE otthon (11-14), 9–0 vs 6–3,
+  liga hazai 67,2% / 61 meccs → +6,0 pp.
 - [ ] **5. fázis – PER*/WS* skála**: képlet és ligaátlag lábjegyzetben.
 - [ ] **Külön tétel (nem H23):** a post-game `postgameOpponentTotalsByTeam`
   (`SeasonComparison.tsx`) `game_id`-nként két csapatot vár, ami a valós adatban sosem fordul elő,

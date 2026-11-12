@@ -137,6 +137,7 @@ Update this file after every meaningful implementation change.
 
 ## Completed (legutóbbi)
 
+- **H23 / 4 – pregame mérkőzés-kontextus (`@core`)** (2026-11-12): `buildPregameMatchContext` (pályaválasztó, mérleg, forma, H2H a fixture-ökből), ligaadatból számolt hazai módosító (±6 pp, zsugorítva) a győzelmi valószínűségen, hiányzók kieső VAL/36-ja a riportban és az exportban.
 - **H23 / 3 – pregame szövegminőség (`@core`)** (2026-11-12): eltérő másodlagos X-faktor, egy X-faktor mondat, a/az névelő, „Félpályás támadás támadást” javítva, dupla pont eltávolítva.
 - **H23 / 2 – pregame modell-konzisztencia (`@core`)** (2026-11-12): a kontrollált forgatókönyv egy forrásból (`xFactorImpact.controlledScenarioDeltaPct`), trigger nélküli alapsor swing nélkül; a variancia-forrás kockázati trigger; tempó-sáv percentilis-ranggal + 1,5 birtoklásos pár-toleranciával; „Kevés büntető” → „Sokat faultoló védekezés” (engedett FTA/FGA); zóna-matchup pont/dobás alapon; export Δ arány / Δ FG% külön.
 - **H23 / 1 – pregame ellenfél-box: OREB%, tempó, DRtg (`@core`)** (2026-11-12): a `teamSeasonStats.opponent` sosem töltődött (OREB% 100%, tempó ~39). Új `hooks/useLeagueTeamBoxTotals.ts` + `lib/team-analysis.ts` `buildOpponentBoxTotals` (tükörpár: dátum + `opponent_team_id`, csak mindkét oldali box score-os meccs); mindkét `normalizeTeamStats` a párosított mintán számol, ellenfél nélkül a saját tempóbecslés. A Csapatelemzés OREB%/DRtg is helyes lett. Mobil jegyzet: `2026-11-12-pregame-riport-h23.md`.
