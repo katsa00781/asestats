@@ -56,8 +56,11 @@ import { useLeagueTeamBoxTotals } from '@/hooks/useLeagueTeamBoxTotals';
 import {
   BASELINE_RISK_SCENARIO_TITLE,
   FOUL_PRONE_DEFENSE_VULNERABILITY,
+  PROXY_PER_DEFINITION,
+  PROXY_WIN_SHARE_DEFINITION,
   analyzePreGameScouting,
   buildPregameMatchContext,
+  computeLeagueProxyPerAverage,
   buildTeamBenchmarks as buildPregameBenchmarks,
   normalizeTeamStats as normalizePregameTeamStats,
   type PlayerSeasonStat,
@@ -7757,6 +7760,24 @@ export function SeasonComparison({
     });
   }, [resolvedTeamId, seasonFixtures, seasonPlayedFixtures, selectedGame, selectedOpponentTeamId, shouldUseHistoricalPregameSnapshot]);
 
+  // A PER* skála viszonyítási pontja: a liga (minden csapat) PER*-átlaga.
+  const leagueProxyPerAverage = useMemo(() => {
+    if (seasonPlayers.length === 0) return null;
+    const teamGames = Math.max(...seasonPlayers.map(player => player.gamesPlayed || 0), 0);
+    return computeLeagueProxyPerAverage(
+      seasonPlayers.map(player => ({
+        games: player.gamesPlayed || 0,
+        minutes: player.minutes || 0,
+        points: player.points || 0,
+        ast: player.assists || 0,
+        stl: player.steals || 0,
+        blk: player.blocks || 0,
+        tov: player.turnovers || 0,
+      })),
+      teamGames
+    );
+  }, [seasonPlayers]);
+
   const pregameReport = useMemo(() => {
     if (!pregameBenchmarks || !pregameOwnTeam || !pregameOpponentTeam) return null;
     if (pregameOpponentPlayers.length === 0) return null;
@@ -7777,9 +7798,11 @@ export function SeasonComparison({
       {
         matchContext: pregameMatchContext,
         injuryImpact: pregameInjuryContext ? pregameInjuryImpactEstimate : null,
+        leagueProxyPerAverage,
       }
     );
   }, [
+    leagueProxyPerAverage,
     pregameBenchmarks,
     pregameInjuryContext,
     pregameInjuryImpactEstimate,
@@ -15685,8 +15708,8 @@ export function SeasonComparison({
                                 {' '}{pregameReport.advancedPlayersEligibility?.opponent.minMinutesPerGame ?? 8} perc/meccs,
                                 {' '}{pregameReport.advancedPlayersEligibility?.opponent.minEligibleGames ?? 3} meccs.
                               </div>
-                              <div>PER*: saját, boxscore-alapú hatékonysági index (nem hivatalos NBA PER).</div>
-                              <div>WS*: becsült győzelem-hozzájárulás a csapat teljesítményére vetítve.</div>
+                              <div>{PROXY_PER_DEFINITION}</div>
+                              <div>{PROXY_WIN_SHARE_DEFINITION}</div>
                               <div>VAL/36: 36 percre normalizált értéktermelés (összehasonlíthatóság miatt).</div>
                             </div>
                           </TooltipContent>
@@ -15726,7 +15749,10 @@ export function SeasonComparison({
                       </div>
                     </div>
                     <div className="text-[11px] text-muted">
-                      A PER* és WS* becslés saját, boxscore-alapú proxy mutató, összehasonlító célra.
+                      A PER* és WS* saját, boxscore-alapú proxy mutató, összehasonlító célra.
+                      {pregameReport.leagueProxyPerAverage != null && (
+                        <> Ligaátlag PER*: <span className="font-mono tabular-nums text-secondary">{pregameReport.leagueProxyPerAverage.toFixed(1)}</span> (percekkel súlyozva, a listával azonos küszöbbel).</>
+                      )}
                     </div>
                   </div>
                 )}

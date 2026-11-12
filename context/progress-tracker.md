@@ -137,6 +137,7 @@ Update this file after every meaningful implementation change.
 
 ## Completed (legutóbbi)
 
+- **H23 / 5 – PER*/WS* skála (`@core`)** (2026-11-12): a PER* és WS* képlete és a liga percekkel súlyozott PER*-átlaga (2026/27: 6,1) a UI-ban és az exportban. A H23 mind az 5 fázisa kész.
 - **H23 / 4 – pregame mérkőzés-kontextus (`@core`)** (2026-11-12): `buildPregameMatchContext` (pályaválasztó, mérleg, forma, H2H a fixture-ökből), ligaadatból számolt hazai módosító (±6 pp, zsugorítva) a győzelmi valószínűségen, hiányzók kieső VAL/36-ja a riportban és az exportban.
 - **H23 / 3 – pregame szövegminőség (`@core`)** (2026-11-12): eltérő másodlagos X-faktor, egy X-faktor mondat, a/az névelő, „Félpályás támadás támadást” javítva, dupla pont eltávolítva.
 - **H23 / 2 – pregame modell-konzisztencia (`@core`)** (2026-11-12): a kontrollált forgatókönyv egy forrásból (`xFactorImpact.controlledScenarioDeltaPct`), trigger nélküli alapsor swing nélkül; a variancia-forrás kockázati trigger; tempó-sáv percentilis-ranggal + 1,5 birtoklásos pár-toleranciával; „Kevés büntető” → „Sokat faultoló védekezés” (engedett FTA/FGA); zóna-matchup pont/dobás alapon; export Δ arány / Δ FG% külön.

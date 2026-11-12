@@ -811,7 +811,7 @@ egymás elleni meccsek közt jelenik meg. A 2024/25-ös szezonnézetben nincs do
   csapatnál) – keret-import csapat-hozzárendelési hiba gyanúja, döntés előtt nem nyúltunk hozzá.
 - Mobil jegyzet: `asestatmobile/docs/mobile-sync/2026-11-08-dobasterkep-zonak-h21.md` (összesítővé bővítve: H21 + H22).
 
-**H23 – Pregame elemzés: számítási hibák, ellentmondások, szöveghibák, hiányzó kontextus (2026-11-12)** – 1. fázis kész, 2–5. nyitva
+**H23 – Pregame elemzés: számítási hibák, ellentmondások, szöveghibák, hiányzó kontextus ✓ (2026-11-12)** – az 5 fázis kész; böngészős ellenőrzés és a post-game ellenfél-összesítő külön tétel nyitva
 
 A pregame scouting riport (ASE–Alba futás) 11 hibája. Felhasználói döntések: az
 ellenfél-összesítő közös forrásban, liga-szintű kliens-hookkal (sémaváltozás
@@ -860,7 +860,12 @@ helyett az ellenfél *engedett* FTA/FGA-ja a gyengeség.
   „Mérkőzés-kontextus” és „Hiányzók” szakasz (a pozíciós VAL/36 a sérültek nélkül számol – ez eddig is
   így volt, most ki is van írva); a bizonyosság magyarul. ASE–Alba: ASE otthon (11-14), 9–0 vs 6–3,
   liga hazai 67,2% / 61 meccs → +6,0 pp.
-- [ ] **5. fázis – PER*/WS* skála**: képlet és ligaátlag lábjegyzetben.
+- [x] **5. fázis – PER*/WS* skála (`@core`)**: `computeProxyPer` exportálva, új
+  `computeLeagueProxyPerAverage` (a kulcsjátékos-lista küszöbével, percekkel súlyozva) → riport
+  `leagueProxyPerAverage`; közös `PROXY_PER_DEFINITION` / `PROXY_WIN_SHARE_DEFINITION` szöveg a UI
+  tooltipben és az export lábjegyzetében. 2026/27: ligaátlag PER* 6,1 (a legjobbak ~10–11).
+- [x] `npx tsc --noEmit`, `npm run lint` (0 hiba, csak a korábbi 5 figyelmeztetés), `npm run build` rendben.
+- [ ] **Böngészős ellenőrzés** (felhasználó): Elemzések → pregame ASE–Alba, MD export – a 11 pont.
 - [ ] **Külön tétel (nem H23):** a post-game `postgameOpponentTotalsByTeam`
   (`SeasonComparison.tsx`) `game_id`-nként két csapatot vár, ami a valós adatban sosem fordul elő,
   ezért a post-game liga-benchmark OREB% / közös birtoklás ellenfél-oldala üres. A

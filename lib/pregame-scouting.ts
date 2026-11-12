@@ -283,6 +283,8 @@ export type ScoutingReport = {
   };
   matchContext?: PregameMatchContext;
   injuryImpact?: { own: PregameInjuryImpact; opponent: PregameInjuryImpact };
+  /** A PER* skála viszonyítási pontja: a liga percekkel súlyozott PER*-átlaga. */
+  leagueProxyPerAverage?: number | null;
   summary: string;
 };
 
@@ -1056,7 +1058,22 @@ const buildShotProfileContext = (
   };
 };
 
-const computeProxyPer = (player: PlayerSeasonStat) => {
+/** A PER* és WS* skála magyarázata (UI és export közös szövege). */
+export const PROXY_PER_DEFINITION =
+  'PER* = saját proxy, nem a Hollinger-féle PER: 36 percre vetítve 0,35·pont + 0,22·assziszt + 0,26·szerzett labda + 0,17·blokk − 0,20·eladott labda (lepattanó és dobáshatékonyság nélkül).';
+export const PROXY_WIN_SHARE_DEFINITION =
+  'WS* = a játékos VAL-részesedése a csapat VAL-jából × a csapat várt győzelmei (meccsszám × e meccsre modellezett győzelmi valószínűség) × hatékonysági szorzó (VAL/meccs ÷ 18, 0,5–1,5 között); szezonra összegzett, becsült győzelem-hozzájárulás.';
+
+/** A PER* számításához szükséges játékosmezők (szezon-összegek). */
+type ProxyPerInput = Pick<PlayerSeasonStat, 'minutes' | 'points' | 'ast' | 'stl' | 'blk' | 'tov'>;
+
+/**
+ * PER* – saját, egyszerűsített teljesítmény-proxy, **nem** a Hollinger-féle PER:
+ * 36 percre vetítve 0,35·pont + 0,22·assziszt + 0,26·szerzett labda +
+ * 0,17·blokk − 0,20·eladott labda (alsó korlát 0). Lepattanót és dobás-
+ * hatékonyságot nem tartalmaz; csak a ligaátlaghoz mérve értelmezhető.
+ */
+export const computeProxyPer = (player: ProxyPerInput) => {
   const minutes = Math.max(player.minutes || 0, 1);
   const pointsPer36 = (player.points / minutes) * 36;
   const astPer36 = (player.ast / minutes) * 36;
@@ -1070,6 +1087,30 @@ const computeProxyPer = (player: PlayerSeasonStat) => {
     blkPer36 * 0.17 -
     tovPer36 * 0.20;
   return round(Math.max(score, 0), 1);
+};
+
+/**
+ * A liga PER*-átlaga a kulcsjátékos-listával azonos jogosultsági küszöbbel
+ * (`getAdvancedEligibility`), percekkel súlyozva – a PER* skála viszonyítási
+ * pontja. `teamGames` = a liga csapatainak jellemző meccsszáma.
+ */
+export const computeLeagueProxyPerAverage = (
+  players: Array<ProxyPerInput & { games: number }>,
+  teamGames: number
+) => {
+  const eligibility = getAdvancedEligibility(teamGames);
+  const eligible = players.filter(player => {
+    const games = Math.max(player.games || 0, 1);
+    return (
+      player.minutes >= eligibility.minTotalMinutes
+      && player.minutes / games >= eligibility.minMinutesPerGame
+      && games >= eligibility.minEligibleGames
+    );
+  });
+  const totalMinutes = eligible.reduce((sum, player) => sum + player.minutes, 0);
+  if (totalMinutes <= 0) return null;
+  const weighted = eligible.reduce((sum, player) => sum + computeProxyPer(player) * player.minutes, 0);
+  return round(weighted / totalMinutes, 1);
 };
 
 const computeProxyWinShare = (
@@ -2663,6 +2704,7 @@ export const analyzePreGameScouting = (
     riskFlags: riskNotes.flags,
     matchContext: extras?.matchContext ?? undefined,
     injuryImpact: extras?.injuryImpact ?? undefined,
+    leagueProxyPerAverage: extras?.leagueProxyPerAverage ?? null,
     positionComparisonNote: positionComparisonNote || undefined,
     llmContext,
     summary: buildSummary(

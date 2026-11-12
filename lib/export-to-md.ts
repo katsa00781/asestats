@@ -18,6 +18,7 @@ import type {
 } from './team-season-export';
 import { LINEUP_NET_MIN_SECONDS, LINEUP_SLOT_POSITIONS, MAX_TRIOS } from './postgame-lineup-export';
 import { MISCLASSIFIED_THREES_MIN, buildPostgameAutoFocus, composePostgameSummary } from './postgame-report';
+import { PROXY_PER_DEFINITION, PROXY_WIN_SHARE_DEFINITION } from './pregame-scouting';
 import { trueShootingPct, effectiveFgPct } from './stat-formulas';
 import {
   buildTeamSeasonExport,
@@ -945,6 +946,14 @@ export function pregameReportToMd(report: ScoutingReport, seasonName?: string): 
         lines.push(`| ${p.name} | ${p.position} | ${p.minutesPerGame.toFixed(1)} | ${p.proxyPer.toFixed(1)} | ${p.proxyWinShare.toFixed(2)} | ${p.valPer36.toFixed(1)} | ${p.pointsPer36.toFixed(1)} |`);
       }
     }
+  }
+
+  if (report.advancedPlayers && (report.advancedPlayers.own.length > 0 || report.advancedPlayers.opponent.length > 0)) {
+    const leagueAvg = report.leagueProxyPerAverage;
+    lines.push(
+      ``,
+      `*${PROXY_PER_DEFINITION}${leagueAvg != null ? ` Ligaátlag PER* (percekkel súlyozva, a listával azonos perc-/meccsküszöbbel): ${leagueAvg.toFixed(1)}.` : ''} ${PROXY_WIN_SHARE_DEFINITION}*`
+    );
   }
 
   if (report.shotProfileContext) {
