@@ -18,7 +18,7 @@ import type {
 } from './team-season-export';
 import { LINEUP_NET_MIN_SECONDS, LINEUP_SLOT_POSITIONS, MAX_TRIOS } from './postgame-lineup-export';
 import { MISCLASSIFIED_THREES_MIN, buildPostgameAutoFocus, composePostgameSummary } from './postgame-report';
-import { PROXY_PER_DEFINITION, PROXY_WIN_SHARE_DEFINITION } from './pregame-scouting';
+import { PROXY_PER_DEFINITION, PROXY_WIN_SHARE_DEFINITION, ZONE_SHRINK_PRIOR_ATTEMPTS } from './pregame-scouting';
 import { trueShootingPct, effectiveFgPct } from './stat-formulas';
 import {
   buildTeamSeasonExport,
@@ -983,28 +983,32 @@ export function pregameReportToMd(report: ScoutingReport, seasonName?: string): 
     const { ownZones, opponentZones } = report.shotProfileContext;
     if (ownZones.length > 0 || opponentZones.length > 0) {
       lines.push(``, `## Dobástérkép összehasonlítás`, ``);
-      // Két külön eltérés: a zóna aránya (dobásmix) és a zóna FG%-a a ligához
-      // mérve – a szöveges jegyzetek az FG%-eltérésre hivatkoznak.
-      lines.push(`| Zóna | Saját arány | Δ arány | Saját FG% | Δ FG% | Saját pont/dobás | Ellenfél arány | Δ arány | Ellenfél FG% | Δ FG% | Ellenfél pont/dobás |`);
-      lines.push(`|------|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|`);
-      const allLabels = Array.from(new Set([...ownZones.map(z => z.label), ...opponentZones.map(z => z.label)]));
+      // Csapatonként külön tábla. Δ arány = a dobásmix eltérése, Δ FG% = a
+      // nyers találati arány eltérése a ligától; a pont/dobás a liga felé húzott
+      // (shrinkelt) FG%-ból jön, mert kis mintán a nyers érték irreális.
       const signedPp = (v: number) => `${v >= 0 ? '+' : ''}${v.toFixed(1)} pp`;
-      const zoneCells = (zone: (typeof ownZones)[number] | undefined) =>
-        zone
-          ? `${zone.rate.toFixed(1)}% | ${signedPp(zone.rateDeltaVsLeague)} | ${zone.pct.toFixed(1)}% | ${signedPp(zone.pctDeltaVsLeague)} | ${zone.pps.toFixed(2)}`
-          : '– | – | – | – | –';
-      for (const label of allLabels) {
-        const own = ownZones.find(z => z.label === label);
-        const opp = opponentZones.find(z => z.label === label);
-        lines.push(`| ${label} | ${zoneCells(own)} | ${zoneCells(opp)} |`);
-      }
-      lines.push(``, `*Δ arány = a zóna dobásaránya a ligaátlaghoz képest; Δ FG% = a zóna találati aránya a ligaátlaghoz képest (mindkettő százalékpont). Pont/dobás = 2 × FG% a kétpontos, 3 × FG% a hárompontos zónákban.*`);
+      const zoneTable = (title: string, zones: typeof ownZones) => {
+        if (zones.length === 0) return;
+        lines.push(``, `**${title}**`, ``);
+        lines.push(`| Zóna | Kísérlet | Arány | Δ arány | FG% | Δ FG% | Shrinkelt FG% | Pont/dobás |`);
+        lines.push(`|------|-----|-----|-----|-----|-----|-----|-----|`);
+        for (const zone of zones) {
+          lines.push(`| ${zone.label} | ${zone.attempts} | ${zone.rate.toFixed(1)}% | ${signedPp(zone.rateDeltaVsLeague)} | ${zone.pct.toFixed(1)}% | ${signedPp(zone.pctDeltaVsLeague)} | ${zone.pctShrunk.toFixed(1)}% | ${zone.pps.toFixed(2)} |`);
+        }
+      };
+      zoneTable(report.ownTeamName, ownZones);
+      zoneTable(report.opponentTeamName, opponentZones);
+      lines.push(``, `*Δ arány = a zóna dobásaránya a ligaátlaghoz képest; Δ FG% = a nyers találati arány a ligaátlaghoz képest (mindkettő százalékpont). Shrinkelt FG% = (találat + ${ZONE_SHRINK_PRIOR_ATTEMPTS} × liga zóna-FG%) / (kísérlet + ${ZONE_SHRINK_PRIOR_ATTEMPTS}). Pont/dobás = 2 × (kétpontos) vagy 3 × (hárompontos) shrinkelt FG%. A zóna-matchup és a jegyzetek a shrinkelt értékekből számolnak.*`);
       if (report.shotProfileContext.clashZones.length > 0) {
         lines.push(``, `**Zónaütközés:** ${report.shotProfileContext.clashZones.join(', ')}`);
       }
       if (report.shotProfileContext.notes.length > 0) {
-        lines.push(``);
+        lines.push(``, `**Dobástérkép-fókusz (támadás):**`, ``);
         for (const note of report.shotProfileContext.notes) lines.push(`- ${note}`);
+      }
+      if (report.shotProfileContext.defenseNotes.length > 0) {
+        lines.push(``, `**Dobástérkép-védekezés:**`, ``);
+        for (const note of report.shotProfileContext.defenseNotes) lines.push(`- ${note}`);
       }
     }
   }

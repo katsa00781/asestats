@@ -137,6 +137,7 @@ Update this file after every meaningful implementation change.
 
 ## Completed (legutóbbi)
 
+- **H24 / P2 – pregame taktikai tartalom (`@core`)** (2026-11-12): zóna-FG% shrinkage (K = 20), zárd/engedd dobástérkép-védekezés, döntő tengely a legnagyobb standardizált különbségből.
 - **H24 / P1 – pregame log-odds esély, hiányzók, WS* (`@core`)** (2026-11-12): a győzelmi esély logit-láncban (alap → matchup → hazai → hiányzók), puha 3–97%-os sávval, bontással; hiányzók meccsátlagban, „Keret ellenőrizve” jelölővel; WS* a tényleges győzelmekből.
 - **H23 utómunka – post-game ellenfél-összesítő** (2026-11-12): a `postgameOpponentTotalsByTeam` a `teamSeasonStats` ellenfél-box-ából számol (eddig `game_id`-nként két csapatot várt, így mindig üres volt); a post-game OREB% referencia és a közös birtoklás most a valódi definíciót követi.
 - **H23 / 5 – PER*/WS* skála (`@core`)** (2026-11-12): a PER* és WS* képlete és a liga percekkel súlyozott PER*-átlaga (2026/27: 6,1) a UI-ban és az exportban. A H23 mind az 5 fázisa kész.

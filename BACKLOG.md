@@ -811,7 +811,7 @@ egymás elleni meccsek közt jelenik meg. A 2024/25-ös szezonnézetben nincs do
   csapatnál) – keret-import csapat-hozzárendelési hiba gyanúja, döntés előtt nem nyúltunk hozzá.
 - Mobil jegyzet: `asestatmobile/docs/mobile-sync/2026-11-08-dobasterkep-zonak-h21.md` (összesítővé bővítve: H21 + H22).
 
-**H24 – Pregame riportgenerátor: 2. javítási lista (2026-11-12)** – P1 kész, P2–P3 nyitva
+**H24 – Pregame riportgenerátor: 2. javítási lista (2026-11-12)** – P1–P2 kész, P3 nyitva
 
 Felhasználói döntések: hiányzó-szorzó k = 2,5 (logit), csapatonkénti „Keret ellenőrizve” jelölő,
 PER* lepattanósúllyal; a hazai módosító ±0,24 logit (≈ ±6 pp 50%-nál, a H23 döntés logit-megfelelője).
@@ -826,8 +826,16 @@ PER* lepattanósúllyal; a hazai módosító ±0,24 logit (≈ ±6 pp 50%-nál, 
   (meccstől független; Benke 2,03 két futásban azonos), mérleg nélkül „–”. ASE–Alba (2026/27, ASE otthon):
   alap 71,5% → matchup 81,1% → hazai 84,0% (+2,9 pp); teszt-hiányzóval (16,2 VAL/meccs, a csapat 11%-a)
   −3,5 pp.
-- [ ] **P2 – taktikai tartalom**: zárd/engedd dobástérkép-védekezés, zóna-FG% shrinkage (K = 20),
-  döntő tengely a legnagyobb standardizált különbségből.
+- [x] **P2 – taktikai tartalom (`@core`)**: (5) zóna-FG% Bayes-shrink a liga zóna-FG% felé
+  (`ZONE_SHRINK_PRIOR_ATTEMPTS = 20`), új `pctShrunk` / `pctShrunkDeltaVsLeague`; a pps, a matchup és a
+  jegyzetek ebből számolnak (szintetikus 9/16 sarok: 56,3% → 44,8%, 1,69 → 1,35 pps). Export: csapatonként
+  külön dobástábla kísérletszámmal és shrinkelt FG%-kal. (4) „Dobástérkép-védekezés” = az ellenfél
+  zónáiból zárd / engedd pár (legmagasabb / legalacsonyabb shrinkelt pps, ≥ 12 kísérlet) + az ellenfél
+  matchup-fenyegetése; a saját támadó matchup a „Dobástérkép-fókusz”-ba került; az export mindkét listát
+  kiírja. (6) Új `getMatchupAxis`: a legnagyobb |saját − ellenfél| / liga-σ (σ ≈ (P90 − P10) / 2,563)
+  mutató tengelye (tempó, periméter, festék – új `two_pct` benchmark –, büntető, lepattanó,
+  labdabiztonság); summary „Döntő tengely: …”, UI kártya, `llmContext.matchupAxis`. ASE–Alba: periméter
+  (3P% 40,7 vs 32,3, z = +2,2; az OREB% z ≈ +1,8).
 - [ ] **P3 – finomhangolás**: engedett FT arány sor + 70. percentilis, forgatókönyv-lábjegyzet,
   OREB-fókusz z ≥ 1-nél, PER* lepattanósúly.
 - Mobil jegyzet: `asestatmobile/docs/mobile-sync/2026-11-12-pregame-riport-h24.md`.

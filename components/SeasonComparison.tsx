@@ -14490,8 +14490,15 @@ export function SeasonComparison({
                         <div className="text-primary mt-1">{probabilityConfidenceLabel}</div>
                       </div>
                       <div className="bg-surface-1/60 border border-border-subtle rounded-md px-3 py-2">
-                        <div className="text-muted uppercase tracking-wide text-[10px]">Domináns ellenfél-tengely</div>
-                        <div className="text-primary mt-1">{axisLabelMap[llmContext?.opponentDominantAxis ?? 'periméter'] ?? 'periméter'}</div>
+                        <div className="text-muted uppercase tracking-wide text-[10px]">Döntő tengely</div>
+                        {llmContext?.matchupAxis ? (
+                          <div className="text-primary mt-1">
+                            {llmContext.matchupAxis.axisLabel}
+                            <span className="text-secondary"> · {llmContext.matchupAxis.metricLabel} {llmContext.matchupAxis.ownValue} vs {llmContext.matchupAxis.opponentValue} (z = <span className="font-mono tabular-nums">{llmContext.matchupAxis.z >= 0 ? '+' : ''}{llmContext.matchupAxis.z.toFixed(1)}</span>)</span>
+                          </div>
+                        ) : (
+                          <div className="text-primary mt-1">{axisLabelMap[llmContext?.opponentDominantAxis ?? 'periméter'] ?? 'periméter'}</div>
+                        )}
                       </div>
                       <div className="bg-surface-1/60 border border-border-subtle rounded-md px-3 py-2">
                         <div className="text-muted uppercase tracking-wide text-[10px]">Fő fókusz</div>

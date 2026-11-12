@@ -105,6 +105,8 @@ export type ScoutingReportLLMContext = {
   opponentTempoDescriptor: string;
   ownTempoDescriptor: string;
   opponentDominantAxis: 'transition' | 'periméter' | 'festék';
+  /** A két csapat közti legnagyobb standardizált eltérés tengelye (lásd `getMatchupAxis`). */
+  matchupAxis?: MatchupAxis;
   tempoControlNote?: string;
   matchupRealizationNote?: string;
   riskNote?: string;
@@ -326,8 +328,9 @@ export type ScoutingReport = {
 
 /**
  * Egy dobászóna összesítője a liga-átlaghoz mérve. `rate` = a zóna aránya a
- * kísérletekből (%), `pct` = FG% a zónában, `pps` = pont / dobás (2P zóna
- * 2×FG%, tripla 3×FG%). A Δ mezők a liga ugyanezen értékétől vett eltérések
+ * kísérletekből (%), `pct` = nyers FG% a zónában, `pctShrunk` = a liga felé
+ * húzott FG% (kis mintán a nyers érték irreális lehet), `pps` = pont / dobás a
+ * shrinkelt FG%-ból (2P zóna 2×, tripla 3×). A Δ mezők a liga ugyanezen értékétől vett eltérések
  * (`rate`, `pct`: százalékpont; `pps`: pont / dobás).
  */
 export type PregameShotZone = {
@@ -336,9 +339,15 @@ export type PregameShotZone = {
   attempts: number;
   rate: number;
   pct: number;
+  /** A liga zóna-FG%-a felé húzott (Bayes-shrink, K = 20 kísérlet) FG%. */
+  pctShrunk: number;
+  /** Pont / dobás a shrinkelt FG%-ból. */
   pps: number;
   rateDeltaVsLeague: number;
+  /** A nyers FG% eltérése a ligától (kijelzés). */
   pctDeltaVsLeague: number;
+  /** A shrinkelt FG% eltérése a ligától (a jegyzetek ebből dolgoznak). */
+  pctShrunkDeltaVsLeague: number;
   ppsDeltaVsLeague: number;
 };
 
@@ -724,6 +733,8 @@ const getStatValue = (team: NormalizedTeamStats, stat: string) => {
       return team.threeRate;
     case 'three_pct':
       return team.threePct;
+    case 'two_pct':
+      return team.fga2 > 0 ? (team.fgm2 / team.fga2) * 100 : Number.NaN;
     case 'ft_rate':
       return team.ftRate;
     case 'opp_ft_rate_allowed':
@@ -824,6 +835,7 @@ const TEAM_STAT_KEYS = [
   'two_rate',
   'three_rate',
   'three_pct',
+  'two_pct',
   'ft_rate',
   'opp_ft_rate_allowed',
   'efg',
@@ -900,6 +912,86 @@ const scoreAbove = (benchmarks: LeagueTeamBenchmarks, team: NormalizedTeamStats,
 const scoreBelow = (benchmarks: LeagueTeamBenchmarks, team: NormalizedTeamStats, stat: string, score: number) =>
   getPercentileScore(benchmarks, team, stat) <= score;
 
+export type MatchupAxisKey = 'tempo' | 'perimeter' | 'paint' | 'free_throw' | 'rebound' | 'ball_security';
+
+/**
+ * A meccs döntő tengelye: az a mutató, ahol a két csapat közti különbség a
+ * liga szórásához mérve a legnagyobb. `z` előjele: pozitív = saját előny.
+ */
+export type MatchupAxis = {
+  axis: MatchupAxisKey;
+  axisLabel: string;
+  metricLabel: string;
+  ownValue: string;
+  opponentValue: string;
+  z: number;
+};
+
+const MATCHUP_AXIS_LABELS: Record<MatchupAxisKey, string> = {
+  tempo: 'tempó',
+  perimeter: 'periméter',
+  paint: 'festék',
+  free_throw: 'büntető',
+  rebound: 'lepattanó',
+  ball_security: 'labdabiztonság',
+};
+
+const MATCHUP_AXIS_METRICS: Array<{
+  stat: string;
+  axis: MatchupAxisKey;
+  label: string;
+  format: (value: number) => string;
+  lowerIsBetter?: boolean;
+  /** Tempónál nincs „jobb” irány: az előjel csak a gyorsabb csapatot jelzi. */
+  neutral?: boolean;
+}> = [
+  { stat: 'pace', axis: 'tempo', label: 'tempó', format: v => `${v.toFixed(1)} birtoklás`, neutral: true },
+  { stat: 'three_rate', axis: 'perimeter', label: '3P arány', format: v => `${(v * 100).toFixed(1)}%` },
+  { stat: 'three_pct', axis: 'perimeter', label: '3P%', format: v => `${v.toFixed(1)}%` },
+  { stat: 'two_rate', axis: 'paint', label: '2P arány', format: v => `${(v * 100).toFixed(1)}%` },
+  { stat: 'two_pct', axis: 'paint', label: '2P%', format: v => `${v.toFixed(1)}%` },
+  { stat: 'ft_rate', axis: 'free_throw', label: 'FT arány', format: v => `${(v * 100).toFixed(1)}%` },
+  { stat: 'oreb_rate', axis: 'rebound', label: 'OREB%', format: v => `${(v * 100).toFixed(1)}%` },
+  { stat: 'turnover_rate', axis: 'ball_security', label: 'TO rate', format: v => `${(v * 100).toFixed(1)}%`, lowerIsBetter: true },
+];
+
+/** A liga szórásának becslése a benchmark-percentilisekből: σ ≈ (P90 − P10) / 2,563. */
+const estimateLeagueStd = (benchmarks: LeagueTeamBenchmarks, team: NormalizedTeamStats, stat: string) => {
+  const p10 = getBenchmarkThreshold(benchmarks, team, stat, 'P10');
+  const p90 = getBenchmarkThreshold(benchmarks, team, stat, 'P90');
+  const std = (p90 - p10) / 2.563;
+  return Number.isFinite(std) && std > 0 ? std : null;
+};
+
+/** A döntő tengely: a legnagyobb |z| = |saját − ellenfél| / liga-σ mutató tengelye. */
+const getMatchupAxis = (
+  ownTeam: NormalizedTeamStats,
+  opponent: NormalizedTeamStats,
+  benchmarks: LeagueTeamBenchmarks
+): MatchupAxis | undefined => {
+  const candidates = MATCHUP_AXIS_METRICS
+    .map(metric => {
+      const own = getStatValue(ownTeam, metric.stat);
+      const opp = getStatValue(opponent, metric.stat);
+      const std = estimateLeagueStd(benchmarks, ownTeam, metric.stat);
+      if (!Number.isFinite(own) || !Number.isFinite(opp) || std === null) return null;
+      const raw = (own - opp) / std;
+      return { metric, own, opp, z: metric.lowerIsBetter ? -raw : raw };
+    })
+    .filter((item): item is NonNullable<typeof item> => Boolean(item))
+    .sort((a, b) => Math.abs(b.z) - Math.abs(a.z));
+  const top = candidates[0];
+  if (!top) return undefined;
+  return {
+    axis: top.metric.axis,
+    axisLabel: MATCHUP_AXIS_LABELS[top.metric.axis],
+    metricLabel: top.metric.label,
+    ownValue: top.metric.format(top.own),
+    opponentValue: top.metric.format(top.opp),
+    z: round(top.z, 2),
+  };
+};
+
 const getDominantAxis = (team: NormalizedTeamStats, benchmarks: LeagueTeamBenchmarks) => {
   const paceScore = getPercentileScore(benchmarks, team, 'pace');
   const twoRateScore = getPercentileScore(benchmarks, team, 'two_rate');
@@ -968,6 +1060,11 @@ const computePlayerUsage = (player: PlayerSeasonStat) => {
   return player.games > 0 ? possessionsUsed / player.games : 0;
 };
 
+/** A zóna-FG% shrinkage prior-súlya (kísérletben): ennyi liga-átlagos dobással húzzuk a mintát. */
+export const ZONE_SHRINK_PRIOR_ATTEMPTS = 20;
+/** Zóna-matchuphoz és zárd/engedd párhoz szükséges minimum kísérletszám. */
+const MIN_MATCHUP_ATTEMPTS = 12;
+
 const buildShotProfileContext = (
   ownShotProfile?: ShotProfileSummary | null,
   opponentShotProfile?: ShotProfileSummary | null,
@@ -990,7 +1087,10 @@ const buildShotProfileContext = (
         const pct = profile.zoneStats[zone].pct;
         const leagueRate = (leagueShotProfile.zoneStats[zone].attempts / leagueTotalAttempts) * 100;
         const leaguePct = leagueShotProfile.zoneStats[zone].pct;
-        const pps = (pct / 100) * zonePoints(zone);
+        // Bayes-shrink: (találat + K × liga FG) / (kísérlet + K).
+        const pctShrunk = ((profile.zoneStats[zone].made + ZONE_SHRINK_PRIOR_ATTEMPTS * (leaguePct / 100))
+          / (attempts + ZONE_SHRINK_PRIOR_ATTEMPTS)) * 100;
+        const pps = (pctShrunk / 100) * zonePoints(zone);
         const leaguePps = (leaguePct / 100) * zonePoints(zone);
 
         return {
@@ -999,15 +1099,17 @@ const buildShotProfileContext = (
           attempts,
           rate: round(rate, 1),
           pct: round(pct, 1),
+          pctShrunk: round(pctShrunk, 1),
           pps: round(pps, 2),
           rateDeltaVsLeague: round(rate - leagueRate, 1),
           pctDeltaVsLeague: round(pct - leaguePct, 1),
+          pctShrunkDeltaVsLeague: round(pctShrunk - leaguePct, 1),
           ppsDeltaVsLeague: round(pps - leaguePps, 2),
         };
       })
       .sort((a, b) => {
-        const aScore = a.rateDeltaVsLeague * 0.7 + a.pctDeltaVsLeague * 0.3;
-        const bScore = b.rateDeltaVsLeague * 0.7 + b.pctDeltaVsLeague * 0.3;
+        const aScore = a.rateDeltaVsLeague * 0.7 + a.pctShrunkDeltaVsLeague * 0.3;
+        const bScore = b.rateDeltaVsLeague * 0.7 + b.pctShrunkDeltaVsLeague * 0.3;
         return bScore - aScore;
       });
   };
@@ -1042,30 +1144,12 @@ const buildShotProfileContext = (
 
   const notes: string[] = [];
   const defenseNotes: string[] = [];
-  const ownBestEfficiency = ownZones.find(zone => zone.pctDeltaVsLeague >= 2 && zone.attempts >= 10) || null;
-  const opponentBestEfficiency = opponentZones.find(zone => zone.pctDeltaVsLeague >= 2 && zone.attempts >= 10) || null;
+  const ownBestEfficiency = ownZones.find(zone => zone.pctShrunkDeltaVsLeague >= 2 && zone.attempts >= 10) || null;
+  const opponentBestEfficiency = opponentZones.find(zone => zone.pctShrunkDeltaVsLeague >= 2 && zone.attempts >= 10) || null;
 
-  if (ownBestEfficiency) {
-    notes.push(`${ownBestEfficiency.label}: saját támadó zónaelőny (FG% ${ownBestEfficiency.pctDeltaVsLeague >= 0 ? '+' : ''}${ownBestEfficiency.pctDeltaVsLeague.toFixed(1)} pp a liga fölött, ${ownBestEfficiency.pps.toFixed(2)} pont/dobás).`);
-  }
-  if (opponentBestEfficiency) {
-    notes.push(`${opponentBestEfficiency.label}: ellenfél elsődleges hatékony zónája (FG% ${opponentBestEfficiency.pctDeltaVsLeague >= 0 ? '+' : ''}${opponentBestEfficiency.pctDeltaVsLeague.toFixed(1)} pp a liga fölött, ${opponentBestEfficiency.pps.toFixed(2)} pont/dobás).`);
-  }
-  if (clashZones.length > 0) {
-    notes.push(`Zónaütközés: mindkét csapat hangsúlyosan támadja a következő területeket: ${clashZones.join(', ')}.`);
-  }
-  if (clashZones.includes('Gyűrű')) {
-    defenseNotes.push('Gyűrű-zónaütközés: a mérkőzés gerince a festékharc lehet, ezért help-védekezés és korai visszarendeződés is kritikus.');
-  }
-  if (clashZones.includes('Sarok tripla') || clashZones.includes('Egyéb tripla')) {
-    defenseNotes.push('Periméter-zónaütközés: a closeout-fegyelem és a tiszta triplahelyzetek limitálása közvetlenül swingeli a varianciát.');
-  }
-
-  // Zóna-matchup pont / dobás alapon: a várható érték = saját zóna pps + amennyivel
-  // a védekező csapat ott többet enged a ligánál. „Kedvező” csak az a zóna lehet,
-  // ahol ez legalább a támadó teljes pps-e (különben a csapat legrosszabb
-  // zónáját is ajánlhatná, csak mert ott az FG%-delta nagy).
-  const MIN_MATCHUP_ATTEMPTS = 12;
+  // Zóna-matchup pont / dobás alapon (shrinkelt értékekből): a várható érték =
+  // saját zóna pps + amennyivel a védekező csapat ott többet enged a ligánál.
+  // „Kedvező” csak az a zóna lehet, ahol ez legalább a támadó teljes pps-e.
   const bestZoneMatchup = (attackZones: PregameShotZone[], defenseAllowed: PregameShotZone[], attackOverallPps: number) =>
     attackZones
       .filter(zone => zone.attempts >= MIN_MATCHUP_ATTEMPTS)
@@ -1089,13 +1173,38 @@ const buildShotProfileContext = (
     ? bestZoneMatchup(opponentZones, ownAllowedZones, overallPps(opponentShotProfile))
     : null;
 
+  // Dobástérkép-fókusz (támadás): a saját kedvező zóna-matchup és hatékony zóna.
   if (ownBestAttackVsOpponentDefense) {
     const { zone, allowedPpsDelta, expectedPps } = ownBestAttackVsOpponentDefense;
-    defenseNotes.push(`${zone.label}: saját támadás kedvező zóna-matchup – várható ${expectedPps.toFixed(2)} pont/dobás (saját ${zone.pps.toFixed(2)}, az ellenfél itt +${allowedPpsDelta.toFixed(2)} pont/dobással többet enged a ligánál).`);
+    notes.push(`${zone.label}: kedvező saját zóna-matchup – várható ${expectedPps.toFixed(2)} pont/dobás (saját ${zone.pps.toFixed(2)}, ${zone.attempts} kísérlet; az ellenfél itt +${allowedPpsDelta.toFixed(2)} pont/dobással többet enged a ligánál).`);
+  }
+  if (ownBestEfficiency && ownBestEfficiency.key !== ownBestAttackVsOpponentDefense?.zone.key) {
+    notes.push(`${ownBestEfficiency.label}: saját támadó zónaelőny (shrinkelt FG% ${ownBestEfficiency.pctShrunkDeltaVsLeague >= 0 ? '+' : ''}${ownBestEfficiency.pctShrunkDeltaVsLeague.toFixed(1)} pp a liga fölött, ${ownBestEfficiency.pps.toFixed(2)} pont/dobás, ${ownBestEfficiency.attempts} kísérlet).`);
+  }
+  if (opponentBestEfficiency) {
+    notes.push(`${opponentBestEfficiency.label}: ellenfél elsődleges hatékony zónája (shrinkelt FG% ${opponentBestEfficiency.pctShrunkDeltaVsLeague >= 0 ? '+' : ''}${opponentBestEfficiency.pctShrunkDeltaVsLeague.toFixed(1)} pp a liga fölött, ${opponentBestEfficiency.pps.toFixed(2)} pont/dobás).`);
+  }
+  if (clashZones.length > 0) {
+    notes.push(`Zónaütközés: mindkét csapat hangsúlyosan támadja a következő területeket: ${clashZones.join(', ')}.`);
+  }
+
+  // Dobástérkép-védekezés: az ellenfél zónáiból zárd / engedd pár.
+  const opponentSampleZones = opponentZones.filter(zone => zone.attempts >= MIN_MATCHUP_ATTEMPTS);
+  if (opponentSampleZones.length >= 2) {
+    const byPps = [...opponentSampleZones].sort((a, b) => b.pps - a.pps);
+    const close = byPps[0];
+    const allow = byPps[byPps.length - 1];
+    defenseNotes.push(`Zárd: ${close.label.toLowerCase()} (${close.pps.toFixed(2)} pont/dobás, ${close.attempts} kísérlet) – engedd: ${allow.label.toLowerCase()} (${allow.pps.toFixed(2)} pont/dobás, ${allow.attempts} kísérlet).`);
   }
   if (opponentBestAttackVsOwnDefense) {
     const { zone, allowedPpsDelta, expectedPps } = opponentBestAttackVsOwnDefense;
     defenseNotes.push(`${zone.label}: ellenfél támadási matchup-fenyegetés – várható ${expectedPps.toFixed(2)} pont/dobás (ellenfél ${zone.pps.toFixed(2)}, a saját védekezés itt +${allowedPpsDelta.toFixed(2)} pont/dobással többet enged a ligánál).`);
+  }
+  if (clashZones.includes('Gyűrű')) {
+    defenseNotes.push('Gyűrű-zónaütközés: a mérkőzés gerince a festékharc lehet, ezért help-védekezés és korai visszarendeződés is kritikus.');
+  }
+  if (clashZones.includes('Sarok tripla') || clashZones.includes('Egyéb tripla')) {
+    defenseNotes.push('Periméter-zónaütközés: a closeout-fegyelem és a tiszta triplahelyzetek limitálása közvetlenül swingeli a varianciát.');
   }
 
   return {
@@ -2127,17 +2236,15 @@ const buildSummary = (
   shotProfileNotes: string[] = [],
   shotDefenseNotes: string[] = [],
   matchContext?: PregameMatchContext | null,
-  injuryImpact?: { own: PregameInjuryImpactReport; opponent: PregameInjuryImpactReport } | null
+  injuryImpact?: { own: PregameInjuryImpactReport; opponent: PregameInjuryImpactReport } | null,
+  matchupAxis?: MatchupAxis
 ) => {
   const tempo = describeTempo(opponent, benchmarks, ownTeam);
   const offense = profile.offense.length > 0 ? profile.offense.join(', ') : 'kiegyensúlyozott';
   const defense = profile.defense.length > 0 ? profile.defense.join(', ') : 'kiegyensúlyozott';
-  const dominantAxis = getDominantAxis(opponent, benchmarks);
-  const axisLabel = dominantAxis === 'transition'
-    ? 'átmeneti játék'
-    : dominantAxis === 'periméter'
-      ? 'periméter'
-      : 'festék';
+  const matchupAxisText = matchupAxis
+    ? ` Döntő tengely: ${matchupAxis.axisLabel} (${matchupAxis.metricLabel} ${matchupAxis.ownValue} vs ${matchupAxis.opponentValue}, z = ${matchupAxis.z >= 0 ? '+' : ''}${matchupAxis.z.toFixed(1)} – a legnagyobb, liga-szórással mért eltérés).`
+    : '';
 
   const viewpointLine = `Elemzés nézőpontja: ${ownTeamName}`;
   const favoredLabel = winProbability.predictedWinner === 'even'
@@ -2265,7 +2372,7 @@ const buildSummary = (
     probabilityLine,
     breakdownLine,
     confidenceReasonLine,
-    `Kontextus: az ellenfél ${tempo}; támadás: ${offense}; védekezés: ${defense}. Domináns tengely: ${axisLabel}.`,
+    `Kontextus: az ellenfél ${tempo}; támadás: ${offense}; védekezés: ${defense}.${matchupAxisText}`,
     `Fő veszélyek: ${threatText}.`,
     `Feltételes sebezhetőségek (ellenfél): ${vulnText}.`,
     `Saját kockázati pontok: ${ownRiskText}.`,
@@ -2708,11 +2815,13 @@ export const analyzePreGameScouting = (
     { defensiveDataLimited: ownStyle.defense.length === 0 }
   );
   const dominantAxis = getDominantAxis(normalizedOpponent, leagueBenchmarks);
+  const matchupAxis = getMatchupAxis(normalizedOwn, normalizedOpponent, leagueBenchmarks);
   const significantMatchups = buildSignificantMatchups(positionComparison);
   const llmContext: ScoutingReportLLMContext = {
     opponentTempoDescriptor,
     ownTempoDescriptor,
     opponentDominantAxis: dominantAxis,
+    matchupAxis,
     tempoControlNote: tempoControlNote || undefined,
     matchupRealizationNote: matchupRealizationNote || undefined,
     riskNote: riskNotes.note || undefined,
@@ -2820,7 +2929,8 @@ export const analyzePreGameScouting = (
       shotProfileContext?.notes ?? [],
       shotProfileContext?.defenseNotes ?? [],
       extras?.matchContext,
-      injuryImpact
+      injuryImpact,
+      matchupAxis
     ),
     injuryContext,
   };
