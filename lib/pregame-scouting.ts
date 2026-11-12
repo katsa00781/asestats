@@ -1291,6 +1291,10 @@ const computePlayerUsage = (player: PlayerSeasonStat) => {
 export const ZONE_SHRINK_PRIOR_ATTEMPTS = 20;
 /** Zóna-matchuphoz és zárd/engedd párhoz szükséges minimum kísérletszám. */
 const MIN_MATCHUP_ATTEMPTS = 12;
+/** Zónaütközés: mindkét csapatnál legalább ennyivel (pp) a liga feletti zónaarány… */
+const CLASH_MIN_RATE_DELTA = 2;
+/** Ez alatti pont/dobású ellenfél-zóna help-forrás: onnan lehet segíteni, nem kell closeout. */
+export const HELP_SOURCE_PPS = 0.95;
 
 const buildShotProfileContext = (
   ownShotProfile?: ShotProfileSummary | null,
@@ -1365,9 +1369,16 @@ const buildShotProfileContext = (
     .filter(zone => zone.attempts >= 12)
     .sort((a, b) => a.rateDeltaVsLeague - b.rateDeltaVsLeague || a.pctDeltaVsLeague - b.pctDeltaVsLeague)
     .slice(0, 2);
-  const clashZones = ownTopZones
-    .map(zone => zone.label)
-    .filter(label => opponentTopZones.some(item => item.label === label));
+  // Zónaütközés: mindkét csapat hangsúlyosan (Δ arány ≥ +2 pp) ÉS legalább
+  // ligaszinten hatékonyan (pps ≥ liga) támadja a zónát, elég mintával.
+  const isClashSide = (zone: PregameShotZone | undefined) =>
+    Boolean(zone)
+    && zone!.attempts >= MIN_MATCHUP_ATTEMPTS
+    && zone!.rateDeltaVsLeague >= CLASH_MIN_RATE_DELTA
+    && zone!.ppsDeltaVsLeague >= 0;
+  const clashZones = ownZones
+    .filter(zone => isClashSide(zone) && isClashSide(opponentZones.find(item => item.key === zone.key)))
+    .map(zone => zone.label);
 
   const notes: string[] = [];
   const defenseNotes: string[] = [];
@@ -1412,26 +1423,28 @@ const buildShotProfileContext = (
     notes.push(`${opponentBestEfficiency.label}: ellenfél elsődleges hatékony zónája (shrinkelt FG% ${opponentBestEfficiency.pctShrunkDeltaVsLeague >= 0 ? '+' : ''}${opponentBestEfficiency.pctShrunkDeltaVsLeague.toFixed(1)} pp a liga fölött, ${opponentBestEfficiency.pps.toFixed(2)} pont/dobás).`);
   }
   if (clashZones.length > 0) {
-    notes.push(`Zónaütközés: mindkét csapat hangsúlyosan támadja a következő területeket: ${clashZones.join(', ')}.`);
+    notes.push(`Zónaütközés: mindkét csapat hangsúlyosan (≥ +${CLASH_MIN_RATE_DELTA} pp a ligánál) és legalább ligaszinten hatékonyan támadja: ${clashZones.join(', ')}.`);
   }
 
-  // Dobástérkép-védekezés: az ellenfél zónáiból zárd / engedd pár.
+  // Dobástérkép-védekezés: kizárólag az ellenfél zónáiból (zárd / engedd pár).
+  // A HELP_SOURCE_PPS alatti zóna help-forrás: onnan lehet segíteni, ott nem
+  // closeout a feladat.
   const opponentSampleZones = opponentZones.filter(zone => zone.attempts >= MIN_MATCHUP_ATTEMPTS);
   if (opponentSampleZones.length >= 2) {
     const byPps = [...opponentSampleZones].sort((a, b) => b.pps - a.pps);
     const close = byPps[0];
-    const allow = byPps[byPps.length - 1];
-    defenseNotes.push(`Zárd: ${close.label.toLowerCase()} (${close.pps.toFixed(2)} pont/dobás, ${close.attempts} kísérlet) – engedd: ${allow.label.toLowerCase()} (${allow.pps.toFixed(2)} pont/dobás, ${allow.attempts} kísérlet).`);
+    const zoneText = (zone: PregameShotZone) => `${zone.label.toLowerCase()} (${zone.pps.toFixed(2)} pont/dobás, ${zone.attempts} kísérlet)`;
+    const helpSources = byPps.filter(zone => zone.key !== close.key && zone.pps < HELP_SOURCE_PPS).reverse();
+    if (helpSources.length > 0) {
+      defenseNotes.push(`Zárd: ${zoneText(close)} – help-forrás (innen lehet segíteni, nem kell closeout): ${helpSources.map(zoneText).join(', ')}.`);
+    } else {
+      const allow = byPps[byPps.length - 1];
+      defenseNotes.push(`Zárd: ${zoneText(close)} – engedd: ${zoneText(allow)}; ${HELP_SOURCE_PPS.toFixed(2)} pont/dobás alatti zóna nincs, ezért help-forrás sincs.`);
+    }
   }
   if (opponentBestAttackVsOwnDefense) {
     const { zone, allowedPpsDelta, expectedPps } = opponentBestAttackVsOwnDefense;
     defenseNotes.push(`${zone.label}: ellenfél támadási matchup-fenyegetés – várható ${expectedPps.toFixed(2)} pont/dobás (ellenfél ${zone.pps.toFixed(2)}, a saját védekezés itt +${allowedPpsDelta.toFixed(2)} pont/dobással többet enged a ligánál).`);
-  }
-  if (clashZones.includes('Gyűrű')) {
-    defenseNotes.push('Gyűrű-zónaütközés: a mérkőzés gerince a festékharc lehet, ezért help-védekezés és korai visszarendeződés is kritikus.');
-  }
-  if (clashZones.includes('Sarok tripla') || clashZones.includes('Egyéb tripla')) {
-    defenseNotes.push('Periméter-zónaütközés: a closeout-fegyelem és a tiszta triplahelyzetek limitálása közvetlenül swingeli a varianciát.');
   }
 
   return {

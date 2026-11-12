@@ -137,6 +137,7 @@ Update this file after every meaningful implementation change.
 
 ## Completed (legutóbbi)
 
+- **H25 / P4 – pregame dobástérkép (`@core`)** (2026-11-12): szigorú zónaütközés (Δ arány ≥ +2 pp és pps ≥ liga mindkét oldalon), védekezési jegyzet csak a zárd/help-forrás párból (< 0,95 pps), engedett zónatáblák az exportban.
 - **H25 / P3 – pregame forgatókönyv-inputok (`@core`)** (2026-11-12): kockázati swing és forgatókönyv egy függvényből (realizált pp), új `scenarioDiagnostics` + export-tábla + fejlesztői debug-log.
 - **H25 / P2 – pregame hiányzók és WS* (`@core`)** (2026-11-12): a pozíciós matchup a teljes kerettel számol, a hiányzó-lépés nettó (pótlással) és meccsarány-súlyos; WS* a teljes keretre normalizálva (Σ = győzelmek).
 - **H25 / P1 – pregame matchup-párok (`@core`)** (2026-11-12): a döntő tengely, az OREB-fókusz és a támadó fókuszpontok a saját támadás vs. ellenfél engedett mutatóiból (nem azonos oldalakból); a tengely az első fókuszpont és az elsődleges X-faktor.

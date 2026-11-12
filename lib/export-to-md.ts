@@ -1017,6 +1017,10 @@ export function pregameReportToMd(report: ScoutingReport, seasonName?: string): 
       };
       zoneTable(report.ownTeamName, ownZones);
       zoneTable(report.opponentTeamName, opponentZones);
+      // Az engedett zónák: ezekből jön a zóna-matchup („az ellenfél itt +x
+      // pont/dobással többet enged”) – nélkülük az állítás nem ellenőrizhető.
+      zoneTable(`${report.opponentTeamName} engedett zónái (az ellenfelei dobásai ellene)`, report.shotProfileContext.opponentAllowedZones);
+      zoneTable(`${report.ownTeamName} engedett zónái`, report.shotProfileContext.ownAllowedZones);
       lines.push(``, `*Δ arány = a zóna dobásaránya a ligaátlaghoz képest; Δ FG% = a nyers találati arány a ligaátlaghoz képest (mindkettő százalékpont). Shrinkelt FG% = (találat + ${ZONE_SHRINK_PRIOR_ATTEMPTS} × liga zóna-FG%) / (kísérlet + ${ZONE_SHRINK_PRIOR_ATTEMPTS}). Pont/dobás = 2 × (kétpontos) vagy 3 × (hárompontos) shrinkelt FG%. A zóna-matchup és a jegyzetek a shrinkelt értékekből számolnak.*`);
       if (report.shotProfileContext.clashZones.length > 0) {
         lines.push(``, `**Zónaütközés:** ${report.shotProfileContext.clashZones.join(', ')}`);

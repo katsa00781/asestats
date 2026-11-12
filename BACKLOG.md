@@ -851,7 +851,13 @@ veszteséggel (kieső − pótlás) és meccsarány-súllyal (#3).
   forrás, Σ swing −3,90, büntetés −2,67, Medium ×1,00 → −3,92 pp@50% → −0,157 → −1,9 pp; a
   „Tripla-variancia” −3,9 pp@50% → −1,9 pp. Megfigyelés (döntés nélkül): egy variancia-forrásnál a
   magas variancia = −(2,05 + 0,48·D) pp, fixpontja D ≈ 3,94 pp – ezért esik egybe a tábla −3,9-ével.
-- [ ] **P4 – Dobástérkép: ütközés, help-forrás, engedett zónatábla (#5–#7)**
+- [x] **P4 – Dobástérkép: ütközés, help-forrás, engedett zónatábla (#5–#7, `@core`)**: (#5) zónaütközés
+  csak ha mindkét csapatnál Δ arány ≥ +2 pp ÉS pps ≥ liga, ≥ 12 kísérlettel (ASE–Alba: a korábbi
+  „Gyűrű, Festék” megszűnt – az Alba gyűrűs aránya +0,4 pp). (#6) A dobástérkép-védekezés kizárólag a
+  zárd/engedd párból: a `HELP_SOURCE_PPS = 0,95` alatti ellenfél-zónák „help-forrás (innen lehet
+  segíteni, nem kell closeout)”; a generikus „festékharc a gerinc” és „closeout-fegyelem” ütközés-mondatok
+  törölve. (#7) Export: „<ellenfél> engedett zónái” és „<saját> engedett zónái” tábla (a zóna-matchup
+  „+x pont/dobással többet enged” állítása ezekből ellenőrizhető).
 - [ ] **P5 – Módszertan-függelék az exportban**
 - [ ] **Böngészős ellenőrzés** (felhasználó): pregame ASE–Alba, MD export.
 - Mobil jegyzet: `asestatmobile/docs/mobile-sync/2026-11-12-pregame-riport-h24.md` (H25 szakaszokkal bővítve).
