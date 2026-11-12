@@ -27,6 +27,7 @@ import { PostgameSummary } from '@/components/PostgameSummary';
 import { PostgameZoneHeatmapChart } from '@/components/PostgameZoneHeatmapChart';
 import { supabase, type Database } from '@/lib/supabase';
 import { fetchAllRows } from '@/lib/fetch-all-rows';
+import { cn } from '@/lib/utils';
 import { buildPositionMetadata } from '@/lib/positions';
 import type { PlayerStats, TeamGame } from '@/lib/dashboard-types';
 import {
@@ -64,6 +65,7 @@ import {
   buildTeamBenchmarks as buildPregameBenchmarks,
   normalizeTeamStats as normalizePregameTeamStats,
   type PlayerSeasonStat,
+  type PregameInjuryImpact,
   type TeamSeasonStat as PregameTeamSeasonStat,
 } from '@/lib/pregame-scouting';
 import {
@@ -2748,6 +2750,10 @@ export function SeasonComparison({
   const [useRecentFormPregame, setUseRecentFormPregame] = useState(false);
   const [pregameOwnInjuries, setPregameOwnInjuries] = useState<string[]>([]);
   const [pregameOpponentInjuries, setPregameOpponentInjuries] = useState<string[]>([]);
+  // „Keret ellenőrizve”: üres hiányzólistánál ez különbözteti meg a „nincs ismert
+  // hiányzót” a „nincs adattól”.
+  const [pregameOwnRosterChecked, setPregameOwnRosterChecked] = useState(false);
+  const [pregameOpponentRosterChecked, setPregameOpponentRosterChecked] = useState(false);
   const [pregamePressureWeight, setPregamePressureWeight] = useState(34);
   const [pregamePerimeterWeight, setPregamePerimeterWeight] = useState(33);
   const [pregameEfficiencyInputs, setPregameEfficiencyInputs] = useState<PregameEfficiencyInputs>({
@@ -5036,11 +5042,13 @@ export function SeasonComparison({
 
   useEffect(() => {
     setPregameOwnInjuries([]);
+    setPregameOwnRosterChecked(false);
     setShowOwnInjuryPicker(false);
   }, [resolvedTeamId]);
 
   useEffect(() => {
     setPregameOpponentInjuries([]);
+    setPregameOpponentRosterChecked(false);
     setShowOpponentInjuryPicker(false);
   }, [selectedOpponentTeamId]);
 
@@ -7693,42 +7701,43 @@ export function SeasonComparison({
       player => String(player.teamId ?? '') === String(selectedOpponentTeamId) && pregameOpponentInjuries.includes(player.id)
     );
 
-    const summarizeMissing = (players: PlayerStats[]) => {
-      const eligiblePlayers = players.filter(player => {
-        const games = Math.max(player.gamesPlayed || 0, 0);
-        const minutesPerGame = games > 0 ? (player.minutes || 0) / games : 0;
-        return games >= 4 && minutesPerGame >= 8;
-      });
-
-      const totals = eligiblePlayers.reduce(
+    // Meccsátlagok összege (perc, VAL, pont): a játékperc természetes súly, a
+    // per-36 értékek összeadása nem értelmezhető. A `points` szezon-összeg, a
+    // `valuation` meccsátlag.
+    const summarizeMissing = (players: PlayerStats[], checked: boolean): PregameInjuryImpact => {
+      const totals = players.reduce(
         (acc, player) => {
-          const games = Math.max(player.gamesPlayed || 0, 1);
-          const minutesPerGame = (player.minutes || 0) / games;
+          const games = player.gamesPlayed || 0;
+          if (games <= 0) return acc;
           const valuationPerGame = player.valuation || 0;
-          const pointsPerGame = player.points || 0;
-          acc.valPer36 += minutesPerGame > 0 ? (valuationPerGame / minutesPerGame) * 36 : 0;
-          acc.pointsPer36 += minutesPerGame > 0 ? (pointsPerGame / minutesPerGame) * 36 : 0;
+          acc.minutes += (player.minutes || 0) / games;
+          acc.val += valuationPerGame;
+          acc.points += (player.points || 0) / games;
           if (valuationPerGame >= 12) acc.coreNames.push(player.name);
           return acc;
         },
-        { valPer36: 0, pointsPer36: 0, coreNames: [] as string[] }
+        { minutes: 0, val: 0, points: 0, coreNames: [] as string[] }
       );
-
       return {
-        valPer36: roundValue(totals.valPer36, 1),
-        pointsPer36: roundValue(totals.pointsPer36, 1),
+        status: players.length > 0 ? 'marked' : checked ? 'confirmedNone' : 'unknown',
+        players: players.length,
+        lostMinutesPerGame: roundValue(totals.minutes, 1),
+        lostValPerGame: roundValue(totals.val, 1),
+        lostPointsPerGame: roundValue(totals.points, 1),
         coreNames: totals.coreNames.slice(0, 4),
       };
     };
 
     return {
-      own: summarizeMissing(ownMissing),
-      opponent: summarizeMissing(opponentMissing),
+      own: summarizeMissing(ownMissing, pregameOwnRosterChecked),
+      opponent: summarizeMissing(opponentMissing, pregameOpponentRosterChecked),
     };
   }, [
     activeSeasonPlayers,
     pregameOpponentInjuries,
+    pregameOpponentRosterChecked,
     pregameOwnInjuries,
+    pregameOwnRosterChecked,
     resolvedTeamId,
     selectedOpponentTeamId,
   ]);
@@ -7797,7 +7806,7 @@ export function SeasonComparison({
       },
       {
         matchContext: pregameMatchContext,
-        injuryImpact: pregameInjuryContext ? pregameInjuryImpactEstimate : null,
+        injuryImpact: pregameInjuryImpactEstimate,
         leagueProxyPerAverage,
       }
     );
@@ -14073,6 +14082,17 @@ export function SeasonComparison({
                     ? `Megjelölve: ${pregameOwnInjuryNames.join(', ')}`
                     : 'Jelöld ki a hiányzókat (nem számítjuk őket az elemzésben).'}
               </div>
+              {pregameOwnRosterOptions.length > 0 && (
+                <label className="mt-1 flex items-center gap-2 text-xs text-secondary cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    className="h-3.5 w-3.5 accent-cyan"
+                    checked={pregameOwnRosterChecked}
+                    onChange={event => setPregameOwnRosterChecked(event.target.checked)}
+                  />
+                  Keret ellenőrizve{pregameOwnInjuryNames.length === 0 ? (' – ' + (pregameOwnRosterChecked ? 'nincs ismert hiányzó' : 'nincs adat')) : ''}
+                </label>
+              )}
               {showOwnInjuryPicker && pregameOwnRosterOptions.length > 0 && (
                 <>
                   <div className="max-h-32 overflow-y-auto rounded-md border border-border-subtle bg-surface-2/70 p-2 flex flex-wrap gap-2 mt-2">
@@ -14127,6 +14147,17 @@ export function SeasonComparison({
                     ? `Megjelölve: ${pregameOpponentInjuryNames.join(', ')}`
                     : 'Add meg, kik hiányozhatnak az ellenféltől.'}
               </div>
+              {pregameOpponentRosterOptions.length > 0 && (
+                <label className="mt-1 flex items-center gap-2 text-xs text-secondary cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    className="h-3.5 w-3.5 accent-cyan"
+                    checked={pregameOpponentRosterChecked}
+                    onChange={event => setPregameOpponentRosterChecked(event.target.checked)}
+                  />
+                  Keret ellenőrizve{pregameOpponentInjuryNames.length === 0 ? (' – ' + (pregameOpponentRosterChecked ? 'nincs ismert hiányzó' : 'nincs adat')) : ''}
+                </label>
+              )}
               {showOpponentInjuryPicker && pregameOpponentRosterOptions.length > 0 && (
                 <>
                   <div className="max-h-32 overflow-y-auto rounded-md border border-border-subtle bg-surface-2/70 p-2 flex flex-wrap gap-2 mt-2">
@@ -14602,31 +14633,36 @@ export function SeasonComparison({
                       </div>
                     )}
 
-                    {(pregameInjuryImpactEstimate.own.valPer36 > 0 || pregameInjuryImpactEstimate.opponent.valPer36 > 0) && (
+                    {pregameReport.injuryImpact && (pregameReport.injuryImpact.own.status !== 'unknown' || pregameReport.injuryImpact.opponent.status !== 'unknown') && (
                       <div className="p-3 bg-surface-2/50 rounded-lg space-y-2">
                         <div className="text-sm text-secondary font-medium">Hiányzások becsült hatása</div>
-                        <div className="text-xs text-muted">Csak legalább 4 meccses és 8 perc/meccs mintájú játékosokkal számolva.</div>
+                        <div className="text-xs text-muted">Meccsátlagban (perc, VAL, pont); a győzelmi esélyre a kieső VAL-arány hat, log-odds térben.</div>
                         <div className="grid grid-cols-1 gap-3 text-sm">
-                          <div className="bg-surface-1/60 border border-border-subtle rounded-md p-2">
-                            <div className="text-xs uppercase tracking-wide text-muted mb-1">Saját kiesés</div>
-                            <div className="text-negative">-{pregameInjuryImpactEstimate.own.valPer36.toFixed(1)} VAL/36</div>
-                            <div className="text-negative">-{pregameInjuryImpactEstimate.own.pointsPer36.toFixed(1)} pont/36</div>
-                            {pregameInjuryImpactEstimate.own.coreNames.length > 0 && (
-                              <div className="text-xs text-secondary mt-1">
-                                Kulcs kiesők: {pregameInjuryImpactEstimate.own.coreNames.join(', ')}
-                              </div>
-                            )}
-                          </div>
-                          <div className="bg-surface-1/60 border border-border-subtle rounded-md p-2">
-                            <div className="text-xs uppercase tracking-wide text-muted mb-1">Ellenfél kiesés</div>
-                            <div className="text-positive">-{pregameInjuryImpactEstimate.opponent.valPer36.toFixed(1)} VAL/36</div>
-                            <div className="text-positive">-{pregameInjuryImpactEstimate.opponent.pointsPer36.toFixed(1)} pont/36</div>
-                            {pregameInjuryImpactEstimate.opponent.coreNames.length > 0 && (
-                              <div className="text-xs text-secondary mt-1">
-                                Kulcs kiesők: {pregameInjuryImpactEstimate.opponent.coreNames.join(', ')}
-                              </div>
-                            )}
-                          </div>
+                          {([
+                            { key: 'own', title: 'Saját kiesés', side: pregameReport.injuryImpact.own, tone: 'text-negative' },
+                            { key: 'opponent', title: 'Ellenfél kiesés', side: pregameReport.injuryImpact.opponent, tone: 'text-positive' },
+                          ] as const).map(({ key, title, side, tone }) => (
+                            <div key={key} className="bg-surface-1/60 border border-border-subtle rounded-md p-2">
+                              <div className="text-xs uppercase tracking-wide text-muted mb-1">{title}</div>
+                              {side.status === 'unknown' ? (
+                                <div className="text-secondary">Nincs adat (a keret nincs ellenőrizve).</div>
+                              ) : side.status === 'confirmedNone' ? (
+                                <div className="text-secondary">Nincs ismert hiányzó.</div>
+                              ) : (
+                                <>
+                                  <div className={cn(tone, 'font-mono tabular-nums')}>
+                                    −{side.lostMinutesPerGame.toFixed(1)} perc · −{side.lostValPerGame.toFixed(1)} VAL · −{side.lostPointsPerGame.toFixed(1)} pont / meccs
+                                  </div>
+                                  <div className="text-xs text-secondary mt-1">
+                                    A csapat VAL-jának {(side.valShare * 100).toFixed(0)}%-a · hatás: {side.logit >= 0 ? '+' : ''}{side.logit.toFixed(2)} logit
+                                  </div>
+                                  {side.coreNames.length > 0 && (
+                                    <div className="text-xs text-secondary mt-1">Kulcs kiesők: {side.coreNames.join(', ')}</div>
+                                  )}
+                                </>
+                              )}
+                            </div>
+                          ))}
                         </div>
                       </div>
                     )}
@@ -15712,7 +15748,7 @@ export function SeasonComparison({
                             >
                               <span className="text-primary">{player.name} <span className="text-muted">({player.minutesPerGame.toFixed(1)} mpg)</span></span>
                               <span className="text-cyan">PER*: {player.proxyPer.toFixed(1)}</span>
-                              <span className="text-positive">WS*: {player.proxyWinShare.toFixed(2)}</span>
+                              <span className="text-positive">WS*: {player.proxyWinShare === null ? '–' : player.proxyWinShare.toFixed(2)}</span>
                             </div>
                           )) : <div className="text-xs text-muted">Nincs elég adat.</div>}
                         </div>
@@ -15727,7 +15763,7 @@ export function SeasonComparison({
                             >
                               <span className="text-primary">{player.name} <span className="text-muted">({player.minutesPerGame.toFixed(1)} mpg)</span></span>
                               <span className="text-cyan">PER*: {player.proxyPer.toFixed(1)}</span>
-                              <span className="text-orange">WS*: {player.proxyWinShare.toFixed(2)}</span>
+                              <span className="text-orange">WS*: {player.proxyWinShare === null ? '–' : player.proxyWinShare.toFixed(2)}</span>
                             </div>
                           )) : <div className="text-xs text-muted">Nincs elég adat.</div>}
                         </div>

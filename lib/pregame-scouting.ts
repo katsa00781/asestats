@@ -132,7 +132,8 @@ export type AdvancedPlayerStat = {
   valPer36: number;
   pointsPer36: number;
   proxyPer: number;
-  proxyWinShare: number;
+  /** `null`, ha a csapat tényleges győzelemszáma nem ismert (nincs mérkőzés-kontextus). */
+  proxyWinShare: number | null;
 };
 
 export type AdvancedPlayerEligibility = {
@@ -158,9 +159,42 @@ export type XFactorImpact = {
 /** A kockázati tábla alapsora, ha egyetlen kockázati trigger sem aktív. */
 export const BASELINE_RISK_SCENARIO_TITLE = 'Alapforgatókönyv – nincs kockázati trigger';
 
-/** A győzelmi valószínűség modellsávja (%). */
-const WIN_PROB_FLOOR = 8;
-const WIN_PROB_CEILING = 92;
+/**
+ * A győzelmi valószínűség log-odds modellje. Minden korrekció logitban adódik
+ * össze; a megjelenített érték puha sávba kerül (3–97%), kemény vágás nincs,
+ * így a korrekciók magas alapnál is látszanak.
+ */
+const logit = (p: number) => Math.log(p / (1 - p));
+const sigmoid = (x: number) => 1 / (1 + Math.exp(-x));
+const SHOWN_PROB_FLOOR = 0.03;
+const SHOWN_PROB_SPAN = 0.94;
+/** Logit → megjelenített saját győzelmi esély (%), puha 3–97%-os sávban. */
+const toShownPct = (z: number) => round((SHOWN_PROB_FLOOR + SHOWN_PROB_SPAN * sigmoid(z)) * 100, 1);
+/** Az „50%-nál ennyi pp” modellhatás logitban (dp/dz = 0,25 50%-nál). */
+const ppAtEvenToLogit = (pp: number) => pp / 25;
+/** A rating-különbség → logit osztója (a korábbi `1/(1+e^(−diff/18))`). */
+const RATING_LOGIT_DIVISOR = 18;
+/** A pozíciós matchup: súlyozott VAL/36-különbség egységenként ennyi logit (≈10 pp 50%-nál). */
+const MATCHUP_LOGIT_SCALE = 0.4;
+const MATCHUP_LOGIT_CAP = 0.6;
+/** A hazai pálya logit-plafonja (≈ ±6 pp 50%-nál). */
+const HOME_LOGIT_CAP = 0.24;
+/** Hiányzók: a kieső VAL/meccs csapat-VAL arányának szorzója logitban. */
+const INJURY_LOGIT_SCALE = 2.5;
+const INJURY_SHARE_CAP = 0.6;
+
+/** A győzelmi valószínűség lépésenkénti bontása (megjelenített %, illetve logit). */
+export type WinProbabilityBreakdown = {
+  basePct: number;
+  afterMatchupPct: number;
+  afterHomePct: number;
+  finalPct: number;
+  baseLogit: number;
+  matchupLogit: number;
+  homeLogit: number;
+  injuryLogit: number;
+  finalLogit: number;
+};
 
 export type ScenarioOutcome = {
   key: string;
@@ -221,6 +255,8 @@ export type ScoutingReport = {
     predictedWinner: 'own' | 'opponent' | 'even';
     confidence: 'Low' | 'Medium' | 'High';
     confidenceReasons: string[];
+    /** Alap → +matchup → +hazai → ±hiányzók → végső (log-odds lánc). */
+    breakdown?: WinProbabilityBreakdown;
   };
   positionComparison: PositionComparison[];
   profile: {
@@ -282,7 +318,7 @@ export type ScoutingReport = {
     opponent: PregameTeamStatLine;
   };
   matchContext?: PregameMatchContext;
-  injuryImpact?: { own: PregameInjuryImpact; opponent: PregameInjuryImpact };
+  injuryImpact?: { own: PregameInjuryImpactReport; opponent: PregameInjuryImpactReport };
   /** A PER* skála viszonyítási pontja: a liga percekkel súlyozott PER*-átlaga. */
   leagueProxyPerAverage?: number | null;
   summary: string;
@@ -359,15 +395,36 @@ export type PregameMatchContext = {
   /** A liga hazai győzelmi aránya (%) a figyelembe vett meccseken; `null`, ha nincs minta. */
   leagueHomeWinPct: number | null;
   leagueGames: number;
-  /** A saját győzelmi valószínűség hazai pálya korrekciója (pp, előjeles). */
-  homeAdjustmentPct: number;
+  /**
+   * A saját győzelmi esély hazai pálya korrekciója logitban (előjeles):
+   * `logit(zsugorított liga hazai gy%)`, ±0,24-re vágva. A tényleges pp-hatás a
+   * `winProbability.breakdown`-ban van (az alaptól függ).
+   */
+  homeLogit: number;
 };
 
-/** A hiányzók kiesett termelése (a kulcsjátékosok szezonátlagából, 36 percre). */
+/**
+ * A hiányzók kieső termelése meccsátlagban, a játékperccel természetesen
+ * súlyozva (VAL/meccs = VAL/36 × perc/meccs ÷ 36). `status`: `marked` = van
+ * megjelölt hiányzó; `confirmedNone` = a keret ellenőrizve, nincs hiányzó;
+ * `unknown` = nincs adat (nem ellenőrzött, nincs megjelölés).
+ */
 export type PregameInjuryImpact = {
-  valPer36: number;
-  pointsPer36: number;
+  status: 'marked' | 'confirmedNone' | 'unknown';
+  players: number;
+  lostMinutesPerGame: number;
+  lostValPerGame: number;
+  lostPointsPerGame: number;
   coreNames: string[];
+};
+
+/** A riportba kerülő hiányzó-hatás: a bemenet + a csapat VAL/meccs és a logit-hatás. */
+export type PregameInjuryImpactReport = PregameInjuryImpact & {
+  teamValPerGame: number;
+  /** Kieső VAL/meccs ÷ csapat VAL/meccs (0–1). */
+  valShare: number;
+  /** A saját győzelmi esélyre gyakorolt hatás logitban (saját hiányzó negatív). */
+  logit: number;
 };
 
 /** Az `analyzePreGameScouting` opcionális, komponensből érkező kiegészítői. */
@@ -497,8 +554,6 @@ const SIGNIFICANT_MATCHUP_DELTA = 10;
 const POSITION_MATCHUP_WEIGHTS: Record<string, number> = {
   PG: 0.25, SG: 0.15, SF: 0.15, PF: 0.20, C: 0.25,
 };
-const MATCHUP_PROB_SCALE = 10;
-const MATCHUP_PROB_CAP = 15;
 
 type TempoBand = 'high' | 'medium' | 'low';
 
@@ -1062,7 +1117,7 @@ const buildShotProfileContext = (
 export const PROXY_PER_DEFINITION =
   'PER* = saját proxy, nem a Hollinger-féle PER: 36 percre vetítve 0,35·pont + 0,22·assziszt + 0,26·szerzett labda + 0,17·blokk − 0,20·eladott labda (lepattanó és dobáshatékonyság nélkül).';
 export const PROXY_WIN_SHARE_DEFINITION =
-  'WS* = a játékos VAL-részesedése a csapat VAL-jából × a csapat várt győzelmei (meccsszám × e meccsre modellezett győzelmi valószínűség) × hatékonysági szorzó (VAL/meccs ÷ 18, 0,5–1,5 között); szezonra összegzett, becsült győzelem-hozzájárulás.';
+  'WS* = a játékos VAL-részesedése a csapat teljes szezon-VAL-jából × a csapat tényleges győzelmeinek száma × hatékonysági szorzó (VAL/meccs ÷ 18, 0,5–1,5 között); becsült győzelem-hozzájárulás, csak új eredménnyel változik. Mérkőzés-kontextus (mérleg) nélkül nem számolható.';
 
 /** A PER* számításához szükséges játékosmezők (szezon-összegek). */
 type ProxyPerInput = Pick<PlayerSeasonStat, 'minutes' | 'points' | 'ast' | 'stl' | 'blk' | 'tov'>;
@@ -1113,16 +1168,20 @@ export const computeLeagueProxyPerAverage = (
   return round(weighted / totalMinutes, 1);
 };
 
+/**
+ * WS*: a játékos VAL-részesedése a csapat **teljes** szezon-VAL-jából × a
+ * csapat **tényleges** győzelmei × hatékonysági szorzó. Nem függ az adott meccs
+ * modellezett esélyétől és a hiányzók szűrésétől, ezért meccsek között csak
+ * új eredménnyel változik.
+ */
 const computeProxyWinShare = (
   player: PlayerSeasonStat,
   teamTotalVal: number,
-  teamGames: number,
-  teamWinProbPct: number
+  teamWins: number
 ) => {
   const valueShare = teamTotalVal > 0 ? player.val / teamTotalVal : 0;
   const efficiencyBoost = player.games > 0 ? clamp((player.val / player.games) / 18, 0.5, 1.5) : 1;
-  const expectedWins = (teamGames || 1) * (teamWinProbPct / 100);
-  return round(valueShare * expectedWins * efficiencyBoost, 2);
+  return round(valueShare * teamWins * efficiencyBoost, 2);
 };
 
 const getAdvancedEligibility = (teamGames: number): AdvancedPlayerEligibility => {
@@ -1146,9 +1205,9 @@ const getAdvancedFallbackEligibility = (eligibility: AdvancedPlayerEligibility):
 const buildAdvancedPlayers = (
   players: PlayerSeasonStat[],
   teamGames: number,
-  teamWinProbPct: number
+  teamTotalVal: number,
+  teamWins: number | null
 ): AdvancedPlayerStat[] => {
-  const teamTotalVal = players.reduce((sum, player) => sum + (player.val || 0), 0) || 1;
   const withMinutes = players
     .filter(player => (player.minutes || 0) > 0)
     .map(player => {
@@ -1199,7 +1258,7 @@ const buildAdvancedPlayers = (
         valPer36: round(valPer36, 1),
         pointsPer36: round(pointsPer36, 1),
         proxyPer: computeProxyPer(player),
-        proxyWinShare: computeProxyWinShare(player, teamTotalVal, teamGames, teamWinProbPct),
+        proxyWinShare: teamWins === null ? null : computeProxyWinShare(player, teamTotalVal, teamWins),
       };
     })
     .sort((a, b) => b.proxyPer - a.proxyPer)
@@ -1796,17 +1855,41 @@ const buildRiskScenarios = (
   return scenarios.slice(0, 4);
 };
 
+/** A forgatókönyvek modell-eltolása logitban (az 50%-os pp-ből átváltva). */
+type ScenarioLogits = { controlled: number; highVariance: number };
+
+const buildScenarioLogits = (
+  winProbability: Pick<ScoutingReport['winProbability'], 'confidence'>,
+  xFactorPpAtEven: { primaryDeltaPct: number; secondaryDeltaPct: number },
+  varianceDrivers: string[],
+  riskScenarios: RiskScenario[]
+): ScenarioLogits => {
+  const downside = Math.abs(riskScenarios.reduce((sum, item) => sum + Math.min(item.estimatedOwnSwingPct, 0), 0));
+  const confidenceMultiplier = winProbability.confidence === 'High'
+    ? 0.85
+    : winProbability.confidence === 'Medium'
+      ? 1
+      : 1.15;
+  // A két forgatókönyv független: a kontrollált az X-faktorokból, a magas
+  // varianciájú a variancia-forrásokból és a kockázati triggerekből számol.
+  const variancePenaltyPp = clamp(0.9 + varianceDrivers.length * 1.15 + downside * 0.16, 1.2, 8.6);
+  return {
+    controlled: ppAtEvenToLogit(xFactorPpAtEven.primaryDeltaPct + xFactorPpAtEven.secondaryDeltaPct),
+    highVariance: -ppAtEvenToLogit(variancePenaltyPp * confidenceMultiplier + downside * 0.32),
+  };
+};
+
 const buildScenarioOutcomes = (
   winProbability: ScoutingReport['winProbability'],
-  xFactorImpact: XFactorImpact,
-  varianceDrivers: string[],
+  scenarioLogits: ScenarioLogits,
   riskScenarios: RiskScenario[],
   ownTeamName: string,
   opponentTeamName: string
 ): ScenarioOutcome[] => {
   const baseOwn = winProbability.ownPct;
-  const makeScenario = (key: string, label: string, delta: number, note: string): ScenarioOutcome => {
-    const ownPct = round(clamp(baseOwn + delta, WIN_PROB_FLOOR, WIN_PROB_CEILING), 1);
+  const baseLogit = winProbability.breakdown?.finalLogit ?? logit(clamp(baseOwn / 100, 0.01, 0.99));
+  const makeScenario = (key: string, label: string, deltaLogit: number, note: string): ScenarioOutcome => {
+    const ownPct = deltaLogit === 0 ? baseOwn : toShownPct(baseLogit + deltaLogit);
     return {
       key,
       label,
@@ -1817,17 +1900,7 @@ const buildScenarioOutcomes = (
     };
   };
 
-  const downside = Math.abs(riskScenarios.reduce((sum, item) => sum + Math.min(item.estimatedOwnSwingPct, 0), 0));
-  const confidenceMultiplier = winProbability.confidence === 'High'
-    ? 0.85
-    : winProbability.confidence === 'Medium'
-      ? 1
-      : 1.15;
-  const variancePenalty = clamp(0.9 + varianceDrivers.length * 1.15 + downside * 0.16, 1.2, 8.6);
-  // A kontrollált forgatókönyv = az X-faktorok kombinált modellhatása (egy forrás).
-  const controlledDelta = xFactorImpact.combinedDeltaPct;
-
-  const scenarios: ScenarioOutcome[] = [
+  return [
     makeScenario(
       'base',
       'Alapforgatókönyv',
@@ -1837,20 +1910,18 @@ const buildScenarioOutcomes = (
     makeScenario(
       'controlled_tempo',
       'Kontrollált tempó és fókuszált végrehajtás',
-      controlledDelta,
+      scenarioLogits.controlled,
       'A kulcsfaktorok realizálódnak, a tempó kontrollált marad.'
     ),
     makeScenario(
       'high_variance',
       'Magas variancia, ellenfél futásokkal',
-      -(variancePenalty * confidenceMultiplier + downside * 0.32),
+      scenarioLogits.highVariance,
       riskScenarios.some(item => item.estimatedOwnSwingPct < 0)
         ? 'A kockázati triggerek (lásd a kockázati táblát) az ellenfél oldalára billentik a futásokat.'
         : 'Általános szórás: kockázati trigger nélkül is előforduló ellenfél-futások.'
     ),
   ];
-
-  return scenarios;
 };
 
 const buildCalibrationDiagnostics = (
@@ -2028,10 +2099,7 @@ export const describeMatchContext = (context: PregameMatchContext, ownTeamName: 
       .map(game => `${game.date} ${game.venue === 'home' ? 'otthon' : 'idegenben'} ${game.ownScore}–${game.opponentScore}`)
       .join(', ')
     : 'idén még nem találkoztak';
-  const homeText = context.homeAdjustmentPct !== 0
-    ? `; hazai pálya korrekció ${context.homeAdjustmentPct > 0 ? '+' : ''}${context.homeAdjustmentPct.toFixed(1)} pp`
-    : '';
-  return `Mérkőzés-kontextus: ${venueText}. Mérleg: ${ownTeamName} ${formatRecord(context.ownRecord)}, ${opponentTeamName} ${formatRecord(context.opponentRecord)}. Forma (utolsó 5): ${ownTeamName} ${formatForm(context.ownRecord)}, ${opponentTeamName} ${formatForm(context.opponentRecord)}. Egymás ellen: ${h2hText}${homeText}.`;
+  return `Mérkőzés-kontextus: ${venueText}. Mérleg: ${ownTeamName} ${formatRecord(context.ownRecord)}, ${opponentTeamName} ${formatRecord(context.opponentRecord)}. Forma (utolsó 5): ${ownTeamName} ${formatForm(context.ownRecord)}, ${opponentTeamName} ${formatForm(context.opponentRecord)}. Egymás ellen: ${h2hText}.`;
 };
 
 const buildSummary = (
@@ -2059,7 +2127,7 @@ const buildSummary = (
   shotProfileNotes: string[] = [],
   shotDefenseNotes: string[] = [],
   matchContext?: PregameMatchContext | null,
-  injuryImpact?: { own: PregameInjuryImpact; opponent: PregameInjuryImpact } | null
+  injuryImpact?: { own: PregameInjuryImpactReport; opponent: PregameInjuryImpactReport } | null
 ) => {
   const tempo = describeTempo(opponent, benchmarks, ownTeam);
   const offense = profile.offense.length > 0 ? profile.offense.join(', ') : 'kiegyensúlyozott';
@@ -2115,19 +2183,21 @@ const buildSummary = (
       ? activeRiskTitles.join('; ')
       : 'nincs aktív kockázati trigger';
   const injuryLine = (() => {
-    const impactText = (impact?: PregameInjuryImpact) =>
-      impact && impact.valPer36 > 0 ? ` (kieső termelés: ${impact.valPer36.toFixed(1)} VAL/36, ${impact.pointsPer36.toFixed(1)} pont/36)` : '';
-    const parts: string[] = [];
-    if (injuryContext?.own?.length) {
-      parts.push(`${ownTeamName}: ${injuryContext.own.join(', ')}${impactText(injuryImpact?.own)}`);
-    }
-    if (injuryContext?.opponent?.length) {
-      parts.push(`${opponent.teamName}: ${injuryContext.opponent.join(', ')}${impactText(injuryImpact?.opponent)}`);
-    }
-    return parts.length > 0
-      ? `Hiányzók: ${parts.join(' | ')}; a pozíciós VAL/36 már csak az elérhető játékosokból számol.`
-      : '';
+    const describe = (names: string[] | undefined, impact?: PregameInjuryImpactReport) => {
+      if (!impact || impact.status === 'unknown') return names?.length ? names.join(', ') : 'nincs adat';
+      if (impact.status === 'confirmedNone') return 'nincs ismert hiányzó';
+      return `${(names ?? []).join(', ')} (kieső ${impact.lostMinutesPerGame.toFixed(1)} perc, ${impact.lostValPerGame.toFixed(1)} VAL, ${impact.lostPointsPerGame.toFixed(1)} pont meccsenként – a csapat VAL-jának ${(impact.valShare * 100).toFixed(0)}%-a)`;
+    };
+    const anyInfo = [injuryImpact?.own, injuryImpact?.opponent].some(item => item && item.status !== 'unknown')
+      || Boolean(injuryContext?.own?.length || injuryContext?.opponent?.length);
+    if (!anyInfo) return '';
+    return `Hiányzók: ${ownTeamName}: ${describe(injuryContext?.own, injuryImpact?.own)} | ${opponent.teamName}: ${describe(injuryContext?.opponent, injuryImpact?.opponent)}; a pozíciós VAL/36 már csak az elérhető játékosokból számol.`;
   })();
+
+  const breakdown = winProbability.breakdown;
+  const breakdownLine = breakdown
+    ? `Valószínűség-bontás (${ownTeamName}): alap ${breakdown.basePct.toFixed(1)}% → matchup ${breakdown.afterMatchupPct.toFixed(1)}% → pályaválasztó ${breakdown.afterHomePct.toFixed(1)}% → hiányzók ${breakdown.finalPct.toFixed(1)}% (log-odds összeadás, puha 3–97%-os sáv).`
+    : '';
 
   const matchContextLine = matchContext ? describeMatchContext(matchContext, ownTeamName, opponent.teamName) : '';
 
@@ -2178,15 +2248,11 @@ const buildSummary = (
     : '';
 
   // Egyetlen X-faktor mondat: a címkék és a számok együtt, a kontrollált
-  // forgatókönyv tényleges (sávra vágott) eltolásával – ugyanaz, mint a táblában.
+  // forgatókönyv tényleges (az aktuális alapon realizált) eltolásával – ugyanaz, mint a táblában.
   const xFactorNumbers = (pct?: number) => (xFactorImpact && pct !== undefined ? ` (+${pct.toFixed(1)} pp)` : '');
   const controlledDelta = xFactorImpact?.controlledScenarioDeltaPct ?? xFactorImpact?.combinedDeltaPct;
   const xFactorImpactPart = xFactorImpact && controlledDelta !== undefined
-    ? `; a kontrollált forgatókönyvben együtt +${controlledDelta.toFixed(1)} pp${
-      xFactorImpact.controlledScenarioCapped
-        ? ` (modellhatás +${xFactorImpact.combinedDeltaPct.toFixed(1)} pp, a ${WIN_PROB_CEILING}%-os modellsáv miatt kevesebb)`
-        : ''
-    }`
+    ? `; a kontrollált forgatókönyvben együtt +${controlledDelta.toFixed(1)} pp`
     : '';
   const xFactorLine = `X-faktorok: elsődleges – ${xFactors.primary.label}${xFactorNumbers(xFactorImpact?.primaryDeltaPct)}; másodlagos – ${xFactors.secondary.label}${xFactorNumbers(xFactorImpact?.secondaryDeltaPct)}${xFactorImpactPart}.`;
   const riskScenarioLine = riskScenarios.length > 0
@@ -2197,6 +2263,7 @@ const buildSummary = (
   const sections = [
     viewpointLine,
     probabilityLine,
+    breakdownLine,
     confidenceReasonLine,
     `Kontextus: az ellenfél ${tempo}; támadás: ${offense}; védekezés: ${defense}. Domináns tengely: ${axisLabel}.`,
     `Fő veszélyek: ${threatText}.`,
@@ -2243,11 +2310,17 @@ const computeTeamRating = (team: NormalizedTeamStats, benchmarks: LeagueTeamBenc
   return weightedScore / totalWeight;
 };
 
-const computeWinProbability = (
+type BaseWinModel = {
+  baseLogit: number;
+  confidence: 'Low' | 'Medium' | 'High';
+  confidenceReasons: string[];
+};
+
+const computeBaseWinModel = (
   ownTeam: NormalizedTeamStats,
   opponentTeam: NormalizedTeamStats,
   benchmarks: LeagueTeamBenchmarks
-) => {
+): BaseWinModel => {
   const ownRating = computeTeamRating(ownTeam, benchmarks);
   const opponentRating = computeTeamRating(opponentTeam, benchmarks);
   const diff = ownRating - opponentRating;
@@ -2257,9 +2330,6 @@ const computeWinProbability = (
   const volatilityFactor = ownThreeRateScore >= 70 || oppThreeRateScore >= 70 ? 0.9 : 1;
 
   const adjustedDiff = diff * volatilityFactor;
-  const probability = 1 / (1 + Math.exp(-adjustedDiff / 18));
-  const ownPct = clamp(probability, 0.08, 0.92) * 100;
-  const opponentPct = 100 - ownPct;
   const absDiff = Math.abs(adjustedDiff);
   const confidenceReasons: string[] = [];
 
@@ -2269,77 +2339,101 @@ const computeWinProbability = (
       ? 'Medium'
       : 'Low';
 
-  if (absDiff < 8) {
-    confidenceReasons.push('szűk rating-különbség');
-  }
+  if (absDiff < 8) confidenceReasons.push('szűk rating-különbség');
 
   const minGames = Math.min(ownTeam.games || 0, opponentTeam.games || 0);
-  if (minGames < 10 && confidence === 'High') {
-    confidence = 'Medium';
-  }
-  if (minGames < 10) {
-    confidenceReasons.push('korlátozott szezonminta');
-  }
-  if (volatilityFactor < 1 && confidence === 'High') {
-    confidence = 'Medium';
-  }
-  if (volatilityFactor < 1) {
-    confidenceReasons.push('magas tripla-variancia');
-  }
+  if (minGames < 10 && confidence === 'High') confidence = 'Medium';
+  if (minGames < 10) confidenceReasons.push('korlátozott szezonminta');
+  if (volatilityFactor < 1 && confidence === 'High') confidence = 'Medium';
+  if (volatilityFactor < 1) confidenceReasons.push('magas tripla-variancia');
 
-  const predictedWinner: 'own' | 'opponent' | 'even' = absDiff < 2
-    ? 'even'
-    : adjustedDiff > 0
-      ? 'own'
-      : 'opponent';
-
-  return {
-    ownPct: round(ownPct, 1),
-    opponentPct: round(opponentPct, 1),
-    predictedWinner,
-    confidence,
-    confidenceReasons,
-  };
+  return { baseLogit: adjustedDiff / RATING_LOGIT_DIVISOR, confidence, confidenceReasons };
 };
 
-const applyMatchupAdjustment = (
-  baseProb: ReturnType<typeof computeWinProbability>,
-  positionComparison: ReturnType<typeof buildPositionComparison>
-): ReturnType<typeof computeWinProbability> => {
+/** A pozíciós matchup-mérleg logitban (súlyozott VAL/36-különbség). */
+const computeMatchupLogit = (positionComparison: ReturnType<typeof buildPositionComparison>) => {
   const weightedDelta = positionComparison.reduce((acc, pos) => {
     const w = POSITION_MATCHUP_WEIGHTS[pos.position] ?? 0.20;
     return acc + pos.deltaValPer36 * w;
   }, 0);
+  const value = clamp(weightedDelta * MATCHUP_LOGIT_SCALE, -MATCHUP_LOGIT_CAP, MATCHUP_LOGIT_CAP);
+  // A korábbi 2 pp-es küszöb logit-megfelelője: zajszintű mérleg nem mozdít.
+  return Math.abs(value) < ppAtEvenToLogit(2) ? 0 : value;
+};
 
-  const rawAdjust = weightedDelta * MATCHUP_PROB_SCALE;
-  const adjustment = clamp(rawAdjust, -MATCHUP_PROB_CAP, MATCHUP_PROB_CAP);
-  if (Math.abs(adjustment) < 2) return baseProb;
+/** A hiányzók logit-hatása csapatonként (a kieső VAL/meccs a csapat VAL/meccs-éhez mérve). */
+const buildInjuryImpactReport = (
+  impact: PregameInjuryImpact | undefined,
+  team: NormalizedTeamStats,
+  sign: 1 | -1
+): PregameInjuryImpactReport => {
+  const base: PregameInjuryImpact = impact ?? {
+    status: 'unknown', players: 0, lostMinutesPerGame: 0, lostValPerGame: 0, lostPointsPerGame: 0, coreNames: [],
+  };
+  const teamValPerGame = Math.max(team.valPerGame, 0);
+  const valShare = teamValPerGame > 0 ? clamp(base.lostValPerGame / teamValPerGame, 0, INJURY_SHARE_CAP) : 0;
+  return {
+    ...base,
+    teamValPerGame: round(teamValPerGame, 1),
+    valShare: round(valShare, 3),
+    logit: round(sign * -INJURY_LOGIT_SCALE * valShare, 3),
+  };
+};
 
-  const newOwnPct = round(clamp(baseProb.ownPct + adjustment, 8, 92), 1);
-  const absDiff = Math.abs(newOwnPct - 50);
+/**
+ * A győzelmi valószínűség log-odds lánca: alap (rating) + matchup + hazai +
+ * hiányzók, a végén puha 3–97%-os sávba képezve. A lépések pp-hatása így az
+ * alaptól függ, de sosem nullázódik egy plafonon.
+ */
+const computeWinProbability = (
+  base: BaseWinModel,
+  matchupLogit: number,
+  homeLogit: number,
+  injuryLogit: number,
+  matchContext?: PregameMatchContext | null
+): ScoutingReport['winProbability'] => {
+  const afterMatchup = base.baseLogit + matchupLogit;
+  const afterHome = afterMatchup + homeLogit;
+  const finalLogit = afterHome + injuryLogit;
+  const breakdown: WinProbabilityBreakdown = {
+    basePct: toShownPct(base.baseLogit),
+    afterMatchupPct: toShownPct(afterMatchup),
+    afterHomePct: toShownPct(afterHome),
+    finalPct: toShownPct(finalLogit),
+    baseLogit: round(base.baseLogit, 3),
+    matchupLogit: round(matchupLogit, 3),
+    homeLogit: round(homeLogit, 3),
+    injuryLogit: round(injuryLogit, 3),
+    finalLogit: round(finalLogit, 3),
+  };
+  const ownPct = breakdown.finalPct;
   const predictedWinner: 'own' | 'opponent' | 'even' =
-    absDiff < 2 ? 'even' : newOwnPct > 50 ? 'own' : 'opponent';
+    Math.abs(ownPct - 50) < 2 ? 'even' : ownPct > 50 ? 'own' : 'opponent';
 
-  const confidence =
-    baseProb.confidence === 'High' && Math.abs(adjustment) >= 8 ? 'Medium' : baseProb.confidence;
+  const signedPp = (value: number) => `${value >= 0 ? '+' : ''}${value.toFixed(1)} pp`;
+  const reasons = [...base.confidenceReasons];
+  let confidence = base.confidence;
+  if (Math.abs(matchupLogit) >= ppAtEvenToLogit(5)) reasons.push('matchup-mérleg korrekció');
+  if (confidence === 'High' && Math.abs(matchupLogit) >= ppAtEvenToLogit(8)) confidence = 'Medium';
+  if (homeLogit !== 0 && matchContext) {
+    reasons.push(
+      `${matchContext.venue === 'home' ? 'hazai pálya' : 'idegenbeli meccs'} ${signedPp(breakdown.afterHomePct - breakdown.afterMatchupPct)} (liga hazai győzelmi arány ${matchContext.leagueHomeWinPct?.toFixed(1)}%, ${matchContext.leagueGames} meccs)`
+    );
+  }
+  if (injuryLogit !== 0) reasons.push(`hiányzók ${signedPp(breakdown.finalPct - breakdown.afterHomePct)}`);
 
   return {
-    ...baseProb,
-    ownPct: newOwnPct,
-    opponentPct: round(100 - newOwnPct, 1),
+    ownPct,
+    opponentPct: round(100 - ownPct, 1),
     predictedWinner,
     confidence,
-    confidenceReasons: [
-      ...baseProb.confidenceReasons,
-      ...(Math.abs(adjustment) >= 5 ? ['matchup-mérleg korrekció'] : []),
-    ],
+    confidenceReasons: reasons,
+    breakdown,
   };
 };
 
 /** A hazai módosító zsugorítása: ennyi meccsnyi „semleges” minta húzza 50% felé. */
 const HOME_ADVANTAGE_PRIOR_GAMES = 40;
-/** A hazai módosító felső korlátja (pp). */
-const HOME_ADVANTAGE_CAP = 6;
 
 const emptyRecord = (): PregameTeamRecord => ({
   wins: 0, losses: 0, homeWins: 0, homeLosses: 0, awayWins: 0, awayLosses: 0, last5: [],
@@ -2426,11 +2520,13 @@ export const buildPregameMatchContext = (params: {
   const leagueGames = played.length;
   const homeWins = played.filter(item => (item.homeScore as number) > (item.awayScore as number)).length;
   const leagueHomeWinPct = leagueGames > 0 ? (homeWins / leagueGames) * 100 : null;
-  const shrunk = leagueHomeWinPct === null
-    ? 0
-    : (leagueHomeWinPct - 50) * (leagueGames / (leagueGames + HOME_ADVANTAGE_PRIOR_GAMES));
-  const magnitude = clamp(shrunk, -HOME_ADVANTAGE_CAP, HOME_ADVANTAGE_CAP);
-  const homeAdjustmentPct = venue === 'home' ? round(magnitude, 1) : venue === 'away' ? round(-magnitude, 1) : 0;
+  // Zsugorított liga hazai győzelmi arány → logit (két egyforma csapatnál a
+  // hazai csapat esélye), ±0,24-re vágva.
+  const shrunkHomeShare = leagueHomeWinPct === null
+    ? 0.5
+    : 0.5 + (leagueHomeWinPct / 100 - 0.5) * (leagueGames / (leagueGames + HOME_ADVANTAGE_PRIOR_GAMES));
+  const magnitude = clamp(logit(clamp(shrunkHomeShare, 0.01, 0.99)), -HOME_LOGIT_CAP, HOME_LOGIT_CAP);
+  const homeLogit = venue === 'home' ? round(magnitude, 3) : venue === 'away' ? round(-magnitude, 3) : 0;
 
   return {
     venue,
@@ -2440,29 +2536,7 @@ export const buildPregameMatchContext = (params: {
     headToHead,
     leagueHomeWinPct: leagueHomeWinPct === null ? null : round(leagueHomeWinPct, 1),
     leagueGames,
-    homeAdjustmentPct,
-  };
-};
-
-/** A hazai pálya korrekció ráhelyezése a győzelmi valószínűségre. */
-const applyHomeAdjustment = (
-  baseProb: ReturnType<typeof computeWinProbability>,
-  matchContext?: PregameMatchContext | null
-): ReturnType<typeof computeWinProbability> => {
-  if (!matchContext || matchContext.homeAdjustmentPct === 0) return baseProb;
-  const newOwnPct = round(clamp(baseProb.ownPct + matchContext.homeAdjustmentPct, WIN_PROB_FLOOR, WIN_PROB_CEILING), 1);
-  const absDiff = Math.abs(newOwnPct - 50);
-  const predictedWinner: 'own' | 'opponent' | 'even' = absDiff < 2 ? 'even' : newOwnPct > 50 ? 'own' : 'opponent';
-  const adj = matchContext.homeAdjustmentPct;
-  return {
-    ...baseProb,
-    ownPct: newOwnPct,
-    opponentPct: round(100 - newOwnPct, 1),
-    predictedWinner,
-    confidenceReasons: [
-      ...baseProb.confidenceReasons,
-      `${matchContext.venue === 'home' ? 'hazai pálya' : 'idegenbeli meccs'} ${adj > 0 ? '+' : ''}${adj.toFixed(1)} pp (liga hazai győzelmi arány ${matchContext.leagueHomeWinPct?.toFixed(1)}%, ${matchContext.leagueGames} meccs)`,
-    ],
+    homeLogit,
   };
 };
 
@@ -2532,11 +2606,15 @@ export const analyzePreGameScouting = (
   const threats = buildThreats(normalizedOpponent, leagueBenchmarks, usageShare);
   const vulnerabilities = buildVulnerabilities(normalizedOpponent, leagueBenchmarks);
   const positionComparison = buildPositionComparison(ownPlayers, opponentPlayers);
-  const winProbability = applyHomeAdjustment(
-    applyMatchupAdjustment(
-      computeWinProbability(normalizedOwn, normalizedOpponent, leagueBenchmarks),
-      positionComparison
-    ),
+  const injuryImpact = {
+    own: buildInjuryImpactReport(extras?.injuryImpact?.own, normalizedOwn, 1),
+    opponent: buildInjuryImpactReport(extras?.injuryImpact?.opponent, normalizedOpponent, -1),
+  };
+  const winProbability = computeWinProbability(
+    computeBaseWinModel(normalizedOwn, normalizedOpponent, leagueBenchmarks),
+    computeMatchupLogit(positionComparison),
+    extras?.matchContext?.homeLogit ?? 0,
+    injuryImpact.own.logit + injuryImpact.opponent.logit,
     extras?.matchContext
   );
   const xFactors = buildXFactors(normalizedOpponent, normalizedOwn, leagueBenchmarks, threats, vulnerabilities);
@@ -2562,21 +2640,25 @@ export const analyzePreGameScouting = (
     shotProfiles?.ownAllowed,
     shotProfiles?.opponentAllowed
   );
+  const scenarioLogits = buildScenarioLogits(winProbability, baseXFactorImpact, varianceDrivers, riskScenarios);
   const scenarioOutcomes = buildScenarioOutcomes(
     winProbability,
-    baseXFactorImpact,
-    varianceDrivers,
+    scenarioLogits,
     riskScenarios,
     ownTeam.teamName,
     opponentTeam.teamName
   );
+  // Az X-faktorok a tényleges alapon realizált pp-ben: ugyanaz a szám áll a
+  // forgatókönyv-táblában, az X-faktor mondatban és a kártyán.
+  const finalLogit = winProbability.breakdown?.finalLogit ?? 0;
+  const realizedPp = (deltaLogit: number) => round(toShownPct(finalLogit + deltaLogit) - winProbability.ownPct, 1);
   const controlledOutcome = scenarioOutcomes.find(item => item.key === 'controlled_tempo');
   const xFactorImpact: XFactorImpact = {
-    ...baseXFactorImpact,
-    controlledScenarioDeltaPct: controlledOutcome?.deltaVsBase ?? baseXFactorImpact.combinedDeltaPct,
-    controlledScenarioCapped: controlledOutcome
-      ? controlledOutcome.deltaVsBase < baseXFactorImpact.combinedDeltaPct - 0.05
-      : false,
+    primaryDeltaPct: realizedPp(ppAtEvenToLogit(baseXFactorImpact.primaryDeltaPct)),
+    secondaryDeltaPct: realizedPp(ppAtEvenToLogit(baseXFactorImpact.secondaryDeltaPct)),
+    combinedDeltaPct: controlledOutcome?.deltaVsBase ?? realizedPp(scenarioLogits.controlled),
+    controlledScenarioDeltaPct: controlledOutcome?.deltaVsBase ?? realizedPp(scenarioLogits.controlled),
+    controlledScenarioCapped: false,
   };
   const calibrationDiagnostics = buildCalibrationDiagnostics(
     normalizedOpponent,
@@ -2596,11 +2678,17 @@ export const analyzePreGameScouting = (
     riskScenarios
   );
   const advancedPlayers = {
-    own: buildAdvancedPlayers(ownPlayers, ownTeam.games || normalizedOwn.games || 1, winProbability.ownPct),
+    own: buildAdvancedPlayers(
+      ownPlayers,
+      ownTeam.games || normalizedOwn.games || 1,
+      ownTeam.val,
+      extras?.matchContext ? extras.matchContext.ownRecord.wins : null
+    ),
     opponent: buildAdvancedPlayers(
       opponentPlayers,
       opponentTeam.games || normalizedOpponent.games || 1,
-      winProbability.opponentPct
+      opponentTeam.val,
+      extras?.matchContext ? extras.matchContext.opponentRecord.wins : null
     ),
   };
   const advancedPlayersEligibility = {
@@ -2703,7 +2791,7 @@ export const analyzePreGameScouting = (
     },
     riskFlags: riskNotes.flags,
     matchContext: extras?.matchContext ?? undefined,
-    injuryImpact: extras?.injuryImpact ?? undefined,
+    injuryImpact,
     leagueProxyPerAverage: extras?.leagueProxyPerAverage ?? null,
     positionComparisonNote: positionComparisonNote || undefined,
     llmContext,
@@ -2732,7 +2820,7 @@ export const analyzePreGameScouting = (
       shotProfileContext?.notes ?? [],
       shotProfileContext?.defenseNotes ?? [],
       extras?.matchContext,
-      extras?.injuryImpact
+      injuryImpact
     ),
     injuryContext,
   };

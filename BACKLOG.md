@@ -811,6 +811,27 @@ egymás elleni meccsek közt jelenik meg. A 2024/25-ös szezonnézetben nincs do
   csapatnál) – keret-import csapat-hozzárendelési hiba gyanúja, döntés előtt nem nyúltunk hozzá.
 - Mobil jegyzet: `asestatmobile/docs/mobile-sync/2026-11-08-dobasterkep-zonak-h21.md` (összesítővé bővítve: H21 + H22).
 
+**H24 – Pregame riportgenerátor: 2. javítási lista (2026-11-12)** – P1 kész, P2–P3 nyitva
+
+Felhasználói döntések: hiányzó-szorzó k = 2,5 (logit), csapatonkénti „Keret ellenőrizve” jelölő,
+PER* lepattanósúllyal; a hazai módosító ±0,24 logit (≈ ±6 pp 50%-nál, a H23 döntés logit-megfelelője).
+
+- [x] **P1 – log-odds esély, hiányzók, WS* (`@core`)**: (1) a győzelmi esély logit-láncban adódik
+  (alap rating/18 → matchup ±0,6 → hazai ±0,24 → hiányzók), megjelenítés `3% + 94%·sigmoid`, vágás
+  nélkül; új `winProbability.breakdown`, exportban lépéstábla, summaryben bontás-sor; a forgatókönyvek
+  és az X-faktor számok is logitban, a tényleges alapon realizált pp-ben. (2) Hiányzók meccsátlagban
+  (perc, VAL, pont; a `points` szezon-összeg volt → 234,9 pont/36), hatás `−2,5 × VAL-arány` logit;
+  `status` = megjelölt / nincs ismert hiányzó / nincs adat, új „Keret ellenőrizve” jelölő a
+  hiányzó-választók alatt. (3) WS* = VAL-részesedés a csapat teljes VAL-jából × tényleges győzelmek
+  (meccstől független; Benke 2,03 két futásban azonos), mérleg nélkül „–”. ASE–Alba (2026/27, ASE otthon):
+  alap 71,5% → matchup 81,1% → hazai 84,0% (+2,9 pp); teszt-hiányzóval (16,2 VAL/meccs, a csapat 11%-a)
+  −3,5 pp.
+- [ ] **P2 – taktikai tartalom**: zárd/engedd dobástérkép-védekezés, zóna-FG% shrinkage (K = 20),
+  döntő tengely a legnagyobb standardizált különbségből.
+- [ ] **P3 – finomhangolás**: engedett FT arány sor + 70. percentilis, forgatókönyv-lábjegyzet,
+  OREB-fókusz z ≥ 1-nél, PER* lepattanósúly.
+- Mobil jegyzet: `asestatmobile/docs/mobile-sync/2026-11-12-pregame-riport-h24.md`.
+
 **H23 – Pregame elemzés: számítási hibák, ellentmondások, szöveghibák, hiányzó kontextus ✓ (2026-11-12)** – az 5 fázis és a post-game utómunka kész; a böngészős ellenőrzés nyitva
 
 A pregame scouting riport (ASE–Alba futás) 11 hibája. Felhasználói döntések: az

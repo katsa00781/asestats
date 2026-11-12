@@ -809,6 +809,26 @@ export function pregameReportToMd(report: ScoutingReport, seasonName?: string): 
     } | **Bizonyosság:** ${({ High: 'Magas', Medium: 'Közepes', Low: 'Alacsony' } as const)[report.winProbability.confidence]}`,
   ];
 
+  const breakdown = report.winProbability.breakdown;
+  if (breakdown) {
+    const step = (from: number, to: number) => `${to - from >= 0 ? '+' : ''}${(to - from).toFixed(1)} pp`;
+    const logitCell = (value: number) => `${value >= 0 ? '+' : ''}${value.toFixed(2)}`;
+    lines.push(
+      ``,
+      `**Valószínűség-bontás (${report.ownTeamName} esélye):**`,
+      ``,
+      `| Lépés | Logit | Hatás | Esély |`,
+      `|---|---|---|---|`,
+      `| Alap (csapat-rating) | ${logitCell(breakdown.baseLogit)} | – | ${breakdown.basePct.toFixed(1)}% |`,
+      `| + pozíciós matchup | ${logitCell(breakdown.matchupLogit)} | ${step(breakdown.basePct, breakdown.afterMatchupPct)} | ${breakdown.afterMatchupPct.toFixed(1)}% |`,
+      `| + pályaválasztó | ${logitCell(breakdown.homeLogit)} | ${step(breakdown.afterMatchupPct, breakdown.afterHomePct)} | ${breakdown.afterHomePct.toFixed(1)}% |`,
+      `| ± hiányzók | ${logitCell(breakdown.injuryLogit)} | ${step(breakdown.afterHomePct, breakdown.finalPct)} | ${breakdown.finalPct.toFixed(1)}% |`,
+      `| **Végső** | ${logitCell(breakdown.finalLogit)} | ${step(breakdown.basePct, breakdown.finalPct)} | **${breakdown.finalPct.toFixed(1)}%** |`,
+      ``,
+      `*A korrekciók log-odds térben adódnak össze; a megjelenített esély = 3% + 94% × sigmoid(logit), puha 3–97%-os sáv, vágás nélkül. Ugyanaz a logit-lépés 50% körül nagyobb, a sáv szélén kisebb pp-hatást ad.*`
+    );
+  }
+
   const matchContext = report.matchContext;
   if (matchContext) {
     const record = (r: typeof matchContext.ownRecord) => `${r.wins}–${r.losses}`;
@@ -840,24 +860,27 @@ export function pregameReportToMd(report: ScoutingReport, seasonName?: string): 
     if (matchContext.leagueHomeWinPct !== null) {
       lines.push(
         ``,
-        `**Hazai pálya korrekció (${report.ownTeamName} győzelmi esélyére):** ${matchContext.homeAdjustmentPct > 0 ? '+' : ''}${matchContext.homeAdjustmentPct.toFixed(1)} pp`,
+        `**Hazai pálya korrekció:** ${matchContext.homeLogit >= 0 ? '+' : ''}${matchContext.homeLogit.toFixed(2)} logit (a pp-hatás a valószínűség-bontásban)`,
         ``,
-        `*A liga hazai győzelmi aránya ${matchContext.leagueHomeWinPct.toFixed(1)}% (${matchContext.leagueGames} meccs). A korrekció (arány − 50) × n / (n + 40), ±6 pp-re vágva; ismeretlen pályaválasztónál 0. A győzelmi valószínűség már tartalmazza.*`
+        `*A liga hazai győzelmi aránya ${matchContext.leagueHomeWinPct.toFixed(1)}% (${matchContext.leagueGames} meccs). A korrekció logit(50% + (arány − 50%) × n / (n + 40)), ±0,24 logitra (≈ ±6 pp 50%-nál) vágva; ismeretlen pályaválasztónál 0.*`
       );
     }
   }
 
+  const injuryImpact = report.injuryImpact;
   const injuries = report.injuryContext;
-  if (injuries && (injuries.own.length > 0 || injuries.opponent.length > 0)) {
-    const impact = report.injuryImpact;
-    const impactCells = (side?: { valPer36: number; pointsPer36: number }) =>
-      side && side.valPer36 > 0 ? `${side.valPer36.toFixed(1)} | ${side.pointsPer36.toFixed(1)}` : '– | –';
+  if (injuryImpact && (injuryImpact.own.status !== 'unknown' || injuryImpact.opponent.status !== 'unknown' || injuries)) {
+    const sideRow = (teamName: string, names: string[] | undefined, side: typeof injuryImpact.own) => {
+      if (side.status === 'unknown' && !names?.length) return `| ${teamName} | nincs adat (a keret nincs ellenőrizve) | – | – | – | – |`;
+      if (side.status === 'confirmedNone') return `| ${teamName} | nincs ismert hiányzó | 0 | 0 | 0 | – |`;
+      return `| ${teamName} | ${(names ?? []).join(', ') || '–'} | ${side.lostMinutesPerGame.toFixed(1)} | ${side.lostValPerGame.toFixed(1)} | ${side.lostPointsPerGame.toFixed(1)} | ${side.logit >= 0 ? '+' : ''}${side.logit.toFixed(2)} logit (${(side.valShare * 100).toFixed(0)}% a csapat ${side.teamValPerGame.toFixed(1)} VAL/meccs-éből) |`;
+    };
     lines.push(``, `## Hiányzók`, ``);
-    lines.push(`| Csapat | Hiányzók | Kieső VAL/36 | Kieső pont/36 |`);
-    lines.push(`|---|---|---|---|`);
-    lines.push(`| ${report.ownTeamName} | ${injuries.own.length > 0 ? injuries.own.join(', ') : '–'} | ${impactCells(impact?.own)} |`);
-    lines.push(`| ${report.opponentTeamName} | ${injuries.opponent.length > 0 ? injuries.opponent.join(', ') : '–'} | ${impactCells(impact?.opponent)} |`);
-    lines.push(``, `*A pozíciós VAL/36 és a kulcsjátékos-lista már csak az elérhető játékosokból számol. A kieső termelés a legalább 4 meccses, legalább 8 perc/meccs hiányzók szezonátlaga 36 percre vetítve.*`);
+    lines.push(`| Csapat | Hiányzók | Kieső perc/meccs | Kieső VAL/meccs | Kieső pont/meccs | Hatás (${report.ownTeamName} esélye) |`);
+    lines.push(`|---|---|---|---|---|---|`);
+    lines.push(sideRow(report.ownTeamName, injuries?.own, injuryImpact.own));
+    lines.push(sideRow(report.opponentTeamName, injuries?.opponent, injuryImpact.opponent));
+    lines.push(``, `*A kieső termelés a hiányzók szezonbeli meccsátlaga (perc, VAL, pont), összegezve – a játékperc így természetes súly. Hatás = ∓2,5 × kieső VAL/meccs ÷ csapat VAL/meccs logitban (legfeljebb 60%-os arányig). A pozíciós VAL/36 és a kulcsjátékos-lista csak az elérhető játékosokból számol.*`);
   }
 
   if (report.positionComparison.length > 0) {
@@ -935,7 +958,7 @@ export function pregameReportToMd(report: ScoutingReport, seasonName?: string): 
       lines.push(`| Játékos | Poz | Perc/meccs | PER* | WS* | VAL/36 | Pont/36 |`);
       lines.push(`|---------|-----|------------|------|-----|--------|---------|`);
       for (const p of report.advancedPlayers.own) {
-        lines.push(`| ${p.name} | ${p.position} | ${p.minutesPerGame.toFixed(1)} | ${p.proxyPer.toFixed(1)} | ${p.proxyWinShare.toFixed(2)} | ${p.valPer36.toFixed(1)} | ${p.pointsPer36.toFixed(1)} |`);
+        lines.push(`| ${p.name} | ${p.position} | ${p.minutesPerGame.toFixed(1)} | ${p.proxyPer.toFixed(1)} | ${p.proxyWinShare === null ? '–' : p.proxyWinShare.toFixed(2)} | ${p.valPer36.toFixed(1)} | ${p.pointsPer36.toFixed(1)} |`);
       }
     }
     if (report.advancedPlayers.opponent.length > 0) {
@@ -943,7 +966,7 @@ export function pregameReportToMd(report: ScoutingReport, seasonName?: string): 
       lines.push(`| Játékos | Poz | Perc/meccs | PER* | WS* | VAL/36 | Pont/36 |`);
       lines.push(`|---------|-----|------------|------|-----|--------|---------|`);
       for (const p of report.advancedPlayers.opponent) {
-        lines.push(`| ${p.name} | ${p.position} | ${p.minutesPerGame.toFixed(1)} | ${p.proxyPer.toFixed(1)} | ${p.proxyWinShare.toFixed(2)} | ${p.valPer36.toFixed(1)} | ${p.pointsPer36.toFixed(1)} |`);
+        lines.push(`| ${p.name} | ${p.position} | ${p.minutesPerGame.toFixed(1)} | ${p.proxyPer.toFixed(1)} | ${p.proxyWinShare === null ? '–' : p.proxyWinShare.toFixed(2)} | ${p.valPer36.toFixed(1)} | ${p.pointsPer36.toFixed(1)} |`);
       }
     }
   }
