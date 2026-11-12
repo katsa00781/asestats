@@ -871,16 +871,16 @@ export function pregameReportToMd(report: ScoutingReport, seasonName?: string): 
   const injuries = report.injuryContext;
   if (injuryImpact && (injuryImpact.own.status !== 'unknown' || injuryImpact.opponent.status !== 'unknown' || injuries)) {
     const sideRow = (teamName: string, names: string[] | undefined, side: typeof injuryImpact.own) => {
-      if (side.status === 'unknown' && !names?.length) return `| ${teamName} | nincs adat (a keret nincs ellenőrizve) | – | – | – | – |`;
-      if (side.status === 'confirmedNone') return `| ${teamName} | nincs ismert hiányzó | 0 | 0 | 0 | – |`;
-      return `| ${teamName} | ${(names ?? []).join(', ') || '–'} | ${side.lostMinutesPerGame.toFixed(1)} | ${side.lostValPerGame.toFixed(1)} | ${side.lostPointsPerGame.toFixed(1)} | ${side.logit >= 0 ? '+' : ''}${side.logit.toFixed(2)} logit (${(side.valShare * 100).toFixed(0)}% a csapat ${side.teamValPerGame.toFixed(1)} VAL/meccs-éből) |`;
+      if (side.status === 'unknown' && !names?.length) return `| ${teamName} | nincs adat (a keret nincs ellenőrizve) | – | – | – | – | – | – | – |`;
+      if (side.status === 'confirmedNone') return `| ${teamName} | nincs ismert hiányzó | 0 | 0 | 0 | – | – | 0 | – |`;
+      return `| ${teamName} | ${(names ?? []).join(', ') || '–'} | ${side.lostMinutesPerGame.toFixed(1)} | ${side.lostValPerGame.toFixed(1)} | ${side.lostPointsPerGame.toFixed(1)} | ${side.replacementValPer36.toFixed(1)} | ${(side.presenceShare * 100).toFixed(0)}% | ${side.netLostValPerGame.toFixed(1)} | ${side.logit >= 0 ? '+' : ''}${side.logit.toFixed(2)} logit (${(side.valShare * 100).toFixed(0)}% a csapat ${side.teamValPerGame.toFixed(1)} VAL/meccs-éből) |`;
     };
     lines.push(``, `## Hiányzók`, ``);
-    lines.push(`| Csapat | Hiányzók | Kieső perc/meccs | Kieső VAL/meccs | Kieső pont/meccs | Hatás (${report.ownTeamName} esélye) |`);
-    lines.push(`|---|---|---|---|---|---|`);
+    lines.push(`| Csapat | Hiányzók | Kieső perc/meccs | Kieső VAL/meccs (bruttó) | Kieső pont/meccs | Pótlás VAL/36 | Jelenlét | Nettó VAL/meccs | Hatás (${report.ownTeamName} esélye) |`);
+    lines.push(`|---|---|---|---|---|---|---|---|---|`);
     lines.push(sideRow(report.ownTeamName, injuries?.own, injuryImpact.own));
     lines.push(sideRow(report.opponentTeamName, injuries?.opponent, injuryImpact.opponent));
-    lines.push(``, `*A kieső termelés a hiányzók szezonbeli meccsátlaga (perc, VAL, pont), összegezve – a játékperc így természetes súly. Hatás = ∓2,5 × kieső VAL/meccs ÷ csapat VAL/meccs logitban (legfeljebb 60%-os arányig). A pozíciós VAL/36 és a kulcsjátékos-lista csak az elérhető játékosokból számol.*`);
+    lines.push(``, `*Bruttó = a hiányzók szezonbeli meccsátlaga (perc, VAL, pont), összegezve. Nettó = játékosonként max(0, VAL/meccs − pótlás VAL/36 × perc/meccs ÷ 36) × játszott meccs ÷ csapat meccs; pótlás = a perc/meccs szerinti top 5 utáni elérhető játékosok VAL/36-ja; jelenlét = a velük játszott meccsek aránya (perc/meccs-szel súlyozva). Hatás = ∓2,5 × nettó VAL/meccs ÷ csapat VAL/meccs logitban (legfeljebb 60%-os arányig). A pozíciós VAL/36 a teljes kerettel számol (a hiányzókkal együtt), így a hiányzás csak ebben a lépésben hat; a kulcsjátékos-lista az elérhetőkből.*`);
   }
 
   if (report.positionComparison.length > 0) {

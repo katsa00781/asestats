@@ -829,7 +829,18 @@ veszteséggel (kieső − pótlás) és meccsarány-súllyal (#3).
   ASE–Alba: periméter, ASE 3P% 40,7% vs. Alba engedett 33,2% (él +1,5), Alba 32,3% vs. ASE
   engedett 31,6% (él +0,1), nettó z = +1,4; lepattanó: 43,2% vs. engedett 23,9% → él +0,6 (a
   korábbi „z = +1,8” azonos oldalas volt), ezért nincs T-lep fókusz.
-- [ ] **P2 – Hiányzók: teljes keret + nettó, meccsarány-súly (#2, #3) + WS* normalizálás**
+- [x] **P2 – Hiányzók: teljes keret + nettó, meccsarány-súly (#2, #3) + WS* normalizálás (`@core`)**:
+  a pregame keret-memók (`pregameOwnFullRoster` / `pregameOpponentFullRoster`) nem szűrnek
+  hiányzót; ebből származik az elérhető és a hiányzó lista. A pozíciós matchup a teljes kerettel
+  számol, a hiányzó-hatást a `@core` számolja (`extras.injuries` = `{ checked, markedCount,
+  players }`, a komponens `summarizeMissing`-je megszűnt): nettó = max(0, VAL/meccs − pótlás VAL/36
+  × perc/meccs ÷ 36) × játszott ÷ csapat meccs; pótlás = top 5 utáni elérhetők VAL/36-ja. Új
+  `netLostValPerGame`, `replacementValPer36`, `presenceShare`; export- és UI-kártya ezeket mutatja.
+  WS*: a győzelmek a VAL-részesedés × hatékonysági szorzó arányában szétosztva, a teljes keretre
+  (+ a nem listázott maradékra) normalizálva → Σ WS* = győzelmek. ASE–Alba, Benke (8/9 meccs,
+  25,6 VAL/meccs, 26,9 perc) jelölve: matchup +0,60 változatlan, nettó 8,2 VAL/meccs (pótlás 21,9
+  VAL/36, jelenlét 89%) → −0,14 logit, 84,0% → 82,3% (korábban bruttó levonással −3,5 pp);
+  Σ WS* = 9,00 = 9 győzelem.
 - [ ] **P3 – Forgatókönyv-inputok, kockázati swing ugyanabból a függvényből (#4)**
 - [ ] **P4 – Dobástérkép: ütközés, help-forrás, engedett zónatábla (#5–#7)**
 - [ ] **P5 – Módszertan-függelék az exportban**

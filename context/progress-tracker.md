@@ -137,6 +137,7 @@ Update this file after every meaningful implementation change.
 
 ## Completed (legutóbbi)
 
+- **H25 / P2 – pregame hiányzók és WS* (`@core`)** (2026-11-12): a pozíciós matchup a teljes kerettel számol, a hiányzó-lépés nettó (pótlással) és meccsarány-súlyos; WS* a teljes keretre normalizálva (Σ = győzelmek).
 - **H25 / P1 – pregame matchup-párok (`@core`)** (2026-11-12): a döntő tengely, az OREB-fókusz és a támadó fókuszpontok a saját támadás vs. ellenfél engedett mutatóiból (nem azonos oldalakból); a tengely az első fókuszpont és az elsődleges X-faktor.
 - **H24 / P3 – pregame finomhangolás (`@core`)** (2026-11-12): engedett FT arány sor és 70. percentilis küszöb, forgatókönyv-képletek lábjegyzetben, OREB-előny elsődleges fókusz z ≥ 1-nél, PER* lepattanósúllyal. A H24 kész.
 - **H24 / P2 – pregame taktikai tartalom (`@core`)** (2026-11-12): zóna-FG% shrinkage (K = 20), zárd/engedd dobástérkép-védekezés, döntő tengely a legnagyobb standardizált különbségből.

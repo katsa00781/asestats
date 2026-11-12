@@ -423,10 +423,10 @@ export type PregameMatchContext = {
 };
 
 /**
- * A hiányzók kieső termelése meccsátlagban, a játékperccel természetesen
- * súlyozva (VAL/meccs = VAL/36 × perc/meccs ÷ 36). `status`: `marked` = van
- * megjelölt hiányzó; `confirmedNone` = a keret ellenőrizve, nincs hiányzó;
- * `unknown` = nincs adat (nem ellenőrzött, nincs megjelölés).
+ * A hiányzók kieső termelése meccsátlagban (bruttó: a hiányzók szezonbeli
+ * meccsátlagainak összege). `status`: `marked` = van megjelölt hiányzó;
+ * `confirmedNone` = a keret ellenőrizve, nincs hiányzó; `unknown` = nincs adat
+ * (nem ellenőrzött, nincs megjelölés).
  */
 export type PregameInjuryImpact = {
   status: 'marked' | 'confirmedNone' | 'unknown';
@@ -437,19 +437,45 @@ export type PregameInjuryImpact = {
   coreNames: string[];
 };
 
-/** A riportba kerülő hiányzó-hatás: a bemenet + a csapat VAL/meccs és a logit-hatás. */
+/**
+ * A riportba kerülő hiányzó-hatás. A győzelmi esélyt a **nettó** veszteség
+ * mozgatja: játékosonként (VAL/meccs − pótlás VAL/36 × perc/meccs ÷ 36), 0-nál
+ * alulról vágva, × a játszott meccsek aránya (az alap-rating a nélküle játszott
+ * meccseket már tartalmazza).
+ */
 export type PregameInjuryImpactReport = PregameInjuryImpact & {
   teamValPerGame: number;
-  /** Kieső VAL/meccs ÷ csapat VAL/meccs (0–1). */
+  /** A pótlás minősége: a padsor (perc/meccs szerinti top 5 utáni elérhetők) VAL/36-ja. */
+  replacementValPer36: number;
+  /** Nettó kieső VAL/meccs (pótlással és meccsaránnyal korrigálva). */
+  netLostValPerGame: number;
+  /** A hiányzók játszott meccseinek aránya a csapat meccseihez, perc/meccs-szel súlyozva (0–1). */
+  presenceShare: number;
+  /** Nettó kieső VAL/meccs ÷ csapat VAL/meccs (0–1). */
   valShare: number;
   /** A saját győzelmi esélyre gyakorolt hatás logitban (saját hiányzó negatív). */
   logit: number;
 };
 
+/**
+ * Egy csapat hiányzó-bemenete: a megjelölt hiányzók szezon-sorai (ugyanabból a
+ * forrásból, mint a keret), a megjelöltek száma és a „Keret ellenőrizve” jelölő.
+ * Egy kevés meccses megjelölt játékos hiányozhat a `players`-ből (mintaküszöb).
+ */
+export type PregameInjuryInput = {
+  checked: boolean;
+  markedCount: number;
+  players: PlayerSeasonStat[];
+};
+
 /** Az `analyzePreGameScouting` opcionális, komponensből érkező kiegészítői. */
 export type PregameScoutingExtras = {
   matchContext?: PregameMatchContext | null;
-  injuryImpact?: { own: PregameInjuryImpact; opponent: PregameInjuryImpact } | null;
+  /**
+   * A hiányzók. A pozíciós matchup a teljes kerettel (elérhetők + hiányzók)
+   * számol; a hiányzók hatását egyedül a hiányzó-lépés viszi.
+   */
+  injuries?: { own: PregameInjuryInput; opponent: PregameInjuryInput } | null;
   leagueProxyPerAverage?: number | null;
 };
 
@@ -1387,7 +1413,7 @@ const buildShotProfileContext = (
 export const PROXY_PER_DEFINITION =
   'PER* = saját proxy, nem a Hollinger-féle PER: 36 percre vetítve 0,35·pont + 0,22·assziszt + 0,26·szerzett labda + 0,17·blokk + 0,10·támadó lepattanó + 0,05·védő lepattanó − 0,20·eladott labda (dobáshatékonyság nélkül).';
 export const PROXY_WIN_SHARE_DEFINITION =
-  'WS* = a játékos VAL-részesedése a csapat teljes szezon-VAL-jából × a csapat tényleges győzelmeinek száma × hatékonysági szorzó (VAL/meccs ÷ 18, 0,5–1,5 között); becsült győzelem-hozzájárulás, csak új eredménnyel változik. Mérkőzés-kontextus (mérleg) nélkül nem számolható.';
+  'WS* = a csapat tényleges győzelmei szétosztva a játékosok VAL-részesedése × hatékonysági szorzó (VAL/meccs ÷ 18, 0,5–1,5 között) arányában, úgy normalizálva, hogy a teljes keret WS*-összege = a győzelmek száma; becsült győzelem-hozzájárulás, csak új eredménnyel változik. Mérkőzés-kontextus (mérleg) nélkül nem számolható.';
 
 /** A PER* számításához szükséges játékosmezők (szezon-összegek). */
 type ProxyPerInput = Pick<PlayerSeasonStat, 'minutes' | 'points' | 'ast' | 'stl' | 'blk' | 'tov' | 'oreb' | 'dreb'>;
@@ -1443,21 +1469,38 @@ export const computeLeagueProxyPerAverage = (
   return round(weighted / totalMinutes, 1);
 };
 
+/** A WS* nyers súlya: VAL-részesedés (negatív VAL nélkül) × hatékonysági szorzó (0,5–1,5). */
+const proxyWinShareWeight = (player: PlayerSeasonStat, teamTotalVal: number) => {
+  const valueShare = teamTotalVal > 0 ? Math.max(player.val, 0) / teamTotalVal : 0;
+  const efficiencyBoost = player.games > 0 ? clamp((player.val / player.games) / 18, 0.5, 1.5) : 1;
+  return valueShare * efficiencyBoost;
+};
+
 /**
- * WS*: a játékos VAL-részesedése a csapat **teljes** szezon-VAL-jából × a
- * csapat **tényleges** győzelmei × hatékonysági szorzó. Nem függ az adott meccs
- * modellezett esélyétől és a hiányzók szűrésétől, ezért meccsek között csak
- * új eredménnyel változik.
+ * WS* normalizáló: a teljes keret súlyainak összege + a kereten kívüli (a
+ * mintaküszöb miatt nem listázott) játékosok VAL-részesedése 1-es szorzóval.
+ * Így Σ WS* (teljes csapat) = a tényleges győzelmek száma.
+ */
+const proxyWinShareNormalizer = (roster: PlayerSeasonStat[], teamTotalVal: number) => {
+  const rosterShare = teamTotalVal > 0
+    ? roster.reduce((sum, player) => sum + Math.max(player.val, 0), 0) / teamTotalVal
+    : 0;
+  const residualShare = Math.max(0, 1 - rosterShare);
+  return roster.reduce((sum, player) => sum + proxyWinShareWeight(player, teamTotalVal), 0) + residualShare;
+};
+
+/**
+ * WS*: a csapat **tényleges** győzelmei a VAL-részesedés × hatékonysági szorzó
+ * arányában szétosztva (a normalizálás miatt Σ WS* = győzelmek). Nem függ az
+ * adott meccs modellezett esélyétől és a hiányzók jelölésétől, ezért meccsek
+ * között csak új eredménnyel változik.
  */
 const computeProxyWinShare = (
   player: PlayerSeasonStat,
   teamTotalVal: number,
-  teamWins: number
-) => {
-  const valueShare = teamTotalVal > 0 ? player.val / teamTotalVal : 0;
-  const efficiencyBoost = player.games > 0 ? clamp((player.val / player.games) / 18, 0.5, 1.5) : 1;
-  return round(valueShare * teamWins * efficiencyBoost, 2);
-};
+  teamWins: number,
+  normalizer: number
+) => (normalizer > 0 ? round((teamWins * proxyWinShareWeight(player, teamTotalVal)) / normalizer, 2) : 0);
 
 const getAdvancedEligibility = (teamGames: number): AdvancedPlayerEligibility => {
   const safeTeamGames = Math.max(Math.round(teamGames || 0), 6);
@@ -1481,8 +1524,11 @@ const buildAdvancedPlayers = (
   players: PlayerSeasonStat[],
   teamGames: number,
   teamTotalVal: number,
-  teamWins: number | null
+  teamWins: number | null,
+  /** A teljes keret (elérhetők + hiányzók) a WS* normalizálásához. */
+  roster: PlayerSeasonStat[] = players
 ): AdvancedPlayerStat[] => {
+  const winShareNormalizer = proxyWinShareNormalizer(roster, teamTotalVal);
   const withMinutes = players
     .filter(player => (player.minutes || 0) > 0)
     .map(player => {
@@ -1533,7 +1579,7 @@ const buildAdvancedPlayers = (
         valPer36: round(valPer36, 1),
         pointsPer36: round(pointsPer36, 1),
         proxyPer: computeProxyPer(player),
-        proxyWinShare: teamWins === null ? null : computeProxyWinShare(player, teamTotalVal, teamWins),
+        proxyWinShare: teamWins === null ? null : computeProxyWinShare(player, teamTotalVal, teamWins, winShareNormalizer),
       };
     })
     .sort((a, b) => b.proxyPer - a.proxyPer)
@@ -2709,20 +2755,72 @@ const computeMatchupLogit = (positionComparison: ReturnType<typeof buildPosition
   return Math.abs(value) < ppAtEvenToLogit(2) ? 0 : value;
 };
 
-/** A hiányzók logit-hatása csapatonként (a kieső VAL/meccs a csapat VAL/meccs-éhez mérve). */
+/** Ennyi (perc/meccs szerinti) vezető játékos nem számít padsornak a pótlásnál. */
+const REPLACEMENT_STARTERS = 5;
+/** Ennyi VAL/meccs felett „kulcs” a hiányzó (a kártya névlistájához). */
+const INJURY_CORE_VAL_PER_GAME = 12;
+
+/** A pótlás VAL/36-ja: a top 5 utáni elérhetők; üres padnál az elérhető keret. */
+const computeReplacementValPer36 = (available: PlayerSeasonStat[]) => {
+  const withMinutes = available
+    .filter(player => (player.minutes || 0) > 0 && (player.games || 0) > 0)
+    .sort((a, b) => b.minutes / b.games - a.minutes / a.games);
+  const bench = withMinutes.slice(REPLACEMENT_STARTERS);
+  const pool = bench.length > 0 ? bench : withMinutes;
+  const minutes = pool.reduce((sum, player) => sum + player.minutes, 0);
+  const val = pool.reduce((sum, player) => sum + player.val, 0);
+  return minutes > 0 ? Math.max((val / minutes) * 36, 0) : 0;
+};
+
+/**
+ * A hiányzók logit-hatása csapatonként. Nettó veszteség játékosonként:
+ * max(0, VAL/meccs − pótlás VAL/36 × perc/meccs ÷ 36) × min(1, játszott meccs ÷
+ * csapat meccs); a nettó összeg a csapat VAL/meccs-éhez mérve, × −2,5 logit.
+ */
 const buildInjuryImpactReport = (
-  impact: PregameInjuryImpact | undefined,
+  input: PregameInjuryInput | undefined,
+  available: PlayerSeasonStat[],
   team: NormalizedTeamStats,
   sign: 1 | -1
 ): PregameInjuryImpactReport => {
-  const base: PregameInjuryImpact = impact ?? {
-    status: 'unknown', players: 0, lostMinutesPerGame: 0, lostValPerGame: 0, lostPointsPerGame: 0, coreNames: [],
-  };
+  const players = input?.players ?? [];
+  const markedCount = Math.max(input?.markedCount ?? 0, players.length);
+  const status: PregameInjuryImpact['status'] = markedCount > 0 ? 'marked' : input?.checked ? 'confirmedNone' : 'unknown';
+  const teamGames = Math.max(team.games || 0, 1);
+  const replacementValPer36 = computeReplacementValPer36(available);
+
+  const totals = players.reduce(
+    (acc, player) => {
+      const games = player.games || 0;
+      if (games <= 0) return acc;
+      const minutesPerGame = (player.minutes || 0) / games;
+      const valPerGame = (player.val || 0) / games;
+      const presence = Math.min(1, games / teamGames);
+      const net = Math.max(0, valPerGame - (replacementValPer36 * minutesPerGame) / 36) * presence;
+      acc.minutes += minutesPerGame;
+      acc.val += valPerGame;
+      acc.points += (player.points || 0) / games;
+      acc.net += net;
+      acc.presenceMinutes += minutesPerGame * presence;
+      if (valPerGame >= INJURY_CORE_VAL_PER_GAME) acc.coreNames.push(player.name);
+      return acc;
+    },
+    { minutes: 0, val: 0, points: 0, net: 0, presenceMinutes: 0, coreNames: [] as string[] }
+  );
+
   const teamValPerGame = Math.max(team.valPerGame, 0);
-  const valShare = teamValPerGame > 0 ? clamp(base.lostValPerGame / teamValPerGame, 0, INJURY_SHARE_CAP) : 0;
+  const valShare = teamValPerGame > 0 ? clamp(totals.net / teamValPerGame, 0, INJURY_SHARE_CAP) : 0;
   return {
-    ...base,
+    status,
+    players: markedCount,
+    lostMinutesPerGame: round(totals.minutes, 1),
+    lostValPerGame: round(totals.val, 1),
+    lostPointsPerGame: round(totals.points, 1),
+    coreNames: totals.coreNames.slice(0, 4),
     teamValPerGame: round(teamValPerGame, 1),
+    replacementValPer36: round(replacementValPer36, 1),
+    netLostValPerGame: round(totals.net, 1),
+    presenceShare: totals.minutes > 0 ? round(totals.presenceMinutes / totals.minutes, 3) : 0,
     valShare: round(valShare, 3),
     logit: round(sign * -INJURY_LOGIT_SCALE * valShare, 3),
   };
@@ -2953,10 +3051,16 @@ export const analyzePreGameScouting = (
   });
   const threats = buildThreats(normalizedOpponent, leagueBenchmarks, usageShare);
   const vulnerabilities = buildVulnerabilities(normalizedOpponent, leagueBenchmarks);
-  const positionComparison = buildPositionComparison(ownPlayers, opponentPlayers);
+  // A pozíciós matchup a teljes kerettel számol (mint az alap-rating); a
+  // hiányzók hatását egyedül a hiányzó-lépés viszi – így nincs duplán.
+  const ownInjured = extras?.injuries?.own.players ?? [];
+  const opponentInjured = extras?.injuries?.opponent.players ?? [];
+  const ownRoster = [...ownPlayers, ...ownInjured];
+  const opponentRoster = [...opponentPlayers, ...opponentInjured];
+  const positionComparison = buildPositionComparison(ownRoster, opponentRoster);
   const injuryImpact = {
-    own: buildInjuryImpactReport(extras?.injuryImpact?.own, normalizedOwn, 1),
-    opponent: buildInjuryImpactReport(extras?.injuryImpact?.opponent, normalizedOpponent, -1),
+    own: buildInjuryImpactReport(extras?.injuries?.own, ownPlayers, normalizedOwn, 1),
+    opponent: buildInjuryImpactReport(extras?.injuries?.opponent, opponentPlayers, normalizedOpponent, -1),
   };
   const winProbability = computeWinProbability(
     computeBaseWinModel(normalizedOwn, normalizedOpponent, leagueBenchmarks),
@@ -3031,13 +3135,15 @@ export const analyzePreGameScouting = (
       ownPlayers,
       ownTeam.games || normalizedOwn.games || 1,
       ownTeam.val,
-      extras?.matchContext ? extras.matchContext.ownRecord.wins : null
+      extras?.matchContext ? extras.matchContext.ownRecord.wins : null,
+      ownRoster
     ),
     opponent: buildAdvancedPlayers(
       opponentPlayers,
       opponentTeam.games || normalizedOpponent.games || 1,
       opponentTeam.val,
-      extras?.matchContext ? extras.matchContext.opponentRecord.wins : null
+      extras?.matchContext ? extras.matchContext.opponentRecord.wins : null,
+      opponentRoster
     ),
   };
   const advancedPlayersEligibility = {
