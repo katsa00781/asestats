@@ -811,7 +811,7 @@ egymás elleni meccsek közt jelenik meg. A 2024/25-ös szezonnézetben nincs do
   csapatnál) – keret-import csapat-hozzárendelési hiba gyanúja, döntés előtt nem nyúltunk hozzá.
 - Mobil jegyzet: `asestatmobile/docs/mobile-sync/2026-11-08-dobasterkep-zonak-h21.md` (összesítővé bővítve: H21 + H22).
 
-**H25 – Pregame riportgenerátor: 3. javítási lista (2026-11-12)** – folyamatban
+**H25 – Pregame riportgenerátor: 3. javítási lista ✓ (2026-11-12)** – P1–P5 kész, böngészős ellenőrzés nyitva
 
 Az ASE–Alba riport 7 hibája + 2 apróság. Felhasználói döntések: (#1) tengelyenként két
 matchup-pár, pár-él = (támadó z + védekező engedett z) / 2, tengely z = saját él − ellenfél él;
@@ -858,7 +858,11 @@ veszteséggel (kieső − pótlás) és meccsarány-súllyal (#3).
   segíteni, nem kell closeout)”; a generikus „festékharc a gerinc” és „closeout-fegyelem” ütközés-mondatok
   törölve. (#7) Export: „<ellenfél> engedett zónái” és „<saját> engedett zónái” tábla (a zóna-matchup
   „+x pont/dobással többet enged” állítása ezekből ellenőrizhető).
-- [ ] **P5 – Módszertan-függelék az exportban**
+- [x] **P5 – Módszertan-függelék az exportban**: a pregame MD export hosszú dőlt lábjegyzetei (győzelmi
+  esély, hazai pálya, hiányzók, csapatmutatók, matchup-párok, PER*, WS* – Σ WS* = győzelmek –, dobászónák,
+  forgatókönyvek) és a „Forgatókönyv nyers inputok” tábla a riport végi `## Módszertan` szakaszba kerültek;
+  a táblák alatt csak a tempó ¹ jelölés maradt.
+- [x] `npx tsc --noEmit`, `npm run lint` (0 hiba, a korábbi 7 figyelmeztetés), `npm run build` rendben.
 - [ ] **Böngészős ellenőrzés** (felhasználó): pregame ASE–Alba, MD export.
 - Mobil jegyzet: `asestatmobile/docs/mobile-sync/2026-11-12-pregame-riport-h24.md` (H25 szakaszokkal bővítve).
 

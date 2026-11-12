@@ -18,7 +18,7 @@ import type {
 } from './team-season-export';
 import { LINEUP_NET_MIN_SECONDS, LINEUP_SLOT_POSITIONS, MAX_TRIOS } from './postgame-lineup-export';
 import { MISCLASSIFIED_THREES_MIN, buildPostgameAutoFocus, composePostgameSummary } from './postgame-report';
-import { PROXY_PER_DEFINITION, PROXY_WIN_SHARE_DEFINITION, ZONE_SHRINK_PRIOR_ATTEMPTS } from './pregame-scouting';
+import { HELP_SOURCE_PPS, PROXY_PER_DEFINITION, PROXY_WIN_SHARE_DEFINITION, ZONE_SHRINK_PRIOR_ATTEMPTS } from './pregame-scouting';
 import { trueShootingPct, effectiveFgPct } from './stat-formulas';
 import {
   buildTeamSeasonExport,
@@ -791,6 +791,10 @@ export function teamStatsToMd(input: TeamStatsMdInput): string {
 }
 
 export function pregameReportToMd(report: ScoutingReport, seasonName?: string): string {
+  // A képletek és definíciók a riport végi „Módszertan” függelékbe kerülnek –
+  // az edzői olvasásban a táblák alatt nem állnak hosszú lábjegyzetek.
+  const methodology: string[] = [];
+  const addMethod = (title: string, text: string) => methodology.push(`- **${title}:** ${text}`);
   const lines: string[] = [
     `# Pregame scouting: ${report.ownTeamName} vs ${report.opponentTeamName}`,
     ``,
@@ -823,10 +827,9 @@ export function pregameReportToMd(report: ScoutingReport, seasonName?: string): 
       `| + pozíciós matchup | ${logitCell(breakdown.matchupLogit)} | ${step(breakdown.basePct, breakdown.afterMatchupPct)} | ${breakdown.afterMatchupPct.toFixed(1)}% |`,
       `| + pályaválasztó | ${logitCell(breakdown.homeLogit)} | ${step(breakdown.afterMatchupPct, breakdown.afterHomePct)} | ${breakdown.afterHomePct.toFixed(1)}% |`,
       `| ± hiányzók | ${logitCell(breakdown.injuryLogit)} | ${step(breakdown.afterHomePct, breakdown.finalPct)} | ${breakdown.finalPct.toFixed(1)}% |`,
-      `| **Végső** | ${logitCell(breakdown.finalLogit)} | ${step(breakdown.basePct, breakdown.finalPct)} | **${breakdown.finalPct.toFixed(1)}%** |`,
-      ``,
-      `*A korrekciók log-odds térben adódnak össze; a megjelenített esély = 3% + 94% × sigmoid(logit), puha 3–97%-os sáv, vágás nélkül. Ugyanaz a logit-lépés 50% körül nagyobb, a sáv szélén kisebb pp-hatást ad.*`
+      `| **Végső** | ${logitCell(breakdown.finalLogit)} | ${step(breakdown.basePct, breakdown.finalPct)} | **${breakdown.finalPct.toFixed(1)}%** |`
     );
+    addMethod('Győzelmi esély', 'a korrekciók log-odds térben adódnak össze; a megjelenített esély = 3% + 94% × sigmoid(logit), puha 3–97%-os sáv, vágás nélkül. Ugyanaz a logit-lépés 50% körül nagyobb, a sáv szélén kisebb pp-hatást ad.');
   }
 
   const matchContext = report.matchContext;
@@ -860,10 +863,9 @@ export function pregameReportToMd(report: ScoutingReport, seasonName?: string): 
     if (matchContext.leagueHomeWinPct !== null) {
       lines.push(
         ``,
-        `**Hazai pálya korrekció:** ${matchContext.homeLogit >= 0 ? '+' : ''}${matchContext.homeLogit.toFixed(2)} logit (a pp-hatás a valószínűség-bontásban)`,
-        ``,
-        `*A liga hazai győzelmi aránya ${matchContext.leagueHomeWinPct.toFixed(1)}% (${matchContext.leagueGames} meccs). A korrekció logit(50% + (arány − 50%) × n / (n + 40)), ±0,24 logitra (≈ ±6 pp 50%-nál) vágva; ismeretlen pályaválasztónál 0.*`
+        `**Hazai pálya korrekció:** ${matchContext.homeLogit >= 0 ? '+' : ''}${matchContext.homeLogit.toFixed(2)} logit (a pp-hatás a valószínűség-bontásban)`
       );
+      addMethod('Hazai pálya', `a liga hazai győzelmi aránya ${matchContext.leagueHomeWinPct.toFixed(1)}% (${matchContext.leagueGames} meccs). A korrekció logit(50% + (arány − 50%) × n / (n + 40)), ±0,24 logitra (≈ ±6 pp 50%-nál) vágva; ismeretlen pályaválasztónál 0.`);
     }
   }
 
@@ -880,7 +882,7 @@ export function pregameReportToMd(report: ScoutingReport, seasonName?: string): 
     lines.push(`|---|---|---|---|---|---|---|---|---|`);
     lines.push(sideRow(report.ownTeamName, injuries?.own, injuryImpact.own));
     lines.push(sideRow(report.opponentTeamName, injuries?.opponent, injuryImpact.opponent));
-    lines.push(``, `*Bruttó = a hiányzók szezonbeli meccsátlaga (perc, VAL, pont), összegezve. Nettó = játékosonként max(0, VAL/meccs − pótlás VAL/36 × perc/meccs ÷ 36) × játszott meccs ÷ csapat meccs; pótlás = a perc/meccs szerinti top 5 utáni elérhető játékosok VAL/36-ja; jelenlét = a velük játszott meccsek aránya (perc/meccs-szel súlyozva). Hatás = ∓2,5 × nettó VAL/meccs ÷ csapat VAL/meccs logitban (legfeljebb 60%-os arányig). A pozíciós VAL/36 a teljes kerettel számol (a hiányzókkal együtt), így a hiányzás csak ebben a lépésben hat; a kulcsjátékos-lista az elérhetőkből.*`);
+    addMethod('Hiányzók', `Bruttó = a hiányzók szezonbeli meccsátlaga (perc, VAL, pont), összegezve. Nettó = játékosonként max(0, VAL/meccs − pótlás VAL/36 × perc/meccs ÷ 36) × játszott meccs ÷ csapat meccs; pótlás = a perc/meccs szerinti top 5 utáni elérhető játékosok VAL/36-ja; jelenlét = a velük játszott meccsek aránya (perc/meccs-szel súlyozva). Hatás = ∓2,5 × nettó VAL/meccs ÷ csapat VAL/meccs logitban (legfeljebb 60%-os arányig). A pozíciós VAL/36 a teljes kerettel számol (a hiányzókkal együtt), így a hiányzás csak ebben a lépésben hat; a kulcsjátékos-lista az elérhetőkből.`);
   }
 
   if (report.positionComparison.length > 0) {
@@ -914,9 +916,10 @@ export function pregameReportToMd(report: ScoutingReport, seasonName?: string): 
     lines.push(`| Engedett OREB% (= 1 − DREB%) | ${allowedCell(ts.own.oppOrebRateAllowed)} | ${allowedCell(ts.opponent.oppOrebRateAllowed)} |`);
     lines.push(`| Kényszerített TO rate | ${allowedCell(ts.own.oppTurnoverRateAllowed)} | ${allowedCell(ts.opponent.oppTurnoverRateAllowed)} |`);
     lines.push(`| Assziszt arány | ${ts.own.assistRate.toFixed(1)}% | ${ts.opponent.assistRate.toFixed(1)}% |`);
-    lines.push(``, `*Tempó = a két csapat (FGA + 0,44·FTA + LV − T-lep) birtoklásbecslésének meccsenkénti átlaga. OREB% = saját T-lep / (saját T-lep + ellenfél V-lep) a mindkét oldali box score-os meccseken. FT arány = FTA / FGA; engedett FT arány = az ellenfelek FTA / FGA-ja a csapat ellen (a „Sokat faultoló védekezés” címke a liga 70. percentilise felett).${
-      ts.own.paceFromOwnOnly || ts.opponent.paceFromOwnOnly ? ' ¹ Ellenfél box score nélkül: csak a saját birtoklásbecslés.' : ''
-    }*`);
+    if (ts.own.paceFromOwnOnly || ts.opponent.paceFromOwnOnly) {
+      lines.push(``, `*¹ Ellenfél box score nélkül: csak a saját birtoklásbecslés.*`);
+    }
+    addMethod('Csapatmutatók', 'Tempó = a két csapat (FGA + 0,44·FTA + LV − T-lep) birtoklásbecslésének meccsenkénti átlaga. OREB% = saját T-lep / (saját T-lep + ellenfél V-lep) a mindkét oldali box score-os meccseken. FT arány = FTA / FGA; engedett FT arány = az ellenfelek FTA / FGA-ja a csapat ellen (a „Sokat faultoló védekezés” címke a liga 70. percentilise felett). Engedett 3P% / OREB% / kényszerített TO rate = az ellenfelek ugyanezen mutatója a csapat ellen (engedett OREB% = 1 − DREB%).');
   }
 
   if (report.matchupPairs && report.matchupPairs.length > 0) {
@@ -929,7 +932,7 @@ export function pregameReportToMd(report: ScoutingReport, seasonName?: string): 
     for (const pair of report.matchupPairs) {
       lines.push(`| ${pair.axisLabel} (${pair.metricLabel}) | ${pair.ownAttack.attackValue} vs. ${pair.ownAttack.allowedValue} | ${z(pair.ownAttack.edge)} | ${pair.opponentAttack.attackValue} vs. ${pair.opponentAttack.allowedValue} | ${z(pair.opponentAttack.edge)} | ${z(pair.netZ)} |`);
     }
-    lines.push(``, `*Él = (támadó z + védekező engedett z) / 2, a liga mediánjához és szórásához (σ ≈ (P90 − P10) / 2,563) mérve; TO rate-nél előjelváltással. Nettó z = saját él − ellenfél él; a döntő tengely a legnagyobb |nettó z|.*`);
+    addMethod('Matchup-párok', 'él = (támadó z + védekező engedett z) / 2, a liga mediánjához és szórásához (σ ≈ (P90 − P10) / 2,563) mérve; TO rate-nél előjelváltással. Nettó z = saját él − ellenfél él; a döntő tengely a legnagyobb |nettó z| (tempónál a két csapat tempókülönbsége / liga-σ). |Nettó z| ≥ 1-nél a tengely az első fókuszpont és az elsődleges X-faktor.');
   }
 
   if (report.ownTeamProfile) {
@@ -992,10 +995,11 @@ export function pregameReportToMd(report: ScoutingReport, seasonName?: string): 
 
   if (report.advancedPlayers && (report.advancedPlayers.own.length > 0 || report.advancedPlayers.opponent.length > 0)) {
     const leagueAvg = report.leagueProxyPerAverage;
-    lines.push(
-      ``,
-      `*${PROXY_PER_DEFINITION}${leagueAvg != null ? ` Ligaátlag PER* (percekkel súlyozva, a listával azonos perc-/meccsküszöbbel): ${leagueAvg.toFixed(1)}.` : ''} ${PROXY_WIN_SHARE_DEFINITION}*`
-    );
+    addMethod('PER*', `${PROXY_PER_DEFINITION}${leagueAvg != null ? ` Ligaátlag PER* (percekkel súlyozva, a listával azonos perc-/meccsküszöbbel): ${leagueAvg.toFixed(1)}.` : ''}`);
+    const wins = report.matchContext
+      ? ` Σ WS* (teljes keret): ${report.ownTeamName} = ${report.matchContext.ownRecord.wins}, ${report.opponentTeamName} = ${report.matchContext.opponentRecord.wins} győzelem; a táblákban csak a top 5 áll.`
+      : '';
+    addMethod('WS*', `${PROXY_WIN_SHARE_DEFINITION}${wins}`);
   }
 
   if (report.shotProfileContext) {
@@ -1021,7 +1025,7 @@ export function pregameReportToMd(report: ScoutingReport, seasonName?: string): 
       // pont/dobással többet enged”) – nélkülük az állítás nem ellenőrizhető.
       zoneTable(`${report.opponentTeamName} engedett zónái (az ellenfelei dobásai ellene)`, report.shotProfileContext.opponentAllowedZones);
       zoneTable(`${report.ownTeamName} engedett zónái`, report.shotProfileContext.ownAllowedZones);
-      lines.push(``, `*Δ arány = a zóna dobásaránya a ligaátlaghoz képest; Δ FG% = a nyers találati arány a ligaátlaghoz képest (mindkettő százalékpont). Shrinkelt FG% = (találat + ${ZONE_SHRINK_PRIOR_ATTEMPTS} × liga zóna-FG%) / (kísérlet + ${ZONE_SHRINK_PRIOR_ATTEMPTS}). Pont/dobás = 2 × (kétpontos) vagy 3 × (hárompontos) shrinkelt FG%. A zóna-matchup és a jegyzetek a shrinkelt értékekből számolnak.*`);
+      addMethod('Dobászónák', `Δ arány = a zóna dobásaránya a ligaátlaghoz képest; Δ FG% = a nyers találati arány a ligaátlaghoz képest (mindkettő százalékpont). Shrinkelt FG% = (találat + ${ZONE_SHRINK_PRIOR_ATTEMPTS} × liga zóna-FG%) / (kísérlet + ${ZONE_SHRINK_PRIOR_ATTEMPTS}). Pont/dobás = 2 × (kétpontos) vagy 3 × (hárompontos) shrinkelt FG%. A zóna-matchup és a jegyzetek a shrinkelt értékekből számolnak. Engedett zónák = az ellenfelek dobásai a csapat ellen. Zónaütközés = mindkét csapatnál Δ arány ≥ +2 pp és pont/dobás ≥ liga (≥ 12 kísérlet). Help-forrás = ${HELP_SOURCE_PPS.toFixed(2)} pont/dobás alatti ellenfél-zóna.`);
       if (report.shotProfileContext.clashZones.length > 0) {
         lines.push(``, `**Zónaütközés:** ${report.shotProfileContext.clashZones.join(', ')}`);
       }
@@ -1046,17 +1050,18 @@ export function pregameReportToMd(report: ScoutingReport, seasonName?: string): 
     }
     const impact = report.xFactorImpact;
     if (impact) {
-      lines.push(
-        ``,
-        `*A két forgatókönyv független változókból számol, egy esetleges azonos nagyságú eltérés véletlen. Kontrollált = az X-faktorok modellhatása (elsődleges + másodlagos, logitban hozzáadva; itt +${impact.combinedDeltaPct.toFixed(1)} pp). Magas variancia = −(variancia-büntetés × bizonyosság-szorzó + 0,32 × a kockázati triggerek negatív swingjének összege), ahol a variancia-büntetés 0,9 + 1,15 × variancia-források száma + 0,16 × a negatív swingek összege (1,2–8,6 pp), logitban levonva. Mindkettő a végső (valószínűség-bontás szerinti) esélyhez képest.*`
-      );
+      addMethod('Forgatókönyvek', `a két forgatókönyv független változókból számol, egy esetleges azonos nagyságú eltérés véletlen. Kontrollált = az X-faktorok modellhatása (elsődleges + másodlagos, logitban hozzáadva; itt +${impact.combinedDeltaPct.toFixed(1)} pp). Magas variancia = −(variancia-büntetés × bizonyosság-szorzó + 0,32 × a kockázati triggerek negatív swingjének összege), ahol a variancia-büntetés 0,9 + 1,15 × variancia-források száma + 0,16 × a negatív swingek összege (1,2–8,6 pp), logitban levonva. Minden pp „50%-os” modellhatás; a táblákban (forgatókönyv és kockázati swing) ugyanazzal a függvénnyel a végső esélyen realizált eltérés áll. A nyers inputokat a lenti tábla mutatja.`);
     }
-    lines.push(...scenarioDiagnosticsToMd(report));
   }
 
   if (report.summary) {
     lines.push(``, `## Összefoglalás`, ``);
     lines.push(report.summary);
+  }
+
+  if (methodology.length > 0 || report.scenarioDiagnostics) {
+    lines.push(``, `## Módszertan`, ``, ...methodology);
+    lines.push(...scenarioDiagnosticsToMd(report));
   }
 
   return lines.join('\n');
