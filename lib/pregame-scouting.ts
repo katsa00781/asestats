@@ -105,7 +105,7 @@ export type ScoutingReportLLMContext = {
   opponentTempoDescriptor: string;
   ownTempoDescriptor: string;
   opponentDominantAxis: 'transition' | 'periméter' | 'festék';
-  /** A két csapat közti legnagyobb standardizált eltérés tengelye (lásd `getMatchupAxis`). */
+  /** A legnagyobb nettó matchup-él tengelye (lásd `getMatchupAxis`). */
   matchupAxis?: MatchupAxis;
   tempoControlNote?: string;
   matchupRealizationNote?: string;
@@ -319,6 +319,8 @@ export type ScoutingReport = {
     own: PregameTeamStatLine;
     opponent: PregameTeamStatLine;
   };
+  /** Támadás vs. engedett párok tengelyenként (a döntő tengely ezekből választ). */
+  matchupPairs?: MatchupPairRow[];
   matchContext?: PregameMatchContext;
   injuryImpact?: { own: PregameInjuryImpactReport; opponent: PregameInjuryImpactReport };
   /** A PER* skála viszonyítási pontja: a liga percekkel súlyozott PER*-átlaga. */
@@ -363,6 +365,12 @@ export type PregameTeamStatLine = {
   assistRate: number;
   /** A csapat védekezése által engedett FTA/FGA (%); `null`, ha nincs párosított meccs. */
   oppFtRateAllowed: number | null;
+  /** Engedett 3P% (%); `null`, ha nincs párosított meccs. */
+  oppThreePctAllowed: number | null;
+  /** Engedett OREB% (= 1 − DREB%, %); `null`, ha nincs párosított meccs. */
+  oppOrebRateAllowed: number | null;
+  /** Kényszerített TO rate (%); `null`, ha nincs párosított meccs. */
+  oppTurnoverRateAllowed: number | null;
 };
 
 /** Egy bajnoki fixture (`league_fixtures`) a mérkőzés-kontextushoz. */
@@ -742,6 +750,16 @@ const getStatValue = (team: NormalizedTeamStats, stat: string) => {
     case 'opp_ft_rate_allowed':
       // Csak párosított meccsekből ismert; hiányában kimarad a benchmarkból.
       return team.hasOpponentBox ? team.oppFtRateAllowed : Number.NaN;
+    case 'opp_three_pct_allowed':
+      return team.hasOpponentBox ? team.oppThreePctAllowed : Number.NaN;
+    case 'opp_three_rate_allowed':
+      return team.hasOpponentBox ? team.oppThreeRateAllowed : Number.NaN;
+    case 'opp_two_pct_allowed':
+      return team.hasOpponentBox ? team.oppTwoPctAllowed : Number.NaN;
+    case 'opp_oreb_rate_allowed':
+      return team.hasOpponentBox ? team.oppOrebRateAllowed : Number.NaN;
+    case 'opp_turnover_rate_allowed':
+      return team.hasOpponentBox ? team.oppTurnoverRateAllowed : Number.NaN;
     case 'efg':
       return team.efg;
     case 'val_per_game':
@@ -774,6 +792,19 @@ export type NormalizedTeamStats = TeamSeasonStat & {
   hasOpponentBox: boolean;
   /** A csapat védekezése által engedett FTA / FGA (az ellenfelek büntetőaránya), 0–1. */
   oppFtRateAllowed: number;
+  // A csapat védekezése által engedett mutatók (az ellenfelek támadása a csapat
+  // ellen, csak párosított meccsekből). A matchup-párok ezekből számolnak:
+  // saját támadás vs. ellenfél *engedett* érték.
+  /** Engedett 3P% (0–100). */
+  oppThreePctAllowed: number;
+  /** Engedett 3P arány (3PA / FGA, 0–1). */
+  oppThreeRateAllowed: number;
+  /** Engedett 2P% (0–100). */
+  oppTwoPctAllowed: number;
+  /** Engedett OREB% = ellenfél T-lep / (ellenfél T-lep + saját V-lep), 0–1 (= 1 − DREB%). */
+  oppOrebRateAllowed: number;
+  /** Kényszerített TO rate = ellenfél LV / ellenfél birtoklás, 0–1. */
+  oppTurnoverRateAllowed: number;
 };
 
 const computePossessions = (fga2: number, fga3: number, fta: number, oreb: number, tov: number) =>
@@ -809,6 +840,15 @@ export const normalizeTeamStats = (raw: TeamSeasonStat): NormalizedTeamStats => 
   const valPerGame = raw.val / games;
   const opponentFga = opponent ? opponent.fga2 + opponent.fga3 : 0;
   const oppFtRateAllowed = opponent && hasOpponentBox && opponentFga > 0 ? opponent.fta / opponentFga : 0;
+  // Engedett mutatók: az ellenfelek box score-ja a csapat ellen (párosított meccsek).
+  const oppThreePctAllowed = opponent && hasOpponentBox && opponent.fga3 > 0 ? (opponent.fgm3 / opponent.fga3) * 100 : 0;
+  const oppThreeRateAllowed = opponent && hasOpponentBox && opponentFga > 0 ? opponent.fga3 / opponentFga : 0;
+  const oppTwoPctAllowed = opponent && hasOpponentBox && opponent.fga2 > 0 ? (opponent.fgm2 / opponent.fga2) * 100 : 0;
+  const allowedOrebDenominator = opponent && hasOpponentBox ? opponent.oreb + opponent.ownDreb : 0;
+  const oppOrebRateAllowed = opponent && allowedOrebDenominator > 0 ? opponent.oreb / allowedOrebDenominator : 0;
+  const oppTurnoverRateAllowed = opponent && opponentPossessionsPerGame > 0
+    ? (opponent.tov / opponentGames) / opponentPossessionsPerGame
+    : 0;
 
   return {
     ...raw,
@@ -826,6 +866,11 @@ export const normalizeTeamStats = (raw: TeamSeasonStat): NormalizedTeamStats => 
     valPerGame: round(valPerGame, 1),
     hasOpponentBox: hasOpponentBox && orebDenominator > 0,
     oppFtRateAllowed: round(oppFtRateAllowed, 3),
+    oppThreePctAllowed: round(oppThreePctAllowed, 1),
+    oppThreeRateAllowed: round(oppThreeRateAllowed, 3),
+    oppTwoPctAllowed: round(oppTwoPctAllowed, 1),
+    oppOrebRateAllowed: round(oppOrebRateAllowed, 3),
+    oppTurnoverRateAllowed: round(oppTurnoverRateAllowed, 3),
   };
 };
 
@@ -840,6 +885,11 @@ const TEAM_STAT_KEYS = [
   'two_pct',
   'ft_rate',
   'opp_ft_rate_allowed',
+  'opp_three_pct_allowed',
+  'opp_three_rate_allowed',
+  'opp_two_pct_allowed',
+  'opp_oreb_rate_allowed',
+  'opp_turnover_rate_allowed',
   'efg',
   'val_per_game',
   'stl_per_game',
@@ -917,16 +967,37 @@ const scoreBelow = (benchmarks: LeagueTeamBenchmarks, team: NormalizedTeamStats,
 export type MatchupAxisKey = 'tempo' | 'perimeter' | 'paint' | 'free_throw' | 'rebound' | 'ball_security';
 
 /**
- * A meccs döntő tengelye: az a mutató, ahol a két csapat közti különbség a
- * liga szórásához mérve a legnagyobb. `z` előjele: pozitív = saját előny.
+ * Egy matchup-pár egyik iránya: a támadó csapat mutatója a védekező csapat
+ * *engedett* ugyanazon mutatójával szemben. `edge` = (támadó z + védekező
+ * engedett z) / 2, mindkettő a liga mediánjához és szórásához mérve;
+ * pozitív = a támadónak kedvez.
+ */
+export type MatchupPairSide = {
+  attackValue: string;
+  allowedValue: string;
+  edge: number;
+};
+
+/**
+ * A meccs döntő tengelye: az a mutató, ahol a két irány (saját támadás vs.
+ * ellenfél védekezés, ellenfél támadás vs. saját védekezés) éle közti
+ * különbség a legnagyobb. `z` = saját él − ellenfél él; pozitív = saját előny.
+ * Tempónál nincs „engedett” pár: ott `z` = (saját − ellenfél tempó) / liga-σ,
+ * az előjel csak a gyorsabb csapatot jelzi.
  */
 export type MatchupAxis = {
   axis: MatchupAxisKey;
   axisLabel: string;
   metricLabel: string;
+  /** Tempónál a saját tempó, párnál a saját támadó érték. */
   ownValue: string;
+  /** Tempónál az ellenfél tempója, párnál az ellenfél engedett értéke. */
   opponentValue: string;
   z: number;
+  /** Saját támadás vs. ellenfél engedett (tempónál nincs). */
+  ownAttack?: MatchupPairSide;
+  /** Ellenfél támadás vs. saját engedett (tempónál nincs). */
+  opponentAttack?: MatchupPairSide;
 };
 
 const MATCHUP_AXIS_LABELS: Record<MatchupAxisKey, string> = {
@@ -938,23 +1009,27 @@ const MATCHUP_AXIS_LABELS: Record<MatchupAxisKey, string> = {
   ball_security: 'labdabiztonság',
 };
 
-const MATCHUP_AXIS_METRICS: Array<{
-  stat: string;
-  axis: MatchupAxisKey;
+const formatPct100 = (v: number) => `${v.toFixed(1)}%`;
+const formatPct01 = (v: number) => `${(v * 100).toFixed(1)}%`;
+
+/**
+ * A matchup-párok: támadó mutató ↔ a védekező csapat engedett mutatója. Csak
+ * hatékonysági mutatók; a dobásmix (3P / 2P arány) stílus, nem előny.
+ */
+const MATCHUP_PAIR_METRICS: Array<{
+  axis: Exclude<MatchupAxisKey, 'tempo'>;
+  attackStat: string;
+  allowedStat: string;
   label: string;
+  allowedLabel: string;
   format: (value: number) => string;
   lowerIsBetter?: boolean;
-  /** Tempónál nincs „jobb” irány: az előjel csak a gyorsabb csapatot jelzi. */
-  neutral?: boolean;
 }> = [
-  { stat: 'pace', axis: 'tempo', label: 'tempó', format: v => `${v.toFixed(1)} birtoklás`, neutral: true },
-  { stat: 'three_rate', axis: 'perimeter', label: '3P arány', format: v => `${(v * 100).toFixed(1)}%` },
-  { stat: 'three_pct', axis: 'perimeter', label: '3P%', format: v => `${v.toFixed(1)}%` },
-  { stat: 'two_rate', axis: 'paint', label: '2P arány', format: v => `${(v * 100).toFixed(1)}%` },
-  { stat: 'two_pct', axis: 'paint', label: '2P%', format: v => `${v.toFixed(1)}%` },
-  { stat: 'ft_rate', axis: 'free_throw', label: 'FT arány', format: v => `${(v * 100).toFixed(1)}%` },
-  { stat: 'oreb_rate', axis: 'rebound', label: 'OREB%', format: v => `${(v * 100).toFixed(1)}%` },
-  { stat: 'turnover_rate', axis: 'ball_security', label: 'TO rate', format: v => `${(v * 100).toFixed(1)}%`, lowerIsBetter: true },
+  { axis: 'perimeter', attackStat: 'three_pct', allowedStat: 'opp_three_pct_allowed', label: '3P%', allowedLabel: 'engedett 3P%', format: formatPct100 },
+  { axis: 'paint', attackStat: 'two_pct', allowedStat: 'opp_two_pct_allowed', label: '2P%', allowedLabel: 'engedett 2P%', format: formatPct100 },
+  { axis: 'free_throw', attackStat: 'ft_rate', allowedStat: 'opp_ft_rate_allowed', label: 'FT arány', allowedLabel: 'engedett FT arány', format: formatPct01 },
+  { axis: 'rebound', attackStat: 'oreb_rate', allowedStat: 'opp_oreb_rate_allowed', label: 'OREB%', allowedLabel: 'engedett OREB%', format: formatPct01 },
+  { axis: 'ball_security', attackStat: 'turnover_rate', allowedStat: 'opp_turnover_rate_allowed', label: 'TO rate', allowedLabel: 'kényszerített TO rate', format: formatPct01, lowerIsBetter: true },
 ];
 
 /** A liga szórásának becslése a benchmark-percentilisekből: σ ≈ (P90 − P10) / 2,563. */
@@ -965,33 +1040,117 @@ const estimateLeagueStd = (benchmarks: LeagueTeamBenchmarks, team: NormalizedTea
   return Number.isFinite(std) && std > 0 ? std : null;
 };
 
-/** A döntő tengely: a legnagyobb |z| = |saját − ellenfél| / liga-σ mutató tengelye. */
+/** Egy érték z-je a liga mediánjához és szórásához mérve; `null`, ha nem számolható. */
+const leagueZ = (benchmarks: LeagueTeamBenchmarks, refTeam: NormalizedTeamStats, stat: string, value: number) => {
+  const std = estimateLeagueStd(benchmarks, refTeam, stat);
+  const median = benchmarks[refTeam.league]?.[refTeam.season]?.[stat]?.P50;
+  if (std === null || median === undefined || !Number.isFinite(value)) return null;
+  return (value - median) / std;
+};
+
+/**
+ * Egy matchup-pár éle: `attacker` támadó mutatója vs. `defender` engedett
+ * mutatója. `null`, ha bármelyik oldal hiányzik (pl. nincs párosított meccs) –
+ * ilyenkor nincs visszaesés azonos oldalas összevetésre.
+ */
+const computePairEdge = (
+  metric: (typeof MATCHUP_PAIR_METRICS)[number],
+  attacker: NormalizedTeamStats,
+  defender: NormalizedTeamStats,
+  benchmarks: LeagueTeamBenchmarks
+) => {
+  const attack = getStatValue(attacker, metric.attackStat);
+  const allowed = getStatValue(defender, metric.allowedStat);
+  const zAttack = leagueZ(benchmarks, attacker, metric.attackStat, attack);
+  const zAllowed = leagueZ(benchmarks, attacker, metric.allowedStat, allowed);
+  if (zAttack === null || zAllowed === null) return null;
+  const sign = metric.lowerIsBetter ? -1 : 1;
+  return { attack, allowed, edge: (sign * (zAttack + zAllowed)) / 2 };
+};
+
+const getPairMetric = (axis: Exclude<MatchupAxisKey, 'tempo'>) =>
+  MATCHUP_PAIR_METRICS.find(metric => metric.axis === axis)!;
+
+/** A döntő tengely: a legnagyobb |saját él − ellenfél él| (tempónál |Δ tempó| / liga-σ). */
 const getMatchupAxis = (
   ownTeam: NormalizedTeamStats,
   opponent: NormalizedTeamStats,
   benchmarks: LeagueTeamBenchmarks
 ): MatchupAxis | undefined => {
-  const candidates = MATCHUP_AXIS_METRICS
-    .map(metric => {
-      const own = getStatValue(ownTeam, metric.stat);
-      const opp = getStatValue(opponent, metric.stat);
-      const std = estimateLeagueStd(benchmarks, ownTeam, metric.stat);
-      if (!Number.isFinite(own) || !Number.isFinite(opp) || std === null) return null;
-      const raw = (own - opp) / std;
-      return { metric, own, opp, z: metric.lowerIsBetter ? -raw : raw };
-    })
-    .filter((item): item is NonNullable<typeof item> => Boolean(item))
-    .sort((a, b) => Math.abs(b.z) - Math.abs(a.z));
-  const top = candidates[0];
-  if (!top) return undefined;
-  return {
-    axis: top.metric.axis,
-    axisLabel: MATCHUP_AXIS_LABELS[top.metric.axis],
-    metricLabel: top.metric.label,
-    ownValue: top.metric.format(top.own),
-    opponentValue: top.metric.format(top.opp),
-    z: round(top.z, 2),
-  };
+  const candidates: MatchupAxis[] = [];
+
+  const paceStd = estimateLeagueStd(benchmarks, ownTeam, 'pace');
+  if (paceStd !== null && Number.isFinite(ownTeam.pace) && Number.isFinite(opponent.pace)) {
+    candidates.push({
+      axis: 'tempo',
+      axisLabel: MATCHUP_AXIS_LABELS.tempo,
+      metricLabel: 'tempó',
+      ownValue: `${ownTeam.pace.toFixed(1)} birtoklás`,
+      opponentValue: `${opponent.pace.toFixed(1)} birtoklás`,
+      z: round((ownTeam.pace - opponent.pace) / paceStd, 2),
+    });
+  }
+
+  MATCHUP_PAIR_METRICS.forEach(metric => {
+    const own = computePairEdge(metric, ownTeam, opponent, benchmarks);
+    const opp = computePairEdge(metric, opponent, ownTeam, benchmarks);
+    if (!own || !opp) return;
+    candidates.push({
+      axis: metric.axis,
+      axisLabel: MATCHUP_AXIS_LABELS[metric.axis],
+      metricLabel: metric.label,
+      ownValue: metric.format(own.attack),
+      opponentValue: metric.format(own.allowed),
+      z: round(own.edge - opp.edge, 2),
+      ownAttack: { attackValue: metric.format(own.attack), allowedValue: metric.format(own.allowed), edge: round(own.edge, 2) },
+      opponentAttack: { attackValue: metric.format(opp.attack), allowedValue: metric.format(opp.allowed), edge: round(opp.edge, 2) },
+    });
+  });
+
+  return candidates.sort((a, b) => Math.abs(b.z) - Math.abs(a.z))[0];
+};
+
+const signedZ = (z: number) => `${z >= 0 ? '+' : ''}${z.toFixed(1)}`;
+
+/** A döntő tengely egy mondatban (summary és UI közös szövege). */
+export const describeMatchupAxis = (axis: MatchupAxis) => {
+  if (!axis.ownAttack || !axis.opponentAttack) {
+    return `${axis.axisLabel} (${axis.metricLabel} ${axis.ownValue} vs ${axis.opponentValue}, z = ${signedZ(axis.z)})`;
+  }
+  return `${axis.axisLabel} – saját ${axis.metricLabel} ${axis.ownAttack.attackValue} vs. ellenfél engedett ${axis.ownAttack.allowedValue} (él ${signedZ(axis.ownAttack.edge)}), ellenfél ${axis.metricLabel} ${axis.opponentAttack.attackValue} vs. saját engedett ${axis.opponentAttack.allowedValue} (él ${signedZ(axis.opponentAttack.edge)}); nettó z = ${signedZ(axis.z)}`;
+};
+
+/** Minden matchup-pár (a riport „Matchup-párok” táblájához), tengelysorrendben. */
+const buildMatchupPairs = (
+  ownTeam: NormalizedTeamStats,
+  opponent: NormalizedTeamStats,
+  benchmarks: LeagueTeamBenchmarks
+): MatchupPairRow[] =>
+  MATCHUP_PAIR_METRICS.flatMap(metric => {
+    const own = computePairEdge(metric, ownTeam, opponent, benchmarks);
+    const opp = computePairEdge(metric, opponent, ownTeam, benchmarks);
+    if (!own || !opp) return [];
+    return [{
+      axis: metric.axis,
+      axisLabel: MATCHUP_AXIS_LABELS[metric.axis],
+      metricLabel: metric.label,
+      allowedLabel: metric.allowedLabel,
+      ownAttack: { attackValue: metric.format(own.attack), allowedValue: metric.format(own.allowed), edge: round(own.edge, 2) },
+      opponentAttack: { attackValue: metric.format(opp.attack), allowedValue: metric.format(opp.allowed), edge: round(opp.edge, 2) },
+      netZ: round(own.edge - opp.edge, 2),
+    }];
+  });
+
+/** A „Matchup-párok” tábla egy sora. */
+export type MatchupPairRow = {
+  axis: Exclude<MatchupAxisKey, 'tempo'>;
+  axisLabel: string;
+  metricLabel: string;
+  allowedLabel: string;
+  ownAttack: MatchupPairSide;
+  opponentAttack: MatchupPairSide;
+  /** Saját él − ellenfél él. */
+  netZ: number;
 };
 
 const getDominantAxis = (team: NormalizedTeamStats, benchmarks: LeagueTeamBenchmarks) => {
@@ -1590,28 +1749,58 @@ const buildVulnerabilities = (team: NormalizedTeamStats, benchmarks: LeagueTeamB
   return vulnerabilities;
 };
 
-/** Az OREB%-különbség z-értéke (saját − ellenfél) / liga-σ; `null`, ha nem számolható. */
+/**
+ * Lepattanó-matchup: a saját OREB% az ellenfél *engedett* OREB%-ával szemben
+ * (= 1 − az ellenfél DREB%-a). `z` a pár éle (lásd `computePairEdge`);
+ * `null`, ha nincs párosított meccs.
+ */
 const OREB_EDGE_Z = 1;
-const getOrebEdge = (ownTeam: NormalizedTeamStats, opponent: NormalizedTeamStats, benchmarks: LeagueTeamBenchmarks) => {
-  if (!ownTeam.hasOpponentBox || !opponent.hasOpponentBox) return null;
-  const std = estimateLeagueStd(benchmarks, ownTeam, 'oreb_rate');
-  if (std === null) return null;
-  return { z: (ownTeam.orebRate - opponent.orebRate) / std, own: ownTeam.orebRate, opponent: opponent.orebRate };
+const getOrebEdge = (attacker: NormalizedTeamStats, defender: NormalizedTeamStats, benchmarks: LeagueTeamBenchmarks) => {
+  const pair = computePairEdge(getPairMetric('rebound'), attacker, defender, benchmarks);
+  return pair ? { z: pair.edge, own: pair.attack, allowed: pair.allowed } : null;
+};
+/** A második esély elleni kockázat küszöbe (az ellenfél lepattanó-éle a saját védekezés ellen). */
+const OPPONENT_OREB_RISK_Z = 0.4;
+
+/** Ennyi |nettó z| felett a döntő tengely fókuszpont és X-faktor is. */
+const MATCHUP_AXIS_FOCUS_Z = 1;
+
+/** A döntő tengely fókuszpontja (irány szerint: erőltetni vagy elzárni). */
+const buildMatchupAxisFocus = (axis: MatchupAxis) => {
+  const z = signedZ(axis.z);
+  if (!axis.ownAttack || !axis.opponentAttack) {
+    return `Döntő tengely – tempó: ${axis.ownValue} vs ${axis.opponentValue} (z = ${z}) – a tempó feletti kontroll`;
+  }
+  return axis.z >= 0
+    ? `Döntő tengely – ${axis.axisLabel}: saját ${axis.metricLabel} ${axis.ownAttack.attackValue} vs. ellenfél engedett ${axis.ownAttack.allowedValue} (nettó z = ${z}) – ezt a matchupot kell erőltetni`
+    : `Döntő tengely – ${axis.axisLabel}: ellenfél ${axis.metricLabel} ${axis.opponentAttack.attackValue} vs. saját engedett ${axis.opponentAttack.allowedValue} (nettó z = ${z}) – ezt kell elzárni`;
 };
 
 const buildFocusPoints = (
   opponent: NormalizedTeamStats,
   ownTeam: NormalizedTeamStats,
   benchmarks: LeagueTeamBenchmarks,
-  xFactors?: XFactorInsight
+  xFactors?: XFactorInsight,
+  matchupAxis?: MatchupAxis
 ) => {
   const focus: string[] = [];
   let contingencyFocus: string | null = null;
 
-  // Egyértelmű lepattanó-előny (z ≥ 1) elsődleges fókusz, nem „ha nem működik” ág.
+  // Egyértelmű lepattanó-előny (saját OREB% vs. ellenfél engedett OREB%, él ≥ 1)
+  // elsődleges fókusz, nem „ha nem működik” ág.
   const orebEdge = getOrebEdge(ownTeam, opponent, benchmarks);
-  if (orebEdge && orebEdge.z >= OREB_EDGE_Z) {
-    focus.push(`T-lep támadás: ${(orebEdge.own * 100).toFixed(1)}% vs ${(orebEdge.opponent * 100).toFixed(1)}% OREB% (z = +${orebEdge.z.toFixed(1)}) – második esélyek maximalizálása`);
+  const hasOrebFocus = Boolean(orebEdge && orebEdge.z >= OREB_EDGE_Z);
+  // A döntő tengely az első fókuszpont, ha elég erős (a lepattanót a
+  // specifikusabb T-lep sor adja).
+  if (
+    matchupAxis
+    && Math.abs(matchupAxis.z) >= MATCHUP_AXIS_FOCUS_Z
+    && !(matchupAxis.axis === 'rebound' && hasOrebFocus)
+  ) {
+    focus.push(buildMatchupAxisFocus(matchupAxis));
+  }
+  if (orebEdge && hasOrebFocus) {
+    focus.push(`T-lep támadás: saját OREB% ${(orebEdge.own * 100).toFixed(1)}% vs. ellenfél engedett OREB% ${(orebEdge.allowed * 100).toFixed(1)}% (él z = +${orebEdge.z.toFixed(1)}) – második esélyek maximalizálása`);
   }
 
   if (scoreAbove(benchmarks, opponent, 'three_rate', 60)) {
@@ -1640,17 +1829,18 @@ const buildFocusPoints = (
     focus.push('Labdajáratásból előny építése');
   }
 
-  if (scoreBelow(benchmarks, opponent, 'three_pct', 40) && scoreAbove(benchmarks, ownTeam, 'three_rate', 60)) {
-    focus.push('Külső dobóterhelés növelése (ellenfél gyenge periméter-hatékonyság)');
+  // Saját támadás vs. ellenfél *védekezés*: az ellenfél engedett mutatóiból.
+  if (scoreAbove(benchmarks, opponent, 'opp_three_pct_allowed', 60) && scoreAbove(benchmarks, ownTeam, 'three_rate', 60)) {
+    focus.push(`Külső dobóterhelés növelése (az ellenfél engedett 3P%-a ${opponent.oppThreePctAllowed.toFixed(1)}%)`);
   }
-  if (scoreBelow(benchmarks, opponent, 'turnover_rate', 40) && scoreAbove(benchmarks, ownTeam, 'turnover_rate', 60)) {
-    focus.push('Labdabiztonság kiemelt, az ellenfél védekezése nem kényszerít labdaeladást');
+  if (scoreBelow(benchmarks, opponent, 'opp_turnover_rate_allowed', 40) && scoreAbove(benchmarks, ownTeam, 'turnover_rate', 60)) {
+    focus.push('Labdabiztonság kiemelt: az ellenfél védekezése kevés eladást kényszerít, a saját hibák döntenek');
   }
   if (scoreAbove(benchmarks, opponent, 'turnover_rate', 60) && scoreAbove(benchmarks, ownTeam, 'stl_per_game', 60)) {
     focus.push('Labdaszerzés maximalizálása, agresszív nyomás engedhető');
   }
-  if (scoreBelow(benchmarks, opponent, 'two_rate', 40) && scoreAbove(benchmarks, ownTeam, 'two_rate', 60)) {
-    focus.push('Festékelőny erőltetése (ellenfél alacsony 2P-fókusz)');
+  if (scoreAbove(benchmarks, opponent, 'opp_two_pct_allowed', 60) && scoreAbove(benchmarks, ownTeam, 'two_rate', 60)) {
+    focus.push(`Festékelőny erőltetése (az ellenfél engedett 2P%-a ${opponent.oppTwoPctAllowed.toFixed(1)}%)`);
   }
   if (
     isFoulProneDefense(opponent, benchmarks)
@@ -1665,7 +1855,7 @@ const buildFocusPoints = (
   if (
     !(orebEdge && orebEdge.z >= OREB_EDGE_Z)
     && scoreAbove(benchmarks, ownTeam, 'oreb_rate', 60)
-    && scoreBelow(benchmarks, opponent, 'oreb_rate', 40)
+    && scoreAbove(benchmarks, opponent, 'opp_oreb_rate_allowed', 60)
   ) {
     focus.push('OREB agresszivitás növelése, második esélyek kihasználása');
   }
@@ -1692,7 +1882,9 @@ const buildRiskNotes = (
   if (scoreAbove(benchmarks, opponent, 'ft_rate', 65)) {
     riskFlags.push('FT-rate volumen kockázat (fault + vonal)');
   }
-  if (scoreAbove(benchmarks, opponent, 'oreb_rate', 65)) {
+  // Ellenfél támadólepattanó vs. a saját *engedett* OREB%.
+  const opponentOrebEdge = getOrebEdge(opponent, ownTeam, benchmarks);
+  if (opponentOrebEdge && opponentOrebEdge.z >= OPPONENT_OREB_RISK_Z) {
     riskFlags.push('OREB volumen kockázat (második esélyek)');
   }
   if (scoreAbove(benchmarks, opponent, 'stl_per_game', 60) && scoreAbove(benchmarks, ownTeam, 'turnover_rate', 50)) {
@@ -1791,28 +1983,42 @@ const X_FACTOR_CANDIDATES: Record<'perimeter' | 'turnover' | 'rebound_edge' | 't
   paint: { key: 'paint', label: 'festék kontrollja és faultterhelés menedzselése', short: 'festék kontroll' },
 };
 
+/** A döntő tengely → X-faktor jelölt. */
+const AXIS_X_FACTOR: Record<MatchupAxisKey, keyof typeof X_FACTOR_CANDIDATES> = {
+  tempo: 'tempo',
+  perimeter: 'perimeter',
+  paint: 'paint',
+  free_throw: 'paint',
+  rebound: 'rebound_edge',
+  ball_security: 'turnover',
+};
+
 const buildXFactors = (
   opponent: NormalizedTeamStats,
   ownTeam: NormalizedTeamStats,
   benchmarks: LeagueTeamBenchmarks,
   threats: string[],
-  vulnerabilities: string[]
+  vulnerabilities: string[],
+  matchupAxis?: MatchupAxis
 ): XFactorInsight => {
   const candidates: XFactorCandidate[] = [];
+  // Az elég erős döntő tengely (|nettó z| ≥ 1) az elsődleges X-faktor.
+  if (matchupAxis && Math.abs(matchupAxis.z) >= MATCHUP_AXIS_FOCUS_Z) {
+    candidates.push(X_FACTOR_CANDIDATES[AXIS_X_FACTOR[matchupAxis.axis]]);
+  }
 
   const hasPerimeterThreat = threats.some(item => item.includes('tripla') || item.includes('3P'));
   const hasTurnoverWeakness = vulnerabilities.some(item => item.toLowerCase().includes('labdaeladás'));
-  const hasReboundOpportunity = vulnerabilities.some(item => item.toLowerCase().includes('lepattanó'));
   const tempoScore = getPercentileScore(benchmarks, opponent, 'pace');
 
   const orebEdge = getOrebEdge(ownTeam, opponent, benchmarks);
-  if (orebEdge && orebEdge.z >= OREB_EDGE_Z) candidates.push(X_FACTOR_CANDIDATES.rebound_edge);
-  if (hasPerimeterThreat) candidates.push(X_FACTOR_CANDIDATES.perimeter);
-  if (hasTurnoverWeakness) candidates.push(X_FACTOR_CANDIDATES.turnover);
-  if (hasReboundOpportunity && !candidates.some(item => item.key === 'rebound_edge')) {
-    candidates.push(X_FACTOR_CANDIDATES.rebound_edge);
-  }
-  if (tempoScore >= 70) candidates.push(X_FACTOR_CANDIDATES.tempo);
+  const addCandidate = (candidate: XFactorCandidate) => {
+    if (!candidates.some(item => item.key === candidate.key)) candidates.push(candidate);
+  };
+  if (orebEdge && orebEdge.z >= OREB_EDGE_Z) addCandidate(X_FACTOR_CANDIDATES.rebound_edge);
+  if (hasPerimeterThreat) addCandidate(X_FACTOR_CANDIDATES.perimeter);
+  if (hasTurnoverWeakness) addCandidate(X_FACTOR_CANDIDATES.turnover);
+  if (tempoScore >= 70) addCandidate(X_FACTOR_CANDIDATES.tempo);
   if (!candidates.some(item => item.key === 'paint')) candidates.push(X_FACTOR_CANDIDATES.paint);
 
   const primary = candidates[0];
@@ -1820,7 +2026,7 @@ const buildXFactors = (
   // csak egy jelöltet adnak, a maradék tengelyek közül a legerősebb jelzésű lép
   // be (saját OREB, ellenfél labdaeladás, ellenfél tripla-profil, ellenfél tempó).
   const fallbackIntensity: Record<string, number> = {
-    rebound_edge: getPercentileScore(benchmarks, ownTeam, 'oreb_rate'),
+    rebound_edge: (getPercentileScore(benchmarks, ownTeam, 'oreb_rate') + getPercentileScore(benchmarks, opponent, 'opp_oreb_rate_allowed')) / 2,
     turnover: getPercentileScore(benchmarks, opponent, 'turnover_rate'),
     perimeter: (getPercentileScore(benchmarks, opponent, 'three_rate') + getPercentileScore(benchmarks, opponent, 'three_pct')) / 2,
     tempo: tempoScore,
@@ -1864,7 +2070,7 @@ const buildXFactorImpact = (
     ) / 200;
     const reboundIntensity = (
       getPercentileScore(benchmarks, ownTeam, 'oreb_rate') +
-      (100 - getPercentileScore(benchmarks, opponent, 'oreb_rate'))
+      getPercentileScore(benchmarks, opponent, 'opp_oreb_rate_allowed')
     ) / 200;
     const tempoIntensity = clamp(
       (Math.abs(getPercentileScore(benchmarks, ownTeam, 'pace') - getPercentileScore(benchmarks, opponent, 'pace')) +
@@ -1909,7 +2115,7 @@ const buildRiskScenarios = (
   const scenarios: RiskScenario[] = [];
 
   const oppFtScore = getPercentileScore(benchmarks, opponent, 'ft_rate');
-  const oppOrebScore = getPercentileScore(benchmarks, opponent, 'oreb_rate');
+  const oppOrebScore = (getPercentileScore(benchmarks, opponent, 'oreb_rate') + getPercentileScore(benchmarks, ownTeam, 'opp_oreb_rate_allowed')) / 2;
   const oppStlScore = getPercentileScore(benchmarks, opponent, 'stl_per_game');
   const ownToScore = getPercentileScore(benchmarks, ownTeam, 'turnover_rate');
   const oppThreeBlend =
@@ -2278,7 +2484,7 @@ const buildSummary = (
   const offense = profile.offense.length > 0 ? profile.offense.join(', ') : 'kiegyensúlyozott';
   const defense = profile.defense.length > 0 ? profile.defense.join(', ') : 'kiegyensúlyozott';
   const matchupAxisText = matchupAxis
-    ? ` Döntő tengely: ${matchupAxis.axisLabel} (${matchupAxis.metricLabel} ${matchupAxis.ownValue} vs ${matchupAxis.opponentValue}, z = ${matchupAxis.z >= 0 ? '+' : ''}${matchupAxis.z.toFixed(1)} – a legnagyobb, liga-szórással mért eltérés).`
+    ? ` Döntő tengely: ${describeMatchupAxis(matchupAxis)}.`
     : '';
 
   const viewpointLine = `Elemzés nézőpontja: ${ownTeamName}`;
@@ -2759,12 +2965,13 @@ export const analyzePreGameScouting = (
     injuryImpact.own.logit + injuryImpact.opponent.logit,
     extras?.matchContext
   );
-  const xFactors = buildXFactors(normalizedOpponent, normalizedOwn, leagueBenchmarks, threats, vulnerabilities);
+  const matchupAxis = getMatchupAxis(normalizedOwn, normalizedOpponent, leagueBenchmarks);
+  const xFactors = buildXFactors(normalizedOpponent, normalizedOwn, leagueBenchmarks, threats, vulnerabilities, matchupAxis);
   const baseXFactorImpact = buildXFactorImpact(xFactors, normalizedOpponent, normalizedOwn, leagueBenchmarks);
   const riskNotes = buildRiskNotes(normalizedOpponent, normalizedOwn, leagueBenchmarks);
   const tempoControlNote = buildTempoControlNote(normalizedOpponent, normalizedOwn, leagueBenchmarks);
   const matchupRealizationNote = buildMatchupRealizationNote(positionComparison, opponentStyle);
-  const focusPoints = buildFocusPoints(normalizedOpponent, normalizedOwn, leagueBenchmarks, xFactors);
+  const focusPoints = buildFocusPoints(normalizedOpponent, normalizedOwn, leagueBenchmarks, xFactors, matchupAxis);
   const positionComparisonNote = buildCriticalMatchupNote(positionComparison, winProbability, ownTeam.teamName);
   const { perimeterDelta, frontcourtDelta } = summarizePositionDeltas(positionComparison);
   const varianceDrivers = buildVarianceDrivers(normalizedOpponent, normalizedOwn, leagueBenchmarks, riskNotes.flags);
@@ -2850,7 +3057,6 @@ export const analyzePreGameScouting = (
     { defensiveDataLimited: ownStyle.defense.length === 0 }
   );
   const dominantAxis = getDominantAxis(normalizedOpponent, leagueBenchmarks);
-  const matchupAxis = getMatchupAxis(normalizedOwn, normalizedOpponent, leagueBenchmarks);
   const significantMatchups = buildSignificantMatchups(positionComparison);
   const llmContext: ScoutingReportLLMContext = {
     opponentTempoDescriptor,
@@ -2921,6 +3127,9 @@ export const analyzePreGameScouting = (
         orebRate: normalizedOwn.hasOpponentBox ? round(normalizedOwn.orebRate * 100, 1) : null,
         assistRate: round(normalizedOwn.assistRate * 100, 1),
         oppFtRateAllowed: normalizedOwn.hasOpponentBox ? round(normalizedOwn.oppFtRateAllowed * 100, 1) : null,
+        oppThreePctAllowed: normalizedOwn.hasOpponentBox ? normalizedOwn.oppThreePctAllowed : null,
+        oppOrebRateAllowed: normalizedOwn.hasOpponentBox ? round(normalizedOwn.oppOrebRateAllowed * 100, 1) : null,
+        oppTurnoverRateAllowed: normalizedOwn.hasOpponentBox ? round(normalizedOwn.oppTurnoverRateAllowed * 100, 1) : null,
       },
       opponent: {
         pace: normalizedOpponent.pace,
@@ -2933,8 +3142,12 @@ export const analyzePreGameScouting = (
         orebRate: normalizedOpponent.hasOpponentBox ? round(normalizedOpponent.orebRate * 100, 1) : null,
         assistRate: round(normalizedOpponent.assistRate * 100, 1),
         oppFtRateAllowed: normalizedOpponent.hasOpponentBox ? round(normalizedOpponent.oppFtRateAllowed * 100, 1) : null,
+        oppThreePctAllowed: normalizedOpponent.hasOpponentBox ? normalizedOpponent.oppThreePctAllowed : null,
+        oppOrebRateAllowed: normalizedOpponent.hasOpponentBox ? round(normalizedOpponent.oppOrebRateAllowed * 100, 1) : null,
+        oppTurnoverRateAllowed: normalizedOpponent.hasOpponentBox ? round(normalizedOpponent.oppTurnoverRateAllowed * 100, 1) : null,
       },
     },
+    matchupPairs: buildMatchupPairs(normalizedOwn, normalizedOpponent, leagueBenchmarks),
     riskFlags: riskNotes.flags,
     matchContext: extras?.matchContext ?? undefined,
     injuryImpact,

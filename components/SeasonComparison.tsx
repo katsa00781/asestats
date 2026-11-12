@@ -14496,7 +14496,19 @@ export function SeasonComparison({
                         {llmContext?.matchupAxis ? (
                           <div className="text-primary mt-1">
                             {llmContext.matchupAxis.axisLabel}
-                            <span className="text-secondary"> · {llmContext.matchupAxis.metricLabel} {llmContext.matchupAxis.ownValue} vs {llmContext.matchupAxis.opponentValue} (z = <span className="font-mono tabular-nums">{llmContext.matchupAxis.z >= 0 ? '+' : ''}{llmContext.matchupAxis.z.toFixed(1)}</span>)</span>
+                            {llmContext.matchupAxis.ownAttack && llmContext.matchupAxis.opponentAttack ? (
+                              <>
+                                <span className="text-secondary"> · nettó z = <span className="font-mono tabular-nums">{llmContext.matchupAxis.z >= 0 ? '+' : ''}{llmContext.matchupAxis.z.toFixed(1)}</span></span>
+                                <div className="text-secondary mt-1">
+                                  Saját {llmContext.matchupAxis.metricLabel} <span className="font-mono tabular-nums">{llmContext.matchupAxis.ownAttack.attackValue}</span> vs. engedett <span className="font-mono tabular-nums">{llmContext.matchupAxis.ownAttack.allowedValue}</span>
+                                </div>
+                                <div className="text-secondary">
+                                  Ellenfél {llmContext.matchupAxis.metricLabel} <span className="font-mono tabular-nums">{llmContext.matchupAxis.opponentAttack.attackValue}</span> vs. engedett <span className="font-mono tabular-nums">{llmContext.matchupAxis.opponentAttack.allowedValue}</span>
+                                </div>
+                              </>
+                            ) : (
+                              <span className="text-secondary"> · {llmContext.matchupAxis.metricLabel} {llmContext.matchupAxis.ownValue} vs {llmContext.matchupAxis.opponentValue} (z = <span className="font-mono tabular-nums">{llmContext.matchupAxis.z >= 0 ? '+' : ''}{llmContext.matchupAxis.z.toFixed(1)}</span>)</span>
+                            )}
                           </div>
                         ) : (
                           <div className="text-primary mt-1">{axisLabelMap[llmContext?.opponentDominantAxis ?? 'periméter'] ?? 'periméter'}</div>

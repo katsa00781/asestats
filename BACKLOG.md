@@ -811,6 +811,31 @@ egymás elleni meccsek közt jelenik meg. A 2024/25-ös szezonnézetben nincs do
   csapatnál) – keret-import csapat-hozzárendelési hiba gyanúja, döntés előtt nem nyúltunk hozzá.
 - Mobil jegyzet: `asestatmobile/docs/mobile-sync/2026-11-08-dobasterkep-zonak-h21.md` (összesítővé bővítve: H21 + H22).
 
+**H25 – Pregame riportgenerátor: 3. javítási lista (2026-11-12)** – folyamatban
+
+Az ASE–Alba riport 7 hibája + 2 apróság. Felhasználói döntések: (#1) tengelyenként két
+matchup-pár, pár-él = (támadó z + védekező engedett z) / 2, tengely z = saját él − ellenfél él;
+(#2) a pozíciós matchup a teljes kerettel számol, a hiányzó-lépés egyedül korrigál, nettó
+veszteséggel (kieső − pótlás) és meccsarány-súllyal (#3).
+
+- [x] **P1 – Matchup-párok (#1, `@core`)**: a döntő tengely és az OREB-fókusz azonos oldalt
+  hasonlított (ASE 3P% vs. Alba 3P%). Új engedett mutatók a `TeamOpponentBox`-ból (engedett
+  3P%, 2P%, 3P arány, OREB% = 1 − DREB%, kényszerített TO rate) + benchmarkjaik; `getMatchupAxis`
+  párokból (3P%, 2P%, FT arány, OREB%, TO rate; a tempó kétcsapatos marad, a dobásmix kikerült);
+  új `matchupPairs` riportmező és „Matchup-párok” exporttábla, a csapattáblában az engedett sorok.
+  A |nettó z| ≥ 1 tengely az első fókuszpont és az elsődleges X-faktor. Az OREB-fókusz és az OREB
+  kockázat pár-élből; a „Külső dobóterhelés”, „Festékelőny”, „Labdabiztonság” fókusz az ellenfél
+  engedett mutatóiból; az ellenfél gyenge támadólepattanózása már nem ad `rebound_edge`-et.
+  ASE–Alba: periméter, ASE 3P% 40,7% vs. Alba engedett 33,2% (él +1,5), Alba 32,3% vs. ASE
+  engedett 31,6% (él +0,1), nettó z = +1,4; lepattanó: 43,2% vs. engedett 23,9% → él +0,6 (a
+  korábbi „z = +1,8” azonos oldalas volt), ezért nincs T-lep fókusz.
+- [ ] **P2 – Hiányzók: teljes keret + nettó, meccsarány-súly (#2, #3) + WS* normalizálás**
+- [ ] **P3 – Forgatókönyv-inputok, kockázati swing ugyanabból a függvényből (#4)**
+- [ ] **P4 – Dobástérkép: ütközés, help-forrás, engedett zónatábla (#5–#7)**
+- [ ] **P5 – Módszertan-függelék az exportban**
+- [ ] **Böngészős ellenőrzés** (felhasználó): pregame ASE–Alba, MD export.
+- Mobil jegyzet: `asestatmobile/docs/mobile-sync/2026-11-12-pregame-riport-h24.md` (H25 szakaszokkal bővítve).
+
 **H24 – Pregame riportgenerátor: 2. javítási lista ✓ (2026-11-12)** – P1–P3 kész, böngészős ellenőrzés nyitva
 
 Felhasználói döntések: hiányzó-szorzó k = 2,5 (logit), csapatonkénti „Keret ellenőrizve” jelölő,

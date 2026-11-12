@@ -908,12 +908,28 @@ export function pregameReportToMd(report: ScoutingReport, seasonName?: string): 
     lines.push(`| TO rate | ${ts.own.turnoverRate.toFixed(1)}% | ${ts.opponent.turnoverRate.toFixed(1)}% |`);
     lines.push(`| FT arány | ${ts.own.ftRate.toFixed(1)}% | ${ts.opponent.ftRate.toFixed(1)}% |`);
     lines.push(`| OREB% | ${orebCell(ts.own)} | ${orebCell(ts.opponent)} |`);
-    const allowedFtCell = (line: typeof ts.own) => (line.oppFtRateAllowed === null ? '–' : `${line.oppFtRateAllowed.toFixed(1)}%`);
-    lines.push(`| Engedett FT arány (ellenfél FTA/FGA ellenük) | ${allowedFtCell(ts.own)} | ${allowedFtCell(ts.opponent)} |`);
+    const allowedCell = (value: number | null | undefined) => (value == null ? '–' : `${value.toFixed(1)}%`);
+    lines.push(`| Engedett FT arány (ellenfél FTA/FGA ellenük) | ${allowedCell(ts.own.oppFtRateAllowed)} | ${allowedCell(ts.opponent.oppFtRateAllowed)} |`);
+    lines.push(`| Engedett 3P% | ${allowedCell(ts.own.oppThreePctAllowed)} | ${allowedCell(ts.opponent.oppThreePctAllowed)} |`);
+    lines.push(`| Engedett OREB% (= 1 − DREB%) | ${allowedCell(ts.own.oppOrebRateAllowed)} | ${allowedCell(ts.opponent.oppOrebRateAllowed)} |`);
+    lines.push(`| Kényszerített TO rate | ${allowedCell(ts.own.oppTurnoverRateAllowed)} | ${allowedCell(ts.opponent.oppTurnoverRateAllowed)} |`);
     lines.push(`| Assziszt arány | ${ts.own.assistRate.toFixed(1)}% | ${ts.opponent.assistRate.toFixed(1)}% |`);
     lines.push(``, `*Tempó = a két csapat (FGA + 0,44·FTA + LV − T-lep) birtoklásbecslésének meccsenkénti átlaga. OREB% = saját T-lep / (saját T-lep + ellenfél V-lep) a mindkét oldali box score-os meccseken. FT arány = FTA / FGA; engedett FT arány = az ellenfelek FTA / FGA-ja a csapat ellen (a „Sokat faultoló védekezés” címke a liga 70. percentilise felett).${
       ts.own.paceFromOwnOnly || ts.opponent.paceFromOwnOnly ? ' ¹ Ellenfél box score nélkül: csak a saját birtoklásbecslés.' : ''
     }*`);
+  }
+
+  if (report.matchupPairs && report.matchupPairs.length > 0) {
+    // A taktikai következtetések (döntő tengely, OREB-fókusz) erre épülnek:
+    // támadás vs. a másik csapat *engedett* értéke, nem azonos oldalak.
+    const z = (v: number) => `${v >= 0 ? '+' : ''}${v.toFixed(1)}`;
+    lines.push(``, `## Matchup-párok (támadás vs. engedett)`, ``);
+    lines.push(`| Tengely | ${report.ownTeamName} támadás vs. ${report.opponentTeamName} engedett | Él | ${report.opponentTeamName} támadás vs. ${report.ownTeamName} engedett | Él | Nettó z |`);
+    lines.push(`|---|---|---|---|---|---|`);
+    for (const pair of report.matchupPairs) {
+      lines.push(`| ${pair.axisLabel} (${pair.metricLabel}) | ${pair.ownAttack.attackValue} vs. ${pair.ownAttack.allowedValue} | ${z(pair.ownAttack.edge)} | ${pair.opponentAttack.attackValue} vs. ${pair.opponentAttack.allowedValue} | ${z(pair.opponentAttack.edge)} | ${z(pair.netZ)} |`);
+    }
+    lines.push(``, `*Él = (támadó z + védekező engedett z) / 2, a liga mediánjához és szórásához (σ ≈ (P90 − P10) / 2,563) mérve; TO rate-nél előjelváltással. Nettó z = saját él − ellenfél él; a döntő tengely a legnagyobb |nettó z|.*`);
   }
 
   if (report.ownTeamProfile) {
