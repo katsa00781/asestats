@@ -174,6 +174,12 @@ const SHOWN_PROB_SPAN = 0.94;
 const toShownPct = (z: number) => round((SHOWN_PROB_FLOOR + SHOWN_PROB_SPAN * sigmoid(z)) * 100, 1);
 /** Az „50%-nál ennyi pp” modellhatás logitban (dp/dz = 0,25 50%-nál). */
 const ppAtEvenToLogit = (pp: number) => pp / 25;
+/**
+ * Egy logit-eltolás tényleges pp-hatása a végső esélyen. Ezt használja a
+ * forgatókönyv-tábla, a kockázati tábla és az X-faktor is – egyetlen skála.
+ */
+const realizedLogitPp = (finalLogit: number, baseShownPct: number, deltaLogit: number) =>
+  deltaLogit === 0 ? 0 : round(toShownPct(finalLogit + deltaLogit) - baseShownPct, 1);
 /** A rating-különbség → logit osztója (a korábbi `1/(1+e^(−diff/18))`). */
 const RATING_LOGIT_DIVISOR = 18;
 /** A pozíciós matchup: súlyozott VAL/36-különbség egységenként ennyi logit (≈10 pp 50%-nál). */
@@ -211,7 +217,39 @@ export type RiskScenario = {
   title: string;
   trigger: string;
   instantResponse: string;
+  /** A modellhatás „50%-os” pp-ben (nyers input; a variancia-forgatókönyv ebből számol). */
+  swingPpAtEven: number;
+  /**
+   * A tényleges (végső) esélyen realizált pp – ugyanazzal a `realizedPp`
+   * függvénnyel, mint a forgatókönyv-tábla és az X-faktor.
+   */
   estimatedOwnSwingPct: number;
+};
+
+/**
+ * A forgatókönyvek nyers inputjai (ellenőrzéshez / debug-loghoz). Minden pp
+ * „50%-os” modellhatás; a `realizedPp` a végső esélyen ténylegesen látszó eltérés.
+ */
+export type ScenarioDiagnostics = {
+  baseLogit: number;
+  basePct: number;
+  controlled: {
+    primaryPpAtEven: number;
+    secondaryPpAtEven: number;
+    totalPpAtEven: number;
+    logit: number;
+    realizedPp: number;
+  };
+  highVariance: {
+    varianceDriverCount: number;
+    downsidePpAtEven: number;
+    variancePenaltyPp: number;
+    confidence: 'Low' | 'Medium' | 'High';
+    confidenceMultiplier: number;
+    totalPpAtEven: number;
+    logit: number;
+    realizedPp: number;
+  };
 };
 
 export type FanSummary = {
@@ -279,6 +317,8 @@ export type ScoutingReport = {
   xFactorContext?: PreGameXFactorContext;
   xFactorImpact?: XFactorImpact;
   scenarioOutcomes?: ScenarioOutcome[];
+  /** A forgatókönyvek nyers inputjai (lásd `ScenarioDiagnostics`). */
+  scenarioDiagnostics?: ScenarioDiagnostics;
   riskScenarios?: RiskScenario[];
   fanSummary?: FanSummary;
   calibrationDiagnostics?: CalibrationDiagnostics;
@@ -2176,6 +2216,7 @@ const buildRiskScenarios = (
       title: 'Faultterhelés felpörgése',
       trigger: 'Az ellenfél sokat jut vonalra az első félidőben.',
       instantResponse: 'Korai rotáció, festéksegítés késleltetése, verticality-fókusz.',
+      swingPpAtEven: dynamicSwing(2.4, oppFtScore, 6.4),
       estimatedOwnSwingPct: dynamicSwing(2.4, oppFtScore, 6.4),
     });
   }
@@ -2185,6 +2226,7 @@ const buildRiskScenarios = (
       title: 'Második esély pontok',
       trigger: 'Két egymást követő támadólepattanó ugyanabban a szakaszban.',
       instantResponse: 'Plusz boxout szabály, gyengeoldali zárás, hosszú lepattanó-vadászat.',
+      swingPpAtEven: dynamicSwing(2.1, oppOrebScore, 5.8),
       estimatedOwnSwingPct: dynamicSwing(2.1, oppOrebScore, 5.8),
     });
   }
@@ -2194,6 +2236,7 @@ const buildRiskScenarios = (
       title: 'Nyomás alatti eladások',
       trigger: '3+ gyorsindítás kapott pont labdaeladásból negyeden belül.',
       instantResponse: 'Két labdakezelős felállás, rövid outlet, első passz egyszerűsítése.',
+      swingPpAtEven: dynamicSwing(2.6, (oppStlScore + ownToScore) / 2, 6.8),
       estimatedOwnSwingPct: dynamicSwing(2.6, (oppStlScore + ownToScore) / 2, 6.8),
     });
   }
@@ -2203,6 +2246,7 @@ const buildRiskScenarios = (
       title: 'Periméter-run veszély',
       trigger: 'Két gyors tripla ugyanabból az akciótípusból.',
       instantResponse: 'Switch-szigorítás, agresszívabb első closeout, zóna-look 1-2 támadásra.',
+      swingPpAtEven: dynamicSwing(2.2, oppThreeBlend, 6.3),
       estimatedOwnSwingPct: dynamicSwing(2.2, oppThreeBlend, 6.3),
     });
   }
@@ -2217,6 +2261,7 @@ const buildRiskScenarios = (
       title: 'Tripla-variancia',
       trigger: 'Egy negyeden belül 3+ tripla-különbség bármelyik irányban.',
       instantResponse: 'Closeout-fegyelem a dobókra, saját oldalon a rossz ritmusú korai triplák visszafogása.',
+      swingPpAtEven: dynamicSwing(1.6, Math.max(oppThreeBlend, ownThreeBlend), 4.8),
       estimatedOwnSwingPct: dynamicSwing(1.6, Math.max(oppThreeBlend, ownThreeBlend), 4.8),
     });
   }
@@ -2225,6 +2270,7 @@ const buildRiskScenarios = (
       title: 'Faultterhelés felpörgése',
       trigger: 'Bármelyik csapat a negyed felénél bónuszba kerül.',
       instantResponse: 'Fault-fegyelem a kulcsjátékosokon, korai rotáció a 2 faultos játékosnál.',
+      swingPpAtEven: dynamicSwing(1.6, Math.max(oppFtScore, getPercentileScore(benchmarks, ownTeam, 'ft_rate')), 4.6),
       estimatedOwnSwingPct: dynamicSwing(1.6, Math.max(oppFtScore, getPercentileScore(benchmarks, ownTeam, 'ft_rate')), 4.6),
     });
   }
@@ -2234,6 +2280,7 @@ const buildRiskScenarios = (
       title: 'Tempó-szétcsúszás',
       trigger: 'A meccs a saját tempó felett pörög két negyeden át.',
       instantResponse: 'Támadóidő mélyebb kihasználása, támadólepattanó-visszafogás, korai visszarendeződés.',
+      swingPpAtEven: dynamicSwing(1.8, paceGap, 5.2),
       estimatedOwnSwingPct: dynamicSwing(1.8, paceGap, 5.2),
     });
   }
@@ -2244,6 +2291,7 @@ const buildRiskScenarios = (
       title: BASELINE_RISK_SCENARIO_TITLE,
       trigger: 'Egyik kockázati trigger sem aktív.',
       instantResponse: 'Félpályás ritmuskontroll, stabil kezdő rotáció és tudatosan időzített timeout a spacing resethez.',
+      swingPpAtEven: 0,
       estimatedOwnSwingPct: 0,
     });
   }
@@ -2254,24 +2302,54 @@ const buildRiskScenarios = (
 /** A forgatókönyvek modell-eltolása logitban (az 50%-os pp-ből átváltva). */
 type ScenarioLogits = { controlled: number; highVariance: number };
 
+/**
+ * A két forgatókönyv logitja és nyers inputjai. A két forgatókönyv független:
+ * a kontrollált az X-faktorokból, a magas varianciájú a variancia-forrásokból
+ * és a kockázati triggerek (50%-os) swingjéből számol.
+ */
 const buildScenarioLogits = (
-  winProbability: Pick<ScoutingReport['winProbability'], 'confidence'>,
+  winProbability: Pick<ScoutingReport['winProbability'], 'confidence' | 'ownPct' | 'breakdown'>,
   xFactorPpAtEven: { primaryDeltaPct: number; secondaryDeltaPct: number },
   varianceDrivers: string[],
   riskScenarios: RiskScenario[]
-): ScenarioLogits => {
-  const downside = Math.abs(riskScenarios.reduce((sum, item) => sum + Math.min(item.estimatedOwnSwingPct, 0), 0));
+): { logits: ScenarioLogits; diagnostics: ScenarioDiagnostics } => {
+  const downside = Math.abs(riskScenarios.reduce((sum, item) => sum + Math.min(item.swingPpAtEven, 0), 0));
   const confidenceMultiplier = winProbability.confidence === 'High'
     ? 0.85
     : winProbability.confidence === 'Medium'
       ? 1
       : 1.15;
-  // A két forgatókönyv független: a kontrollált az X-faktorokból, a magas
-  // varianciájú a variancia-forrásokból és a kockázati triggerekből számol.
   const variancePenaltyPp = clamp(0.9 + varianceDrivers.length * 1.15 + downside * 0.16, 1.2, 8.6);
+  const controlledPp = xFactorPpAtEven.primaryDeltaPct + xFactorPpAtEven.secondaryDeltaPct;
+  const highVariancePp = variancePenaltyPp * confidenceMultiplier + downside * 0.32;
+  const logits = {
+    controlled: ppAtEvenToLogit(controlledPp),
+    highVariance: -ppAtEvenToLogit(highVariancePp),
+  };
+  const baseLogit = winProbability.breakdown?.finalLogit ?? logit(clamp(winProbability.ownPct / 100, 0.01, 0.99));
   return {
-    controlled: ppAtEvenToLogit(xFactorPpAtEven.primaryDeltaPct + xFactorPpAtEven.secondaryDeltaPct),
-    highVariance: -ppAtEvenToLogit(variancePenaltyPp * confidenceMultiplier + downside * 0.32),
+    logits,
+    diagnostics: {
+      baseLogit: round(baseLogit, 3),
+      basePct: winProbability.ownPct,
+      controlled: {
+        primaryPpAtEven: xFactorPpAtEven.primaryDeltaPct,
+        secondaryPpAtEven: xFactorPpAtEven.secondaryDeltaPct,
+        totalPpAtEven: round(controlledPp, 2),
+        logit: round(logits.controlled, 3),
+        realizedPp: realizedLogitPp(baseLogit, winProbability.ownPct, logits.controlled),
+      },
+      highVariance: {
+        varianceDriverCount: varianceDrivers.length,
+        downsidePpAtEven: round(downside, 2),
+        variancePenaltyPp: round(variancePenaltyPp, 2),
+        confidence: winProbability.confidence,
+        confidenceMultiplier,
+        totalPpAtEven: round(highVariancePp, 2),
+        logit: round(logits.highVariance, 3),
+        realizedPp: realizedLogitPp(baseLogit, winProbability.ownPct, logits.highVariance),
+      },
+    },
   };
 };
 
@@ -2285,13 +2363,14 @@ const buildScenarioOutcomes = (
   const baseOwn = winProbability.ownPct;
   const baseLogit = winProbability.breakdown?.finalLogit ?? logit(clamp(baseOwn / 100, 0.01, 0.99));
   const makeScenario = (key: string, label: string, deltaLogit: number, note: string): ScenarioOutcome => {
-    const ownPct = deltaLogit === 0 ? baseOwn : toShownPct(baseLogit + deltaLogit);
+    const deltaVsBase = realizedLogitPp(baseLogit, baseOwn, deltaLogit);
+    const ownPct = round(baseOwn + deltaVsBase, 1);
     return {
       key,
       label,
       ownPct,
       opponentPct: round(100 - ownPct, 1),
-      deltaVsBase: round(ownPct - baseOwn, 1),
+      deltaVsBase,
       note,
     };
   };
@@ -2313,7 +2392,7 @@ const buildScenarioOutcomes = (
       'high_variance',
       'Magas variancia, ellenfél futásokkal',
       scenarioLogits.highVariance,
-      riskScenarios.some(item => item.estimatedOwnSwingPct < 0)
+      riskScenarios.some(item => item.swingPpAtEven < 0)
         ? 'A kockázati triggerek (lásd a kockázati táblát) az ellenfél oldalára billentik a futásokat.'
         : 'Általános szórás: kockázati trigger nélkül is előforduló ellenfél-futások.'
     ),
@@ -3079,13 +3158,17 @@ export const analyzePreGameScouting = (
   const positionComparisonNote = buildCriticalMatchupNote(positionComparison, winProbability, ownTeam.teamName);
   const { perimeterDelta, frontcourtDelta } = summarizePositionDeltas(positionComparison);
   const varianceDrivers = buildVarianceDrivers(normalizedOpponent, normalizedOwn, leagueBenchmarks, riskNotes.flags);
+  // A kockázati swing a tényleges esélyen, ugyanazzal a függvénnyel, mint a
+  // forgatókönyv-tábla (a nyers 50%-os érték a `swingPpAtEven`).
+  const finalLogit = winProbability.breakdown?.finalLogit ?? 0;
+  const realizedPp = (deltaLogit: number) => realizedLogitPp(finalLogit, winProbability.ownPct, deltaLogit);
   const riskScenarios = buildRiskScenarios(
     riskNotes.flags,
     normalizedOpponent,
     normalizedOwn,
     leagueBenchmarks,
     varianceDrivers
-  );
+  ).map(item => ({ ...item, estimatedOwnSwingPct: realizedPp(ppAtEvenToLogit(item.swingPpAtEven)) }));
   const shotProfileContext = buildShotProfileContext(
     shotProfiles?.own,
     shotProfiles?.opponent,
@@ -3093,7 +3176,12 @@ export const analyzePreGameScouting = (
     shotProfiles?.ownAllowed,
     shotProfiles?.opponentAllowed
   );
-  const scenarioLogits = buildScenarioLogits(winProbability, baseXFactorImpact, varianceDrivers, riskScenarios);
+  const { logits: scenarioLogits, diagnostics: scenarioDiagnostics } = buildScenarioLogits(
+    winProbability,
+    baseXFactorImpact,
+    varianceDrivers,
+    riskScenarios
+  );
   const scenarioOutcomes = buildScenarioOutcomes(
     winProbability,
     scenarioLogits,
@@ -3103,8 +3191,6 @@ export const analyzePreGameScouting = (
   );
   // Az X-faktorok a tényleges alapon realizált pp-ben: ugyanaz a szám áll a
   // forgatókönyv-táblában, az X-faktor mondatban és a kártyán.
-  const finalLogit = winProbability.breakdown?.finalLogit ?? 0;
-  const realizedPp = (deltaLogit: number) => round(toShownPct(finalLogit + deltaLogit) - winProbability.ownPct, 1);
   const controlledOutcome = scenarioOutcomes.find(item => item.key === 'controlled_tempo');
   const xFactorImpact: XFactorImpact = {
     primaryDeltaPct: realizedPp(ppAtEvenToLogit(baseXFactorImpact.primaryDeltaPct)),
@@ -3215,6 +3301,7 @@ export const analyzePreGameScouting = (
     xFactorContext,
     xFactorImpact,
     scenarioOutcomes,
+    scenarioDiagnostics,
     riskScenarios,
     fanSummary,
     calibrationDiagnostics,

@@ -961,11 +961,12 @@ export function pregameReportToMd(report: ScoutingReport, seasonName?: string): 
 
   if (report.riskScenarios && report.riskScenarios.length > 0) {
     lines.push(``, `## Kockázati forgatókönyvek`, ``);
-    lines.push(`| Forgatókönyv | Trigger | Azonnali válasz | Saját swing |`);
+    lines.push(`| Forgatókönyv | Trigger | Azonnali válasz | Saját swing (a ${report.winProbability.ownPct.toFixed(1)}%-os esélyen) |`);
     lines.push(`|---|---|---|---|`);
     for (const s of report.riskScenarios) {
-      // A swing pp-ben értendő; trigger nélküli alapsornál nincs modellezett swing.
-      const swing = s.estimatedOwnSwingPct < 0 ? `${s.estimatedOwnSwingPct.toFixed(1)} pp` : '–';
+      // A swing a tényleges esélyen realizált pp (a forgatókönyv-táblával azonos
+      // függvény); trigger nélküli alapsornál nincs modellezett swing.
+      const swing = s.swingPpAtEven < 0 ? `${s.estimatedOwnSwingPct.toFixed(1)} pp` : '–';
       lines.push(`| ${s.title} | ${s.trigger} | ${s.instantResponse} | ${swing} |`);
     }
   }
@@ -1046,6 +1047,7 @@ export function pregameReportToMd(report: ScoutingReport, seasonName?: string): 
         `*A két forgatókönyv független változókból számol, egy esetleges azonos nagyságú eltérés véletlen. Kontrollált = az X-faktorok modellhatása (elsődleges + másodlagos, logitban hozzáadva; itt +${impact.combinedDeltaPct.toFixed(1)} pp). Magas variancia = −(variancia-büntetés × bizonyosság-szorzó + 0,32 × a kockázati triggerek negatív swingjének összege), ahol a variancia-büntetés 0,9 + 1,15 × variancia-források száma + 0,16 × a negatív swingek összege (1,2–8,6 pp), logitban levonva. Mindkettő a végső (valószínűség-bontás szerinti) esélyhez képest.*`
       );
     }
+    lines.push(...scenarioDiagnosticsToMd(report));
   }
 
   if (report.summary) {
@@ -1054,6 +1056,38 @@ export function pregameReportToMd(report: ScoutingReport, seasonName?: string): 
   }
 
   return lines.join('\n');
+}
+
+/**
+ * A forgatókönyvek és a kockázati swingek nyers inputjai: minden „50%-os” pp
+ * érték és a tényleges esélyen realizált eltérés, kézzel visszaszámolhatóan.
+ */
+function scenarioDiagnosticsToMd(report: ScoutingReport): string[] {
+  const d = report.scenarioDiagnostics;
+  if (!d) return [];
+  const pp = (v: number) => `${v >= 0 ? '+' : ''}${v.toFixed(2)} pp`;
+  const lg = (v: number) => `${v >= 0 ? '+' : ''}${v.toFixed(3)}`;
+  const lines = [
+    ``,
+    `**Forgatókönyv nyers inputok** (alap: ${d.basePct.toFixed(1)}%, logit ${lg(d.baseLogit)})`,
+    ``,
+    `| Input | Érték |`,
+    `|---|---|`,
+    `| Kontrollált: elsődleges X-faktor (50%-on) | ${pp(d.controlled.primaryPpAtEven)} |`,
+    `| Kontrollált: másodlagos X-faktor (50%-on) | ${pp(d.controlled.secondaryPpAtEven)} |`,
+    `| Kontrollált: összesen → logit → realizált | ${pp(d.controlled.totalPpAtEven)} → ${lg(d.controlled.logit)} → ${pp(d.controlled.realizedPp)} |`,
+    `| Magas variancia: variancia-források száma | ${d.highVariance.varianceDriverCount} |`,
+    `| Magas variancia: Σ negatív kockázati swing (50%-on) | ${pp(-d.highVariance.downsidePpAtEven)} |`,
+    `| Magas variancia: variancia-büntetés | ${pp(-d.highVariance.variancePenaltyPp)} |`,
+    `| Magas variancia: bizonyosság / szorzó | ${d.highVariance.confidence} / ×${d.highVariance.confidenceMultiplier.toFixed(2)} |`,
+    `| Magas variancia: összesen → logit → realizált | ${pp(-d.highVariance.totalPpAtEven)} → ${lg(d.highVariance.logit)} → ${pp(d.highVariance.realizedPp)} |`,
+  ];
+  const risks = (report.riskScenarios ?? []).filter(item => item.swingPpAtEven < 0);
+  if (risks.length > 0) {
+    lines.push(``, `| Kockázati trigger | Swing 50%-on | Realizált swing |`, `|---|---|---|`);
+    for (const item of risks) lines.push(`| ${item.title} | ${pp(item.swingPpAtEven)} | ${pp(item.estimatedOwnSwingPct)} |`);
+  }
+  return lines;
 }
 
 /** Ennyi együttállás kerül a „Legjobb védekező együttállások” listába. */

@@ -7809,6 +7809,13 @@ export function SeasonComparison({
     leagueSeasonShotSummary,
   ]);
 
+  // Fejlesztői debug-log: a forgatókönyvek nyers inputjai (a riport exportja a
+  // „Forgatókönyv nyers inputok” táblában ugyanezt mutatja).
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'production' || !pregameReport?.scenarioDiagnostics) return;
+    console.debug('[pregame] forgatókönyv-inputok', pregameReport.scenarioDiagnostics);
+  }, [pregameReport]);
+
   const pregameEfficiencyBaseline = useMemo(() => {
     if (!pregameOwnTeam || !pregameOpponentTeam) return null;
     return {
@@ -15609,8 +15616,8 @@ export function SeasonComparison({
                           <div key={item.title} className="bg-surface-1/60 border border-border-subtle rounded-md px-3 py-2">
                             <div className="flex items-center justify-between text-sm">
                               <span className="text-primary">{item.title}</span>
-                              {item.estimatedOwnSwingPct < 0 ? (
-                                <span className="text-negative">{item.estimatedOwnSwingPct.toFixed(1)} pp</span>
+                              {item.swingPpAtEven < 0 ? (
+                                <span className="text-negative font-mono tabular-nums" title={`Modellhatás 50%-os esélynél: ${item.swingPpAtEven.toFixed(1)} pp`}>{item.estimatedOwnSwingPct.toFixed(1)} pp</span>
                               ) : (
                                 <span className="text-secondary">nincs swing</span>
                               )}

@@ -841,7 +841,16 @@ veszteséggel (kieső − pótlás) és meccsarány-súllyal (#3).
   25,6 VAL/meccs, 26,9 perc) jelölve: matchup +0,60 változatlan, nettó 8,2 VAL/meccs (pótlás 21,9
   VAL/36, jelenlét 89%) → −0,14 logit, 84,0% → 82,3% (korábban bruttó levonással −3,5 pp);
   Σ WS* = 9,00 = 9 győzelem.
-- [ ] **P3 – Forgatókönyv-inputok, kockázati swing ugyanabból a függvényből (#4)**
+- [x] **P3 – Forgatókönyv-inputok, kockázati swing ugyanabból a függvényből (#4, `@core`)**: közös
+  `realizedLogitPp` (logit-eltolás → pp a tényleges esélyen) a forgatókönyv-, a kockázati tábla és az
+  X-faktor számára. `RiskScenario.swingPpAtEven` = a nyers 50%-os érték (a variancia-képlet ebből),
+  `estimatedOwnSwingPct` = realizált pp. Új `scenarioDiagnostics` (kontrollált / magas variancia nyers
+  inputjai, logit, realizált pp); export: „Forgatókönyv nyers inputok” tábla + triggerenként 50%-os és
+  realizált swing; fejlesztői módban `console.debug('[pregame] forgatókönyv-inputok', …)`. ASE–Alba
+  (hiányzó nélkül, 84,0%): kontrollált +4,30 pp@50% → +0,172 logit → +1,8 pp; magas variancia: 1
+  forrás, Σ swing −3,90, büntetés −2,67, Medium ×1,00 → −3,92 pp@50% → −0,157 → −1,9 pp; a
+  „Tripla-variancia” −3,9 pp@50% → −1,9 pp. Megfigyelés (döntés nélkül): egy variancia-forrásnál a
+  magas variancia = −(2,05 + 0,48·D) pp, fixpontja D ≈ 3,94 pp – ezért esik egybe a tábla −3,9-ével.
 - [ ] **P4 – Dobástérkép: ütközés, help-forrás, engedett zónatábla (#5–#7)**
 - [ ] **P5 – Módszertan-függelék az exportban**
 - [ ] **Böngészős ellenőrzés** (felhasználó): pregame ASE–Alba, MD export.
