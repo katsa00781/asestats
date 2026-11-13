@@ -18,7 +18,7 @@ import type {
 } from './team-season-export';
 import { LINEUP_NET_MIN_SECONDS, LINEUP_SLOT_POSITIONS, MAX_TRIOS } from './postgame-lineup-export';
 import { MISCLASSIFIED_THREES_MIN, buildPostgameAutoFocus, composePostgameSummary } from './postgame-report';
-import { CONFIDENCE_LABELS, HELP_SOURCE_PPS, LOW_SLOT_MINUTES, POSITION_SLOT_MINUTES, PROXY_PER_DEFINITION, PROXY_WIN_SHARE_DEFINITION, ZONE_SHRINK_PRIOR_ATTEMPTS } from './pregame-scouting';
+import { CONFIDENCE_LABELS, HELP_SOURCE_PPS, LOW_SLOT_MINUTES, POSITION_SLOT_MINUTES, PROXY_PER_DEFINITION, SHOT_COVERAGE_MIN_SHARE, describeShotCoverageWarning, PROXY_WIN_SHARE_DEFINITION, ZONE_SHRINK_PRIOR_ATTEMPTS } from './pregame-scouting';
 import { trueShootingPct, effectiveFgPct } from './stat-formulas';
 import {
   buildTeamSeasonExport,
@@ -1012,6 +1012,21 @@ export function pregameReportToMd(report: ScoutingReport, seasonName?: string): 
     const { ownZones, opponentZones } = report.shotProfileContext;
     if (ownZones.length > 0 || opponentZones.length > 0) {
       lines.push(``, `## Dobástérkép összehasonlítás`, ``);
+      const coverage = report.shotProfileContext.coverage ?? [];
+      if (coverage.length > 0) {
+        const coverageWarning = describeShotCoverageWarning(coverage);
+        if (coverageWarning) lines.push(`*Hiányos dobástérkép – ${coverageWarning}.*`, ``);
+        lines.push(`**Lefedettség**`, ``);
+        lines.push(`| Profil | Meccs dobástérképpel | Dobás | Box score FGA | Arány |`);
+        lines.push(`|---|---|---|---|---|`);
+        for (const entry of coverage) {
+          const games = entry.shotGames !== null ? `${entry.shotGames}/${entry.boxGames}` : `?/${entry.boxGames}`;
+          const fga = entry.boxFga !== null ? String(Math.round(entry.boxFga)) : '–';
+          const share = entry.attemptShare !== null ? `${Math.round(entry.attemptShare * 100)}%` : '–';
+          lines.push(`| ${entry.label}${entry.incomplete ? ' (!)' : ''} | ${games} | ${entry.shotAttempts} | ${fga} | ${share} |`);
+        }
+        addMethod('Dobástérkép-lefedettség', `meccs dobástérképpel = a különböző meccsek száma, amelyekről van dobás; box score FGA = a csapat (engedettnél a párosított ellenfelek) mezőnykísérletei. Hiányos (!), ha kevesebb a meccs, mint a box score-ban, vagy a dobás a box score FGA ${Math.round(SHOT_COVERAGE_MIN_SHARE * 100)}%-a alatt van. A zóna-arányok részesedések, ezért hiányos lefedettségnél is használhatók; meccsenkénti dobásszám nem számolható belőlük.`);
+      }
       // Csapatonként külön tábla. Δ arány = a dobásmix eltérése, Δ FG% = a
       // nyers találati arány eltérése a ligától; a pont/dobás a liga felé húzott
       // (shrinkelt) FG%-ból jön, mert kis mintán a nyers érték irreális.

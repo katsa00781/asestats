@@ -1491,6 +1491,8 @@ type ShotProfileSummary = {
   made: number;
   fgPct: number;
   zoneStats: Record<ShotZoneKey, ShotZoneStats>;
+  /** Lefedett meccsek száma (különböző `raw_game_id`) – a pregame lefedettség-ellenőrzéshez. */
+  games?: number;
 };
 
 type PregameEfficiencyBaseline = {
@@ -2325,6 +2327,16 @@ const toShotPoints = (rows: ShotEventRow[]): ShotPoint[] => {
     .filter((item): item is ShotPoint => Boolean(item));
 };
 
+/**
+ * A dobásprofil kiegészítése a lefedett meccsek számával (különböző
+ * `raw_game_id`); a pregame lefedettség-ellenőrzés ebből veti össze a box
+ * score meccsszámával. Ha a sorokban nincs `raw_game_id`, a profil változatlan.
+ */
+const withShotGames = (summary: ShotProfileSummary, rows: ShotEventRow[]): ShotProfileSummary => {
+  const gameIds = new Set(rows.map(row => row.raw_game_id).filter((id): id is string => Boolean(id)));
+  return gameIds.size > 0 ? { ...summary, games: gameIds.size } : summary;
+};
+
 const buildShotProfileSummary = (points: ShotPoint[]): ShotProfileSummary => {
   const zoneStats: Record<ShotZoneKey, ShotZoneStats> = {
     rim: { attempts: 0, made: 0, pct: 0 },
@@ -3068,7 +3080,7 @@ export function SeasonComparison({
         const data = await fetchAllRows<ShotEventRow>((from, to) =>
           supabase
             .from('hunbasket_shot_events' as never)
-            .select('player_id, x, y, is_successful, shot_side')
+            .select('raw_game_id, player_id, x, y, is_successful, shot_side')
             .eq('season_id', resolvedSeasonId)
             .eq('team_id', resolvedTeamId)
             .order('id')
@@ -3103,7 +3115,7 @@ export function SeasonComparison({
         const data = await fetchAllRows<ShotEventRow>((from, to) =>
           supabase
             .from('hunbasket_shot_events' as never)
-            .select('player_id, x, y, is_successful, shot_side')
+            .select('raw_game_id, player_id, x, y, is_successful, shot_side')
             .eq('season_id', resolvedSeasonId)
             .eq('team_id', selectedOpponentTeamId)
             .order('id')
@@ -4727,29 +4739,29 @@ export function SeasonComparison({
 
   const teamSeasonShotSummary = useMemo(() => {
     if (teamSeasonShotPoints.length === 0) return null;
-    return buildShotProfileSummary(teamSeasonShotPoints);
-  }, [teamSeasonShotPoints]);
+    return withShotGames(buildShotProfileSummary(teamSeasonShotPoints), teamSeasonShotRows);
+  }, [teamSeasonShotPoints, teamSeasonShotRows]);
 
   const opponentSeasonShotPoints = useMemo(() => toShotPoints(opponentSeasonShotRows), [opponentSeasonShotRows]);
 
   const opponentSeasonShotSummary = useMemo<ShotProfileSummary | null>(() => {
     if (opponentSeasonShotPoints.length === 0) return null;
-    return buildShotProfileSummary(opponentSeasonShotPoints);
-  }, [opponentSeasonShotPoints]);
+    return withShotGames(buildShotProfileSummary(opponentSeasonShotPoints), opponentSeasonShotRows);
+  }, [opponentSeasonShotPoints, opponentSeasonShotRows]);
 
   const teamAllowedSeasonShotPoints = useMemo(() => toShotPoints(teamAllowedSeasonShotRows), [teamAllowedSeasonShotRows]);
 
   const teamAllowedSeasonShotSummary = useMemo<ShotProfileSummary | null>(() => {
     if (teamAllowedSeasonShotPoints.length === 0) return null;
-    return buildShotProfileSummary(teamAllowedSeasonShotPoints);
-  }, [teamAllowedSeasonShotPoints]);
+    return withShotGames(buildShotProfileSummary(teamAllowedSeasonShotPoints), teamAllowedSeasonShotRows);
+  }, [teamAllowedSeasonShotPoints, teamAllowedSeasonShotRows]);
 
   const opponentAllowedSeasonShotPoints = useMemo(() => toShotPoints(opponentAllowedSeasonShotRows), [opponentAllowedSeasonShotRows]);
 
   const opponentAllowedSeasonShotSummary = useMemo<ShotProfileSummary | null>(() => {
     if (opponentAllowedSeasonShotPoints.length === 0) return null;
-    return buildShotProfileSummary(opponentAllowedSeasonShotPoints);
-  }, [opponentAllowedSeasonShotPoints]);
+    return withShotGames(buildShotProfileSummary(opponentAllowedSeasonShotPoints), opponentAllowedSeasonShotRows);
+  }, [opponentAllowedSeasonShotPoints, opponentAllowedSeasonShotRows]);
 
   const teamSeasonShotZoneRows = useMemo(() => {
     if (!teamSeasonShotSummary) return [] as Array<{ label: string; rate: number; pct: number; attempts: number }>;

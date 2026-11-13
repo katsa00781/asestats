@@ -72,7 +72,30 @@ export type ShotProfileSummary = {
   made: number;
   fgPct: number;
   zoneStats: Record<ShotZoneKey, ShotZoneStats>;
+  /** Ennyi meccsről van legalább egy dobás (különböző `raw_game_id`); hiányában a lefedettség csak dobásszámból. */
+  games?: number;
 };
+
+/**
+ * Egy dobásprofil lefedettsége a box score-hoz mérve. `incomplete`, ha
+ * kevesebb meccsről van dobástérkép, mint ahány box score-os meccs, vagy a
+ * dobásszám a box score FGA 90%-a alatt marad. A zóna-arányok részesedések,
+ * ezért hiányos lefedettségnél is használhatók; meccsenkénti dobásszám nem.
+ */
+export type ShotCoverageEntry = {
+  side: 'own' | 'opponent' | 'ownAllowed' | 'opponentAllowed';
+  label: string;
+  shotGames: number | null;
+  boxGames: number;
+  shotAttempts: number;
+  boxFga: number | null;
+  /** Dobás ÷ box score FGA (0–1); `null`, ha a box FGA nem ismert. */
+  attemptShare: number | null;
+  incomplete: boolean;
+};
+
+/** E dobás / box score FGA arány alatt hiányosnak számít a dobástérkép. */
+export const SHOT_COVERAGE_MIN_SHARE = 0.9;
 
 export type BenchmarkPercentiles = {
   P10: number;
@@ -371,6 +394,8 @@ export type ScoutingReport = {
     clashZones: string[];
     notes: string[];
     defenseNotes: string[];
+    /** Dobástérkép-lefedettség oldalanként (saját, ellenfél, engedett). */
+    coverage?: ShotCoverageEntry[];
   };
   /**
    * Csapatszintű mutatók (%-ban). Az `orebRate` `null`, ha nincs párosított
@@ -1321,6 +1346,69 @@ const MIN_MATCHUP_ATTEMPTS = 12;
 const CLASH_MIN_RATE_DELTA = 2;
 /** Ez alatti pont/dobású ellenfél-zóna help-forrás: onnan lehet segíteni, nem kell closeout. */
 export const HELP_SOURCE_PPS = 0.95;
+
+/** Egy dobásprofil lefedettsége a box score-hoz (meccsszám és FGA) mérve. */
+const buildShotCoverageEntry = (
+  side: ShotCoverageEntry['side'],
+  label: string,
+  profile: ShotProfileSummary | null | undefined,
+  boxGames: number,
+  boxFga: number | null
+): ShotCoverageEntry | null => {
+  if (!profile) return null;
+  const shotGames = typeof profile.games === 'number' ? profile.games : null;
+  const attemptShare = boxFga !== null && boxFga > 0 ? round(profile.attempts / boxFga, 3) : null;
+  return {
+    side,
+    label,
+    shotGames,
+    boxGames,
+    shotAttempts: profile.attempts,
+    boxFga,
+    attemptShare,
+    incomplete: (shotGames !== null && shotGames < boxGames)
+      || (attemptShare !== null && attemptShare < SHOT_COVERAGE_MIN_SHARE),
+  };
+};
+
+/**
+ * A négy dobásprofil lefedettsége. Az engedett oldal box FGA-ja az ellenfelek
+ * párosított box score-ja – csak ha minden meccs párosított, különben csak a
+ * meccsszám ellenőrizhető.
+ */
+const buildShotCoverage = (
+  ownTeam: NormalizedTeamStats,
+  opponent: NormalizedTeamStats,
+  shotProfiles?: {
+    own?: ShotProfileSummary | null;
+    opponent?: ShotProfileSummary | null;
+    ownAllowed?: ShotProfileSummary | null;
+    opponentAllowed?: ShotProfileSummary | null;
+  }
+): ShotCoverageEntry[] => {
+  const allowedFga = (team: NormalizedTeamStats) =>
+    team.opponent && team.opponent.games >= team.games ? team.opponent.fga2 + team.opponent.fga3 : null;
+  return [
+    buildShotCoverageEntry('own', `${ownTeam.teamName} támadás`, shotProfiles?.own, ownTeam.games, ownTeam.fga),
+    buildShotCoverageEntry('opponent', `${opponent.teamName} támadás`, shotProfiles?.opponent, opponent.games, opponent.fga),
+    buildShotCoverageEntry('ownAllowed', `${ownTeam.teamName} engedett`, shotProfiles?.ownAllowed, ownTeam.games, allowedFga(ownTeam)),
+    buildShotCoverageEntry('opponentAllowed', `${opponent.teamName} engedett`, shotProfiles?.opponentAllowed, opponent.games, allowedFga(opponent)),
+  ].filter((entry): entry is ShotCoverageEntry => entry !== null);
+};
+
+/** A hiányos lefedettség egy mondatban (summary és export közös szövege); üres, ha nincs hiány. */
+export const describeShotCoverageWarning = (coverage: ShotCoverageEntry[] | undefined) => {
+  const incomplete = (coverage ?? []).filter(entry => entry.incomplete);
+  if (incomplete.length === 0) return '';
+  const parts = incomplete.map(entry => {
+    const games = entry.shotGames !== null ? `${entry.shotGames}/${entry.boxGames} meccs` : `${entry.boxGames} meccsből`;
+    const attempts = entry.boxFga !== null && entry.attemptShare !== null
+      ? `, ${entry.shotAttempts} dobás vs. ${Math.round(entry.boxFga)} box score FGA (${Math.round(entry.attemptShare * 100)}%)`
+      : `, ${entry.shotAttempts} dobás`;
+    return `${entry.label}: ${games}${attempts}`;
+  });
+  return `${parts.join('; ')} – a zóna-arányok részesedésként használhatók, meccsenkénti dobásszám ebből nem számolható`;
+};
 
 const buildShotProfileContext = (
   ownShotProfile?: ShotProfileSummary | null,
@@ -2721,7 +2809,8 @@ const buildSummary = (
   shotDefenseNotes: string[] = [],
   matchContext?: PregameMatchContext | null,
   injuryImpact?: { own: PregameInjuryImpactReport; opponent: PregameInjuryImpactReport } | null,
-  matchupAxis?: MatchupAxis
+  matchupAxis?: MatchupAxis,
+  shotCoverageWarning = ''
 ) => {
   const tempo = describeTempo(opponent, benchmarks, ownTeam);
   const offense = profile.offense.length > 0 ? profile.offense.join(', ') : 'kiegyensúlyozott';
@@ -2816,6 +2905,9 @@ const buildSummary = (
   const shotProfileLine = shotProfileNotes.length > 0
     ? `Dobástérkép-fókusz: ${shotProfileNotes.join(' • ')}.`
     : '';
+  const shotCoverageLine = shotCoverageWarning
+    ? `Dobástérkép-lefedettség: ${shotCoverageWarning}.`
+    : '';
   const shotDefenseLine = shotDefenseNotes.length > 0
     ? `Dobástérkép-védekezés: ${shotDefenseNotes.join(' • ')}.`
     : '';
@@ -2857,6 +2949,7 @@ const buildSummary = (
     matchContextLine,
     injuryLine,
     positionSection,
+    shotCoverageLine,
     shotProfileLine,
     shotDefenseLine,
     focusLine,
@@ -3286,13 +3379,16 @@ export const analyzePreGameScouting = (
     leagueBenchmarks,
     varianceDrivers
   ).map(item => ({ ...item, estimatedOwnSwingPct: realizedPp(ppAtEvenToLogit(item.swingPpAtEven)) }));
-  const shotProfileContext = buildShotProfileContext(
+  const baseShotProfileContext = buildShotProfileContext(
     shotProfiles?.own,
     shotProfiles?.opponent,
     shotProfiles?.league,
     shotProfiles?.ownAllowed,
     shotProfiles?.opponentAllowed
   );
+  const shotProfileContext = baseShotProfileContext
+    ? { ...baseShotProfileContext, coverage: buildShotCoverage(normalizedOwn, normalizedOpponent, shotProfiles) }
+    : undefined;
   const { logits: scenarioLogits, diagnostics: scenarioDiagnostics } = buildScenarioLogits(
     winProbability,
     baseXFactorImpact,
@@ -3490,7 +3586,8 @@ export const analyzePreGameScouting = (
       shotProfileContext?.defenseNotes ?? [],
       extras?.matchContext,
       injuryImpact,
-      matchupAxis
+      matchupAxis,
+      describeShotCoverageWarning(shotProfileContext?.coverage)
     ),
     injuryContext,
   };

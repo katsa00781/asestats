@@ -811,7 +811,7 @@ egymás elleni meccsek közt jelenik meg. A 2024/25-ös szezonnézetben nincs do
   csapatnál) – keret-import csapat-hozzárendelési hiba gyanúja, döntés előtt nem nyúltunk hozzá.
 - Mobil jegyzet: `asestatmobile/docs/mobile-sync/2026-11-08-dobasterkep-zonak-h21.md` (összesítővé bővítve: H21 + H22).
 
-**H26 – Pregame riportgenerátor: 4. javítási lista (ASE–Falco) (2026-11-13)** – P1–P2 kész, P3 folyamatban
+**H26 – Pregame riportgenerátor: 4. javítási lista (ASE–Falco) (2026-11-13)** – P1–P3 kész, adat-újraimport és böngészős ellenőrzés nyitva
 
 Az ASE–Falco riport 6 adatminőségi pontja. Feltárás (service role olvasás, 2026-11-13): a Falco SF-slotja
 ~30 perc/meccs (Rosic 19,6 + Whelan ½ × 20,9) → VAL/36 15,6; a maradék SF-perceket SG-k (Perl 38,6, Tanoh
@@ -834,7 +834,14 @@ Felhasználói döntések: (1) slot feltöltése 40 percre a csapat VAL/36-jáva
   a flag és a matchup-logit a feltöltött értékből. Export: perc/meccs oszlopok, nyers érték zárójelben, „kevés
   perc”, Módszertan-bejegyzés. Falco (8 meccs, csapat VAL/36 24,9): SF 30,1 perc, 15,6 → 17,9; PG 29,9 perc,
   21,8 → 22,6; C 30,9 perc, 27,6 → 27,0; SG 59,9 / PF 49,3 perc változatlan. A matchup-skála (0,4 / ±0,6) marad.
-- [ ] **P3 – Dobástérkép-lefedettség (`@core` + UI-lekérdezés + export)**
+- [x] **P3 – Dobástérkép-lefedettség (`@core` + UI-lekérdezés + export)**: `ShotProfileSummary.games?` (különböző
+  `raw_game_id`), a saját / ellenfél dobás-lekérdezés `raw_game_id`-t is kér (`withShotGames`); új `ShotCoverageEntry`
+  és `shotProfileContext.coverage` (saját, ellenfél, saját engedett, ellenfél engedett: meccs dobástérképpel / box
+  score meccs, dobás vs. box FGA – engedettnél csak teljesen párosított szezonnál). Hiányos, ha kevesebb a meccs
+  vagy a dobás < 90% FGA (`SHOT_COVERAGE_MIN_SHARE`); ilyenkor „Dobástérkép-lefedettség:” sor a summaryben, az
+  exportban dőlt figyelmeztetés + „Lefedettség” tábla + Módszertan-bejegyzés. A zóna-arányok maradnak. Falco: 7/8
+  meccs, 447 dobás vs. 529 box FGA (85%) → hiányos; a 7 lefedett meccsen ~97%.
+- [x] `npx tsc --noEmit`, `npm run lint` (0 hiba, a korábbi 7 figyelmeztetés), `npm run build` rendben.
 - [ ] **Adatjavítás (kézi)**: `HUNBASKET_DATE_FROM=2026-11-11 HUNBASKET_DATE_TO=2026-11-11 npm run hunbasket:shotchart`
 - [ ] **Utómunka (külön)**: a dobástérkép-import 0 eseményes nyers sort is ír (nem publikált chart) – figyelmeztetés
   vagy kihagyás; a dobástérkép-import nincs a `scrape.yml`-ben.

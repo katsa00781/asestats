@@ -137,6 +137,7 @@ Update this file after every meaningful implementation change.
 
 ## Completed (legutóbbi)
 
+- **H26 / P3 – pregame dobástérkép-lefedettség (`@core` + UI)** (2026-11-13): meccs- és FGA-lefedettség oldalanként, hiányos (< 90% vagy kevesebb meccs) dobástérképnél figyelmeztetés a summaryben és az exportban. Nyitva: a Falco–Alba (2026-11-11) dobástérkép újraimportja, böngészős ellenőrzés.
 - **H26 / P2 – pregame pozíciós slot (`@core`)** (2026-11-13): 40 perc/meccs alatti slotot a csapat VAL/36-ja tölt fel; perc/meccs és nyers érték az exportban, „kevés perc” jelzés 24 perc alatt.
 - **H26 / P1 – pregame szöveg-konzisztencia (`@core`)** (2026-11-13): döntő tengely fókusza a nagyobb |él| oldaláról, veszély-címkék matchup-él szerint szűrve, egyetlen bizonyosság-címke (`CONFIDENCE_LABELS`), javított hiányzó-sor.
 - **H25 / P5 – pregame Módszertan-függelék** (2026-11-12): az MD export képletei és definíciói a riport végi „Módszertan” szakaszban. A H25 kész, a böngészős ellenőrzés nyitva.
