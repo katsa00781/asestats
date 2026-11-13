@@ -91,6 +91,12 @@ export type LeagueTeamBenchmarks = Record<
   Record<string, TeamBenchmarks>
 >;
 
+/**
+ * Pozíciós összevetés. A `ownValPer36` / `oppValPer36` a 40 percre feltöltött
+ * slot-érték (lásd `buildPositionComparison`), a `*RawValPer36` a csak a poszt
+ * játékosaiból számolt nyers érték; a delta, a flag és a matchup-logit a
+ * feltöltött értékből dolgozik.
+ */
 export type PositionComparison = {
   position: Position;
   ownValPer36: number;
@@ -99,6 +105,15 @@ export type PositionComparison = {
   oppPointsPer36: number;
   deltaValPer36: number;
   matchupFlag?: 'critical_disadvantage' | 'clear_advantage';
+  /** A poszt játékosainak (pozíció-súlyozott) perce csapatmeccsenként. */
+  ownMinutesPerGame: number;
+  oppMinutesPerGame: number;
+  /** A nyers, csak a poszt játékosaiból számolt VAL/36. */
+  ownRawValPer36: number;
+  oppRawValPer36: number;
+  /** Igaz, ha a slotra `LOW_SLOT_MINUTES` alatti perc jut meccsenként. */
+  ownLowMinutes: boolean;
+  oppLowMinutes: boolean;
 };
 
 export type ScoutingReportLLMContext = {
@@ -643,6 +658,10 @@ const selectPlayersForPosition = (players: PlayerSeasonStat[], position: Positio
 const CRITICAL_MATCHUP_DELTA = -12;
 const CLEAR_ADVANTAGE_DELTA = 12;
 const SIGNIFICANT_MATCHUP_DELTA = 10;
+/** Egy poszt-slot perce meccsenként; a hiányzó perceket a csapat VAL/36-ja tölti ki. */
+export const POSITION_SLOT_MINUTES = 40;
+/** Ennyi perc/meccs alatt a slot „kevés perc” jelzést kap. */
+export const LOW_SLOT_MINUTES = 24;
 const POSITION_MATCHUP_WEIGHTS: Record<string, number> = {
   PG: 0.25, SG: 0.15, SF: 0.15, PF: 0.20, C: 0.25,
 };
@@ -1653,7 +1672,19 @@ const computeUsageConcentration = (players: PlayerSeasonStat[]) => {
   return round(top2 / total, 3);
 };
 
-const buildPositionComparison = (ownPlayers: PlayerSeasonStat[], opponentPlayers: PlayerSeasonStat[]) => {
+/**
+ * Pozíciós VAL/36 összevetés. Egy slot nyers értéke a poszt játékosainak
+ * (pozíció-súlyozott) Σ VAL ÷ Σ perc × 36. Ha a slotra meccsenként 40 percnél
+ * kevesebb jut, a maradék perceket a valóságban más posztú játékosok töltik –
+ * ezeket a csapat teljes keretes VAL/36-ja tölti ki:
+ * (VAL + csapat VAL/36 ÷ 36 × (40 − perc/meccs) × meccs) ÷ (40 × meccs).
+ */
+const buildPositionComparison = (
+  ownPlayers: PlayerSeasonStat[],
+  opponentPlayers: PlayerSeasonStat[],
+  ownGames: number,
+  opponentGames: number
+): PositionComparison[] => {
   const positions: Position[] = ['PG', 'SG', 'SF', 'PF', 'C'];
 
   const allocationWeightForPosition = (player: PlayerSeasonStat, target: Position) => {
@@ -1682,16 +1713,35 @@ const buildPositionComparison = (ownPlayers: PlayerSeasonStat[], opponentPlayers
       );
   };
 
+  const teamValPer36 = (players: PlayerSeasonStat[]) => {
+    const minutes = players.reduce((sum, player) => sum + (player.minutes || 0), 0);
+    const val = players.reduce((sum, player) => sum + (player.val || 0), 0);
+    return minutes > 0 ? (val / minutes) * 36 : 0;
+  };
+  const ownTeamValPer36 = teamValPer36(ownPlayers);
+  const oppTeamValPer36 = teamValPer36(opponentPlayers);
+
+  const slotValue = (slot: ReturnType<typeof aggregate>, games: number, teamVal36: number) => {
+    const teamGames = Math.max(games, 1);
+    const minutesPerGame = slot.minutes / teamGames;
+    const raw = slot.minutes > 0 ? (slot.val / slot.minutes) * 36 : 0;
+    const fillMinutes = Math.max(0, POSITION_SLOT_MINUTES - minutesPerGame) * teamGames;
+    const filled = fillMinutes > 0
+      ? ((slot.val + (teamVal36 / 36) * fillMinutes) / (slot.minutes + fillMinutes)) * 36
+      : raw;
+    return { minutesPerGame, raw, filled };
+  };
+
   return positions.map(position => {
     const own = aggregate(ownPlayers, position);
     const opp = aggregate(opponentPlayers, position);
+    const ownSlot = slotValue(own, ownGames, ownTeamValPer36);
+    const oppSlot = slotValue(opp, opponentGames, oppTeamValPer36);
 
-    const ownValPer36 = own.minutes > 0 ? (own.val / own.minutes) * 36 : 0;
-    const oppValPer36 = opp.minutes > 0 ? (opp.val / opp.minutes) * 36 : 0;
     const ownPointsPer36 = own.minutes > 0 ? (own.points / own.minutes) * 36 : 0;
     const oppPointsPer36 = opp.minutes > 0 ? (opp.points / opp.minutes) * 36 : 0;
 
-    const deltaValPer36 = round(ownValPer36 - oppValPer36, 1);
+    const deltaValPer36 = round(ownSlot.filled - oppSlot.filled, 1);
     let matchupFlag: PositionComparison['matchupFlag'];
     if (deltaValPer36 <= CRITICAL_MATCHUP_DELTA) {
       matchupFlag = 'critical_disadvantage';
@@ -1701,12 +1751,18 @@ const buildPositionComparison = (ownPlayers: PlayerSeasonStat[], opponentPlayers
 
     return {
       position,
-      ownValPer36: round(ownValPer36, 1),
-      oppValPer36: round(oppValPer36, 1),
+      ownValPer36: round(ownSlot.filled, 1),
+      oppValPer36: round(oppSlot.filled, 1),
       ownPointsPer36: round(ownPointsPer36, 1),
       oppPointsPer36: round(oppPointsPer36, 1),
       deltaValPer36,
       matchupFlag,
+      ownMinutesPerGame: round(ownSlot.minutesPerGame, 1),
+      oppMinutesPerGame: round(oppSlot.minutesPerGame, 1),
+      ownRawValPer36: round(ownSlot.raw, 1),
+      oppRawValPer36: round(oppSlot.raw, 1),
+      ownLowMinutes: ownSlot.minutesPerGame < LOW_SLOT_MINUTES,
+      oppLowMinutes: oppSlot.minutesPerGame < LOW_SLOT_MINUTES,
     };
   });
 };
@@ -3192,7 +3248,12 @@ export const analyzePreGameScouting = (
   const opponentInjured = extras?.injuries?.opponent.players ?? [];
   const ownRoster = [...ownPlayers, ...ownInjured];
   const opponentRoster = [...opponentPlayers, ...opponentInjured];
-  const positionComparison = buildPositionComparison(ownRoster, opponentRoster);
+  const positionComparison = buildPositionComparison(
+    ownRoster,
+    opponentRoster,
+    normalizedOwn.games || 0,
+    normalizedOpponent.games || 0
+  );
   const injuryImpact = {
     own: buildInjuryImpactReport(extras?.injuries?.own, ownPlayers, normalizedOwn, 1),
     opponent: buildInjuryImpactReport(extras?.injuries?.opponent, opponentPlayers, normalizedOpponent, -1),

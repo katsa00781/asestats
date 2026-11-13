@@ -811,7 +811,7 @@ egymás elleni meccsek közt jelenik meg. A 2024/25-ös szezonnézetben nincs do
   csapatnál) – keret-import csapat-hozzárendelési hiba gyanúja, döntés előtt nem nyúltunk hozzá.
 - Mobil jegyzet: `asestatmobile/docs/mobile-sync/2026-11-08-dobasterkep-zonak-h21.md` (összesítővé bővítve: H21 + H22).
 
-**H26 – Pregame riportgenerátor: 4. javítási lista (ASE–Falco) (2026-11-13)** – P1 kész, P2–P3 folyamatban
+**H26 – Pregame riportgenerátor: 4. javítási lista (ASE–Falco) (2026-11-13)** – P1–P2 kész, P3 folyamatban
 
 Az ASE–Falco riport 6 adatminőségi pontja. Feltárás (service role olvasás, 2026-11-13): a Falco SF-slotja
 ~30 perc/meccs (Rosic 19,6 + Whelan ½ × 20,9) → VAL/36 15,6; a maradék SF-perceket SG-k (Perl 38,6, Tanoh
@@ -827,7 +827,13 @@ Felhasználói döntések: (1) slot feltöltése 40 percre a csapat VAL/36-jáva
   periméter, OREB → lepattanó, festékdomináns → max(festék, büntető), eFG → max(periméter, festék)), él < 0 →
   kimarad, egyébként „(matchup-él +x)”; új `CONFIDENCE_LABELS` a summary, az export és a UI közös forrása, a
   55–60%-os felülírás törölve; a „Hiányzók:” sor hamis „csak az elérhető játékosokból” záradéka törölve.
-- [ ] **P2 – Pozíciós slot feltöltése 40 percre (`@core` + export)**
+- [x] **P2 – Pozíciós slot feltöltése 40 percre (`@core` + export)**: `buildPositionComparison` a csapat meccsszámát
+  is kapja; slotonként perc/meccs, és 40 alatt a hiányzó perceket a csapat teljes keretes VAL/36-ja tölti ki
+  ((VAL + csapat VAL/36 ÷ 36 × (40 − perc/meccs) × meccs) ÷ (40 × meccs)). Új `PositionComparison` mezők:
+  `own/oppMinutesPerGame`, `own/oppRawValPer36`, `own/oppLowMinutes` (< 24 perc/meccs); a `*ValPer36`, a delta,
+  a flag és a matchup-logit a feltöltött értékből. Export: perc/meccs oszlopok, nyers érték zárójelben, „kevés
+  perc”, Módszertan-bejegyzés. Falco (8 meccs, csapat VAL/36 24,9): SF 30,1 perc, 15,6 → 17,9; PG 29,9 perc,
+  21,8 → 22,6; C 30,9 perc, 27,6 → 27,0; SG 59,9 / PF 49,3 perc változatlan. A matchup-skála (0,4 / ±0,6) marad.
 - [ ] **P3 – Dobástérkép-lefedettség (`@core` + UI-lekérdezés + export)**
 - [ ] **Adatjavítás (kézi)**: `HUNBASKET_DATE_FROM=2026-11-11 HUNBASKET_DATE_TO=2026-11-11 npm run hunbasket:shotchart`
 - [ ] **Utómunka (külön)**: a dobástérkép-import 0 eseményes nyers sort is ír (nem publikált chart) – figyelmeztetés

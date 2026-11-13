@@ -18,7 +18,7 @@ import type {
 } from './team-season-export';
 import { LINEUP_NET_MIN_SECONDS, LINEUP_SLOT_POSITIONS, MAX_TRIOS } from './postgame-lineup-export';
 import { MISCLASSIFIED_THREES_MIN, buildPostgameAutoFocus, composePostgameSummary } from './postgame-report';
-import { CONFIDENCE_LABELS, HELP_SOURCE_PPS, PROXY_PER_DEFINITION, PROXY_WIN_SHARE_DEFINITION, ZONE_SHRINK_PRIOR_ATTEMPTS } from './pregame-scouting';
+import { CONFIDENCE_LABELS, HELP_SOURCE_PPS, LOW_SLOT_MINUTES, POSITION_SLOT_MINUTES, PROXY_PER_DEFINITION, PROXY_WIN_SHARE_DEFINITION, ZONE_SHRINK_PRIOR_ATTEMPTS } from './pregame-scouting';
 import { trueShootingPct, effectiveFgPct } from './stat-formulas';
 import {
   buildTeamSeasonExport,
@@ -887,13 +887,19 @@ export function pregameReportToMd(report: ScoutingReport, seasonName?: string): 
 
   if (report.positionComparison.length > 0) {
     lines.push(``, `## Pozíció összehasonlítás (VAL/36)`, ``);
-    lines.push(`| Poz | ${report.ownTeamName} | ${report.opponentTeamName} | Delta |`);
-    lines.push(`|-----|---|---|-------|`);
+    lines.push(`| Poz | ${report.ownTeamName} VAL/36 | Perc/meccs | ${report.opponentTeamName} VAL/36 | Perc/meccs | Delta |`);
+    lines.push(`|-----|---|---|---|---|-------|`);
+    // A slot-érték 40 percre feltöltött; ha eltér a nyerstől, az zárójelben áll.
+    const slotCell = (filled: number, raw: number | undefined) =>
+      raw !== undefined && raw.toFixed(1) !== filled.toFixed(1) ? `${filled.toFixed(1)} (nyers ${raw.toFixed(1)})` : filled.toFixed(1);
+    const minutesCell = (minutes: number | undefined, low: boolean | undefined) =>
+      minutes === undefined ? '–' : `${minutes.toFixed(1)}${low ? ' – kevés perc' : ''}`;
     for (const pos of report.positionComparison) {
       const sign = pos.deltaValPer36 >= 0 ? '+' : '';
       const flag = pos.matchupFlag === 'critical_disadvantage' ? ' (!!)' : pos.matchupFlag === 'clear_advantage' ? ' (+)' : '';
-      lines.push(`| ${pos.position} | ${pos.ownValPer36.toFixed(1)} | ${pos.oppValPer36.toFixed(1)} | ${sign}${pos.deltaValPer36.toFixed(1)}${flag} |`);
+      lines.push(`| ${pos.position} | ${slotCell(pos.ownValPer36, pos.ownRawValPer36)} | ${minutesCell(pos.ownMinutesPerGame, pos.ownLowMinutes)} | ${slotCell(pos.oppValPer36, pos.oppRawValPer36)} | ${minutesCell(pos.oppMinutesPerGame, pos.oppLowMinutes)} | ${sign}${pos.deltaValPer36.toFixed(1)}${flag} |`);
     }
+    addMethod('Pozíciós VAL/36', `Egy poszt nyers értéke a posztra jelölt játékosok Σ VAL ÷ Σ perc × 36 (több posztos játékos egyenlő arányban oszlik meg). Ha a slotra meccsenként ${POSITION_SLOT_MINUTES} percnél kevesebb jut, a maradék perceket a valóságban más posztú játékosok töltik: ezeket a csapat teljes keretes VAL/36-ja tölti ki – (VAL + csapat VAL/36 ÷ 36 × (${POSITION_SLOT_MINUTES} − perc/meccs) × meccs) ÷ (${POSITION_SLOT_MINUTES} × meccs). A delta, a jelzések és a matchup-lépés a feltöltött értékből számol. „Kevés perc” = ${LOW_SLOT_MINUTES} perc/meccs alatt.`);
   }
 
   if (report.teamStats) {
