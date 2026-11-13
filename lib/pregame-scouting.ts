@@ -158,6 +158,13 @@ export type XFactorImpact = {
   controlledScenarioCapped?: boolean;
 };
 
+/** A győzelmi esély bizonyosságának címkéje – a summary, az export és a UI közös forrása. */
+export const CONFIDENCE_LABELS: Record<'High' | 'Medium' | 'Low', string> = {
+  High: 'Magas',
+  Medium: 'Közepes',
+  Low: 'Alacsony',
+};
+
 /** A kockázati tábla alapsora, ha egyetlen kockázati trigger sem aktív. */
 export const BASELINE_RISK_SCENARIO_TITLE = 'Alapforgatókönyv – nincs kockázati trigger';
 
@@ -1800,25 +1807,53 @@ const identifyKeyPlayers = (players: PlayerSeasonStat[], teamUsageShare: number)
   };
 };
 
-const buildThreats = (team: NormalizedTeamStats, benchmarks: LeagueTeamBenchmarks, usageShare: number) => {
+/**
+ * Az ellenfél fő veszélyei. A matchup-párral rendelkező címkéket az ellenfél
+ * támadásának éle a saját védekezés ellen szűri (`computePairEdge`): negatív
+ * élnél ebben a párosításban nem veszély (kimarad), egyébként az él kiíródik.
+ * Ha a pár nem számolható (nincs párosított meccs), a címke él nélkül marad.
+ */
+const buildThreats = (
+  team: NormalizedTeamStats,
+  ownTeam: NormalizedTeamStats,
+  benchmarks: LeagueTeamBenchmarks,
+  usageShare: number
+) => {
   const threats: string[] = [];
+  const pairEdge = (axes: Array<Exclude<MatchupAxisKey, 'tempo'>>) => {
+    const edges = axes
+      .map(axis => computePairEdge(getPairMetric(axis), team, ownTeam, benchmarks))
+      .filter((pair): pair is NonNullable<typeof pair> => pair !== null)
+      .map(pair => pair.edge);
+    return edges.length > 0 ? Math.max(...edges) : null;
+  };
+  const pushMatchupThreat = (label: string, axes: Array<Exclude<MatchupAxisKey, 'tempo'>>) => {
+    const edge = pairEdge(axes);
+    if (edge === null) {
+      threats.push(label);
+      return;
+    }
+    if (edge < 0) return;
+    threats.push(`${label} (matchup-él ${signedZ(edge)})`);
+  };
+
   if (scoreAbove(benchmarks, team, 'three_rate', 60)) {
     threats.push('Magas tripla-volumen → nagyobb pontszerzési variancia, gyors futások veszélye');
   }
   if (scoreAbove(benchmarks, team, 'three_pct', 60)) {
-    threats.push('Erős 3P-hatékonyság → gyors pontfutás kockázat');
+    pushMatchupThreat('Erős 3P-hatékonyság → gyors pontfutás kockázat', ['perimeter']);
   }
   if (scoreAbove(benchmarks, team, 'assist_rate', 60)) {
     threats.push('Szervezett labdajáratás → rotációs bontás veszély');
   }
   if (scoreAbove(benchmarks, team, 'efg', 60) && !scoreAbove(benchmarks, team, 'three_pct', 60)) {
-    threats.push('Hatékony dobás → félpályás megállítás nehezebb');
+    pushMatchupThreat('Hatékony dobás → félpályás megállítás nehezebb', ['perimeter', 'paint']);
   }
   if (scoreAbove(benchmarks, team, 'two_rate', 60) && scoreAbove(benchmarks, team, 'ft_rate', 60)) {
-    threats.push('Festékdomináns támadás → faultterhelés és belső nyomás');
+    pushMatchupThreat('Festékdomináns támadás → faultterhelés és belső nyomás', ['paint', 'free_throw']);
   }
   if (scoreAbove(benchmarks, team, 'oreb_rate', 60)) {
-    threats.push('Erős támadólepattanózás → második esély pontok veszélye');
+    pushMatchupThreat('Erős támadólepattanózás → második esély pontok veszélye', ['rebound']);
   }
   if (usageShare >= 0.55) threats.push('Kulcsjátékos dominancia → fókuszált elfojtás szükséges');
   return threats;
@@ -1864,15 +1899,29 @@ const OPPONENT_OREB_RISK_Z = 0.4;
 /** Ennyi |nettó z| felett a döntő tengely fókuszpont és X-faktor is. */
 const MATCHUP_AXIS_FOCUS_Z = 1;
 
-/** A döntő tengely fókuszpontja (irány szerint: erőltetni vagy elzárni). */
+/**
+ * A döntő tengely fókuszpontja. A nagyobb |él|-ű oldalt idézi (az viszi a
+ * nettó z-t), az irány az él előjeléből jön: saját támadásnál erőltetni vagy
+ * kerülni, ellenfél támadásánál elzárni vagy megtartani.
+ */
 const buildMatchupAxisFocus = (axis: MatchupAxis) => {
   const z = signedZ(axis.z);
   if (!axis.ownAttack || !axis.opponentAttack) {
     return `Döntő tengely – tempó: ${axis.ownValue} vs ${axis.opponentValue} (z = ${z}) – a tempó feletti kontroll`;
   }
-  return axis.z >= 0
-    ? `Döntő tengely – ${axis.axisLabel}: saját ${axis.metricLabel} ${axis.ownAttack.attackValue} vs. ellenfél engedett ${axis.ownAttack.allowedValue} (nettó z = ${z}) – ezt a matchupot kell erőltetni`
-    : `Döntő tengely – ${axis.axisLabel}: ellenfél ${axis.metricLabel} ${axis.opponentAttack.attackValue} vs. saját engedett ${axis.opponentAttack.allowedValue} (nettó z = ${z}) – ezt kell elzárni`;
+  const ownSide = Math.abs(axis.ownAttack.edge) >= Math.abs(axis.opponentAttack.edge);
+  if (ownSide) {
+    const side = axis.ownAttack;
+    const action = side.edge >= 0
+      ? 'ezt a matchupot kell erőltetni'
+      : 'itt vagyunk hátrányban: alternatív pontforrás, jobb dobásválasztás';
+    return `Döntő tengely – ${axis.axisLabel}: saját ${axis.metricLabel} ${side.attackValue} vs. ellenfél engedett ${side.allowedValue} (él ${signedZ(side.edge)}; nettó z = ${z}) – ${action}`;
+  }
+  const side = axis.opponentAttack;
+  const action = side.edge >= 0
+    ? 'ezt kell elzárni'
+    : 'a saját védekezés itt erős, ezt kell megtartani';
+  return `Döntő tengely – ${axis.axisLabel}: ellenfél ${axis.metricLabel} ${side.attackValue} vs. saját engedett ${side.allowedValue} (él ${signedZ(side.edge)}; nettó z = ${z}) – ${action}`;
 };
 
 const buildFocusPoints = (
@@ -2634,19 +2683,7 @@ const buildSummary = (
   const probabilityText = winProbability.predictedWinner === 'even'
     ? 'Valószínűség: 50-50'
     : `Valószínűség: ${winProbability.ownPct}% - ${winProbability.opponentPct}%`;
-  const favoredPct = winProbability.predictedWinner === 'even'
-    ? 50
-    : winProbability.predictedWinner === 'own'
-      ? winProbability.ownPct
-      : winProbability.opponentPct;
-  const confidenceMap: Record<ScoutingReport['winProbability']['confidence'], string> = {
-    High: 'Bizonyosság: Magas',
-    Medium: 'Bizonyosság: Közepes',
-    Low: 'Bizonyosság: Alacsony',
-  };
-  const probabilityConfidenceLabel = favoredPct >= 55 && favoredPct <= 60
-    ? 'Bizonyosság: Közepes–alacsony'
-    : confidenceMap[winProbability.confidence];
+  const probabilityConfidenceLabel = `Bizonyosság: ${CONFIDENCE_LABELS[winProbability.confidence]}`;
   const probabilityLine = `Eredmény-prognózis: Várható győztes: ${favoredLabel} | ${probabilityText} | ${probabilityConfidenceLabel}.`;
   const confidenceReasonLine = confidenceReasons.length > 0
     ? `Bizonyosság kontextusa: ${confidenceReasons.join(' • ')}.`
@@ -2677,7 +2714,13 @@ const buildSummary = (
     const anyInfo = [injuryImpact?.own, injuryImpact?.opponent].some(item => item && item.status !== 'unknown')
       || Boolean(injuryContext?.own?.length || injuryContext?.opponent?.length);
     if (!anyInfo) return '';
-    return `Hiányzók: ${ownTeamName}: ${describe(injuryContext?.own, injuryImpact?.own)} | ${opponent.teamName}: ${describe(injuryContext?.opponent, injuryImpact?.opponent)}; a pozíciós VAL/36 már csak az elérhető játékosokból számol.`;
+    // A pozíciós VAL/36 a teljes kerettel számol; ezt csak akkor írjuk ki, ha
+    // van megjelölt hiányzó (különben nincs mit pontosítani).
+    const anyMarked = [injuryImpact?.own, injuryImpact?.opponent].some(item => item?.status === 'marked');
+    const rosterNote = anyMarked
+      ? '; a pozíciós VAL/36 a teljes kerettel számol, a hiányzás csak a hiányzó-lépésben hat'
+      : '';
+    return `Hiányzók: ${ownTeamName}: ${describe(injuryContext?.own, injuryImpact?.own)} | ${opponent.teamName}: ${describe(injuryContext?.opponent, injuryImpact?.opponent)}${rosterNote}.`;
   })();
 
   const breakdown = winProbability.breakdown;
@@ -3141,7 +3184,7 @@ export const analyzePreGameScouting = (
       heightMismatchNotes.push(`Magassági hátrány a ${pos} poszton (≈${round(oppAvg - ownAvg, 1)} cm).`);
     }
   });
-  const threats = buildThreats(normalizedOpponent, leagueBenchmarks, usageShare);
+  const threats = buildThreats(normalizedOpponent, normalizedOwn, leagueBenchmarks, usageShare);
   const vulnerabilities = buildVulnerabilities(normalizedOpponent, leagueBenchmarks);
   // A pozíciós matchup a teljes kerettel számol (mint az alap-rating); a
   // hiányzók hatását egyedül a hiányzó-lépés viszi – így nincs duplán.

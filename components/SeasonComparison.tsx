@@ -56,6 +56,7 @@ import {
 import { useLeagueTeamBoxTotals } from '@/hooks/useLeagueTeamBoxTotals';
 import {
   BASELINE_RISK_SCENARIO_TITLE,
+  CONFIDENCE_LABELS,
   FOUL_PRONE_DEFENSE_VULNERABILITY,
   PROXY_PER_DEFINITION,
   PROXY_WIN_SHARE_DEFINITION,
@@ -14197,21 +14198,10 @@ export function SeasonComparison({
               : predictedWinner === 'own'
                 ? ownLabel
                 : opponentLabel;
-            const favoredPct = predictedWinner === 'even'
-              ? 50
-              : predictedWinner === 'own'
-                ? pregameReport.winProbability.ownPct
-                : pregameReport.winProbability.opponentPct;
             const probabilitySpread = predictedWinner === 'even'
               ? '50-50'
               : `${pregameReport.winProbability.ownPct.toFixed(1)}% - ${pregameReport.winProbability.opponentPct.toFixed(1)}%`;
-            const probabilityConfidenceLabel = favoredPct >= 55 && favoredPct <= 60
-              ? 'Közepes–alacsony'
-              : pregameReport.winProbability.confidence === 'High'
-                ? 'Magas'
-                : pregameReport.winProbability.confidence === 'Medium'
-                  ? 'Közepes'
-                  : 'Alacsony';
+            const probabilityConfidenceLabel = CONFIDENCE_LABELS[pregameReport.winProbability.confidence];
             const riskFlags = pregameReport.riskFlags ?? [];
             const riskScenarios = pregameReport.riskScenarios ?? [];
             const xFactorImpact = pregameReport.xFactorImpact;

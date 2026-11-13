@@ -18,7 +18,7 @@ import type {
 } from './team-season-export';
 import { LINEUP_NET_MIN_SECONDS, LINEUP_SLOT_POSITIONS, MAX_TRIOS } from './postgame-lineup-export';
 import { MISCLASSIFIED_THREES_MIN, buildPostgameAutoFocus, composePostgameSummary } from './postgame-report';
-import { HELP_SOURCE_PPS, PROXY_PER_DEFINITION, PROXY_WIN_SHARE_DEFINITION, ZONE_SHRINK_PRIOR_ATTEMPTS } from './pregame-scouting';
+import { CONFIDENCE_LABELS, HELP_SOURCE_PPS, PROXY_PER_DEFINITION, PROXY_WIN_SHARE_DEFINITION, ZONE_SHRINK_PRIOR_ATTEMPTS } from './pregame-scouting';
 import { trueShootingPct, effectiveFgPct } from './stat-formulas';
 import {
   buildTeamSeasonExport,
@@ -810,7 +810,7 @@ export function pregameReportToMd(report: ScoutingReport, seasonName?: string): 
     `**Jósolt győztes:** ${
       report.winProbability.predictedWinner === 'own' ? report.ownTeamName :
       report.winProbability.predictedWinner === 'opponent' ? report.opponentTeamName : 'Egyenlő'
-    } | **Bizonyosság:** ${({ High: 'Magas', Medium: 'Közepes', Low: 'Alacsony' } as const)[report.winProbability.confidence]}`,
+    } | **Bizonyosság:** ${CONFIDENCE_LABELS[report.winProbability.confidence]}`,
   ];
 
   const breakdown = report.winProbability.breakdown;

@@ -811,6 +811,30 @@ egymás elleni meccsek közt jelenik meg. A 2024/25-ös szezonnézetben nincs do
   csapatnál) – keret-import csapat-hozzárendelési hiba gyanúja, döntés előtt nem nyúltunk hozzá.
 - Mobil jegyzet: `asestatmobile/docs/mobile-sync/2026-11-08-dobasterkep-zonak-h21.md` (összesítővé bővítve: H21 + H22).
 
+**H26 – Pregame riportgenerátor: 4. javítási lista (ASE–Falco) (2026-11-13)** – P1 kész, P2–P3 folyamatban
+
+Az ASE–Falco riport 6 adatminőségi pontja. Feltárás (service role olvasás, 2026-11-13): a Falco SF-slotja
+~30 perc/meccs (Rosic 19,6 + Whelan ½ × 20,9) → VAL/36 15,6; a maradék SF-perceket SG-k (Perl 38,6, Tanoh
+23,8) játsszák, a modell nem. A matchup-lépés már az SF-ből plafonra fut (0,15 × 10,9 × 0,4 = 0,65 > 0,6).
+A Falco–Alba (2026-11-11, `hun_134855`) dobástérkép-sora 0 eseménnyel áll (import 2026-11-12 06:26) – a szezon
+egyetlen üres dobástérképe; 447 / 8 = 55,9 és 424 / 8 = 53,0 innen jön.
+Felhasználói döntések: (1) slot feltöltése 40 percre a csapat VAL/36-jával + perc/meccs + „kevés perc” jelzés;
+(2) a 55–60%-os „Közepes–alacsony” felülírás törlése, egy címketérkép; (3) veszély-címke kimarad, ha a pár-él
+< 0, megtartottnál az él kiíródik; (4) dobástérkép-lefedettség tábla + figyelmeztetés 90% alatt.
+
+- [x] **P1 – Szöveg-konzisztencia (`@core`)**: a döntő tengely fókuszpontja a nagyobb |él|-ű oldalt idézi
+  (négy irány: erőltetni / hátrány / elzárni / megtartani); `buildThreats` a matchup-párral szűr (3P% →
+  periméter, OREB → lepattanó, festékdomináns → max(festék, büntető), eFG → max(periméter, festék)), él < 0 →
+  kimarad, egyébként „(matchup-él +x)”; új `CONFIDENCE_LABELS` a summary, az export és a UI közös forrása, a
+  55–60%-os felülírás törölve; a „Hiányzók:” sor hamis „csak az elérhető játékosokból” záradéka törölve.
+- [ ] **P2 – Pozíciós slot feltöltése 40 percre (`@core` + export)**
+- [ ] **P3 – Dobástérkép-lefedettség (`@core` + UI-lekérdezés + export)**
+- [ ] **Adatjavítás (kézi)**: `HUNBASKET_DATE_FROM=2026-11-11 HUNBASKET_DATE_TO=2026-11-11 npm run hunbasket:shotchart`
+- [ ] **Utómunka (külön)**: a dobástérkép-import 0 eseményes nyers sort is ír (nem publikált chart) – figyelmeztetés
+  vagy kihagyás; a dobástérkép-import nincs a `scrape.yml`-ben.
+- [ ] **Böngészős ellenőrzés** (felhasználó): pregame ASE–Falco, MD export.
+- Mobil jegyzet: `asestatmobile/docs/mobile-sync/2026-11-13-pregame-riport-h26.md`.
+
 **H25 – Pregame riportgenerátor: 3. javítási lista ✓ (2026-11-12)** – P1–P5 kész, böngészős ellenőrzés nyitva
 
 Az ASE–Alba riport 7 hibája + 2 apróság. Felhasználói döntések: (#1) tengelyenként két

@@ -137,6 +137,7 @@ Update this file after every meaningful implementation change.
 
 ## Completed (legutóbbi)
 
+- **H26 / P1 – pregame szöveg-konzisztencia (`@core`)** (2026-11-13): döntő tengely fókusza a nagyobb |él| oldaláról, veszély-címkék matchup-él szerint szűrve, egyetlen bizonyosság-címke (`CONFIDENCE_LABELS`), javított hiányzó-sor.
 - **H25 / P5 – pregame Módszertan-függelék** (2026-11-12): az MD export képletei és definíciói a riport végi „Módszertan” szakaszban. A H25 kész, a böngészős ellenőrzés nyitva.
 - **H25 / P4 – pregame dobástérkép (`@core`)** (2026-11-12): szigorú zónaütközés (Δ arány ≥ +2 pp és pps ≥ liga mindkét oldalon), védekezési jegyzet csak a zárd/help-forrás párból (< 0,95 pps), engedett zónatáblák az exportban.
 - **H25 / P3 – pregame forgatókönyv-inputok (`@core`)** (2026-11-12): kockázati swing és forgatókönyv egy függvényből (realizált pp), új `scenarioDiagnostics` + export-tábla + fejlesztői debug-log.
