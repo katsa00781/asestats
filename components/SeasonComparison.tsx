@@ -31,7 +31,7 @@ import { supabase, type Database } from '@/lib/supabase';
 import { fetchAllRows } from '@/lib/fetch-all-rows';
 import { cn } from '@/lib/utils';
 import { buildPositionMetadata } from '@/lib/positions';
-import type { PlayerStats, TeamGame } from '@/lib/dashboard-types';
+import type { GamePerformance, PlayerStats, TeamGame } from '@/lib/dashboard-types';
 import {
   analyzePlayerSeason,
   buildLeagueBenchmarks,
@@ -4728,6 +4728,31 @@ export function SeasonComparison({
         return bDate - aDate;
       });
   }, [playerGameStats, resolvedSeasonId, selectedPlayer]);
+
+  // Az MD export „Utolsó meccsek” táblája: a szezonlista játékosobjektuma nem
+  // hoz meccstörténetet, ezért a játékos meccssoraiból (legfrissebb elöl).
+  const selectedPlayerRecentGames = useMemo<GamePerformance[]>(() => selectedPlayerRows.map(row => ({
+    date: row.games?.date ?? '',
+    opponent: String(row.games?.opponent ?? ''),
+    points: row.points || 0,
+    minutes: row.minutes || 0,
+    shooting: {
+      close: { made: row.close_made || 0, attempted: row.close_attempted || 0 },
+      mid: { made: row.mid_made || 0, attempted: row.mid_attempted || 0 },
+      three: { made: row.three_made || 0, attempted: row.three_attempted || 0 },
+      freeThrow: { made: row.free_throw_made || 0, attempted: row.free_throw_attempted || 0 },
+    },
+    rebounds: {
+      offensive: row.offensive_rebounds || 0,
+      defensive: row.defensive_rebounds || 0,
+      total: row.total_rebounds ?? (row.offensive_rebounds || 0) + (row.defensive_rebounds || 0),
+    },
+    assists: row.assists || 0,
+    steals: row.steals || 0,
+    turnovers: row.turnovers || 0,
+    blocks: row.blocks || 0,
+    valuation: row.valuation || 0,
+  })), [selectedPlayerRows]);
 
   useEffect(() => {
     let cancelled = false;
@@ -12015,7 +12040,7 @@ export function SeasonComparison({
                     size="sm"
                     className="border-border-subtle hover:bg-surface-2 text-cyan shrink-0"
                     onClick={() => {
-                      const md = playerSeasonToMd(selectedPlayer);
+                      const md = playerSeasonToMd(selectedPlayer, selectedPlayerRecentGames);
                       const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
                       const url = URL.createObjectURL(blob);
                       const a = document.createElement('a');
@@ -12130,7 +12155,7 @@ export function SeasonComparison({
                     size="sm"
                     className="border-border-subtle hover:bg-surface-2 text-cyan shrink-0 ml-auto"
                     onClick={() => {
-                      const md = playerSeasonToMd(selectedPlayer);
+                      const md = playerSeasonToMd(selectedPlayer, selectedPlayerRecentGames);
                       const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
                       const url = URL.createObjectURL(blob);
                       const a = document.createElement('a');

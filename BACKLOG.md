@@ -832,7 +832,13 @@ Felhasználói hibalista a Játékos elemzés felületéről és a játékos MD 
   rosszabb) és a posztküszöbök. Dobásminőség – „Tényleges eFG” → „Dobástérkép-eFG”, a lefedettség kiírva
   (térkép / box score kísérlet és találat, %), 95% alatt figyelmeztető színnel. Limitáció – 1,5 alatti AST/TO mindig
   limitáció (`lib/player-analysis.ts`, `AST_TO_LIMITATION_THRESHOLD`). Teszt: `tests/player-analysis-h32.test.ts`.
-- [ ] C) MD export (VAL, utolsó meccsek, offenzív / defenzív index).
+- [x] **C) MD export (`playerSeasonToMd`):** a `PlayerStats.valuation` a meccsátlag (`avg_valuation`), az export mégis
+  összesnek vette és újra osztotta (21,8 / 2,2 / VAL/36 3,1) → most 218 összes, 21,8 / meccs, 30,9 / 36. Az
+  „Utolsó meccsek” tábla üres volt, mert a szezonlista játékosobjektumában nincs `gameHistory` – új opcionális
+  `recentGames` paraméter, a `SeasonComparison` a játékos meccssoraiból adja (`selectedPlayerRecentGames`). A nem
+  reprodukálható „Offenzív index” (130.00) és „Defenzív index” (90.2) – a DB `offensive_rating` /
+  `defensive_rating` oszlopok meccsátlaga – helyett képlettel kiírt mutatók: `Pont / dobáskísérlet (PTS / (FGA +
+  0,44·FTA))` és `Védekező akció / meccs (St + Bl + V-lep)`. Teszt: `tests/player-export-md.test.ts`.
 - [x] **D) Szöveg és címke:** cirill `о`, `б` a „Mezőnydobás” szóban (`lib/player-analysis.ts`) javítva, teszt őrzi;
   „alapkontekstus” → „alapkontextus”; hátvéd poszton „Pontszerző hátvéd” / „Triplázó-védő hátvéd” a „csatár” helyett
   (`roleLabelForPosition`). Lineup névpárosítás: a „Legjobb páros” nevei a közös `resolvePlayerNames`

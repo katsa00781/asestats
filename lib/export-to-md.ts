@@ -355,10 +355,22 @@ export function gameStatsToMd(
   return lines.join('\n');
 }
 
-export function playerSeasonToMd(player: PlayerStats): string {
+/**
+ * Játékos szezon-export. `recentGames`: a meccstörténet, ha a játékosobjektum
+ * nem hozza (`gameHistory` üres – pl. a szezonlista betöltési útja), legfrissebb elöl.
+ */
+export function playerSeasonToMd(player: PlayerStats, recentGames?: PlayerStats['gameHistory']): string {
   const g = Math.max(player.gamesPlayed, 1);
   const pp = (n: number) => (n / g).toFixed(1);
   const s = player.shooting;
+  // A `valuation` a meccsátlag (avg_valuation) – az összes ebből, nem fordítva.
+  const valTotal = player.valuation * player.gamesPlayed;
+  const per36 = (n: number) => (n / Math.max(player.minutes, 1) * 36).toFixed(1);
+  const fga = s.close.attempted + s.mid.attempted + s.three.attempted;
+  const scoringAttempts = fga + 0.44 * s.freeThrow.attempted;
+  const pointsPerAttempt = scoringAttempts > 0 ? player.points / scoringAttempts : 0;
+  const defensiveActionsPerGame = (player.steals + player.blocks + player.rebounds.defensive) / g;
+  const games = player.gameHistory.length > 0 ? player.gameHistory : (recentGames ?? []);
 
   const lines: string[] = [
     `# Játékos szezonértékelés: ${player.name}`,
@@ -382,7 +394,7 @@ export function playerSeasonToMd(player: PlayerStats): string {
     `| Blokkolt dobás | ${player.blocks} | ${pp(player.blocks)} |`,
     `| Labdavesztés | ${player.turnovers} | ${pp(player.turnovers)} |`,
     `| Faultok | ${player.foulsCommitted} | ${pp(player.foulsCommitted)} |`,
-    `| Valuation | ${player.valuation.toFixed(1)} | ${pp(player.valuation)} |`,
+    `| Valuation | ${valTotal.toFixed(0)} | ${player.valuation.toFixed(1)} |`,
     ``,
     `## Dobásprofil`,
     ``,
@@ -399,9 +411,9 @@ export function playerSeasonToMd(player: PlayerStats): string {
     `|--------|-------|`,
     `| True Shooting % | ${player.trueShootingPct.toFixed(1)}% |`,
     `| Effective FG % | ${player.effectiveShootingPct.toFixed(1)}% |`,
-    `| VAL/36 perc | ${(player.valuation / Math.max(player.minutes, 1) * 36).toFixed(1)} |`,
-    `| Offenzív index (pont/kísérlet, nem NBA OrtG) | ${player.offensiveRating.toFixed(2)} |`,
-    `| Defenzív index (akció/meccs, nem NBA DrtG) | ${player.defensiveRating.toFixed(1)} |`,
+    `| VAL/36 perc | ${per36(valTotal)} |`,
+    `| Pont / dobáskísérlet (PTS / (FGA + 0,44·FTA)) | ${pointsPerAttempt.toFixed(2)} |`,
+    `| Védekező akció / meccs (St + Bl + V-lep) | ${defensiveActionsPerGame.toFixed(1)} |`,
     ``,
     `## Per-36 perces mutatók`,
     ``,
@@ -413,7 +425,7 @@ export function playerSeasonToMd(player: PlayerStats): string {
     `| Labdaszerzés/36 | ${(player.steals / Math.max(player.minutes, 1) * 36).toFixed(1)} |`,
     `| Blokkolt dobás/36 | ${(player.blocks / Math.max(player.minutes, 1) * 36).toFixed(1)} |`,
     `| Labdavesztés/36 | ${(player.turnovers / Math.max(player.minutes, 1) * 36).toFixed(1)} |`,
-    `| VAL/36 | ${(player.valuation / Math.max(player.minutes, 1) * 36).toFixed(1)} |`,
+    `| VAL/36 | ${per36(valTotal)} |`,
     ``,
     `## Utolsó meccsek (max. 10)`,
     ``,
@@ -421,7 +433,7 @@ export function playerSeasonToMd(player: PlayerStats): string {
     `|-------|----------|------|------|--------|----------|----|---------|-----|----|----|----|----|----|`,
   ];
 
-  for (const game of player.gameHistory.slice(0, 10)) {
+  for (const game of games.slice(0, 10)) {
     const gs = game.shooting;
     lines.push(
       `| ${game.date} | ${game.opponent} | ${game.minutes} | ${game.points} | ${gs.close.made}/${gs.close.attempted} | ${gs.mid.made}/${gs.mid.attempted} | ${gs.three.made}/${gs.three.attempted} | ${gs.freeThrow.made}/${gs.freeThrow.attempted} | ${game.rebounds.total} | ${game.assists} | ${game.steals} | ${game.blocks} | ${game.turnovers} | ${game.valuation} |`
