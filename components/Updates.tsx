@@ -77,7 +77,7 @@ const updates: UpdateItem[] = [
     icon: <BarChart3 className="w-5 h-5" />,
     title: 'Pregame layout overhaul, shot-profile matchup és stabilabb játékos kontextus',
     description:
-      'A pregame report teljes vizuális újrarendezést kapott: a gyors összkép, matchup réteg és interaktív modellezés külön blokkba került, a kulcsjátékosok pedig új, összehasonlítható shot-profile kártyákkal jelennek meg. Bekerült a szezonos dobástérkép matchup (zónaarány, liga-delta, offense-vs-defense zónaél), a chartok label-kezelése javult, és a kulcsjátékos/fókusz/kockázat panelek jobban kitöltik a rendelkezésre álló helyet. A játékos elemzés hátterében a clutch blokk Kosarstat alapra váltott, stabilabb lett a lineup fallback és a szezonos alapkontekstus, így a narratívák kevesebb félreértelmezhető szerepköri állítást tesznek.',
+      'A pregame report teljes vizuális újrarendezést kapott: a gyors összkép, matchup réteg és interaktív modellezés külön blokkba került, a kulcsjátékosok pedig új, összehasonlítható shot-profile kártyákkal jelennek meg. Bekerült a szezonos dobástérkép matchup (zónaarány, liga-delta, offense-vs-defense zónaél), a chartok label-kezelése javult, és a kulcsjátékos/fókusz/kockázat panelek jobban kitöltik a rendelkezésre álló helyet. A játékos elemzés hátterében a clutch blokk Kosarstat alapra váltott, stabilabb lett a lineup fallback és a szezonos alapkontextus, így a narratívák kevesebb félreértelmezhető szerepköri állítást tesznek.',
   },
   {
     date: '2026. március 29.',

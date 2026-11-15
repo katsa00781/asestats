@@ -12275,7 +12275,7 @@ export function SeasonComparison({
                   </div>
                 ))}
                 <div className="text-[11px] text-muted">
-                  A magas pontszám önmagában nem jelent elsődleges scorer vagy playmaker szerepet; a szezonos volumen- és usage-kontekstust mindig az alapkártyával együtt kell olvasni.
+                  A magas pontszám önmagában nem jelent elsődleges scorer vagy playmaker szerepet; a szezonos volumen- és usage-kontextust mindig az alapkártyával együtt kell olvasni.
                 </div>
               </CardContent>
             </Card>

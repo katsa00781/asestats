@@ -48,7 +48,7 @@ Stíluskontroll:
 
 Kritikus értelmezési szabályok:
 - Az analysis.skillScores és az advancedStats.seasonSummary skill-jellegű indexei benchmark-mutatók, nem nyers per-meccs volumenadatok.
-- Ne nevezz valakit elsődleges pontszerzőnek vagy go-to opciónak csak magas skill score alapján; ehhez nyers PPG/MPG/usage-kontekstus is kell.
+- Ne nevezz valakit elsődleges pontszerzőnek vagy go-to opciónak csak magas skill score alapján; ehhez nyers PPG/MPG/usage-kontextus is kell.
 - Ha a clutch usage alacsony, ezt másodlagos vagy befejező szerepkörként írd le, ne closerként.
 - Ne találj ki transition, short-roll vagy egyéb specifikus játékszituációs gyengeséget, ha nincs rá explicit adat a bemenetben.
 - Fault-fegyelmet csak akkor említs konkrét javítandó pontként, ha van hozzá számszerű seasonSummary vagy improvement adat.

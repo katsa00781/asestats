@@ -840,7 +840,7 @@ Felhasználói hibalista a Játékos elemzés felületéről és a játékos MD 
   `defensive_rating` oszlopok meccsátlaga – helyett képlettel kiírt mutatók: `Pont / dobáskísérlet (PTS / (FGA +
   0,44·FTA))` és `Védekező akció / meccs (St + Bl + V-lep)`. Teszt: `tests/player-export-md.test.ts`.
 - [x] **D) Szöveg és címke:** cirill `о`, `б` a „Mezőnydobás” szóban (`lib/player-analysis.ts`) javítva, teszt őrzi;
-  „alapkontekstus” → „alapkontextus”; hátvéd poszton „Pontszerző hátvéd” / „Triplázó-védő hátvéd” a „csatár” helyett
+  „alapkontekstus” / „usage-kontekstus” → „…kontextus” (a felületen, a Frissítések szövegében és az AI-promptban); hátvéd poszton „Pontszerző hátvéd” / „Triplázó-védő hátvéd” a „csatár” helyett
   (`roleLabelForPosition`). Lineup névpárosítás: a „Legjobb páros” nevei a közös `resolvePlayerNames`
   (vezetéknév-alapú) illesztővel a játékos-adatbázis alakjára írva („Jay Jay CHANDLER” → „CHANDLER III. John Watson”).
 - Mobil jegyzet: `asestatmobile/docs/mobile-sync/2026-11-15-jatekoselemzes-h32.md`.
