@@ -715,6 +715,15 @@ const buildAggregatedKosarstatClutchContext = (
   };
 };
 
+
+/** Ennél kevesebb clutch meccsből nincs clutch-verdikt és szerep-következtetés, csak „kevés adat”. */
+const CLUTCH_MIN_GAMES_FOR_VERDICT = 3;
+/** A szerepkör-csoport (ball-handler / off-ball / magas 3PA / gyűrűnyomás) ennyi meccstől számít a verdiktbe. */
+const ROLE_MIN_GAMES_FOR_VERDICT = 3;
+/** A lineup on/off verdikt a játszott percek legalább ekkora lefedettségétől. */
+const IMPACT_MIN_COVERAGE = 0.8;
+/** Ekkora |on/off delta| (net/40) alatt az egymeccses lineup-zaj miatt nincs pozitív / negatív verdikt. */
+const IMPACT_NOISE_NET40 = 5;
 const buildAggregatedKosarstatPlayerClutchContext = (
   games: KosarstatParsedClutchGame[],
   playerProfiles: NormalizedNameProfile[]
@@ -775,9 +784,12 @@ const buildAggregatedKosarstatPlayerClutchContext = (
     tovPct,
     astTo,
     ppp,
-    sampleWarning: matchedGames.length < 10 ? 'Korlátozott Kosarstat clutch minta: az értelmezés inkább irányadó, mint végleges.' : null,
+    sampleWarning: matchedGames.length < CLUTCH_MIN_GAMES_FOR_VERDICT
+      ? `Kevés adat: ${matchedGames.length} clutch meccs – szerep- és hatékonysági következtetés csak legalább ${CLUTCH_MIN_GAMES_FOR_VERDICT} meccstől.`
+      : matchedGames.length < 10 ? 'Korlátozott Kosarstat clutch minta: az értelmezés inkább irányadó, mint végleges.' : null,
     roleNote: (() => {
-      if (usagePct === null) return null;
+      // 1–2 meccsből (pár clutch-birtoklás) nem vonunk le szerepet.
+      if (usagePct === null || matchedGames.length < CLUTCH_MIN_GAMES_FOR_VERDICT) return null;
       if (usagePct < 15) return 'Clutch szerepben inkább befejező opció, nem elsődleges labdás vagy izolációs lezáró.';
       if (usagePct >= 24) return 'Clutch szerepben érdemi labdás terhelést is kap.';
       return 'Clutch szerepe vegyes: részben befejező, részben kapcsolódó labdás feladatokkal.';
@@ -11295,9 +11307,23 @@ export function SeasonComparison({
 
       const expectedEfg = roundValue((expectedPoints / (2 * totalAttempts)) * 100, 1);
       const actualEfg = roundValue((actualPoints / (2 * totalAttempts)) * 100, 1);
+      // A dobástérkép (Hunbasket) nem minden kísérletet tartalmaz: a lefedettség a
+      // box score mezőnykísérleteihez és találataihoz mérve, hogy a térkép-eFG ne
+      // tűnjön a szezon-eFG-nek.
+      const boxAttempts = seasonAggregate.fga;
+      const boxMade = seasonAggregate.fgm;
+      const mapMade = Object.values(playerSeasonShotSummary.zoneStats).reduce((sum, zone) => sum + zone.made, 0);
+      const coveragePct = boxAttempts > 0 ? roundValue((playerSeasonShotSummary.attempts / boxAttempts) * 100, 0) : null;
       return {
         available: true,
         sampleAttempts: totalAttempts,
+        coverage: {
+          mapAttempts: playerSeasonShotSummary.attempts,
+          mapMade,
+          boxAttempts,
+          boxMade,
+          pct: coveragePct,
+        },
         confidence: confidenceFromSample(totalAttempts, 70, 140),
         expectedEfg,
         actualEfg,
@@ -11346,20 +11372,38 @@ export function SeasonComparison({
         return roundValue(weightedNet, 1);
       };
 
+      // A Kosarstat lineup más névalakot használ (pl. „Jay Jay CHANDLER”): a
+      // páros neveit a csapat játékos-adatbázisbeli nevére írjuk át.
+      const teamPlayerNames = activeSeasonPlayers
+        .filter(player => player.teamId === selectedPlayer.teamId)
+        .map(player => player.name)
+        .filter((name): name is string => Boolean(name));
       const topPairWithPlayer = (lineupSupportSource?.pairStats ?? [])
         .filter(pair => pair.players.some(player => matchesNormalizedNameProfile(player, selectedPlayerProfiles)) && pair.seconds >= 90)
         .sort((a, b) => b.netPer40 - a.netPer40)[0] ?? null;
 
+      // Lefedettség: a lineup-adatban talált pályán töltött perc a box score
+      // játszott perceihez mérve – hiányzó Kosarstat lineup meccseknél alacsony.
+      const lineupOnMinutes = on.reduce((sum, item) => sum + item.seconds, 0) / 60;
+      const playedMinutes = rows.reduce((sum, item) => sum + item.minutes, 0);
+      const coverage = playedMinutes > 0 ? Math.min(1, lineupOnMinutes / playedMinutes) : 0;
       return {
         available: on.length > 0 || off.length > 0,
-        confidence: confidenceFromSample(roundValue(on.reduce((sum, item) => sum + item.seconds, 0) / 60, 1), 12, 24),
+        confidence: lineupOnMinutes < 12
+          ? 'alacsony' as const
+          : coverage >= 0.9 ? 'magas' as const : coverage >= 0.7 ? 'kozepes' as const : 'alacsony' as const,
+        coveragePct: roundValue(coverage * 100, 0),
+        playedMinutes: roundValue(playedMinutes, 0),
         onNet40: weighted(on),
         offNet40: weighted(off),
         delta: weighted(on) !== null && weighted(off) !== null ? roundValue((weighted(on) as number) - (weighted(off) as number), 1) : null,
         lineupMinutes: roundValue(on.reduce((sum, item) => sum + item.seconds, 0) / 60, 1),
         topPair: topPairWithPlayer
           ? {
-              label: topPairWithPlayer.players.join(' + '),
+              label: (() => {
+                const resolution = resolvePlayerNames(topPairWithPlayer.players, teamPlayerNames);
+                return topPairWithPlayer.players.map(name => resolution.matched.get(name) ?? name).join(' + ');
+              })(),
               netPer40: roundValue(topPairWithPlayer.netPer40, 1),
               minutes: roundValue(topPairWithPlayer.seconds / 60, 1),
             }
@@ -11394,6 +11438,8 @@ export function SeasonComparison({
         confidence,
         ballHandlerSample: ballHandlerRows.length,
         offBallSample: offBallRows.length,
+        highThreeSample: highThreeRows.length,
+        rimPressureSample: rimPressureRows.length,
         ballHandlerTs: poolTs(ballHandlerRows),
         ballHandlerPpp: poolPpp(ballHandlerRows),
         offBallTs: poolTs(offBallRows),
@@ -11402,6 +11448,20 @@ export function SeasonComparison({
         rimPressureTs: poolTs(rimPressureRows),
       };
     })();
+
+    // A legjobb szerepkör-TS csak a legalább ROLE_MIN_GAMES_FOR_VERDICT meccses
+    // csoportokból: 1–2 meccses részhalmaz maximuma szelekciós torzítás.
+    const bestRoleTs = Math.max(
+      ...([
+        [roleEfficiency.ballHandlerTs, roleEfficiency.ballHandlerSample],
+        [roleEfficiency.offBallTs, roleEfficiency.offBallSample],
+        [roleEfficiency.highThreeTs, roleEfficiency.highThreeSample],
+        [roleEfficiency.rimPressureTs, roleEfficiency.rimPressureSample],
+      ] as Array<[number | null, number]>)
+        .filter(([ts, sample]) => ts !== null && sample >= ROLE_MIN_GAMES_FOR_VERDICT)
+        .map(([ts]) => ts as number),
+      -Infinity
+    );
 
     const decisionQuality = (() => {
       // ΣAST / ΣTO – ugyanaz, mint a Játéképítés blokk AST/TO-ja.
@@ -11556,14 +11616,11 @@ export function SeasonComparison({
     const blockVerdicts = (() => {
       const shotTone = gradeHigherBetter(shotQualityVsMaking.valueAdd, 1.5, -1.5);
       const clutchTsDelta = clutchIdentity.tsPct !== null ? roundValue(clutchIdentity.tsPct - seasonTs, 1) : null;
-      const clutchTone = gradeHigherBetter(clutchTsDelta, 1.0, -2.0);
-      const impactTone = gradeHigherBetter(plusMinusContext.delta, 2.0, -2.0);
-      const roleBestTs = Math.max(
-        roleEfficiency.ballHandlerTs ?? -Infinity,
-        roleEfficiency.offBallTs ?? -Infinity,
-        roleEfficiency.highThreeTs ?? -Infinity,
-        roleEfficiency.rimPressureTs ?? -Infinity
-      );
+      const clutchTone = clutchIdentity.games < CLUTCH_MIN_GAMES_FOR_VERDICT ? 'na' : gradeHigherBetter(clutchTsDelta, 1.0, -2.0);
+      // Lineup on/off: csak elég lefedettségnél, és a zajszint (±5 net/40) fölött ad irányt.
+      const impactCovered = (plusMinusContext.coveragePct ?? 0) >= IMPACT_MIN_COVERAGE * 100;
+      const impactTone = impactCovered ? gradeHigherBetter(plusMinusContext.delta, IMPACT_NOISE_NET40, -IMPACT_NOISE_NET40) : 'na';
+      const roleBestTs = bestRoleTs;
       const roleTsDelta = Number.isFinite(roleBestTs) ? roundValue(roleBestTs - seasonTs, 1) : null;
       const roleTone = gradeHigherBetter(roleTsDelta, 1.0, -1.5);
       const decisionTone = gradeHigherBetter(decisionQuality.score, positionProfile.decisionGood, positionProfile.decisionRisk);
@@ -11582,7 +11639,9 @@ export function SeasonComparison({
         },
         clutch: {
           tone: clutchTone,
-          text: clutchTone === 'good'
+          text: clutchTone === 'na'
+            ? `Kevés adat: ${clutchIdentity.games} clutch meccs – verdikt legalább ${CLUTCH_MIN_GAMES_FOR_VERDICT} meccstől.`
+            : clutchTone === 'good'
             ? 'Verdict: clutch helyzetben stabilan tartja vagy javítja a szezon-szintet.'
             : clutchTone === 'risk'
               ? 'Verdict: clutchban érdemi visszaesés látszik a szezonátlaghoz képest.'
@@ -11590,15 +11649,19 @@ export function SeasonComparison({
         },
         impact: {
           tone: impactTone,
-          text: impactTone === 'good'
-            ? 'Verdict: a lineup on/off alapján pozitív nettó hatást ad.'
-            : impactTone === 'risk'
-              ? 'Verdict: a jelenlegi lineup-környezetben negatívabb nettó hatás látszik.'
-              : 'Verdict: a lineup-hatás vegyes, matchup- és rotációfüggő.',
+          text: impactTone === 'na'
+            ? `Verdikt nélkül: a lineup-adat a játszott percek ${plusMinusContext.coveragePct ?? 0}%-át fedi (legalább ${Math.round(IMPACT_MIN_COVERAGE * 100)}% kell).`
+            : impactTone === 'good'
+              ? 'Verdict: a lineup on/off alapján érdemben pozitív nettó hatás (a ±5 net/40 zajszint fölött).'
+              : impactTone === 'risk'
+                ? 'Verdict: a lineup on/off alapján érdemben negatív nettó hatás (a ±5 net/40 zajszint alatt).'
+                : 'Verdict: az on/off különbség zajszinten belül van (±5 net/40) – nincs egyértelmű lineup-hatás.',
         },
         role: {
           tone: roleTone,
-          text: roleTone === 'good'
+          text: roleTone === 'na'
+            ? `Kevés adat: egyik szerepkör-csoportban sincs legalább ${ROLE_MIN_GAMES_FOR_VERDICT} meccs – verdikt nélkül.`
+            : roleTone === 'good'
             ? 'Verdict: legalább egy szerepkörben a szezon-szint fölé tud lépni.'
             : roleTone === 'risk'
               ? 'Verdict: a szerepkörök között nincs stabilan pluszt hozó profil.'
@@ -11647,21 +11710,15 @@ export function SeasonComparison({
     };
 
     const clutchDeltaForHint = clutchIdentity.tsPct !== null ? roundValue(clutchIdentity.tsPct - seasonTs, 1) : null;
-    const roleBestTsForHint = Math.max(
-      roleEfficiency.ballHandlerTs ?? -Infinity,
-      roleEfficiency.offBallTs ?? -Infinity,
-      roleEfficiency.highThreeTs ?? -Infinity,
-      roleEfficiency.rimPressureTs ?? -Infinity
-    );
-    const roleTsDeltaForHint = Number.isFinite(roleBestTsForHint) ? roundValue(roleBestTsForHint - seasonTs, 1) : null;
+    const roleTsDeltaForHint = Number.isFinite(bestRoleTs) ? roundValue(bestRoleTs - seasonTs, 1) : null;
 
     const thresholdHints = {
       shot: `Good: value add >= +1.5 pp | Risk: value add < -1.5 pp | Minta: ${shotQualityVsMaking.sampleAttempts ?? 0} kísérlet\nAktuális: ${formatNullableNumber(shotQualityVsMaking.valueAdd, 1, ' pp')} | Indok: ${toneReason(blockVerdicts.shot.tone)}`,
       clutch: `Good: clutch TS - szezon TS >= +1.0 pp | Risk: <= -2.0 pp | Minta: ${clutchIdentity.games} Kosarstat clutch meccs\nAktuális: ${formatNullableNumber(clutchDeltaForHint, 1, ' pp')} | Indok: ${toneReason(blockVerdicts.clutch.tone)}`,
-      impact: `Good: on/off delta >= +2.0 net/40 | Risk: < -2.0 net/40 | Minta: ${plusMinusContext.lineupMinutes.toFixed(1)} lineup perc\nAktuális: ${formatNullableNumber(plusMinusContext.delta, 1)} | Indok: ${toneReason(blockVerdicts.impact.tone)}`,
-      role: `Good: legjobb szerepkör TS >= szezon TS +1.0 pp | Risk: <= -1.5 pp | Minta: BH ${roleEfficiency.ballHandlerSample} / OB ${roleEfficiency.offBallSample}\nAktuális: ${formatNullableNumber(roleTsDeltaForHint, 1, ' pp')} | Indok: ${toneReason(blockVerdicts.role.tone)}`,
+      impact: `Good: on/off delta >= +${IMPACT_NOISE_NET40.toFixed(1)} net/40 | Risk: < -${IMPACT_NOISE_NET40.toFixed(1)} net/40 | Lefedettség legalább ${Math.round(IMPACT_MIN_COVERAGE * 100)}% | Minta: ${plusMinusContext.lineupMinutes.toFixed(1)} / ${plusMinusContext.playedMinutes} perc (${plusMinusContext.coveragePct}%)\nAktuális: ${formatNullableNumber(plusMinusContext.delta, 1)} | Indok: ${toneReason(blockVerdicts.impact.tone)}`,
+      role: `Good: legjobb (legalább ${ROLE_MIN_GAMES_FOR_VERDICT} meccses) szerepkör TS >= szezon TS +1.0 pp | Risk: <= -1.5 pp | Minta: BH ${roleEfficiency.ballHandlerSample} / OB ${roleEfficiency.offBallSample} / 3PA ${roleEfficiency.highThreeSample} / gyűrű ${roleEfficiency.rimPressureSample}\nAktuális: ${formatNullableNumber(roleTsDeltaForHint, 1, ' pp')} | Indok: ${toneReason(blockVerdicts.role.tone)}`,
       decision: `Good: index >= ${positionProfile.decisionGood} | Risk: < ${positionProfile.decisionRisk} | Pozíciós küszöb (${analysis.position})\nAktuális: ${decisionQuality.score.toFixed(1)} | Indok: ${toneReason(blockVerdicts.decision.tone)}`,
-      stability: `Good: volatilitási index <= ${positionProfile.stabilityGood} | Risk: > ${positionProfile.stabilityRisk} | Pozíciós küszöb (${analysis.position})\nAktuális: ${stability.volatility.toFixed(1)} | Indok: ${toneReason(blockVerdicts.stability.tone)}`,
+      stability: `Skála: 0 = egyenletes, 100 = erősen hullámzó (magasabb = rosszabb) | Good: volatilitási index <= ${positionProfile.stabilityGood} | Risk: > ${positionProfile.stabilityRisk} | Pozíciós küszöb (${analysis.position})\nAktuális: ${stability.volatility.toFixed(1)} | Indok: ${toneReason(blockVerdicts.stability.tone)}`,
       matchup: `Good: erős-gyenge TS delta >= -1.0 pp | Risk: < -4.0 pp | Minta: ${matchupSensitivity.sampleSize ?? 0} meccs\nAktuális: ${formatNullableNumber(matchupSensitivity.tsDelta, 1, ' pp')} | Indok: ${toneReason(blockVerdicts.matchup.tone)}`,
       fatigue: `Good: high-load TS - normal TS >= ${positionProfile.fatigueGoodDrop.toFixed(1)} pp | Risk: <= ${positionProfile.fatigueRiskDrop.toFixed(1)} pp | Pozíciós küszöb (${analysis.position})\nAktuális: ${formatNullableNumber(fatigueLoad.tsDrop, 1, ' pp')} | Indok: ${toneReason(blockVerdicts.fatigue.tone)}`,
     };
@@ -11678,6 +11735,7 @@ export function SeasonComparison({
       blockVerdicts,
       thresholdHints,
       coachingFocus,
+      positionThresholds: { stabilityGood: positionProfile.stabilityGood, stabilityRisk: positionProfile.stabilityRisk },
       season: {
         tsPct: roundValue(seasonTs, 1),
         ppp: roundValue(seasonPpp, 3),
@@ -11686,6 +11744,7 @@ export function SeasonComparison({
     };
   }, [
     activeKosarstatTeamAnalysis,
+    activeSeasonPlayers,
     analysis,
     games,
     leagueSeasonShotSummary,
@@ -12121,7 +12180,7 @@ export function SeasonComparison({
 
             <Card>
               <CardHeader>
-                <CardTitle className="font-display uppercase tracking-wide text-primary">Szezonos alapkontekstus</CardTitle>
+                <CardTitle className="font-display uppercase tracking-wide text-primary">Szezonos alapkontextus</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 {playerSeasonOverview ? (
@@ -12349,11 +12408,16 @@ export function SeasonComparison({
                       </p>
                       <div className="flex flex-wrap gap-1.5">
                         <span className="px-1.5 py-0.5 rounded bg-surface-2 text-[10px] text-secondary">Várt eFG: {formatNullableNumber(playerAdvancedInsights.shotQualityVsMaking.expectedEfg, 1, '%')}</span>
-                        <span className="px-1.5 py-0.5 rounded bg-surface-2 text-[10px] text-secondary">Tényleges eFG: {formatNullableNumber(playerAdvancedInsights.shotQualityVsMaking.actualEfg, 1, '%')}</span>
+                        <span className="px-1.5 py-0.5 rounded bg-surface-2 text-[10px] text-secondary">Dobástérkép-eFG: {formatNullableNumber(playerAdvancedInsights.shotQualityVsMaking.actualEfg, 1, '%')}</span>
                         <span className={`px-1.5 py-0.5 rounded bg-surface-2 text-[10px] ${Number(playerAdvancedInsights.shotQualityVsMaking.valueAdd ?? 0) >= 0 ? 'text-positive' : 'text-negative'}`}>
                           Értéktöbblet: {formatNullableNumber(playerAdvancedInsights.shotQualityVsMaking.valueAdd, 1, ' pp')}
                         </span>
                       </div>
+                      {'coverage' in playerAdvancedInsights.shotQualityVsMaking && playerAdvancedInsights.shotQualityVsMaking.coverage && (
+                        <div className={`text-[10px] ${(playerAdvancedInsights.shotQualityVsMaking.coverage.pct ?? 0) < 95 ? 'text-warning' : 'text-secondary'}`}>
+                          Minta: a dobástérkép (Hunbasket) {playerAdvancedInsights.shotQualityVsMaking.coverage.mapAttempts} / {playerAdvancedInsights.shotQualityVsMaking.coverage.boxAttempts} mezőnykísérletet és {playerAdvancedInsights.shotQualityVsMaking.coverage.mapMade} / {playerAdvancedInsights.shotQualityVsMaking.coverage.boxMade} találatot tartalmaz ({formatNullableNumber(playerAdvancedInsights.shotQualityVsMaking.coverage.pct, 0, '%')}). A dobástérkép-eFG csak erre a mintára vonatkozik, nem a szezon-eFG.
+                        </div>
+                      )}
                       {playerAdvancedInsights.shotQualityVsMaking.zoneAdds.length > 0 && (
                         <div className="text-[10px] text-muted">
                           Zóna delta: {playerAdvancedInsights.shotQualityVsMaking.zoneAdds.slice(0, 3).map(item => `${item.label} ${item.delta >= 0 ? '+' : ''}${item.delta.toFixed(1)}`).join(' • ')}
@@ -12413,7 +12477,7 @@ export function SeasonComparison({
                         <span className={`px-1.5 py-0.5 rounded bg-surface-2 text-[10px] ${Number(playerAdvancedInsights.plusMinusContext.delta ?? 0) >= 0 ? 'text-positive' : 'text-negative'}`}>
                           On/Off delta: {formatNullableNumber(playerAdvancedInsights.plusMinusContext.delta, 1)}
                         </span>
-                        <span className="px-1.5 py-0.5 rounded bg-surface-2 text-[10px] text-muted">Minta: {playerAdvancedInsights.plusMinusContext.lineupMinutes.toFixed(0)} perc</span>
+                        <span className={`px-1.5 py-0.5 rounded bg-surface-2 text-[10px] ${(playerAdvancedInsights.plusMinusContext.coveragePct ?? 0) < IMPACT_MIN_COVERAGE * 100 ? 'text-warning' : 'text-muted'}`}>Minta: {playerAdvancedInsights.plusMinusContext.lineupMinutes.toFixed(0)} / {playerAdvancedInsights.plusMinusContext.playedMinutes} játszott perc ({playerAdvancedInsights.plusMinusContext.coveragePct}%)</span>
                       </div>
                       {playerAdvancedInsights.plusMinusContext.topPair && (
                         <div className="text-[10px] text-muted">
@@ -12443,7 +12507,7 @@ export function SeasonComparison({
                         <span className="px-1.5 py-0.5 rounded bg-surface-2 text-[10px] text-secondary">Magas 3PA TS%: {formatNullableNumber(playerAdvancedInsights.roleEfficiency.highThreeTs, 1, '%')}</span>
                       </div>
                       {'ballHandlerSample' in playerAdvancedInsights.roleEfficiency && 'offBallSample' in playerAdvancedInsights.roleEfficiency && (
-                        <div className="text-[10px] text-muted">Minta: ball-handler {playerAdvancedInsights.roleEfficiency.ballHandlerSample} • off-ball {playerAdvancedInsights.roleEfficiency.offBallSample} meccs</div>
+                        <div className="text-[10px] text-muted">Minta: ball-handler {playerAdvancedInsights.roleEfficiency.ballHandlerSample} • off-ball {playerAdvancedInsights.roleEfficiency.offBallSample} • magas 3PA {playerAdvancedInsights.roleEfficiency.highThreeSample} • gyűrűnyomás {playerAdvancedInsights.roleEfficiency.rimPressureSample} meccs; a verdiktbe csak a legalább {ROLE_MIN_GAMES_FOR_VERDICT} meccses csoport számít.</div>
                       )}
                     </div>
 
@@ -12483,8 +12547,11 @@ export function SeasonComparison({
                       <p className={`text-[11px] leading-relaxed ${getInsightToneClass(playerAdvancedInsights.blockVerdicts.stability.tone)}`}>
                         {playerAdvancedInsights.blockVerdicts.stability.text}
                       </p>
+                      <div className="text-[10px] text-muted">
+                        Skála: 0 = meccsről meccsre egyenletes, 100 = erősen hullámzó (TS-, PPP- és TO-szórásból). Posztküszöb ({analysis?.position}): legfeljebb {playerAdvancedInsights.positionThresholds.stabilityGood} stabil, {playerAdvancedInsights.positionThresholds.stabilityRisk} fölött hullámzó.
+                      </div>
                       <div className="flex flex-wrap gap-1.5">
-                        <span className="px-1.5 py-0.5 rounded bg-surface-2 text-[10px] text-secondary">Volatilitás: {playerAdvancedInsights.stability.volatility.toFixed(1)} / 100</span>
+                        <span className="px-1.5 py-0.5 rounded bg-surface-2 text-[10px] text-secondary">Volatilitás: {playerAdvancedInsights.stability.volatility.toFixed(1)} / 100 (magasabb = hullámzóbb)</span>
                         <span className="px-1.5 py-0.5 rounded bg-surface-2 text-[10px] text-secondary">TS szórás: {playerAdvancedInsights.stability.tsStd.toFixed(1)}</span>
                         <span className="px-1.5 py-0.5 rounded bg-surface-2 text-[10px] text-secondary">PPP szórás: {playerAdvancedInsights.stability.pppStd.toFixed(3)}</span>
                         <span className="px-1.5 py-0.5 rounded bg-surface-2 text-[10px] text-secondary">TO szórás: {playerAdvancedInsights.stability.tovStd.toFixed(1)} pp</span>

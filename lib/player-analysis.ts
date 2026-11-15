@@ -282,11 +282,25 @@ const ROLE_INTROS: Record<RoleKey, string> = {
   'Floor Spacer': 'Külső dobással teret nyitó, alacsonyabb labdaigényű opció.',
 };
 
-const translateRoleLabel = (role: RoleKey) => ROLE_LABELS_HU[role] ?? role;
+/**
+ * Hátvéd poszton (PG / SG) a „wing” szerepek címkéje: a „csatár” rossz
+ * megnevezés dobóhátvédnél. A szerepkulcs ugyanaz, csak a magyar címke más.
+ */
+const GUARD_ROLE_LABELS_HU: Partial<Record<RoleKey, string>> = {
+  'Scoring Wing': 'Pontszerző hátvéd',
+  '3&D Wing': 'Triplázó-védő hátvéd',
+};
+
+/** A szerepkör magyar címkéje a játékos posztjához igazítva. */
+export const roleLabelForPosition = (role: RoleKey, position?: Position | null) =>
+  ((position === 'PG' || position === 'SG') ? GUARD_ROLE_LABELS_HU[role] : undefined) ?? ROLE_LABELS_HU[role] ?? role;
 
 const translateTrendRoles = (roles: string[]) => roles.map(role => ROLE_LABELS_HU[role as RoleKey] ?? role);
 
-const ROLE_LABEL_ENTRIES = Object.entries(ROLE_LABELS_HU) as Array<[RoleKey, string]>;
+const ROLE_LABEL_ENTRIES = [
+  ...Object.entries(ROLE_LABELS_HU),
+  ...Object.entries(GUARD_ROLE_LABELS_HU),
+] as Array<[RoleKey, string]>;
 
 export const resolveRoleKey = (role: string): RoleKey | null => {
   if ((ROLE_LABELS_HU as Record<string, string>)[role]) {
@@ -1020,7 +1034,7 @@ const buildValidatedAnalysis = (
   return {
     position: normalized.position,
     roleKeys,
-    roles: roleKeys.map(translateRoleLabel),
+    roles: roleKeys.map(role => roleLabelForPosition(role, normalized.position)),
     skillScores: skills,
     strengths,
     limitations,
@@ -1032,6 +1046,9 @@ const buildValidatedAnalysis = (
 };
 
 // Build limitation strings with functional + tactical consequence context.
+/** Ennél alacsonyabb (szezonösszegből számolt) AST/TO mindig limitációként jelenik meg. */
+export const AST_TO_LIMITATION_THRESHOLD = 1.5;
+
 const buildDetailedLimitations = (
   player: NormalizedStats,
   benchmarks: LeagueBenchmarks,
@@ -1062,6 +1079,13 @@ const buildDetailedLimitations = (
   }
   if (highUsage && paintHeavy && low3PA) {
     limitations.push('Festékfókusz: támadásban plusz segítő védekezést hív, emiatt szűkül a tér.');
+  }
+  // 1,5 alatti AST/TO (ΣAST / ΣTO) mindig limitáció – különben a labdaeladás a
+  // javítandó pontok közt szerepel, a limitációk közt mégis „nincs kiemelt”.
+  if (player.tovPer36 > 0 && player.astTo < AST_TO_LIMITATION_THRESHOLD) {
+    limitations.unshift(
+      `Labdabiztonság: AST/TO ${player.astTo.toFixed(2)} (${AST_TO_LIMITATION_THRESHOLD.toFixed(1)} alatt) – a labdavesztés a szerepkörében limitáló tényező.`
+    );
   }
 
   if (limitations.length === 0) {
@@ -1534,9 +1558,9 @@ const buildEfficiencyNarrative = (player: NormalizedStats, benchmarks: LeagueBen
   }
 
   if (efgPct >= 70) {
-    parts.push(`Mezőnydобás-hatékonyság posztján kiemelkedő (eFG%: ${player.efg}%).`);
+    parts.push(`Mezőnydobás-hatékonyság posztján kiemelkedő (eFG%: ${player.efg}%).`);
   } else if (efgPct <= 30 && player.fga > 0) {
-    parts.push(`Mezőnydобás-hatékonyság alacsony (eFG%: ${player.efg}%) — javítandó terület.`);
+    parts.push(`Mezőnydobás-hatékonyság alacsony (eFG%: ${player.efg}%) — javítandó terület.`);
   }
 
   return parts.join(' ');

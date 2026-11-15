@@ -823,9 +823,21 @@ Felhasználói hibalista a Játékos elemzés felületéről és a játékos MD 
   a Matchup és a Fáradás. (A Stabilitás szórásai továbbra is meccsenkéntiek – a szórás természeténél fogva.)
   Matchup: a csapatlisták nincsenek 3-ra vágva, a csoportok meccsszáma kiírva, a két csoportba nem került meccsek
   külön „Többi meccs” TS%-kal és ellenféllistával. Teszt: `tests/player-game-aggregate.test.ts`.
-- [ ] B) Verdikt és minta (Clutch, Szerepkör, lineup-lefedettség, Volatilitás-skála, limitáció, dobástérkép-lefedettség).
+- [x] **B) Verdikt és minta:** Clutch – 3 meccs alatt nincs verdikt és szerep-következtetés, csak „Kevés adat”
+  (`CLUTCH_MIN_GAMES_FOR_VERDICT`). Szerepkör – a legjobb TS csak a legalább 3 meccses csoportokból
+  (`ROLE_MIN_GAMES_FOR_VERDICT`), minden csoport mintája kiírva; ha egy sem éri el, „Kevés adat”. Lineup on/off –
+  a minta a játszott percekhez mérve (pl. 164 / 254 perc, 65%); 80% lefedettség alatt nincs verdikt
+  (`IMPACT_MIN_COVERAGE`), a megbízhatóság a lefedettségből; a pozitív / negatív verdikt csak ±5 net/40 fölött
+  (`IMPACT_NOISE_NET40`, korábban ±2). Stabilitás – skálamagyarázat (0 = egyenletes, 100 = hullámzó; magasabb =
+  rosszabb) és a posztküszöbök. Dobásminőség – „Tényleges eFG” → „Dobástérkép-eFG”, a lefedettség kiírva
+  (térkép / box score kísérlet és találat, %), 95% alatt figyelmeztető színnel. Limitáció – 1,5 alatti AST/TO mindig
+  limitáció (`lib/player-analysis.ts`, `AST_TO_LIMITATION_THRESHOLD`). Teszt: `tests/player-analysis-h32.test.ts`.
 - [ ] C) MD export (VAL, utolsó meccsek, offenzív / defenzív index).
-- [ ] D) Szöveg és címke, lineup névpárosítás.
+- [x] **D) Szöveg és címke:** cirill `о`, `б` a „Mezőnydobás” szóban (`lib/player-analysis.ts`) javítva, teszt őrzi;
+  „alapkontekstus” → „alapkontextus”; hátvéd poszton „Pontszerző hátvéd” / „Triplázó-védő hátvéd” a „csatár” helyett
+  (`roleLabelForPosition`). Lineup névpárosítás: a „Legjobb páros” nevei a közös `resolvePlayerNames`
+  (vezetéknév-alapú) illesztővel a játékos-adatbázis alakjára írva („Jay Jay CHANDLER” → „CHANDLER III. John Watson”).
+- Mobil jegyzet: `asestatmobile/docs/mobile-sync/2026-11-15-jatekoselemzes-h32.md`.
 - [ ] E) Telítődés (index / percentilis 100).
 
 **H31 – Post-game riport: Fő ok, fókusz-sorrend, eFG egy sorban (ASE–Alba után) ✓ (2026-11-15)** – a kód kész, a böngészős ellenőrzés nyitva

@@ -23,6 +23,7 @@ export type PlayerGameAggregate = {
   games: number;
   points: number;
   fga: number;
+  fgm: number;
   fta: number;
   ast: number;
   tov: number;
@@ -58,6 +59,7 @@ export const aggregatePlayerGames = (lines: PlayerGameLine[]): PlayerGameAggrega
     games: lines.length,
     points,
     fga,
+    fgm,
     fta,
     ast,
     tov,
