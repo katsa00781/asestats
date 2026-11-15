@@ -12243,7 +12243,7 @@ export function SeasonComparison({
                       <div className="text-secondary">Fault/36: <span className="text-primary font-mono tabular-nums">{formatNullableNumber(playerSeasonOverview.foulsPer36, 1)}</span></div>
                     </div>
                     <div className="text-xs text-muted">
-                      Ezek nyers szezonos alapmutatók. A képesség pontszámok ettől külön, 0-100-as posztos benchmark-indexek, nem nyers PPG/usage mutatók.
+                      Ezek nyers szezonos alapmutatók. A képesség pontszámok ettől külön, 0–100-as posztos percentilisek (100 = a poszt legjobbja), nem nyers PPG/usage mutatók.
                     </div>
                   </>
                 ) : (
@@ -12272,8 +12272,20 @@ export function SeasonComparison({
                       </div>
                     </div>
                     <div className="text-[11px] text-muted">{SKILL_SCORE_HELPERS_HU[key] ?? 'Pozíciós benchmark-index.'}</div>
+                    {analysis.skillBasis?.[key as keyof PlayerAnalysis['skillScores']] && (
+                      <div className="text-[11px] text-secondary">
+                        Nyers érték: <span className="font-mono tabular-nums text-primary">
+                          {analysis.skillBasis[key as keyof PlayerAnalysis['skillScores']]
+                            .map(item => `${item.value.toFixed(item.digits)}${item.unit ?? ''} ${item.label}`)
+                            .join(' · ')}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 ))}
+                <div className="text-[11px] text-muted">
+                  A pontszám posztos percentilis: a liga azonos posztú játékosai közti helyezés, 100 = a poszt legjobbja. A legjobbakat ezért a nyers érték különbözteti meg.
+                </div>
                 <div className="text-[11px] text-muted">
                   A magas pontszám önmagában nem jelent elsődleges scorer vagy playmaker szerepet; a szezonos volumen- és usage-kontextust mindig az alapkártyával együtt kell olvasni.
                 </div>

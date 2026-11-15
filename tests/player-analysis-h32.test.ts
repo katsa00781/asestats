@@ -46,3 +46,13 @@ test('Szerepcímke posztfüggő: hátvédnél „Pontszerző hátvéd”, nem �
   const analysis = analyzePlayerSeason(CHANDLER, BENCHMARKS);
   assert.ok(!analysis.roles.some(role => role.includes('csatár')), analysis.roles.join(', '));
 });
+
+test('Képesség-pontszám mellett a nyers alap: a 100-as percentilis is megkülönböztethető', () => {
+  const analysis = analyzePlayerSeason(CHANDLER, BENCHMARKS);
+  assert.ok(analysis.skillBasis);
+  // 195 pont / 254 perc · 36 = 27,6
+  assert.deepEqual(analysis.skillBasis.scoring, [{ label: 'pont/36', value: 27.6, digits: 1 }]);
+  assert.equal(analysis.skillBasis.playmaking.find(item => item.label === 'AST/TO')?.value, 1.14);
+  // Hátvédnél a dobás alapja a 3P% is.
+  assert.ok(analysis.skillBasis.shooting.some(item => item.label === '3P'));
+});

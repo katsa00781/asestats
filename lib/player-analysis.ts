@@ -99,11 +99,22 @@ export type RoleResult = {
   confidence: number;
 };
 
+/** Egy képesség-pontszám mögötti nyers mutató (pl. 27.6 pont/36). */
+export type SkillBasisItem = { label: string; value: number; digits: number; unit?: '%' };
+/** Képességenként a pontszám alapjául szolgáló nyers mutatók. */
+export type SkillBasis = Record<keyof SkillScores, SkillBasisItem[]>;
+
 export type PlayerAnalysis = {
   position: Position;
   roleKeys: RoleKey[];
   roles: string[];
+  /**
+   * Posztos percentilisek (0–100): a liga azonos posztú játékosai közti helyezés,
+   * a poszt legjobbja 100 – ezért a legjobbakat a `skillBasis` nyers értéke különbözteti meg.
+   */
   skillScores: SkillScores;
+  /** A pontszámok nyers alapja; régi (mentett) elemzésben hiányzik. */
+  skillBasis?: SkillBasis;
   strengths: string[];
   limitations: string[];
   improvements: string[];
@@ -1015,6 +1026,42 @@ const applySkillCaps = (scores: SkillScores, percentiles: SkillScores): SkillSco
 });
 
 // Build a validated PlayerAnalysis object from raw stats.
+/**
+ * A képesség-pontszámok nyers alapja ugyanazokból a mutatókból, amelyekből a
+ * percentilis számol (`computeSkillScores`), hogy a 100-as percentilisű
+ * játékosok is megkülönböztethetők legyenek.
+ */
+export const buildSkillBasis = (player: NormalizedStats): SkillBasis => {
+  const isBig = player.position === 'PF' || player.position === 'C';
+  return {
+    scoring: [{ label: 'pont/36', value: player.ptsPer36, digits: 1 }],
+    shooting: [
+      { label: 'eFG', value: player.efg, digits: 1, unit: '%' },
+      ...(isBig ? [] : [{ label: '3P', value: player.threePct, digits: 1, unit: '%' as const }]),
+      { label: 'FT', value: player.ftPct, digits: 1, unit: '%' },
+    ],
+    playmaking: [
+      { label: 'gólpassz/36', value: player.astPer36, digits: 1 },
+      { label: 'AST/TO', value: player.astTo, digits: 2 },
+    ],
+    rebounding: [{ label: 'lepattanó/36', value: player.rebPer36, digits: 1 }],
+    defense: isBig
+      ? [
+          { label: 'blokk/36', value: player.blkPer36, digits: 1 },
+          { label: 'V-lep/36', value: player.defRebPer36, digits: 1 },
+        ]
+      : [
+          { label: 'labdaszerzés/36', value: player.stlPer36, digits: 1 },
+          { label: 'V-lep/36', value: player.defRebPer36, digits: 1 },
+          { label: 'blokk/36', value: player.blkPer36, digits: 1 },
+        ],
+    efficiency: [
+      { label: 'VAL/36', value: player.valPer36, digits: 1 },
+      { label: 'eFG', value: player.efg, digits: 1, unit: '%' },
+    ],
+  };
+};
+
 const buildValidatedAnalysis = (
   raw: RawPlayerSeasonStat,
   benchmarks: LeagueBenchmarks
@@ -1036,6 +1083,7 @@ const buildValidatedAnalysis = (
     roleKeys,
     roles: roleKeys.map(role => roleLabelForPosition(role, normalized.position)),
     skillScores: skills,
+    skillBasis: buildSkillBasis(normalized),
     strengths,
     limitations,
     improvements,

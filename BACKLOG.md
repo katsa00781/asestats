@@ -1,6 +1,6 @@
 # BACKLOG.md – ASEStats Projekt
 
-_Utoljára frissítve: 2026-11-15 (H31 – post-game riport: a „Fő ok” a volumen / hatékonyság bontásból, a Net-eltérés oka külön sorban, „ellensúlyozta”, ratingek liga mediánja, a fókusz sorrendje a becsült pontköltség szerint belső védekezési céllal, eFG egy sorban, a Reflexió a Pre-game fültől függetlenül; előtte H30 – Játékosok nézet: alacsony kontrasztú kártyaszövegek (`text-muted` → `text-secondary`, stat-értékeken `text-ai` → `text-primary`); előtte H29 – a kapott pont minden elemzésben a `games.opp_score`-ból: csapatelemzés DRtg / Net, post-game DRtg referencia, pregame meccs-kivonás és projekció; előtte H28 – post-game riport adatminőség: második esély küszöb, Oliver-súlyozott védekezési verdikt, pp-mértékegység és egységes kerekítés, a leggyengébb páros mellett a kulcsjátékosok; lelet: a liga DRtg medián a kapott pont hibás összegzése miatt hiányzik; előtte H27 – az ütemezett import Playwright-telepítése elszállt az ubuntu-latest → 26.04 váltás miatt, a runner `ubuntu-24.04`-re rögzítve; előtte 2026-11-08: H22 – a 138 db 2024/25-ös dobástérkép átkötve a helyes szezonra, ellenőrizve; H21 – a dobástérkép zónái valós méretarányú FIBA-geometriával: a festék / tripla besorolás javítva; előtte H20 – a hunbasket menetrend-oldal átalakulása miatt leállt `hunbasket:fixtures` javítva, éles újrafuttatás nyitva; előtte 2026-11-01: idei vs. tavalyi csapat összehasonlítás: csapatstat és keretváltozás kész, böngészős ellenőrzés nyitva; előtte 2026-10-18: H19 – post-game riport harmadik hibalista, A–I egység kész)_
+_Utoljára frissítve: 2026-11-15 (H32 – játékoselemzés: arányok összegből (közös `aggregatePlayerGames`), verdikt csak elég mintánál, lineup- és dobástérkép-lefedettség, AST/TO-limitáció, MD export VAL / meccstábla / indexek, posztfüggő szerepcímke, cirill betűk, percentilis + nyers érték; előtte H31 – post-game riport: a „Fő ok” a volumen / hatékonyság bontásból, a Net-eltérés oka külön sorban, „ellensúlyozta”, ratingek liga mediánja, a fókusz sorrendje a becsült pontköltség szerint belső védekezési céllal, eFG egy sorban, a Reflexió a Pre-game fültől függetlenül; előtte H30 – Játékosok nézet: alacsony kontrasztú kártyaszövegek (`text-muted` → `text-secondary`, stat-értékeken `text-ai` → `text-primary`); előtte H29 – a kapott pont minden elemzésben a `games.opp_score`-ból: csapatelemzés DRtg / Net, post-game DRtg referencia, pregame meccs-kivonás és projekció; előtte H28 – post-game riport adatminőség: második esély küszöb, Oliver-súlyozott védekezési verdikt, pp-mértékegység és egységes kerekítés, a leggyengébb páros mellett a kulcsjátékosok; lelet: a liga DRtg medián a kapott pont hibás összegzése miatt hiányzik; előtte H27 – az ütemezett import Playwright-telepítése elszállt az ubuntu-latest → 26.04 váltás miatt, a runner `ubuntu-24.04`-re rögzítve; előtte 2026-11-08: H22 – a 138 db 2024/25-ös dobástérkép átkötve a helyes szezonra, ellenőrizve; H21 – a dobástérkép zónái valós méretarányú FIBA-geometriával: a festék / tripla besorolás javítva; előtte H20 – a hunbasket menetrend-oldal átalakulása miatt leállt `hunbasket:fixtures` javítva, éles újrafuttatás nyitva; előtte 2026-11-01: idei vs. tavalyi csapat összehasonlítás: csapatstat és keretváltozás kész, böngészős ellenőrzés nyitva; előtte 2026-10-18: H19 – post-game riport harmadik hibalista, A–I egység kész)_
 
 ---
 
@@ -811,7 +811,7 @@ egymás elleni meccsek közt jelenik meg. A 2024/25-ös szezonnézetben nincs do
   csapatnál) – keret-import csapat-hozzárendelési hiba gyanúja, döntés előtt nem nyúltunk hozzá.
 - Mobil jegyzet: `asestatmobile/docs/mobile-sync/2026-11-08-dobasterkep-zonak-h21.md` (összesítővé bővítve: H21 + H22).
 
-**H32 – Játékoselemzés: arányok összegből, verdikt-minta, export, szövegek (Chandler-lista) (2026-11-15)** – folyamatban
+**H32 – Játékoselemzés: arányok összegből, verdikt-minta, export, szövegek (Chandler-lista) ✓ (2026-11-15)** – a kód kész, a böngészős ellenőrzés nyitva
 
 Felhasználói hibalista a Játékos elemzés felületéről és a játékos MD exportról (CHANDLER III. John Watson, 2026/27).
 
@@ -844,7 +844,13 @@ Felhasználói hibalista a Játékos elemzés felületéről és a játékos MD 
   (`roleLabelForPosition`). Lineup névpárosítás: a „Legjobb páros” nevei a közös `resolvePlayerNames`
   (vezetéknév-alapú) illesztővel a játékos-adatbázis alakjára írva („Jay Jay CHANDLER” → „CHANDLER III. John Watson”).
 - Mobil jegyzet: `asestatmobile/docs/mobile-sync/2026-11-15-jatekoselemzes-h32.md`.
-- [ ] E) Telítődés (index / percentilis 100).
+- [x] **E) Telítődés (felhasználói döntés: percentilis + nyers érték):** a „Képesség pontszámok” nem beégetett
+  korláttól 100-asok, hanem posztos percentilisek (a poszt legjobbja definíció szerint 100). A skála marad; új
+  `PlayerAnalysis.skillBasis` (`buildSkillBasis`, `lib/player-analysis.ts`) adja képességenként a nyers alapot, a
+  kártya kiírja („Nyers érték: 27.6 pont/36”), a magyarázat: „posztos percentilis, 100 = a poszt legjobbja”. Az
+  export 130.00-as „offenzív indexe” a C) pontban megszűnt.
+- [ ] Böngészős ellenőrzés (Chandler: Döntésminőség AST/TO 1,14; Fáradás / Matchup TS-ek a szezonérték két oldalán;
+  Clutch „Kevés adat”; lineup 164 / 254 perc, verdikt nélkül; új MD export).
 
 **H31 – Post-game riport: Fő ok, fókusz-sorrend, eFG egy sorban (ASE–Alba után) ✓ (2026-11-15)** – a kód kész, a böngészős ellenőrzés nyitva
 

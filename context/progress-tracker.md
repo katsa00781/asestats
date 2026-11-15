@@ -40,6 +40,13 @@ Update this file after every meaningful implementation change.
 
 ## In Progress
 
+- **H32 – Játékoselemzés javításai (2026-11-15):** a haladó blokkok arányai
+  összegből (`lib/player-game-aggregate.ts`), verdikt csak elég mintánál
+  (Clutch ≥ 3 meccs, szerepkör-csoport ≥ 3 meccs, lineup ≥ 80% lefedettség,
+  ±5 net/40 zajszint), lefedettség kiírva; 1,5 alatti AST/TO limitáció; MD
+  export (VAL, utolsó meccsek, képlettel kiírt indexek); posztfüggő
+  szerepcímke, cirill betűk; képesség-pontszám mellett nyers érték. Nyitva:
+  böngészős ellenőrzés. Részletek: `BACKLOG.md` H32.
 - **H31 – Post-game riport javítások (2026-11-15):** a „Fő ok” a pontkülönbség
   volumen / hatékonyság bontásából (nem mond ellent a „Mi döntötte el”-nek), a
   Net szezonátlagtól való eltérésének oka külön sorban; „ellensúlyozta”;
