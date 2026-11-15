@@ -408,7 +408,7 @@ export function PlayerComparison({
                 <RadarChart data={radarData}>
                   <PolarGrid stroke="var(--border-subtle)" />
                   <PolarAngleAxis dataKey="stat" tick={{ fill: 'var(--text-secondary)', fontSize: 11 }} />
-                  <PolarRadiusAxis angle={90} domain={[0, 100]} tick={{ fill: 'var(--text-muted)' }} />
+                  <PolarRadiusAxis angle={90} domain={[0, 100]} tick={{ fill: 'var(--text-secondary)' }} />
                   {selectedPlayers.map((player, idx) => (
                     <Radar
                       key={`${player.id}-${player.seasonId}-${idx}`}

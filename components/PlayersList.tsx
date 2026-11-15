@@ -114,7 +114,7 @@ export function PlayersList({ players, onSelectPlayer, onCompare }: PlayersListP
     return (
       <div className="text-center py-12">
         <p className="text-secondary">Még nincsenek betöltött játékosok.</p>
-        <p className="text-muted text-sm mt-2">Töltsd be a meccsadatokat a kezdéshez.</p>
+        <p className="text-secondary text-sm mt-2">Töltsd be a meccsadatokat a kezdéshez.</p>
       </div>
     );
   }
@@ -235,7 +235,7 @@ export function PlayersList({ players, onSelectPlayer, onCompare }: PlayersListP
       label: 'VAL',
       numeric: true,
       sortable: true,
-      render: (r) => <span data-stat className="text-ai">{r.valuation.toFixed(1)}</span>,
+      render: (r) => <span data-stat className="text-primary">{r.valuation.toFixed(1)}</span>,
     },
     {
       key: 'forma',

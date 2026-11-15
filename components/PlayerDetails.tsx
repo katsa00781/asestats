@@ -451,7 +451,7 @@ function PlayerDetails( { player, onBack }: PlayerDetailProps) {
                 placeholder={`1-${player.gamesPlayed}`}
                 className="w-24"
               />
-              <span className="text-muted text-sm">meccs</span>
+              <span className="text-secondary text-sm">meccs</span>
             </div>
 
             {isFiltered && (
@@ -482,7 +482,7 @@ function PlayerDetails( { player, onBack }: PlayerDetailProps) {
               </div>
               <p className="text-secondary text-sm sm:text-base">{getPositionLabel(player.position)}</p>
               {player.birthYear && (
-                <div className="flex flex-wrap gap-2 sm:gap-3 mt-2 text-xs sm:text-sm text-muted">
+                <div className="flex flex-wrap gap-2 sm:gap-3 mt-2 text-xs sm:text-sm text-secondary">
                   <span>{2025 - player.birthYear} éves ({player.birthYear})</span>
                   {player.height && <span>{player.height} cm</span>}
                   {player.weight && <span>{player.weight} kg</span>}
@@ -490,12 +490,12 @@ function PlayerDetails( { player, onBack }: PlayerDetailProps) {
               )}
             </div>
             <div className="text-right shrink-0">
-              <div className="text-muted text-xs sm:text-sm">
+              <div className="text-secondary text-xs sm:text-sm">
                 {isFiltered ? 'Átlag perc (szűrt)' : 'Átlagolt perc'}
               </div>
               <div className="text-primary font-mono tabular-nums text-xl sm:text-2xl">{avgMinutes}</div>
               {isFiltered && (
-                <div className="text-muted text-xs mt-1">
+                <div className="text-secondary text-xs mt-1">
                   Szezon: {(player.minutes / player.gamesPlayed).toFixed(1)}
                 </div>
               )}
@@ -506,66 +506,66 @@ function PlayerDetails( { player, onBack }: PlayerDetailProps) {
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3">
             <div className="text-center p-2 sm:p-4 bg-surface-2 rounded-lg border border-border-subtle">
               <StatInfoTooltip stat="points">
-                <div className="text-muted text-xs sm:text-sm mb-1">Pontok/Meccs</div>
+                <div className="text-secondary text-xs sm:text-sm mb-1">Pontok/Meccs</div>
               </StatInfoTooltip>
               <div className="text-positive font-mono tabular-nums text-lg sm:text-2xl">{avgPoints}</div>
               {isFiltered && (
-                <div className="text-muted text-xs mt-1">
+                <div className="text-secondary text-xs mt-1">
                   Szezon: {(player.points / player.gamesPlayed).toFixed(1)}
                 </div>
               )}
             </div>
             <div className="text-center p-2 sm:p-4 bg-surface-2 rounded-lg border border-border-subtle">
               <StatInfoTooltip stat="rebounds">
-                <div className="text-muted text-xs sm:text-sm mb-1">Lepattanók/Meccs</div>
+                <div className="text-secondary text-xs sm:text-sm mb-1">Lepattanók/Meccs</div>
               </StatInfoTooltip>
               <div className="text-cyan font-mono tabular-nums text-lg sm:text-2xl">{avgRebounds}</div>
               {isFiltered && (
-                <div className="text-muted text-xs mt-1">
+                <div className="text-secondary text-xs mt-1">
                   Szezon: {(player.rebounds.total / player.gamesPlayed).toFixed(1)}
                 </div>
               )}
             </div>
             <div className="text-center p-2 sm:p-4 bg-surface-2 rounded-lg border border-border-subtle">
               <StatInfoTooltip stat="assists">
-                <div className="text-muted text-xs sm:text-sm mb-1">Gólpasszok/Meccs</div>
+                <div className="text-secondary text-xs sm:text-sm mb-1">Gólpasszok/Meccs</div>
               </StatInfoTooltip>
-              <div className="text-ai font-mono tabular-nums text-lg sm:text-2xl">{avgAssists}</div>
+              <div className="text-primary font-mono tabular-nums text-lg sm:text-2xl">{avgAssists}</div>
               {isFiltered && (
-                <div className="text-muted text-xs mt-1">
+                <div className="text-secondary text-xs mt-1">
                   Szezon: {(player.assists / player.gamesPlayed).toFixed(1)}
                 </div>
               )}
             </div>
             <div className="text-center p-2 sm:p-4 bg-surface-2 rounded-lg border border-border-subtle">
               <StatInfoTooltip stat="steals">
-                <div className="text-muted text-xs sm:text-sm mb-1">Labdaszerzés/Meccs</div>
+                <div className="text-secondary text-xs sm:text-sm mb-1">Labdaszerzés/Meccs</div>
               </StatInfoTooltip>
               <div className="text-orange font-mono tabular-nums text-lg sm:text-2xl">{avgSteals}</div>
               {isFiltered && (
-                <div className="text-muted text-xs mt-1">
+                <div className="text-secondary text-xs mt-1">
                   Szezon: {(player.steals / player.gamesPlayed).toFixed(1)}
                 </div>
               )}
             </div>
             <div className="text-center p-2 sm:p-4 bg-surface-2 rounded-lg border border-border-subtle">
               <StatInfoTooltip stat="blocks">
-                <div className="text-muted text-xs sm:text-sm mb-1">Blokkok/Meccs</div>
+                <div className="text-secondary text-xs sm:text-sm mb-1">Blokkok/Meccs</div>
               </StatInfoTooltip>
-              <div className="text-ai font-mono tabular-nums text-lg sm:text-2xl">{avgBlocks}</div>
+              <div className="text-primary font-mono tabular-nums text-lg sm:text-2xl">{avgBlocks}</div>
               {isFiltered && (
-                <div className="text-muted text-xs mt-1">
+                <div className="text-secondary text-xs mt-1">
                   Szezon: {(player.blocks / player.gamesPlayed).toFixed(1)}
                 </div>
               )}
             </div>
             <div className="text-center p-2 sm:p-4 bg-surface-2 rounded-lg border border-border-subtle">
               <StatInfoTooltip stat="valuation">
-                <div className="text-muted text-xs sm:text-sm mb-1">VAL/Meccs</div>
+                <div className="text-secondary text-xs sm:text-sm mb-1">VAL/Meccs</div>
               </StatInfoTooltip>
               <div className="text-orange font-mono tabular-nums text-lg sm:text-2xl">{avgValuation}</div>
               {isFiltered && (
-                <div className="text-muted text-xs mt-1">
+                <div className="text-secondary text-xs mt-1">
                   Szezon: {player.valuation.toFixed(1)}
                 </div>
               )}
@@ -598,7 +598,7 @@ function PlayerDetails( { player, onBack }: PlayerDetailProps) {
                           Export MD
                         </Button>
                       )}
-                      <span className="text-xs text-muted font-normal">{generatedAt}</span>
+                      <span className="text-xs text-secondary font-normal">{generatedAt}</span>
                     </div>
                   </CardTitle>
                 </CardHeader>
@@ -670,7 +670,7 @@ function PlayerDetails( { player, onBack }: PlayerDetailProps) {
               <div className="text-right">
                 <span className="text-positive font-mono tabular-nums sm:text-lg">{avgORtg.toFixed(1)}</span>
                 {isFiltered && (
-                  <div className="text-muted text-xs mt-1">
+                  <div className="text-secondary text-xs mt-1">
                     Szezon: {seasonAvgORtg.toFixed(1)}
                   </div>
                 )}
@@ -686,7 +686,7 @@ function PlayerDetails( { player, onBack }: PlayerDetailProps) {
               <div className="text-right">
                 <span className="text-cyan font-mono tabular-nums sm:text-lg">{avgDRtg.toFixed(1)}</span>
                 {isFiltered && (
-                  <div className="text-muted text-xs mt-1">
+                  <div className="text-secondary text-xs mt-1">
                     Szezon: {seasonAvgDRtg.toFixed(1)}
                   </div>
                 )}
@@ -694,15 +694,15 @@ function PlayerDetails( { player, onBack }: PlayerDetailProps) {
             </div>
             <div className="flex items-center justify-between p-2 sm:p-3 bg-surface-2 rounded-lg border border-border-subtle">
               <div className="flex items-center gap-2">
-                <TrendingUp className="text-ai shrink-0" size={16} strokeWidth={1.6} />
+                <TrendingUp className="text-primary shrink-0" size={16} strokeWidth={1.6} />
                 <StatInfoTooltip stat="ts">
                   <span className="text-secondary text-xs sm:text-sm">True Shooting %</span>
                 </StatInfoTooltip>
               </div>
               <div className="text-right">
-                <span className="text-ai font-mono tabular-nums sm:text-lg">{trueShootingPct.toFixed(1)}%</span>
+                <span className="text-primary font-mono tabular-nums sm:text-lg">{trueShootingPct.toFixed(1)}%</span>
                 {isFiltered && (
-                  <div className="text-muted text-xs mt-1">
+                  <div className="text-secondary text-xs mt-1">
                     Szezon: {player.trueShootingPct.toFixed(1)}%
                   </div>
                 )}
@@ -718,7 +718,7 @@ function PlayerDetails( { player, onBack }: PlayerDetailProps) {
               <div className="text-right">
                 <span className="text-orange font-mono tabular-nums sm:text-lg">{effectiveFGPct.toFixed(1)}%</span>
                 {isFiltered && (
-                  <div className="text-muted text-xs mt-1">
+                  <div className="text-secondary text-xs mt-1">
                     Szezon: {player.effectiveShootingPct.toFixed(1)}%
                   </div>
                 )}
@@ -737,7 +737,7 @@ function PlayerDetails( { player, onBack }: PlayerDetailProps) {
               <RadarChart data={radarData}>
                 <PolarGrid stroke="var(--border-subtle)" />
                 <PolarAngleAxis dataKey="stat" tick={{ fill: 'var(--text-secondary)', fontSize: 10 }} />
-                <PolarRadiusAxis angle={90} domain={[0, 100]} tick={{ fill: 'var(--text-muted)' }} />
+                <PolarRadiusAxis angle={90} domain={[0, 100]} tick={{ fill: 'var(--text-secondary)' }} />
                 <Radar name="Játékos" dataKey="value" stroke="var(--accent-cyan)" fill="var(--accent-cyan)" fillOpacity={0.3} />
               </RadarChart>
             </ResponsiveContainer>
@@ -753,30 +753,30 @@ function PlayerDetails( { player, onBack }: PlayerDetailProps) {
         <CardContent className="p-4 sm:p-6">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-4 sm:mb-6">
             <div className="text-center p-3 sm:p-4 bg-surface-2 rounded-lg border border-border-subtle">
-              <div className="text-muted text-xs sm:text-sm mb-1 sm:mb-2">Közeli dobás</div>
+              <div className="text-secondary text-xs sm:text-sm mb-1 sm:mb-2">Közeli dobás</div>
               <div className="text-positive font-mono tabular-nums text-lg sm:text-2xl mb-1">{closeFGPct}%</div>
-              <div className="text-muted text-xs">
+              <div className="text-secondary text-xs">
                 {player.shooting?.close.made}/{player.shooting?.close.attempted}
               </div>
             </div>
             <div className="text-center p-3 sm:p-4 bg-surface-2 rounded-lg border border-border-subtle">
-              <div className="text-muted text-xs sm:text-sm mb-1 sm:mb-2">Középtávoli</div>
+              <div className="text-secondary text-xs sm:text-sm mb-1 sm:mb-2">Középtávoli</div>
               <div className="text-cyan font-mono tabular-nums text-lg sm:text-2xl mb-1">{midFGPct}%</div>
-              <div className="text-muted text-xs">
+              <div className="text-secondary text-xs">
                 {player.shooting?.mid.made}/{player.shooting?.mid.attempted}
               </div>
             </div>
             <div className="text-center p-3 sm:p-4 bg-surface-2 rounded-lg border border-border-subtle">
-              <div className="text-muted text-xs sm:text-sm mb-1 sm:mb-2">Hármasok</div>
-              <div className="text-ai font-mono tabular-nums text-lg sm:text-2xl mb-1">{threePct}%</div>
-              <div className="text-muted text-xs">
+              <div className="text-secondary text-xs sm:text-sm mb-1 sm:mb-2">Hármasok</div>
+              <div className="text-primary font-mono tabular-nums text-lg sm:text-2xl mb-1">{threePct}%</div>
+              <div className="text-secondary text-xs">
                 {player.shooting?.three.made}/{player.shooting?.three.attempted}
               </div>
             </div>
             <div className="text-center p-3 sm:p-4 bg-surface-2 rounded-lg border border-border-subtle">
-              <div className="text-muted text-xs sm:text-sm mb-1 sm:mb-2">Büntetők</div>
+              <div className="text-secondary text-xs sm:text-sm mb-1 sm:mb-2">Büntetők</div>
               <div className="text-orange font-mono tabular-nums text-lg sm:text-2xl mb-1">{ftPct}%</div>
-              <div className="text-muted text-xs">
+              <div className="text-secondary text-xs">
                 {player.shooting?.freeThrow.made}/{player.shooting?.freeThrow.attempted}
               </div>
             </div>
@@ -811,37 +811,37 @@ function PlayerDetails( { player, onBack }: PlayerDetailProps) {
         <CardContent className="p-4 sm:p-6">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
             <div className="p-3 sm:p-4 bg-surface-2 rounded-lg border border-border-subtle">
-              <div className="text-muted text-xs sm:text-sm mb-1">Támadó lepattanó</div>
+              <div className="text-secondary text-xs sm:text-sm mb-1">Támadó lepattanó</div>
               <div className="text-primary font-mono tabular-nums text-lg sm:text-xl">{player.rebounds.offensive}</div>
             </div>
             <div className="p-3 sm:p-4 bg-surface-2 rounded-lg border border-border-subtle">
-              <div className="text-muted text-xs sm:text-sm mb-1">Védekező lepattanó</div>
+              <div className="text-secondary text-xs sm:text-sm mb-1">Védekező lepattanó</div>
               <div className="text-primary font-mono tabular-nums text-lg sm:text-xl">{player.rebounds.defensive}</div>
             </div>
             <div className="p-3 sm:p-4 bg-surface-2 rounded-lg border border-border-subtle">
-              <div className="text-muted text-xs sm:text-sm mb-1">Labdaeladás</div>
+              <div className="text-secondary text-xs sm:text-sm mb-1">Labdaeladás</div>
               <div className="text-primary font-mono tabular-nums text-lg sm:text-xl">{player.turnovers}</div>
             </div>
             <div className="p-3 sm:p-4 bg-surface-2 rounded-lg border border-border-subtle">
-              <div className="text-muted text-xs sm:text-sm mb-1">Blokkok</div>
+              <div className="text-secondary text-xs sm:text-sm mb-1">Blokkok</div>
               <div className="text-primary font-mono tabular-nums text-lg sm:text-xl">{player.blocks}</div>
             </div>
             <div className="p-3 sm:p-4 bg-surface-2 rounded-lg border border-border-subtle">
-              <div className="text-muted text-xs sm:text-sm mb-1">Elkövetett faultok</div>
+              <div className="text-secondary text-xs sm:text-sm mb-1">Elkövetett faultok</div>
               <div className="text-primary font-mono tabular-nums text-lg sm:text-xl">{player.foulsCommitted}</div>
             </div>
             <div className="p-3 sm:p-4 bg-surface-2 rounded-lg border border-border-subtle">
-              <div className="text-muted text-xs sm:text-sm mb-1">Kapott faultok</div>
+              <div className="text-secondary text-xs sm:text-sm mb-1">Kapott faultok</div>
               <div className="text-primary font-mono tabular-nums text-lg sm:text-xl">{player.foulsDrawn}</div>
             </div>
             <div className="p-3 sm:p-4 bg-surface-2 rounded-lg border border-border-subtle">
-              <div className="text-muted text-xs sm:text-sm mb-1">Assist/TO arány</div>
+              <div className="text-secondary text-xs sm:text-sm mb-1">Assist/TO arány</div>
               <div className="text-primary font-mono tabular-nums text-lg sm:text-xl">
                 {player.turnovers > 0 ? (player.assists / player.turnovers).toFixed(2) : player.assists.toFixed(1)}
               </div>
             </div>
             <div className="p-3 sm:p-4 bg-surface-2 rounded-lg border border-border-subtle">
-              <div className="text-muted text-xs sm:text-sm mb-1">Meccsek</div>
+              <div className="text-secondary text-xs sm:text-sm mb-1">Meccsek</div>
               <div className="text-primary font-mono tabular-nums text-lg sm:text-xl">{player.gamesPlayed}</div>
             </div>
           </div>
@@ -910,7 +910,7 @@ function PlayerDetails( { player, onBack }: PlayerDetailProps) {
                       <td className="text-center py-2 sm:py-3 font-mono tabular-nums hidden lg:table-cell text-cyan">
                         {game.defensiveRating ? game.defensiveRating.toFixed(1) : '-'}
                       </td>
-                      <td className="text-center py-2 sm:py-3 font-mono tabular-nums hidden xl:table-cell text-ai">
+                      <td className="text-center py-2 sm:py-3 font-mono tabular-nums hidden xl:table-cell text-primary">
                         {game.trueShootingPct ? game.trueShootingPct.toFixed(1) + '%' : '-'}
                       </td>
                       <td className="text-center py-2 sm:py-3 font-mono tabular-nums hidden xl:table-cell text-orange">
@@ -939,7 +939,7 @@ function PlayerDetails( { player, onBack }: PlayerDetailProps) {
                     <tr className="border-t-2 border-border-active font-semibold">
                       <td className="py-3 text-secondary sticky left-0 bg-surface-1" colSpan={2}>
                         <div>{isFiltered ? 'Szűrt időszak' : 'Összesen'} ({gamesPlayed} meccs)</div>
-                        <div className="text-xs font-normal text-muted mt-1">{isFiltered ? 'Szűrt ' : 'Szezon '}átlag ↓</div>
+                        <div className="text-xs font-normal text-secondary mt-1">{isFiltered ? 'Szűrt ' : 'Szezon '}átlag ↓</div>
                       </td>
                       <td className="text-center py-3 font-mono tabular-nums text-primary">{totalMinutes}</td>
                       <td className="text-center py-3 font-mono tabular-nums text-positive">{totalPoints}</td>
@@ -960,23 +960,23 @@ function PlayerDetails( { player, onBack }: PlayerDetailProps) {
                       <td className="text-center py-3 font-mono tabular-nums text-negative hidden md:table-cell">{totalTurnovers}</td>
                       <td className="text-center py-3 font-mono tabular-nums text-cyan">
                         <div>{avgVAL.toFixed(1)}</div>
-                        <div className="text-xs font-normal text-muted">átlag</div>
+                        <div className="text-xs font-normal text-secondary">átlag</div>
                       </td>
                       <td className="text-center py-3 font-mono tabular-nums text-positive hidden lg:table-cell">
                         <div>{footerAvgORtg.toFixed(1)}</div>
-                        <div className="text-xs font-normal text-muted">átlag</div>
+                        <div className="text-xs font-normal text-secondary">átlag</div>
                       </td>
                       <td className="text-center py-3 font-mono tabular-nums text-cyan hidden lg:table-cell">
                         <div>{footerAvgDRtg.toFixed(1)}</div>
-                        <div className="text-xs font-normal text-muted">átlag</div>
+                        <div className="text-xs font-normal text-secondary">átlag</div>
                       </td>
-                      <td className="text-center py-3 font-mono tabular-nums text-ai hidden xl:table-cell">
+                      <td className="text-center py-3 font-mono tabular-nums text-primary hidden xl:table-cell">
                         <div>{trueShootingPct.toFixed(1)}%</div>
-                        <div className="text-xs font-normal text-muted">átlag</div>
+                        <div className="text-xs font-normal text-secondary">átlag</div>
                       </td>
                       <td className="text-center py-3 font-mono tabular-nums text-orange hidden xl:table-cell">
                         <div>{effectiveFGPct.toFixed(1)}%</div>
-                        <div className="text-xs font-normal text-muted">átlag</div>
+                        <div className="text-xs font-normal text-secondary">átlag</div>
                       </td>
                     </tr>
                   );

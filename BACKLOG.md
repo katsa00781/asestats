@@ -1,6 +1,6 @@
 # BACKLOG.md – ASEStats Projekt
 
-_Utoljára frissítve: 2026-11-15 (H29 – a kapott pont minden elemzésben a `games.opp_score`-ból: csapatelemzés DRtg / Net, post-game DRtg referencia, pregame meccs-kivonás és projekció; előtte H28 – post-game riport adatminőség: második esély küszöb, Oliver-súlyozott védekezési verdikt, pp-mértékegység és egységes kerekítés, a leggyengébb páros mellett a kulcsjátékosok; lelet: a liga DRtg medián a kapott pont hibás összegzése miatt hiányzik; előtte H27 – az ütemezett import Playwright-telepítése elszállt az ubuntu-latest → 26.04 váltás miatt, a runner `ubuntu-24.04`-re rögzítve; előtte 2026-11-08: H22 – a 138 db 2024/25-ös dobástérkép átkötve a helyes szezonra, ellenőrizve; H21 – a dobástérkép zónái valós méretarányú FIBA-geometriával: a festék / tripla besorolás javítva; előtte H20 – a hunbasket menetrend-oldal átalakulása miatt leállt `hunbasket:fixtures` javítva, éles újrafuttatás nyitva; előtte 2026-11-01: idei vs. tavalyi csapat összehasonlítás: csapatstat és keretváltozás kész, böngészős ellenőrzés nyitva; előtte 2026-10-18: H19 – post-game riport harmadik hibalista, A–I egység kész)_
+_Utoljára frissítve: 2026-11-15 (H30 – Játékosok nézet: alacsony kontrasztú kártyaszövegek (`text-muted` → `text-secondary`, stat-értékeken `text-ai` → `text-primary`); előtte H29 – a kapott pont minden elemzésben a `games.opp_score`-ból: csapatelemzés DRtg / Net, post-game DRtg referencia, pregame meccs-kivonás és projekció; előtte H28 – post-game riport adatminőség: második esély küszöb, Oliver-súlyozott védekezési verdikt, pp-mértékegység és egységes kerekítés, a leggyengébb páros mellett a kulcsjátékosok; lelet: a liga DRtg medián a kapott pont hibás összegzése miatt hiányzik; előtte H27 – az ütemezett import Playwright-telepítése elszállt az ubuntu-latest → 26.04 váltás miatt, a runner `ubuntu-24.04`-re rögzítve; előtte 2026-11-08: H22 – a 138 db 2024/25-ös dobástérkép átkötve a helyes szezonra, ellenőrizve; H21 – a dobástérkép zónái valós méretarányú FIBA-geometriával: a festék / tripla besorolás javítva; előtte H20 – a hunbasket menetrend-oldal átalakulása miatt leállt `hunbasket:fixtures` javítva, éles újrafuttatás nyitva; előtte 2026-11-01: idei vs. tavalyi csapat összehasonlítás: csapatstat és keretváltozás kész, böngészős ellenőrzés nyitva; előtte 2026-10-18: H19 – post-game riport harmadik hibalista, A–I egység kész)_
 
 ---
 
@@ -810,6 +810,25 @@ egymás elleni meccsek közt jelenik meg. A 2024/25-ös szezonnézetben nincs do
   Peringer Balázs, Randolph Brandon Kenneth, Davis-Mcmurrin Gage Andrew a `d96c…` és a `be99…`
   csapatnál) – keret-import csapat-hozzárendelési hiba gyanúja, döntés előtt nem nyúltunk hozzá.
 - Mobil jegyzet: `asestatmobile/docs/mobile-sync/2026-11-08-dobasterkep-zonak-h21.md` (összesítővé bővítve: H21 + H22).
+
+**H30 – Játékosok nézet: alacsony kontrasztú kártyaszövegek ✓ (2026-11-15)** – a kód kész, a böngészős ellenőrzés nyitva
+
+Felhasználói jelzés: a Játékosok tab kártyáin a szöveg helyenként sötétebb, mint a kártya. Mért WCAG
+kontraszt a `bg-surface-2` kártyán: `text-ai` (#7C3AED) **2.87:1**, `text-muted` (#4A6D95) **3.05:1** (kis betűvel).
+Tisztán stílusjavítás, új token nélkül, viselkedés változatlan.
+
+- [x] `PlayerDetails.tsx`: minden `text-muted` → `text-secondary` (5.58:1) – kártyacímkék, „Szezon: …” alsorok,
+  fejléc-adatok, a meccstábla „átlag” sorai, a radar sugártengely-felirata. A `ui-context.md` szerint a label
+  `--text-secondary`, a `text-muted` placeholder/deaktivált elemre való.
+- [x] `PlayerDetails.tsx`: a statisztikai értékek `text-ai` színe → `text-primary` (Gólpassz, Blokk, Hármasok, TS%
+  érték + ikon, meccstábla TS% oszlop és lábléc). A lila az AI-tartalom jele; az AI-riport kártya ikonja marad.
+- [x] `PlayersList.tsx`: VAL oszlop `text-ai` → `text-primary`; üres állapot szövege `text-secondary`. A keresőmező
+  ikonjai és az üres „–” jel `text-muted` maradt (placeholder szerep).
+- [x] `PlayerComparison.tsx`: radar sugártengely-felirat `--text-secondary`.
+- [ ] Böngészős ellenőrzés (játékos részletek, lista, összehasonlítás).
+- Nyitott design-kérdés: ha a statoknál lila árnyalat kell, ahhoz új token kellene (`#C4B5FD` ma literálként él a
+  `globals.css`-ben a `.badge-ai` / `.dt-badge--c` / AI nav-item szövegénél) – csak felhasználói döntéssel.
+- Mobil jegyzet: nem kell (tisztán webes stílusváltozás).
 
 **H29 – A kapott pont egyetlen forrása minden elemzésben ✓ (2026-11-15)** – a kód kész, a böngészős ellenőrzés nyitva
 

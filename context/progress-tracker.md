@@ -40,6 +40,11 @@ Update this file after every meaningful implementation change.
 
 ## In Progress
 
+- **H30 – Játékosok nézet kontraszt (2026-11-15):** a kártyák `text-muted`
+  címkéi/alsorai `text-secondary`-re, a statisztikai értékek `text-ai` színe
+  `text-primary`-re váltott (`PlayerDetails`, `PlayersList`, `PlayerComparison`);
+  új token nélkül, viselkedés változatlan. Nyitva: böngészős ellenőrzés.
+  Részletek: `BACKLOG.md` H30.
 - **H29 – Egységes kapott pont (2026-11-15):** minden elemzés (csapatelemzés,
   post-game, pregame, projekció) a csapat saját `games.opp_score`-ját használja
   (`buildTeamScoreTotals`, box score-os meccseken); a `game_id`-alapú, mindig 0-t
