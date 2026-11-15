@@ -7,10 +7,12 @@ import { Loader2, Download, ClipboardList, Save } from 'lucide-react';
 import { toast } from 'sonner';
 import type { PostgameExportExtras, PostgameLineupsMd } from '@/lib/export-to-md';
 import type { KosarstatPlayerRotation, KosarstatRotationEvent, KosarstatSide } from '@/lib/kosarstat-substitutions';
+import type { PlayerGameLine } from '@/lib/player-game-aggregate';
 import { playerSeasonToMd, pregameReportToMd, postgameReportToMd } from '@/lib/export-to-md';
 import { endsOnCourt, groupRotationByPlayer, parseKosarstatSubstitutions, rotationFromMinuteCodes, validateRotation } from '@/lib/kosarstat-substitutions';
 import { buildPostgameLineupSides, describeStarterSplit, describeWeakestLineupCore, isScoringLineupStint } from '@/lib/postgame-lineup-export';
 import { buildTeamSeasonMd } from '@/lib/team-season-export-data';
+import { aggregatePlayerGames } from '@/lib/player-game-aggregate';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, Cell, LabelList, Legend, Line, LineChart, ResponsiveContainer, Scatter, ScatterChart, Tooltip, XAxis, YAxis, ZAxis } from 'recharts';
 import type { Props as RechartsLabelProps } from 'recharts/types/component/Label';
@@ -11202,9 +11204,20 @@ export function SeasonComparison({
         const threeRate = asPct(row.three_attempted || 0, fga);
         const rimRate = asPct(row.close_attempted || 0, fga);
         const midRate = asPct(row.mid_attempted || 0, fga);
+        const line: PlayerGameLine = {
+          points: row.points || 0,
+          fga,
+          fgm,
+          threeMade: row.three_made || 0,
+          midAttempts: row.mid_attempted || 0,
+          fta,
+          ast: row.assists || 0,
+          tov: row.turnovers || 0,
+        };
 
         return {
           row,
+          line,
           fga,
           usageProxy,
           tsPct,
@@ -11225,9 +11238,22 @@ export function SeasonComparison({
       })
       .filter(item => item.fga > 0 || item.usageProxy > 0);
 
-    const seasonTs = average(rows.map(item => item.tsPct));
-    const seasonPpp = average(rows.map(item => item.ppp));
-    const seasonTov = average(rows.map(item => item.tovPct));
+    // Minden arány összegből (ΣPTS / (2·(ΣFGA + 0,44·ΣFTA)) stb.), nem a
+    // meccsenkénti arányok átlagából – különben a részhalmazok (terhelés,
+    // matchup, szerepkör) egyszerre lehetnének a szezonérték fölött.
+    const aggregateOf = (pool: typeof rows) => aggregatePlayerGames(pool.map(item => item.line));
+    const seasonAggregate = aggregateOf(rows);
+    const seasonTs = seasonAggregate.tsPct ?? 0;
+    const seasonPpp = seasonAggregate.ppp ?? 0;
+    const seasonTov = seasonAggregate.tovPct ?? 0;
+    const poolTs = (pool: typeof rows) => {
+      const value = aggregateOf(pool).tsPct;
+      return pool.length > 0 && value !== null ? roundValue(value, 1) : null;
+    };
+    const poolPpp = (pool: typeof rows) => {
+      const value = aggregateOf(pool).ppp;
+      return pool.length > 0 && value !== null ? roundValue(value, 3) : null;
+    };
 
     const shotQualityVsMaking = (() => {
       if (!playerSeasonShotSummary || !leagueSeasonShotSummary) {
@@ -11368,19 +11394,20 @@ export function SeasonComparison({
         confidence,
         ballHandlerSample: ballHandlerRows.length,
         offBallSample: offBallRows.length,
-        ballHandlerTs: ballHandlerRows.length ? roundValue(average(ballHandlerRows.map(item => item.tsPct)), 1) : null,
-        ballHandlerPpp: ballHandlerRows.length ? roundValue(average(ballHandlerRows.map(item => item.ppp)), 3) : null,
-        offBallTs: offBallRows.length ? roundValue(average(offBallRows.map(item => item.tsPct)), 1) : null,
-        offBallPpp: offBallRows.length ? roundValue(average(offBallRows.map(item => item.ppp)), 3) : null,
-        highThreeTs: highThreeRows.length ? roundValue(average(highThreeRows.map(item => item.tsPct)), 1) : null,
-        rimPressureTs: rimPressureRows.length ? roundValue(average(rimPressureRows.map(item => item.tsPct)), 1) : null,
+        ballHandlerTs: poolTs(ballHandlerRows),
+        ballHandlerPpp: poolPpp(ballHandlerRows),
+        offBallTs: poolTs(offBallRows),
+        offBallPpp: poolPpp(offBallRows),
+        highThreeTs: poolTs(highThreeRows),
+        rimPressureTs: poolTs(rimPressureRows),
       };
     })();
 
     const decisionQuality = (() => {
-      const astTo = roundValue(average(rows.map(item => item.astTo)), 2);
-      const tovPct = roundValue(average(rows.map(item => item.tovPct)), 1);
-      const midRate = roundValue(average(rows.map(item => item.midRate)), 1);
+      // ΣAST / ΣTO – ugyanaz, mint a Játéképítés blokk AST/TO-ja.
+      const astTo = roundValue(seasonAggregate.astTo, 2);
+      const tovPct = roundValue(seasonAggregate.tovPct ?? 0, 1);
+      const midRate = roundValue(seasonAggregate.midRatePct ?? 0, 1);
       const qualityAdd = shotQualityVsMaking.valueAdd ?? 0;
       const scoreRaw = 55 + astTo * 8 - tovPct * 1.3 - midRate * 0.15 + qualityAdd * 2;
       const score = Math.max(0, Math.min(100, roundValue(scoreRaw, 1)));
@@ -11400,11 +11427,11 @@ export function SeasonComparison({
       const rollingWindow = 5;
       const rolling: Array<{ ts: number; ppp: number; tov: number }> = [];
       for (let i = rollingWindow - 1; i < chrono.length; i += 1) {
-        const slice = chrono.slice(i - rollingWindow + 1, i + 1);
+        const sliceAggregate = aggregateOf(chrono.slice(i - rollingWindow + 1, i + 1));
         rolling.push({
-          ts: average(slice.map(item => item.tsPct)),
-          ppp: average(slice.map(item => item.ppp)),
-          tov: average(slice.map(item => item.tovPct)),
+          ts: sliceAggregate.tsPct ?? 0,
+          ppp: sliceAggregate.ppp ?? 0,
+          tov: sliceAggregate.tovPct ?? 0,
         });
       }
 
@@ -11413,7 +11440,7 @@ export function SeasonComparison({
       const tovStd = roundValue(stdDev(rows.map(item => item.tovPct)), 1);
       const volatility = roundValue(Math.min(100, tsStd * 1.2 + pppStd * 18 + tovStd * 1.4), 1);
       const trend = rows.length >= 6
-        ? roundValue(average(rows.slice(0, 3).map(item => item.tsPct)) - average(rows.slice(-3).map(item => item.tsPct)), 1)
+        ? roundValue((aggregateOf(rows.slice(0, 3)).tsPct ?? 0) - (aggregateOf(rows.slice(-3)).tsPct ?? 0), 1)
         : 0;
 
       return {
@@ -11448,10 +11475,14 @@ export function SeasonComparison({
       const weakPool = weak.length >= 2 ? weak : [...withQuality].sort((a, b) => a.oppQuality - b.oppQuality).slice(0, Math.ceil(withQuality.length / 2));
       const pairedSample = Math.min(strongPool.length, weakPool.length);
 
-      const strongTs = roundValue(average(strongPool.map(item => item.tsPct)), 1);
-      const weakTs = roundValue(average(weakPool.map(item => item.tsPct)), 1);
-      const strongPpp = roundValue(average(strongPool.map(item => item.ppp)), 3);
-      const weakPpp = roundValue(average(weakPool.map(item => item.ppp)), 3);
+      const strongTs = poolTs(strongPool) ?? 0;
+      const weakTs = poolTs(weakPool) ?? 0;
+      const strongPpp = poolPpp(strongPool) ?? 0;
+      const weakPpp = poolPpp(weakPool) ?? 0;
+      // A két csoportba nem került meccsek (középmezőny, ill. besorolás nélküli
+      // ellenfél) – külön kiírva, hogy látsszon, a minta mekkora részét fedi a két csoport.
+      const pooled = new Set([...strongPool, ...weakPool]);
+      const middlePool = rows.filter(item => !pooled.has(item as typeof withQuality[number]));
       return {
         available: true,
         confidence: pairedSample >= 4 ? 'magas' : pairedSample >= 2 ? 'kozepes' : 'alacsony',
@@ -11462,8 +11493,13 @@ export function SeasonComparison({
         weakPpp,
         tsDelta: roundValue(strongTs - weakTs, 1),
         interpretation: matchupInterpretation(roundValue(strongTs - weakTs, 1)),
-        strongOpponents: Array.from(new Set(strongPool.map(item => String(item.row.games?.opponent || '')).filter(Boolean))).slice(0, 3),
-        weakOpponents: Array.from(new Set(weakPool.map(item => String(item.row.games?.opponent || '')).filter(Boolean))).slice(0, 3),
+        strongGames: strongPool.length,
+        weakGames: weakPool.length,
+        middleGames: middlePool.length,
+        middleTs: poolTs(middlePool),
+        middleOpponents: Array.from(new Set(middlePool.map(item => String(item.row.games?.opponent || '')).filter(Boolean))),
+        strongOpponents: Array.from(new Set(strongPool.map(item => String(item.row.games?.opponent || '')).filter(Boolean))),
+        weakOpponents: Array.from(new Set(weakPool.map(item => String(item.row.games?.opponent || '')).filter(Boolean))),
       };
     })();
 
@@ -11480,9 +11516,10 @@ export function SeasonComparison({
       const normalLoad = withB2B.filter(item => item.minutes < 30);
       const b2b = withB2B.filter(item => item.b2b);
 
-      const highTs = highLoad.length ? roundValue(average(highLoad.map(item => item.tsPct)), 1) : null;
-      const normalTs = normalLoad.length ? roundValue(average(normalLoad.map(item => item.tsPct)), 1) : null;
-      const b2bTov = b2b.length ? roundValue(average(b2b.map(item => item.tovPct)), 1) : null;
+      const highTs = poolTs(highLoad);
+      const normalTs = poolTs(normalLoad);
+      const b2bTovValue = aggregateOf(b2b).tovPct;
+      const b2bTov = b2b.length && b2bTovValue !== null ? roundValue(b2bTovValue, 1) : null;
       const balancedLoadSample = Math.min(highLoad.length, normalLoad.length);
 
       return {
@@ -12476,8 +12513,11 @@ export function SeasonComparison({
                       {playerAdvancedInsights.matchupSensitivity.available ? (
                         <>
                           <div className="flex flex-wrap gap-1.5">
-                            <span className="px-1.5 py-0.5 rounded bg-surface-2 text-[10px] text-secondary">Erős véd. TS/PPP: {formatNullableNumber(playerAdvancedInsights.matchupSensitivity.strongTs, 1, '%')} / {formatNullableNumber(playerAdvancedInsights.matchupSensitivity.strongPpp, 3)}</span>
-                            <span className="px-1.5 py-0.5 rounded bg-surface-2 text-[10px] text-secondary">Gyengébb véd. TS/PPP: {formatNullableNumber(playerAdvancedInsights.matchupSensitivity.weakTs, 1, '%')} / {formatNullableNumber(playerAdvancedInsights.matchupSensitivity.weakPpp, 3)}</span>
+                            <span className="px-1.5 py-0.5 rounded bg-surface-2 text-[10px] text-secondary">Erős véd. TS/PPP: {formatNullableNumber(playerAdvancedInsights.matchupSensitivity.strongTs, 1, '%')} / {formatNullableNumber(playerAdvancedInsights.matchupSensitivity.strongPpp, 3)}{'strongGames' in playerAdvancedInsights.matchupSensitivity ? ` (${playerAdvancedInsights.matchupSensitivity.strongGames} meccs)` : ''}</span>
+                            <span className="px-1.5 py-0.5 rounded bg-surface-2 text-[10px] text-secondary">Gyengébb véd. TS/PPP: {formatNullableNumber(playerAdvancedInsights.matchupSensitivity.weakTs, 1, '%')} / {formatNullableNumber(playerAdvancedInsights.matchupSensitivity.weakPpp, 3)}{'weakGames' in playerAdvancedInsights.matchupSensitivity ? ` (${playerAdvancedInsights.matchupSensitivity.weakGames} meccs)` : ''}</span>
+                            {(playerAdvancedInsights.matchupSensitivity.middleGames ?? 0) > 0 && (
+                              <span className="px-1.5 py-0.5 rounded bg-surface-2 text-[10px] text-secondary">Többi meccs TS: {formatNullableNumber(playerAdvancedInsights.matchupSensitivity.middleTs, 1, '%')} ({playerAdvancedInsights.matchupSensitivity.middleGames} meccs)</span>
+                            )}
                             <span className={`px-1.5 py-0.5 rounded bg-surface-2 text-[10px] ${Number(playerAdvancedInsights.matchupSensitivity.tsDelta ?? 0) >= 0 ? 'text-positive' : 'text-negative'}`}>
                               TS delta: {formatNullableNumber(playerAdvancedInsights.matchupSensitivity.tsDelta, 1, ' pp')}
                             </span>
@@ -12487,6 +12527,9 @@ export function SeasonComparison({
                           )}
                           {'weakOpponents' in playerAdvancedInsights.matchupSensitivity && playerAdvancedInsights.matchupSensitivity.weakOpponents?.length > 0 && (
                             <div className="text-[10px] text-muted">Gyengébb: {playerAdvancedInsights.matchupSensitivity.weakOpponents.join(' • ')}</div>
+                          )}
+                          {(playerAdvancedInsights.matchupSensitivity.middleOpponents?.length ?? 0) > 0 && (
+                            <div className="text-[10px] text-muted">Többi (középmezőny / besorolás nélkül): {playerAdvancedInsights.matchupSensitivity.middleOpponents?.join(' • ')}</div>
                           )}
                         </>
                       ) : (

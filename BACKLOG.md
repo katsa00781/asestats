@@ -811,6 +811,23 @@ egymás elleni meccsek közt jelenik meg. A 2024/25-ös szezonnézetben nincs do
   csapatnál) – keret-import csapat-hozzárendelési hiba gyanúja, döntés előtt nem nyúltunk hozzá.
 - Mobil jegyzet: `asestatmobile/docs/mobile-sync/2026-11-08-dobasterkep-zonak-h21.md` (összesítővé bővítve: H21 + H22).
 
+**H32 – Játékoselemzés: arányok összegből, verdikt-minta, export, szövegek (Chandler-lista) (2026-11-15)** – folyamatban
+
+Felhasználói hibalista a Játékos elemzés felületéről és a játékos MD exportról (CHANDLER III. John Watson, 2026/27).
+
+- [x] **A) Arányok összegből (rendszerszintű hiba):** a `SeasonComparison` `playerAdvancedInsights` blokkjai a
+  meccsenkénti arányokat átlagolták (Döntésminőség AST/TO 1,55 a helyes 24/21 = 1,14 helyett; a Fáradás és a
+  Matchup két részhalmazának TS%-a egyszerre a szezon-TS% fölött). Új közös segéd: `lib/player-game-aggregate.ts`
+  `aggregatePlayerGames()` – TS% = ΣPTS / (2·(ΣFGA + 0,44·ΣFTA)), PPP, TOV%, AST/TO = ΣAST / ΣTO, eFG, középtáv-arány
+  összegből. Ezt használja a szezon-referencia, a Szerepkör, a Döntésminőség, a Stabilitás gördülő ablaka és trendje,
+  a Matchup és a Fáradás. (A Stabilitás szórásai továbbra is meccsenkéntiek – a szórás természeténél fogva.)
+  Matchup: a csapatlisták nincsenek 3-ra vágva, a csoportok meccsszáma kiírva, a két csoportba nem került meccsek
+  külön „Többi meccs” TS%-kal és ellenféllistával. Teszt: `tests/player-game-aggregate.test.ts`.
+- [ ] B) Verdikt és minta (Clutch, Szerepkör, lineup-lefedettség, Volatilitás-skála, limitáció, dobástérkép-lefedettség).
+- [ ] C) MD export (VAL, utolsó meccsek, offenzív / defenzív index).
+- [ ] D) Szöveg és címke, lineup névpárosítás.
+- [ ] E) Telítődés (index / percentilis 100).
+
 **H31 – Post-game riport: Fő ok, fókusz-sorrend, eFG egy sorban (ASE–Alba után) ✓ (2026-11-15)** – a kód kész, a böngészős ellenőrzés nyitva
 
 Felhasználói hibalista az ASE–Alba Fehérvár 102–91 post-game exportjából. Mind a `lib/postgame-report.ts`
