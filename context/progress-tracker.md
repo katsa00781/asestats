@@ -40,14 +40,18 @@ Update this file after every meaningful implementation change.
 
 ## In Progress
 
+- **H29 – Egységes kapott pont (2026-11-15):** minden elemzés (csapatelemzés,
+  post-game, pregame, projekció) a csapat saját `games.opp_score`-ját használja
+  (`buildTeamScoreTotals`, box score-os meccseken); a `game_id`-alapú, mindig 0-t
+  adó összegzés megszűnt. Nyitva: böngészős ellenőrzés; külön vizsgálandó a
+  `gameTeamPoints` csapat-azonosító felhasználása (H2H, ellenfél felismerése).
 - **H28 – Post-game riport adatminőség (2026-11-15):** második esély erősség
   csak ≥ +4 pont második esély előnnyel (kisebbnél adatmegjegyzés), a szezonhoz
   mért OREB-sorok új címkével; DRtg liga medián nélkül Oliver-súlyozott négy
   faktor dönt; rate-különbségek pp-ben, egységes kerekítés (`ppGap`); a
   leggyengébb páros mellett a top 2 Impact-játékos és a fő center jelenléte.
-  Nyitva: böngészős ellenőrzés, és döntés a lelethez – a liga / szezon DRtg
-  referencia azért hiányzik, mert a `teamSeasonStats` kapott pontja mindig 0.
-  Részletek: `BACKLOG.md` H28.
+  Nyitva: böngészős ellenőrzés. A lelet (hiányzó DRtg referencia) a H29-ben
+  javítva. Részletek: `BACKLOG.md` H28.
 - **H27 – Ütemezett import CI javítás (2026-11-15):** az `ubuntu-latest`
   runner Ubuntu 26.04-re váltott, amit a Playwright 1.58 nem támogat, így a
   `scrape.yml` a Chromium telepítésénél elszállt. A runner `ubuntu-24.04`-re

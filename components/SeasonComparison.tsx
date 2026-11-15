@@ -50,6 +50,7 @@ import {
   emptyTeamOpponentBox,
   normalizeTeamStats,
   type TeamAnalysis,
+  type TeamGameScore,
   type TeamOpponentBox,
   type TeamSeasonStat,
 } from '@/lib/team-analysis';
@@ -2039,24 +2040,37 @@ const blendOpponentBox = (
   return result;
 };
 
+/**
+ * A kapott pont a csapat saját meccsein, a `games` végeredményéből
+ * (`buildTeamScoreTotals`). `countedGames`: az ismert eredményű meccsek száma.
+ */
+const sumPointsAgainst = (
+  teamId: string,
+  gameIds: string[],
+  gameScores: Map<string, TeamGameScore>
+) => gameIds.reduce(
+  (acc, gameId) => {
+    const score = gameScores.get(gameId);
+    if (!score || score.ourTeamId !== teamId) return acc;
+    return { pointsAgainst: acc.pointsAgainst + score.oppScore, countedGames: acc.countedGames + 1 };
+  },
+  { pointsAgainst: 0, countedGames: 0 }
+);
+
 const subtractGameFromTeamAggregate = (
   team: PregameTeamSeasonStat,
   teamId: string | null | undefined,
   gameId: string | null | undefined,
   teamGamePlayerRows: Map<string, Map<string, GamePlayerStatRow[]>>,
-  gameTeamPoints: Map<string, Map<string, number>>,
+  gameScores: Map<string, TeamGameScore>,
   opponentBoxByGame: Map<string, TeamOpponentBox>
 ) => {
   if (!teamId || !gameId) return team;
   const rows = teamGamePlayerRows.get(teamId)?.get(gameId);
   if (!rows || rows.length === 0) return team;
   const totals = aggregateTeamGameRows(rows);
-  const scoreMap = gameTeamPoints.get(gameId);
-  const ownPoints = scoreMap?.get(teamId) ?? totals.pointsFor;
-  const totalPoints = scoreMap
-    ? Array.from(scoreMap.values()).reduce((sum, value) => sum + value, 0)
-    : ownPoints;
-  const opponentPoints = Math.max(0, totalPoints - ownPoints);
+  // A kapott pont ugyanabból a forrásból vonódik ki, amiből a szezonösszeg épül.
+  const { pointsAgainst: opponentPoints } = sumPointsAgainst(teamId, [gameId], gameScores);
 
   return {
     ...team,
@@ -4583,7 +4597,8 @@ export function SeasonComparison({
   );
 
   // A liga összes meccsének ellenfél-box score-ja (OREB%, közös tempó, DRtg).
-  const { totals: leagueOpponentBoxes } = useLeagueTeamBoxTotals(resolvedSeasonId, resolvedSeasonName);
+  // A kapott pont minden elemzésben a csapat saját `games.opp_score`-jából jön (`buildTeamScoreTotals`).
+  const { totals: leagueOpponentBoxes, scores: leagueGameScores } = useLeagueTeamBoxTotals(resolvedSeasonId, resolvedSeasonName);
 
   const seasonPlayers = useMemo(() => {
     if (!resolvedSeasonId) return [];
@@ -5361,36 +5376,16 @@ export function SeasonComparison({
       activeSeasonPlayers
     );
 
-    const playerToTeam = new Map<string, string>();
-    seasonPlayers.forEach(player => {
-      if (player.teamId) playerToTeam.set(player.id, player.teamId);
-    });
-
-    const gamePoints = new Map<string, Map<string, number>>();
-    playerGameStats.forEach(row => {
-      if (resolvedSeasonId && String(row.games?.season_id ?? '') !== String(resolvedSeasonId)) return;
-      const teamId = row.players?.team_id ?? playerToTeam.get(row.player_id);
-      if (!teamId) return;
-      if (!gamePoints.has(row.game_id)) gamePoints.set(row.game_id, new Map());
-      const byTeam = gamePoints.get(row.game_id)!;
-      byTeam.set(teamId, (byTeam.get(teamId) ?? 0) + (row.points || 0));
-    });
-
-    const againstTotals = new Map<string, number>();
-    gamePoints.forEach(teamMap => {
-      const total = Array.from(teamMap.values()).reduce((sum, value) => sum + value, 0);
-      teamMap.forEach((points, teamId) => {
-        const against = total - points;
-        againstTotals.set(teamId, (againstTotals.get(teamId) ?? 0) + against);
-      });
-    });
-
+    // A kapott pont a csapat saját `games` sorainak `opp_score`-jából (box score-os
+    // meccsek). A korábbi `game_id`-nkénti összegzés mindig 0-t adott, mert egy
+    // `game_id` alatt csak az egyik csapat játékosai vannak – így a DRtg-nek nem
+    // volt szezon- és liga-referenciája (H29).
     return baseStats.map(team => ({
       ...team,
-      pointsAgainst: againstTotals.get(team.teamId) ?? team.pointsAgainst,
+      pointsAgainst: leagueGameScores.byTeam.get(team.teamId)?.pointsAgainst ?? team.pointsAgainst,
       opponent: leagueOpponentBoxes.byTeam.get(team.teamId) ?? team.opponent,
     }));
-  }, [activeSeasonPlayers, allTeams, league, leagueOpponentBoxes, playerGameStats, resolvedSeasonId, rolesByPlayerId, seasonPlayers]);
+  }, [activeSeasonPlayers, allTeams, league, leagueGameScores, leagueOpponentBoxes, resolvedSeasonId, rolesByPlayerId, seasonPlayers]);
 
   const teamBenchmarks = useMemo(() => {
     if (teamSeasonStats.length === 0) return null;
@@ -6447,17 +6442,7 @@ export function SeasonComparison({
         totals.val += row.valuation || 0;
       });
 
-      let pointsAgainst = 0;
-      let countedGames = 0;
-      recentGameIds.forEach(gameId => {
-        const byTeam = gameTeamPoints.get(gameId);
-        if (!byTeam) return;
-        const ownPoints = byTeam.get(team.teamId);
-        if (ownPoints === undefined) return;
-        const totalPoints = Array.from(byTeam.values()).reduce((sum, value) => sum + value, 0);
-        pointsAgainst += totalPoints - ownPoints;
-        countedGames += 1;
-      });
+      const { pointsAgainst, countedGames } = sumPointsAgainst(team.teamId, recentGameIds, leagueGameScores.byGame);
 
       const gamesCount = countedGames > 0 ? countedGames : recentGameIds.length;
 
@@ -6609,7 +6594,7 @@ export function SeasonComparison({
     return merged;
   }, [
     MIN_RECENT_GAMES_TEAM,
-    gameTeamPoints,
+    leagueGameScores,
     playerGameStats,
     playerTeamMap,
     projectionScenarioSettings.recentWeightMultiplier,
@@ -7236,17 +7221,7 @@ export function SeasonComparison({
         totals.val += row.valuation || 0;
       });
 
-      let pointsAgainst = 0;
-      let countedGames = 0;
-      filteredRecentIds.forEach(gameId => {
-        const byTeam = gameTeamPoints.get(gameId);
-        if (!byTeam) return;
-        const ownPoints = byTeam.get(teamId);
-        if (ownPoints === undefined) return;
-        const totalPoints = Array.from(byTeam.values()).reduce((sum, value) => sum + value, 0);
-        pointsAgainst += totalPoints - ownPoints;
-        countedGames += 1;
-      });
+      const { pointsAgainst, countedGames } = sumPointsAgainst(teamId, filteredRecentIds, leagueGameScores.byGame);
 
       const gamesCount = countedGames > 0 ? countedGames : recentGameIds.length;
 
@@ -7275,7 +7250,7 @@ export function SeasonComparison({
         opponent: sumOpponentBoxes(filteredRecentIds.map(gameId => leagueOpponentBoxes.byGame.get(gameId))),
       };
     };
-  }, [MIN_RECENT_GAMES_TEAM, gameTeamPoints, leagueOpponentBoxes, playerGameStats, playerTeamMap, recentGameIdsByTeam, teamSeasonStats]);
+  }, [MIN_RECENT_GAMES_TEAM, leagueGameScores, leagueOpponentBoxes, playerGameStats, playerTeamMap, recentGameIdsByTeam, teamSeasonStats]);
 
   const pregameOwnTeam = useMemo<PregameTeamSeasonStat | null>(() => {
     const recentSnapshot = useRecentFormPregame
@@ -7324,7 +7299,7 @@ export function SeasonComparison({
         resolvedTeamId,
         excludeOwnPregameGameId,
         teamGamePlayerRows,
-        gameTeamPoints,
+        leagueGameScores.byGame,
         leagueOpponentBoxes.byGame
       );
     }
@@ -7338,7 +7313,7 @@ export function SeasonComparison({
   }, [
     buildRecentTeamStat,
     excludeOwnPregameGameId,
-    gameTeamPoints,
+    leagueGameScores,
     leagueOpponentBoxes,
     resolvedTeamId,
     selectedTeamStats,
@@ -7396,7 +7371,7 @@ export function SeasonComparison({
         selectedOpponentTeamId,
         excludeOpponentPregameGameId,
         teamGamePlayerRows,
-        gameTeamPoints,
+        leagueGameScores.byGame,
         leagueOpponentBoxes.byGame
       );
     }
@@ -7410,7 +7385,7 @@ export function SeasonComparison({
   }, [
     buildRecentTeamStat,
     excludeOpponentPregameGameId,
-    gameTeamPoints,
+    leagueGameScores,
     leagueOpponentBoxes,
     resolvedTeamId,
     selectedOpponentTeamId,

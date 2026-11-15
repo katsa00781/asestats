@@ -1,25 +1,33 @@
 'use client';
 
-import type { BoxStatRow, LeagueGameBox, OpponentBoxTotals, TeamBoxTotals } from '@/lib/team-analysis';
+import type { BoxStatRow, LeagueGameBox, OpponentBoxTotals, TeamBoxTotals, TeamScoreTotals } from '@/lib/team-analysis';
 import { fetchAllRows } from '@/lib/fetch-all-rows';
 import { getSeasonStatsTable } from '@/lib/season-tables';
 import { supabase } from '@/lib/supabase';
-import { buildOpponentBoxTotals, sumBoxRows } from '@/lib/team-analysis';
+import { buildOpponentBoxTotals, buildTeamScoreTotals, sumBoxRows } from '@/lib/team-analysis';
 import { useEffect, useMemo, useState } from 'react';
 
 // A liga minden meccsének csapat-box score-ja, az ellenfél-összesítőhöz
-// (OREB%, közös tempó, DRtg). A dashboard alap adatfolyama (useGameData) csak a
+// (OREB%, közös tempó, DRtg), és a végeredmény a kapott ponthoz (DRtg). A dashboard alap adatfolyama (useGameData) csak a
 // kiválasztott csapat meccseit tölti, ezért ez szezononként egyszer, külön
 // lekérdezéssel jön – a team-season-export-data liga-betöltőjének mintájára.
 
 const BOX_COLUMNS = 'game_id, close_made, close_attempted, mid_made, mid_attempted, three_made, three_attempted, free_throw_made, free_throw_attempted, offensive_rebounds, defensive_rebounds, turnovers';
 const GAME_ID_CHUNK = 50;
 
-type GameRow = { id: string; date: string; our_team_id: string; opponent_team_id: string | null };
+type GameRow = {
+  id: string;
+  date: string;
+  our_team_id: string;
+  opponent_team_id: string | null;
+  our_score: number | null;
+  opp_score: number | null;
+};
 type StatRow = BoxStatRow & { game_id: string };
-type BoxResult = { key: string; totals: OpponentBoxTotals; error: string | null };
+type BoxResult = { key: string; totals: OpponentBoxTotals; scores: TeamScoreTotals; error: string | null };
 
 const EMPTY_TOTALS: OpponentBoxTotals = { byTeam: new Map(), byGame: new Map() };
+const EMPTY_SCORES: TeamScoreTotals = { byTeam: new Map(), byGame: new Map() };
 
 async function loadLeagueGameBoxes(seasonId: string, seasonName: string, signal: AbortSignal): Promise<LeagueGameBox[]> {
   const statsTable = getSeasonStatsTable(seasonName);
@@ -28,7 +36,7 @@ async function loadLeagueGameBoxes(seasonId: string, seasonName: string, signal:
   const games = await fetchAllRows<GameRow>((from, to) =>
     supabase
       .from('games')
-      .select('id, date, our_team_id, opponent_team_id')
+      .select('id, date, our_team_id, opponent_team_id, our_score, opp_score')
       .eq('season_id', seasonId)
       .order('id', { ascending: true })
       .range(from, to)
@@ -67,6 +75,8 @@ async function loadLeagueGameBoxes(seasonId: string, seasonName: string, signal:
       ourTeamId: game.our_team_id,
       opponentTeamId: game.opponent_team_id,
       box,
+      ourScore: game.our_score,
+      oppScore: game.opp_score,
     };
   });
 }
@@ -87,11 +97,11 @@ export function useLeagueTeamBoxTotals(seasonId: string | null | undefined, seas
     const load = async () => {
       try {
         const games = await loadLeagueGameBoxes(seasonId, seasonName, controller.signal);
-        if (active) setResult({ key, totals: buildOpponentBoxTotals(games), error: null });
+        if (active) setResult({ key, totals: buildOpponentBoxTotals(games), scores: buildTeamScoreTotals(games), error: null });
       } catch (error) {
         if (!active) return;
         console.error('Liga box score betöltési hiba:', error);
-        setResult({ key, totals: EMPTY_TOTALS, error: 'A liga box score-ok betöltése nem sikerült.' });
+        setResult({ key, totals: EMPTY_TOTALS, scores: EMPTY_SCORES, error: 'A liga box score-ok betöltése nem sikerült.' });
       }
     };
     void load();
@@ -104,6 +114,8 @@ export function useLeagueTeamBoxTotals(seasonId: string | null | undefined, seas
   const current = result?.key === key ? result : null;
   return {
     totals: current?.totals ?? EMPTY_TOTALS,
+    /** Csapatonként és meccsenként a végeredmény – a kapott pont egyetlen forrása. */
+    scores: current?.scores ?? EMPTY_SCORES,
     loading: Boolean(key && !current),
     error: current?.error ?? null,
   };

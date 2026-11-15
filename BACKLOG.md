@@ -1,6 +1,6 @@
 # BACKLOG.md – ASEStats Projekt
 
-_Utoljára frissítve: 2026-11-15 (H28 – post-game riport adatminőség: második esély küszöb, Oliver-súlyozott védekezési verdikt, pp-mértékegység és egységes kerekítés, a leggyengébb páros mellett a kulcsjátékosok; lelet: a liga DRtg medián a kapott pont hibás összegzése miatt hiányzik; előtte H27 – az ütemezett import Playwright-telepítése elszállt az ubuntu-latest → 26.04 váltás miatt, a runner `ubuntu-24.04`-re rögzítve; előtte 2026-11-08: H22 – a 138 db 2024/25-ös dobástérkép átkötve a helyes szezonra, ellenőrizve; H21 – a dobástérkép zónái valós méretarányú FIBA-geometriával: a festék / tripla besorolás javítva; előtte H20 – a hunbasket menetrend-oldal átalakulása miatt leállt `hunbasket:fixtures` javítva, éles újrafuttatás nyitva; előtte 2026-11-01: idei vs. tavalyi csapat összehasonlítás: csapatstat és keretváltozás kész, böngészős ellenőrzés nyitva; előtte 2026-10-18: H19 – post-game riport harmadik hibalista, A–I egység kész)_
+_Utoljára frissítve: 2026-11-15 (H29 – a kapott pont minden elemzésben a `games.opp_score`-ból: csapatelemzés DRtg / Net, post-game DRtg referencia, pregame meccs-kivonás és projekció; előtte H28 – post-game riport adatminőség: második esély küszöb, Oliver-súlyozott védekezési verdikt, pp-mértékegység és egységes kerekítés, a leggyengébb páros mellett a kulcsjátékosok; lelet: a liga DRtg medián a kapott pont hibás összegzése miatt hiányzik; előtte H27 – az ütemezett import Playwright-telepítése elszállt az ubuntu-latest → 26.04 váltás miatt, a runner `ubuntu-24.04`-re rögzítve; előtte 2026-11-08: H22 – a 138 db 2024/25-ös dobástérkép átkötve a helyes szezonra, ellenőrizve; H21 – a dobástérkép zónái valós méretarányú FIBA-geometriával: a festék / tripla besorolás javítva; előtte H20 – a hunbasket menetrend-oldal átalakulása miatt leállt `hunbasket:fixtures` javítva, éles újrafuttatás nyitva; előtte 2026-11-01: idei vs. tavalyi csapat összehasonlítás: csapatstat és keretváltozás kész, böngészős ellenőrzés nyitva; előtte 2026-10-18: H19 – post-game riport harmadik hibalista, A–I egység kész)_
 
 ---
 
@@ -811,7 +811,44 @@ egymás elleni meccsek közt jelenik meg. A 2024/25-ös szezonnézetben nincs do
   csapatnál) – keret-import csapat-hozzárendelési hiba gyanúja, döntés előtt nem nyúltunk hozzá.
 - Mobil jegyzet: `asestatmobile/docs/mobile-sync/2026-11-08-dobasterkep-zonak-h21.md` (összesítővé bővítve: H21 + H22).
 
-**H28 – Post-game riportgenerátor: adatminőségi javítások (ASE–Alba 102–91 után) ✓ (2026-11-15)** – a kód kész, a böngészős ellenőrzés és a DRtg-lelet döntése nyitva
+**H29 – A kapott pont egyetlen forrása minden elemzésben ✓ (2026-11-15)** – a kód kész, a böngészős ellenőrzés nyitva
+
+A H28 lelete, a felhasználó döntése: „minden elemzésnél egységes legyen az adatfelhasználás”. A
+`SeasonComparison` a kapott pontot `game_id`-nként a csapatok játékossorainak pontjaiból számolta, de a
+`games` tábla csapat-nézetű (egy `game_id` alatt csak az egyik csapat játékosai) – így mindig 0 volt.
+
+- [x] **Közös forrás (`@core`)** – `lib/team-analysis.ts` `buildTeamScoreTotals()`: csapatonként és
+  meccsenként a csapat saját `games` sorának `our_score` / `opp_score`-ja, csak a box score-os, ismert
+  eredményű meccseken (a kapott pont és a box score-ból becsült birtoklás azonos meccshalmazon).
+  A `LeagueGameBox` új opcionális mezői: `ourScore`, `oppScore`.
+- [x] **Betöltés** – `hooks/useLeagueTeamBoxTotals.ts`: a már meglévő liga-szintű `games` lekérdezés
+  kiegészül az `our_score, opp_score` oszlopokkal; a hook új `scores` kimenete. Új lekérdezés nincs.
+- [x] **Felhasználás (`components/SeasonComparison.tsx`)** – minden kapott pont ebből jön:
+  - szezon-aggregátum (`teamSeasonStats`) → csapatelemzés DRtg / Net rating és benchmark, post-game
+    szezon- és liga DRtg referencia (a H28 súlyozott ága így csak valódi adathiánynál fut), pregame benchmark;
+  - pregame meccs-kivonás (`subtractGameFromTeamAggregate`, a meccs előtti állapothoz);
+  - a két „recent” pregame snapshot (`buildRecentTeamStat`, projekciós erősség).
+  A hibás `game_id`-összegzés (`gamePoints` / `againstTotals` és a `gameTeamPoints`-alapú kapott pont)
+  megszűnt; közös segéd: `sumPointsAgainst()`.
+- [x] **Szándékolt következmény** – a tabella-projekció erőssége (`netRatingPerGame`) eddig valójában
+  „szerzett pont / meccs” volt; most valódi nettó, ezért a projekció sorrendje változhat.
+- [x] **Ellenőrzés valós adaton (service role olvasás, 2026/27, 14 csapat)** – a `games.our_score` összege
+  minden csapatnál egyezik a box score pontösszeggel; ASE 10 meccs, 1016 / 783, DRtg ≈ 101,1; liga DRtg
+  medián ≈ 111,2.
+- [x] **Tesztek** – új `tests/team-score-totals.test.ts` (ASE–Alba két csapat-nézetű sora; box score
+  nélküli / eredmény nélküli / 0–0 meccs kiszűrve). 107/107 zöld, `tsc` tiszta, a módosított `lib/` és
+  `hooks/` fájl lint-tiszta, a `SeasonComparison.tsx` lint-eredménye a HEAD-del azonos.
+- [ ] **Böngészős ellenőrzés** (felhasználó): csapatelemzés DRtg / Net rating ≠ 0; post-game Kulcs mutatók
+  DRtg sorában szezonátlag és liga medián; pregame és tabella-projekció betölt.
+- Megfigyelés (nem javítva, külön vizsgálandó): a `gameTeamPoints` másik két felhasználása – a legutóbbi
+  egymás elleni meccs keresése és a kiválasztott meccs ellenfél-csapatának felismerése – ugyanígy egy
+  `game_id` alatt várja mindkét csapatot, ezért valószínűleg sosem talál. Ezek csapat-azonosítást, nem
+  pontot számolnak.
+- Mobil: a mobil `lib/team-season-stats.ts` már a `games.opp_score`-t használja (a hiba ott nem volt meg);
+  eltérés csak a meccshalmazban (mobil: minden meccssor). Jegyzet: a H28-é bővítve,
+  `asestatmobile/docs/mobile-sync/2026-11-15-postgame-riport-h28.md`.
+
+**H28 – Post-game riportgenerátor: adatminőségi javítások (ASE–Alba 102–91 után) ✓ (2026-11-15)** – a kód kész, a böngészős ellenőrzés nyitva
 
 Felhasználói visszajelzés a legutóbbi post-game riportra (4 pont):
 
@@ -840,14 +877,14 @@ Felhasználói visszajelzés a legutóbbi post-game riportra (4 pont):
   pozitív esetének frissített elvárása. 105/105 zöld, `tsc` tiszta, a módosított `lib/` és teszt fájlok lint-tiszták
   (a `SeasonComparison.tsx` meglévő lint-hibái nem nőttek).
 - [ ] **Böngészős ellenőrzés** (felhasználó): az ASE–Alba (2026-11-14) post-game riport újragenerálva, a 4 pont.
-- [ ] **Lelet – a liga DRtg medián (és a szezon DRtg referencia) mindig hiányzik** → döntés kell: a
+- [x] **Lelet – a liga DRtg medián (és a szezon DRtg referencia) mindig hiányzik** → javítva: **H29**. A
   `SeasonComparison` `teamSeasonStats` a kapott pontot `game_id`-nként összegzi a csapatok pontjaiból, de minden
   csapatnak saját `games` sora van (pl. ASE–Alba: `dc623905…` és `a81366a7…`), így a kapott pont mindig 0, a DRtg 0,
   és a benchmark kiszűri (ugyanez a minta volt a H23 utómunkában az ellenfél-összesítőnél). Következmény: a
   post-game DRtg sorban nincs szezon- és liga-referencia, a verdikt mindig a négy faktorból jön. Javítás: a
   kapott pont a csapat saját `games.opp_score`-jából – a csapat-szezon aggregáció több nézetet is érint
   (csapatelemzés, pregame), ezért külön egységként, jóváhagyás után.
-- Mobil jegyzet: `asestatmobile/docs/mobile-sync/2026-11-15-postgame-riport-h28.md`.
+- Mobil jegyzet: `asestatmobile/docs/mobile-sync/2026-11-15-postgame-riport-h28.md` (H28 + H29 összesítő).
 
 **H27 – Ütemezett import (GitHub Actions) elszáll a Playwright telepítésénél ✓ (2026-11-15)** – javítva, CI újrafuttatás nyitva
 

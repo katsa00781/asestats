@@ -128,6 +128,46 @@ export type LeagueGameBox = {
   ourTeamId: string;
   opponentTeamId: string | null;
   box: TeamBoxTotals | null;
+  /** A csapat saját `games` sorának végeredménye (`our_score` / `opp_score`); `null`, ha nincs. */
+  ourScore?: number | null;
+  oppScore?: number | null;
+};
+
+/** Egy meccs végeredménye a csapat saját `games` sorából. */
+export type TeamGameScore = { ourTeamId: string; ourScore: number; oppScore: number };
+
+export type TeamScoreTotals = {
+  /** Csapatonként a szerzett / kapott pont a box score-os meccseken. */
+  byTeam: Map<string, { games: number; pointsFor: number; pointsAgainst: number }>;
+  /** Meccsenként (a csapat saját `games.id`-ja) a végeredmény. */
+  byGame: Map<string, TeamGameScore>;
+};
+
+const isScore = (value: number | null | undefined): value is number =>
+  typeof value === 'number' && Number.isFinite(value) && value >= 0;
+
+/**
+ * A kapott pont egyetlen forrása minden elemzéshez (csapatelemzés, pregame,
+ * post-game): a csapat saját `games` sorának `opp_score`-ja. A `games` tábla
+ * csapat-nézetű – egy `game_id` alatt csak az egyik csapat játékosai vannak –,
+ * ezért a kapott pont a játékossorok `game_id`-nkénti összegéből nem képezhető
+ * (az mindig 0). Csak a box score-os meccsek számítanak, hogy a kapott pont és a
+ * box score-ból becsült birtoklás (DRtg) azonos meccshalmazon álljon.
+ */
+export const buildTeamScoreTotals = (games: LeagueGameBox[]): TeamScoreTotals => {
+  const byTeam: TeamScoreTotals['byTeam'] = new Map();
+  const byGame: TeamScoreTotals['byGame'] = new Map();
+  games.forEach(game => {
+    if (!game.box || !isScore(game.ourScore) || !isScore(game.oppScore)) return;
+    if (game.ourScore === 0 && game.oppScore === 0) return;
+    byGame.set(game.gameId, { ourTeamId: game.ourTeamId, ourScore: game.ourScore, oppScore: game.oppScore });
+    const total = byTeam.get(game.ourTeamId) ?? { games: 0, pointsFor: 0, pointsAgainst: 0 };
+    total.games += 1;
+    total.pointsFor += game.ourScore;
+    total.pointsAgainst += game.oppScore;
+    byTeam.set(game.ourTeamId, total);
+  });
+  return { byTeam, byGame };
 };
 
 export type OpponentBoxTotals = {
