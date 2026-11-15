@@ -1,6 +1,6 @@
 # BACKLOG.md – ASEStats Projekt
 
-_Utoljára frissítve: 2026-11-15 (H27 – az ütemezett import Playwright-telepítése elszállt az ubuntu-latest → 26.04 váltás miatt, a runner `ubuntu-24.04`-re rögzítve; előtte 2026-11-08: H22 – a 138 db 2024/25-ös dobástérkép átkötve a helyes szezonra, ellenőrizve; H21 – a dobástérkép zónái valós méretarányú FIBA-geometriával: a festék / tripla besorolás javítva; előtte H20 – a hunbasket menetrend-oldal átalakulása miatt leállt `hunbasket:fixtures` javítva, éles újrafuttatás nyitva; előtte 2026-11-01: idei vs. tavalyi csapat összehasonlítás: csapatstat és keretváltozás kész, böngészős ellenőrzés nyitva; előtte 2026-10-18: H19 – post-game riport harmadik hibalista, A–I egység kész)_
+_Utoljára frissítve: 2026-11-15 (H28 – post-game riport adatminőség: második esély küszöb, Oliver-súlyozott védekezési verdikt, pp-mértékegység és egységes kerekítés, a leggyengébb páros mellett a kulcsjátékosok; lelet: a liga DRtg medián a kapott pont hibás összegzése miatt hiányzik; előtte H27 – az ütemezett import Playwright-telepítése elszállt az ubuntu-latest → 26.04 váltás miatt, a runner `ubuntu-24.04`-re rögzítve; előtte 2026-11-08: H22 – a 138 db 2024/25-ös dobástérkép átkötve a helyes szezonra, ellenőrizve; H21 – a dobástérkép zónái valós méretarányú FIBA-geometriával: a festék / tripla besorolás javítva; előtte H20 – a hunbasket menetrend-oldal átalakulása miatt leállt `hunbasket:fixtures` javítva, éles újrafuttatás nyitva; előtte 2026-11-01: idei vs. tavalyi csapat összehasonlítás: csapatstat és keretváltozás kész, böngészős ellenőrzés nyitva; előtte 2026-10-18: H19 – post-game riport harmadik hibalista, A–I egység kész)_
 
 ---
 
@@ -810,6 +810,44 @@ egymás elleni meccsek közt jelenik meg. A 2024/25-ös szezonnézetben nincs do
   Peringer Balázs, Randolph Brandon Kenneth, Davis-Mcmurrin Gage Andrew a `d96c…` és a `be99…`
   csapatnál) – keret-import csapat-hozzárendelési hiba gyanúja, döntés előtt nem nyúltunk hozzá.
 - Mobil jegyzet: `asestatmobile/docs/mobile-sync/2026-11-08-dobasterkep-zonak-h21.md` (összesítővé bővítve: H21 + H22).
+
+**H28 – Post-game riportgenerátor: adatminőségi javítások (ASE–Alba 102–91 után) ✓ (2026-11-15)** – a kód kész, a böngészős ellenőrzés és a DRtg-lelet döntése nyitva
+
+Felhasználói visszajelzés a legutóbbi post-game riportra (4 pont):
+
+- [x] **1. Második esély: erősség és probléma ütközött** – az ORB% +23,8 pp „Második esély” erősségként, a
+  szezonhoz mért −10,1 pp OREB „második esély” problémaként szerepelt, miközben második esélyből csak 8–7 lett.
+  `lib/postgame-report.ts` `reconcileSecondChance`: új `SECOND_CHANCE_STRENGTH_MIN_DIFF = 4` – a lepattanó-fölény
+  (Kosarstat ORB%-sor és „Támadólepattanózás erős”) csak legalább +4 pont második esély előnnyel erősség, ekkor a
+  sor a pontokat is kiírja („…, második esélyből 14–10 pont.”); 0 < előny < 4 esetén a sorok és az „OREB
+  agresszivitás fenntartása” fókusz kikerülnek, helyettük egy adatmegjegyzés: „Lepattanó-fölény érdemi
+  pontelőny nélkül (…): második esélyből csak 8–7 pont, …”; ≤ 0 előnynél a korábbi probléma-ág változatlan.
+  A szezonhoz mért sorok nem „második esély” címkéjűek: `Támadólepattanózás a szezonátlag alatt (OREB% …)`
+  (probléma) és `Támadólepattanózás a szezonátlag felett / alatt (OREB%)` (döntő tényező).
+- [x] **2. Védekezési verdikt** – a liga DRtg medián hiányában a négy faktor darabszám-szavazása a +19,1 pp-es
+  ellenfél-eFG ellenére „jobb a ligánál” verdiktet adott. Most Oliver-súlyozás (eFG 40%, TO 25%, OREB 20%,
+  FT 15%, hiányzó faktornál újranormálva, ±1 pp sáv); a mondat kiírja: „DRtg X (liga medián nem elérhető);
+  súlyozott négy faktor (Oliver: …): ±Y pp a liga mediánhoz képest”. Liga DRtg mediánnal a DRtg dönt, mint eddig.
+- [x] **3. Mértékegység és kerekítés** – a realizációs szekció (`buildOpponentProfileSection`) a rate-különbséget
+  „+17,1%”-ként írta: most „+17,1 pp”. Új `ppGap()`: minden pp-különbség a kiírt (1 tizedesre kerekített) értékek
+  különbsége – a liga-sorok, a szezon-delták, a döntő tényezők, a kulcsmutató-tábla `delta`-ja és a realizáció
+  ugyanazt mutatja (eddig pl. erősség +8,9 pp, tábla +8,8 pp).
+- [x] **4. Leggyengébb páros** – `lib/postgame-lineup-export.ts` `describeWeakestLineupCore(model, { topImpact })`:
+  a sor kiírja, mennyi ideig volt a mag mellett a top 2 Impact-játékos és a fő center (a C poszton legtöbbet
+  töltő, `findMainCenter`), külön-külön és együtt („Mellettük: … – a három kulcsjátékos együtt 0:00 a 7:00-ből.”).
+  A `SeasonComparison` az `impactScore` szerinti első kettőt adja át; adatlekérés nem változott.
+- [x] **Tesztek** – új `tests/postgame-report-h28.test.ts` (6 eset), 2 új lineup-teszt, a második esély
+  pozitív esetének frissített elvárása. 105/105 zöld, `tsc` tiszta, a módosított `lib/` és teszt fájlok lint-tiszták
+  (a `SeasonComparison.tsx` meglévő lint-hibái nem nőttek).
+- [ ] **Böngészős ellenőrzés** (felhasználó): az ASE–Alba (2026-11-14) post-game riport újragenerálva, a 4 pont.
+- [ ] **Lelet – a liga DRtg medián (és a szezon DRtg referencia) mindig hiányzik** → döntés kell: a
+  `SeasonComparison` `teamSeasonStats` a kapott pontot `game_id`-nként összegzi a csapatok pontjaiból, de minden
+  csapatnak saját `games` sora van (pl. ASE–Alba: `dc623905…` és `a81366a7…`), így a kapott pont mindig 0, a DRtg 0,
+  és a benchmark kiszűri (ugyanez a minta volt a H23 utómunkában az ellenfél-összesítőnél). Következmény: a
+  post-game DRtg sorban nincs szezon- és liga-referencia, a verdikt mindig a négy faktorból jön. Javítás: a
+  kapott pont a csapat saját `games.opp_score`-jából – a csapat-szezon aggregáció több nézetet is érint
+  (csapatelemzés, pregame), ezért külön egységként, jóváhagyás után.
+- Mobil jegyzet: `asestatmobile/docs/mobile-sync/2026-11-15-postgame-riport-h28.md`.
 
 **H27 – Ütemezett import (GitHub Actions) elszáll a Playwright telepítésénél ✓ (2026-11-15)** – javítva, CI újrafuttatás nyitva
 

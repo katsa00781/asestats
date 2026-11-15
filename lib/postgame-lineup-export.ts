@@ -238,13 +238,77 @@ export function findWeakestLineupCore(model: PostgameLineupExport): PostgameLine
   )[0] ?? null;
 }
 
-/** A leggyengébb mag problémasora a riporthoz; `null`, ha nincs kiemelendő együttállás. */
-export function describeWeakestLineupCore(model: PostgameLineupExport): string | null {
+/**
+ * A fő center: aki a Kosarstat ötös-beosztásban a legtöbb időt töltötte a C
+ * poszton. `null`, ha senki nem állt C-n.
+ */
+export function findMainCenter(model: PostgameLineupExport): string | null {
+  const centerSeconds = (row: PostgameLineupOnOff) =>
+    row.positions.find(item => item.position === 'C')?.seconds ?? 0;
+  const best = [...model.onOff]
+    .filter(row => centerSeconds(row) > 0)
+    .sort((a, b) => centerSeconds(b) - centerSeconds(a) || byName(a.player, b.player))[0];
+  return best?.player ?? null;
+}
+
+export type WeakCoreKeyPlayers = {
+  /** A meccs két legnagyobb Impact-értékű játékosa (box score névírással). */
+  topImpact: string[];
+};
+
+/**
+ * Kik voltak a mag mellett: a top Impact-játékosok és a fő center pályán
+ * töltött ideje a mag közös idejéből, külön-külön és együtt. A magban lévő
+ * kulcsjátékos „a magban” jelölést kap; az egyszerre top Impact és fő center
+ * játékos egyszer szerepel. `null`, ha nincs kulcsjátékos.
+ */
+const describeCoreKeyPresence = (
+  model: PostgameLineupExport,
+  core: PostgameLineupUnit,
+  keyPlayers: WeakCoreKeyPlayers
+): string | null => {
+  const center = findMainCenter(model);
+  const roles = new Map<string, string[]>();
+  const addRole = (player: string, role: string) => roles.set(player, [...(roles.get(player) ?? []), role]);
+  keyPlayers.topImpact.slice(0, 2).forEach(player => addRole(player, 'top Impact'));
+  if (center) addRole(center, 'fő center');
+  if (roles.size === 0) return null;
+
+  // A mag ötösei: amelyekben a mag minden tagja pályán volt.
+  const coreLineups = model.lineups.filter(lineup => core.players.every(player => lineup.players.includes(player)));
+  const secondsWith = (players: string[]) => coreLineups
+    .filter(lineup => players.every(player => lineup.players.includes(player)))
+    .reduce((sum, lineup) => sum + lineup.seconds, 0);
+
+  const keyNames = Array.from(roles.keys());
+  const parts = keyNames.map(player => {
+    const roleText = roles.get(player)!.join(', ');
+    return core.players.includes(player)
+      ? `${player} (${roleText}) a magban`
+      : `${player} (${roleText}) ${formatClock(secondsWith([player]))}`;
+  });
+  // Legfeljebb három kulcsjátékos: két top Impact + a fő center.
+  const countWord = keyNames.length === 2 ? 'két' : 'három';
+  const together = keyNames.length > 1
+    ? ` – a ${countWord} kulcsjátékos együtt ${formatClock(secondsWith(keyNames))} a ${formatClock(core.seconds)}-ből`
+    : '';
+  return `Mellettük: ${parts.join(', ')}${together}.`;
+};
+
+/**
+ * A leggyengébb mag problémasora a riporthoz; `null`, ha nincs kiemelendő
+ * együttállás. `keyPlayers` mellett a sor azt is kiírja, mennyi ideig volt a mag
+ * mellett a top 2 Impact-játékos és a fő center – a gyenge eredmény mögött
+ * gyakran az áll, hogy a kulcsjátékosok nélkül voltak pályán.
+ */
+export function describeWeakestLineupCore(model: PostgameLineupExport, keyPlayers?: WeakCoreKeyPlayers): string | null {
   const core = findWeakestLineupCore(model);
   if (!core) return null;
   const clock = formatClock(core.seconds);
   const sizeLabel = CORE_SIZE_LABEL[core.players.length] ?? 'együttállása';
-  return `Együttállás: ${core.players.join(' + ')} közös ${clock} perce alatt ${core.teamPts}–${core.oppPts} (${core.teamPts - core.oppPts} pont) – a meccs leggyengébb, legalább ${LINEUP_NET_MIN_SECONDS / 60} percet együtt töltő ${sizeLabel} (Kosarstat lineup).`;
+  const base = `Együttállás: ${core.players.join(' + ')} közös ${clock} perce alatt ${core.teamPts}–${core.oppPts} (${core.teamPts - core.oppPts} pont) – a meccs leggyengébb, legalább ${LINEUP_NET_MIN_SECONDS / 60} percet együtt töltő ${sizeLabel} (Kosarstat lineup).`;
+  const presence = keyPlayers ? describeCoreKeyPresence(model, core, keyPlayers) : null;
+  return presence ? `${base} ${presence}` : base;
 }
 
 /**

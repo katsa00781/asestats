@@ -249,7 +249,8 @@ test('A végeredmény ismerete nélkül a kontextus nem ítél, az összefűzés
 
 test('Pozitív második esély vagy hiányzó / hibás pontforrás mellett az erősség marad', () => {
   const positive = kosarstat({ sources: { ...POINT_SOURCES, home: { ...POINT_SOURCES.home, secondChancePoints: 14 } } });
-  assert.ok(positive.strengths.includes('Második esély: ORB% különbség +7.4 pp.'));
+  // H28: érdemi (≥ 4 pont) második esély előnynél a sor a pontokat is kiírja.
+  assert.ok(positive.strengths.includes('Második esély: ORB% különbség +7.4 pp, második esélyből 14–10 pont.'), positive.strengths.join('\n'));
   assert.ok(kosarstat({ sources: null }).strengths.includes('Második esély: ORB% különbség +7.4 pp.'));
   // Az eseménylista pontösszege nem egyezik a végeredménnyel → nincs mihez mérni.
   const broken = kosarstat({ sources: { ...POINT_SOURCES, home: { ...POINT_SOURCES.home, points: 101 } } });

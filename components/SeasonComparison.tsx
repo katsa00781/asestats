@@ -9570,7 +9570,14 @@ export function SeasonComparison({
           opponentBoxNames: [],
         }).own
       : null;
-    const lineupProblem = ownLineupModel ? describeWeakestLineupCore(ownLineupModel) : null;
+    // A leggyengébb mag mellett a top 2 Impact-játékos (és a fő center) jelenléte is kiíródik.
+    const topImpactPlayers = [...baseReport.playerReport.players]
+      .sort((a, b) => b.impactScore - a.impactScore)
+      .slice(0, 2)
+      .map(player => player.name);
+    const lineupProblem = ownLineupModel
+      ? describeWeakestLineupCore(ownLineupModel, { topImpact: topImpactPlayers })
+      : null;
 
     return mergeKosarstatPostgameContext(baseReport, kosarstatPostgameContext, {
       extraNotes: [...kosarstatPostgameNotes, ...nameNotes],

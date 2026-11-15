@@ -375,3 +375,34 @@ test('Kezdő ötös vs többi perc: a kezdő ötös együttes ideje és eredmén
   assert.ok(noStarters);
   assert.equal(describeStarterSplit(noStarters), null);
 });
+
+// H28: a leggyengébb mag mellett a top 2 Impact-játékos és a fő center jelenléte.
+// Szintetikus adat (PG–C sorrend): a P + Q páros két rövid ötösben 7:00 alatt 6–16.
+const KEY_PRESENCE = buildPostgameLineupExport({
+  teamName: 'Teszt',
+  starters: ['A', 'B', 'C', 'D', 'E'],
+  stints: [
+    stint('A, B, C, D, E', '10:00', 25, 20),
+    stint('P, Q, C, D, X', '4:00', 4, 10),
+    stint('P, Q, R, S, E', '3:00', 2, 6),
+  ],
+});
+
+test('H28: a leggyengébb páros mellett a kulcsjátékosok jelenléte, külön és együtt', () => {
+  assert.ok(KEY_PRESENCE);
+  // Fő center: a C poszton legtöbbet töltő játékos (E 13:00, X 4:00).
+  const line = describeWeakestLineupCore(KEY_PRESENCE, { topImpact: ['A', 'C'] });
+  assert.equal(
+    line,
+    'Együttállás: P + Q közös 7:00 perce alatt 6–16 (-10 pont) – a meccs leggyengébb, legalább 5 percet együtt töltő párosa (Kosarstat lineup). ' +
+      'Mellettük: A (top Impact) 0:00, C (top Impact) 4:00, E (fő center) 3:00 – a három kulcsjátékos együtt 0:00 a 7:00-ből.'
+  );
+});
+
+test('H28: a magban lévő kulcsjátékos jelölve, a top Impact + fő center egyszer szerepel', () => {
+  assert.ok(KEY_PRESENCE);
+  const line = describeWeakestLineupCore(KEY_PRESENCE, { topImpact: ['P', 'E'] });
+  assert.match(line ?? '', /Mellettük: P \(top Impact\) a magban, E \(top Impact, fő center\) 3:00 – a két kulcsjátékos együtt 3:00 a 7:00-ből\.$/);
+  // Kulcsjátékos-adat nélkül a sor a régi formájú.
+  assert.doesNotMatch(describeWeakestLineupCore(KEY_PRESENCE) ?? '', /Mellettük/);
+});
