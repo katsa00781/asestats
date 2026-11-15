@@ -40,6 +40,11 @@ Update this file after every meaningful implementation change.
 
 ## In Progress
 
+- **H27 – Ütemezett import CI javítás (2026-11-15):** az `ubuntu-latest`
+  runner Ubuntu 26.04-re váltott, amit a Playwright 1.58 nem támogat, így a
+  `scrape.yml` a Chromium telepítésénél elszállt. A runner `ubuntu-24.04`-re
+  rögzítve. Helyben mind az 5 import lépés hibátlan, az éles adat a 10.
+  fordulóig frissítve. Nyitva: CI újrafuttatás zöldre. Részletek: `BACKLOG.md`.
 - **Idei vs. tavalyi csapat összehasonlítás (2026-11-01):** kész – új
   `TeamSeasonCompare` nézet az Áttekintés fülön (`lib/team-season-compare.ts`,
   `lib/team-season-roster.ts`, `hooks/useTeamSeasonModel.ts`), a tavalyi

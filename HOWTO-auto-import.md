@@ -114,6 +114,7 @@ a `scrape.yml` `env:` blokkját bővíteni kell (lásd 5. pont).
 | `Timeout` / `net::ERR_` | hunbasket.hu vagy kosarstat.hu lassú/elérhetetlen | újrafuttatás (`Re-run failed jobs`). A Kosarstat import oldalanként 4-szer próbálkozik (`NAV RETRY` sorok a logban, 60 mp-es időkorláttal); ha ezután is elbukik, a forrás percekig nem volt elérhető a runnerről |
 | `relation "player_game_stats_2026_2027" does not exist` | új szezon migráció kimaradt | `HOWTO-uj-szezon.md` |
 | Supabase `project is paused` | free tier projekt inaktivitás miatt szüneteltetve | Supabase dashboard → Restore project |
+| `Playwright does not support chromium on ubuntuXX.XX-x64` (a `Playwright Chromium telepítése` lépésben) | a runner image újabb, mint amit a telepített Playwright támogat | a `scrape.yml` `runs-on` rögzített (`ubuntu-24.04`, 2026-11-15 óta) – ne állítsd vissza `ubuntu-latest`-re; image-léptetés csak Playwright-frissítéssel együtt |
 
 **Újrafuttatás:** a piros run oldalán jobbra fent **Re-run jobs → Re-run failed jobs**.
 Az importok idempotensek (upsert), a dupla futás nem termel duplikátumot.

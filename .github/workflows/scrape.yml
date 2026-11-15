@@ -34,7 +34,10 @@ on:
 
 jobs:
   scrape:
-    runs-on: ubuntu-latest
+    # Rögzített runner: az ubuntu-latest 2026-11-ben átállt 26.04-re, amit a
+    # Playwright 1.58 nem támogat („does not support chromium on ubuntu26.04-x64”).
+    # Csak akkor léptessük, ha a Playwright verzió már hivatalosan támogatja az újabb image-et.
+    runs-on: ubuntu-24.04
     timeout-minutes: 90
     # A Supabase secretek a 'production' environment alatt vannak – enélkül a
     # ${{ secrets.* }} üres lenne a jobban.

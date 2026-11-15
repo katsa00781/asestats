@@ -1,6 +1,6 @@
 # BACKLOG.md – ASEStats Projekt
 
-_Utoljára frissítve: 2026-11-08 (H22 – a 138 db 2024/25-ös dobástérkép átkötve a helyes szezonra, ellenőrizve; H21 – a dobástérkép zónái valós méretarányú FIBA-geometriával: a festék / tripla besorolás javítva; előtte H20 – a hunbasket menetrend-oldal átalakulása miatt leállt `hunbasket:fixtures` javítva, éles újrafuttatás nyitva; előtte 2026-11-01: idei vs. tavalyi csapat összehasonlítás: csapatstat és keretváltozás kész, böngészős ellenőrzés nyitva; előtte 2026-10-18: H19 – post-game riport harmadik hibalista, A–I egység kész)_
+_Utoljára frissítve: 2026-11-15 (H27 – az ütemezett import Playwright-telepítése elszállt az ubuntu-latest → 26.04 váltás miatt, a runner `ubuntu-24.04`-re rögzítve; előtte 2026-11-08: H22 – a 138 db 2024/25-ös dobástérkép átkötve a helyes szezonra, ellenőrizve; H21 – a dobástérkép zónái valós méretarányú FIBA-geometriával: a festék / tripla besorolás javítva; előtte H20 – a hunbasket menetrend-oldal átalakulása miatt leállt `hunbasket:fixtures` javítva, éles újrafuttatás nyitva; előtte 2026-11-01: idei vs. tavalyi csapat összehasonlítás: csapatstat és keretváltozás kész, böngészős ellenőrzés nyitva; előtte 2026-10-18: H19 – post-game riport harmadik hibalista, A–I egység kész)_
 
 ---
 
@@ -810,6 +810,29 @@ egymás elleni meccsek közt jelenik meg. A 2024/25-ös szezonnézetben nincs do
   Peringer Balázs, Randolph Brandon Kenneth, Davis-Mcmurrin Gage Andrew a `d96c…` és a `be99…`
   csapatnál) – keret-import csapat-hozzárendelési hiba gyanúja, döntés előtt nem nyúltunk hozzá.
 - Mobil jegyzet: `asestatmobile/docs/mobile-sync/2026-11-08-dobasterkep-zonak-h21.md` (összesítővé bővítve: H21 + H22).
+
+**H27 – Ütemezett import (GitHub Actions) elszáll a Playwright telepítésénél ✓ (2026-11-15)** – javítva, CI újrafuttatás nyitva
+
+Tünet: a `scrape.yml` `Playwright Chromium telepítése` lépése: `BEWARE: your OS is not officially supported
+by Playwright; installing dependencies for ubuntu26.04-x64 as a fallback … ERROR: Playwright does not support
+chromium on ubuntu26.04-x64` → exit 1, egyetlen import sem futott le.
+
+Ok: a GitHub `ubuntu-latest` runner image átállt Ubuntu 26.04-re, ezt a Playwright 1.58 nem támogatja.
+A kód és az adat rendben volt: helyben mind az 5 CI lépés hibátlanul lefutott (fixtures 182/67 lejátszott,
+tabella 14 csapat / 10. forduló, box score 67/67, kosarstat pbp 6 új meccs / 0 hiba, link-backfill 10 új /
+24 ismert nem párosítható), az `npm ci` tiszta másolaton is sikeres (a 2026-11-14-i Next 16.4.6 frissítés
+nem okozott hibát).
+
+- [x] **`.github/workflows/scrape.yml`** – `runs-on: ubuntu-latest` → `ubuntu-24.04` (rögzítve, magyarázó kommenttel).
+  Új npm csomag / verzióváltás nincs.
+- [x] **`HOWTO-auto-import.md`** – új sor a „Gyakori hibaokok” táblában.
+- [x] **Adat** – a helyi futás az éles DB-t a 10. fordulóig (2026-11-14) frissítette.
+- [ ] **CI újrafuttatás** (felhasználó): Actions → Scrape → Run workflow, ellenőrizni, hogy zöld.
+- [ ] **Később (külön döntés):** Playwright frissítés, ha egy verzió hivatalosan támogatja az Ubuntu 26.04-et –
+  utána a runner léptethető.
+- Megfigyelés: a 10. forduló dobástérképei a futáskor még nagyrészt üresek voltak a hunbasketen
+  (pl. ASE–Alba „nincs event”); a következő futás pótolja, ha a forrás feltölti.
+- Mobil jegyzet nem kell (CI-infrastruktúra, adatforma nem változott).
 
 **H26 – Pregame riportgenerátor: 4. javítási lista (ASE–Falco) (2026-11-13)** – P1–P3 kész, adat-újraimport és böngészős ellenőrzés nyitva
 
