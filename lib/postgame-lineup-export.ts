@@ -257,10 +257,21 @@ export type WeakCoreKeyPlayers = {
 };
 
 /**
- * Kik voltak a mag mellett: a top Impact-játékosok és a fő center pályán
- * töltött ideje a mag közös idejéből, külön-külön és együtt. A magban lévő
- * kulcsjátékos „a magban” jelölést kap; az egyszerre top Impact és fő center
- * játékos egyszer szerepel. `null`, ha nincs kulcsjátékos.
+ * A mag idejének legfeljebb ekkora részében pályán lévő kulcsjátékos „hiányzó”:
+ * a sor azt írja ki, mennyi ideig volt a mag nélküle (nélkülük).
+ */
+const KEY_PLAYER_ABSENT_SHARE = 0.25;
+
+/** Az Impact-rangsor helye a szerep-címkében: „legjobb Impact”, „2. legjobb Impact”. */
+const impactRankLabel = (index: number) => (index === 0 ? 'legjobb Impact' : `${index + 1}. legjobb Impact`);
+
+/**
+ * Kik voltak a mag mellett: a két legjobb Impact-játékos és a fő center pályán
+ * töltött ideje a mag közös idejéből. A magban lévő kulcsjátékos „a magban”
+ * jelölést kap; az egyszerre Impact-vezető és fő center játékos egyszer
+ * szerepel. A záró rész a ritkán (≤ 25%) mellettük álló kulcsjátékosok nélkül
+ * töltött időt adja – a három kulcsjátékos szinte sosincs egyszerre pályán,
+ * ezért az „együtt” idő mindig ~0 volna. `null`, ha nincs kulcsjátékos.
  */
 const describeCoreKeyPresence = (
   model: PostgameLineupExport,
@@ -270,7 +281,7 @@ const describeCoreKeyPresence = (
   const center = findMainCenter(model);
   const roles = new Map<string, string[]>();
   const addRole = (player: string, role: string) => roles.set(player, [...(roles.get(player) ?? []), role]);
-  keyPlayers.topImpact.slice(0, 2).forEach(player => addRole(player, 'top Impact'));
+  keyPlayers.topImpact.slice(0, 2).forEach((player, index) => addRole(player, impactRankLabel(index)));
   if (center) addRole(center, 'fő center');
   if (roles.size === 0) return null;
 
@@ -278,6 +289,9 @@ const describeCoreKeyPresence = (
   const coreLineups = model.lineups.filter(lineup => core.players.every(player => lineup.players.includes(player)));
   const secondsWith = (players: string[]) => coreLineups
     .filter(lineup => players.every(player => lineup.players.includes(player)))
+    .reduce((sum, lineup) => sum + lineup.seconds, 0);
+  const secondsWithout = (players: string[]) => coreLineups
+    .filter(lineup => players.every(player => !lineup.players.includes(player)))
     .reduce((sum, lineup) => sum + lineup.seconds, 0);
 
   const keyNames = Array.from(roles.keys());
@@ -287,12 +301,16 @@ const describeCoreKeyPresence = (
       ? `${player} (${roleText}) a magban`
       : `${player} (${roleText}) ${formatClock(secondsWith([player]))}`;
   });
-  // Legfeljebb három kulcsjátékos: két top Impact + a fő center.
-  const countWord = keyNames.length === 2 ? 'két' : 'három';
-  const together = keyNames.length > 1
-    ? ` – a ${countWord} kulcsjátékos együtt ${formatClock(secondsWith(keyNames))} a ${formatClock(core.seconds)}-ből`
+
+  const absent = keyNames.filter(player =>
+    !core.players.includes(player) && secondsWith([player]) <= core.seconds * KEY_PLAYER_ABSENT_SHARE);
+  const absentSubject = absent.length === keyNames.length && absent.length > 1
+    ? `${absent.length === 2 ? 'mindkét' : 'mindhárom'} kulcsjátékos`
+    : absent.join(' és ');
+  const without = absent.length > 0
+    ? ` – ${absentSubject} nélkül ${formatClock(secondsWithout(absent))} a ${formatClock(core.seconds)}-ből`
     : '';
-  return `Mellettük: ${parts.join(', ')}${together}.`;
+  return `Mellettük: ${parts.join(', ')}${without}.`;
 };
 
 /**

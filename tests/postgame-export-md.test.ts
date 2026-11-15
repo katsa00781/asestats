@@ -72,7 +72,12 @@ test('Kulcs mutatók: liga medián oszlop a szezonátlag mellett', () => {
   assert.match(table, /\| Mutató \| Meccs \| Szezon átl\. \| Delta \| Liga medián \| vs liga \|/);
   // OREB%: 38,5% a meccsen, 33,3% a szezonban; a liga medián oszlop is kitöltött.
   assert.match(table, /\| OREB% \| 38\.5% \| 33\.3% \| \+5\.2 pp ▲ \| \d+\.\d% \| [+-]\d+\.\d pp [▲▼] \|/);
-  assert.match(table, /\| ORtg \| .* \| – \| – \|/);
+  // H31: a ratingek is kapnak liga mediánt (a DRtg-é az, amihez az összefoglaló a védekezést méri).
+  assert.match(table, /\| ORtg \| 144\.7 \| 129\.2 \| \+15\.5 ▲ \| 112\.7 \| \+32\.0 ▲ \|/);
+  assert.match(table, /\| DRtg \(alacsonyabb a jobb\) \| 106\.2 \| 105\.5 \| \+0\.7 ▼ \| 108\.8 \| -2\.6 ▲ \|/);
+  assert.match(table, /\| Net rating \| \+38\.5 \| \+23\.7 \| \+14\.8 ▲ \| \+3\.9 \| \+34\.6 ▲ \|/);
+  const drtgMedian = REPORT.context.defense?.leagueDrtg;
+  assert.equal(REPORT.metrics.ratings?.leagueDrtg, drtgMedian);
 
   // Ha a referencia maga a liga medián (kis minta), nincs ismétlő oszlop.
   const league = { ...REPORT, baseline: { ...REPORT.baseline!, kind: 'league' as const } };

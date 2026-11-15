@@ -388,21 +388,28 @@ const KEY_PRESENCE = buildPostgameLineupExport({
   ],
 });
 
-test('H28: a leggyengébb páros mellett a kulcsjátékosok jelenléte, külön és együtt', () => {
+test('H31: a leggyengébb páros mellett a kulcsjátékosok jelenléte és a ritkán mellettük állók nélküli idő', () => {
   assert.ok(KEY_PRESENCE);
   // Fő center: a C poszton legtöbbet töltő játékos (E 13:00, X 4:00).
   const line = describeWeakestLineupCore(KEY_PRESENCE, { topImpact: ['A', 'C'] });
   assert.equal(
     line,
     'Együttállás: P + Q közös 7:00 perce alatt 6–16 (-10 pont) – a meccs leggyengébb, legalább 5 percet együtt töltő párosa (Kosarstat lineup). ' +
-      'Mellettük: A (top Impact) 0:00, C (top Impact) 4:00, E (fő center) 3:00 – a három kulcsjátékos együtt 0:00 a 7:00-ből.'
+      'Mellettük: A (legjobb Impact) 0:00, C (2. legjobb Impact) 4:00, E (fő center) 3:00 – A nélkül 7:00 a 7:00-ből.'
   );
 });
 
-test('H28: a magban lévő kulcsjátékos jelölve, a top Impact + fő center egyszer szerepel', () => {
+test('H31: több ritkán mellettük álló kulcsjátékosnál a „nélkülük” idő együtt (A és B nélkül)', () => {
+  assert.ok(KEY_PRESENCE);
+  // A és B egyik ötösben sincs a P + Q mellett; E (fő center) 3:00 > a mag idejének 25%-a.
+  const line = describeWeakestLineupCore(KEY_PRESENCE, { topImpact: ['A', 'B'] });
+  assert.match(line ?? '', /Mellettük: A \(legjobb Impact\) 0:00, B \(2\. legjobb Impact\) 0:00, E \(fő center\) 3:00 – A és B nélkül 7:00 a 7:00-ből\.$/);
+});
+
+test('H28: a magban lévő kulcsjátékos jelölve, az Impact-vezető + fő center egyszer szerepel', () => {
   assert.ok(KEY_PRESENCE);
   const line = describeWeakestLineupCore(KEY_PRESENCE, { topImpact: ['P', 'E'] });
-  assert.match(line ?? '', /Mellettük: P \(top Impact\) a magban, E \(top Impact, fő center\) 3:00 – a két kulcsjátékos együtt 3:00 a 7:00-ből\.$/);
+  assert.match(line ?? '', /Mellettük: P \(legjobb Impact\) a magban, E \(2\. legjobb Impact, fő center\) 3:00\.$/);
   // Kulcsjátékos-adat nélkül a sor a régi formájú.
   assert.doesNotMatch(describeWeakestLineupCore(KEY_PRESENCE) ?? '', /Mellettük/);
 });

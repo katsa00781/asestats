@@ -1,6 +1,6 @@
 # BACKLOG.md – ASEStats Projekt
 
-_Utoljára frissítve: 2026-11-15 (H30 – Játékosok nézet: alacsony kontrasztú kártyaszövegek (`text-muted` → `text-secondary`, stat-értékeken `text-ai` → `text-primary`); előtte H29 – a kapott pont minden elemzésben a `games.opp_score`-ból: csapatelemzés DRtg / Net, post-game DRtg referencia, pregame meccs-kivonás és projekció; előtte H28 – post-game riport adatminőség: második esély küszöb, Oliver-súlyozott védekezési verdikt, pp-mértékegység és egységes kerekítés, a leggyengébb páros mellett a kulcsjátékosok; lelet: a liga DRtg medián a kapott pont hibás összegzése miatt hiányzik; előtte H27 – az ütemezett import Playwright-telepítése elszállt az ubuntu-latest → 26.04 váltás miatt, a runner `ubuntu-24.04`-re rögzítve; előtte 2026-11-08: H22 – a 138 db 2024/25-ös dobástérkép átkötve a helyes szezonra, ellenőrizve; H21 – a dobástérkép zónái valós méretarányú FIBA-geometriával: a festék / tripla besorolás javítva; előtte H20 – a hunbasket menetrend-oldal átalakulása miatt leállt `hunbasket:fixtures` javítva, éles újrafuttatás nyitva; előtte 2026-11-01: idei vs. tavalyi csapat összehasonlítás: csapatstat és keretváltozás kész, böngészős ellenőrzés nyitva; előtte 2026-10-18: H19 – post-game riport harmadik hibalista, A–I egység kész)_
+_Utoljára frissítve: 2026-11-15 (H31 – post-game riport: a „Fő ok” a volumen / hatékonyság bontásból, a Net-eltérés oka külön sorban, „ellensúlyozta”, ratingek liga mediánja, a fókusz sorrendje a becsült pontköltség szerint belső védekezési céllal, eFG egy sorban, a hiányzó Reflexió jelzése; előtte H30 – Játékosok nézet: alacsony kontrasztú kártyaszövegek (`text-muted` → `text-secondary`, stat-értékeken `text-ai` → `text-primary`); előtte H29 – a kapott pont minden elemzésben a `games.opp_score`-ból: csapatelemzés DRtg / Net, post-game DRtg referencia, pregame meccs-kivonás és projekció; előtte H28 – post-game riport adatminőség: második esély küszöb, Oliver-súlyozott védekezési verdikt, pp-mértékegység és egységes kerekítés, a leggyengébb páros mellett a kulcsjátékosok; lelet: a liga DRtg medián a kapott pont hibás összegzése miatt hiányzik; előtte H27 – az ütemezett import Playwright-telepítése elszállt az ubuntu-latest → 26.04 váltás miatt, a runner `ubuntu-24.04`-re rögzítve; előtte 2026-11-08: H22 – a 138 db 2024/25-ös dobástérkép átkötve a helyes szezonra, ellenőrizve; H21 – a dobástérkép zónái valós méretarányú FIBA-geometriával: a festék / tripla besorolás javítva; előtte H20 – a hunbasket menetrend-oldal átalakulása miatt leállt `hunbasket:fixtures` javítva, éles újrafuttatás nyitva; előtte 2026-11-01: idei vs. tavalyi csapat összehasonlítás: csapatstat és keretváltozás kész, böngészős ellenőrzés nyitva; előtte 2026-10-18: H19 – post-game riport harmadik hibalista, A–I egység kész)_
 
 ---
 
@@ -810,6 +810,47 @@ egymás elleni meccsek közt jelenik meg. A 2024/25-ös szezonnézetben nincs do
   Peringer Balázs, Randolph Brandon Kenneth, Davis-Mcmurrin Gage Andrew a `d96c…` és a `be99…`
   csapatnál) – keret-import csapat-hozzárendelési hiba gyanúja, döntés előtt nem nyúltunk hozzá.
 - Mobil jegyzet: `asestatmobile/docs/mobile-sync/2026-11-08-dobasterkep-zonak-h21.md` (összesítővé bővítve: H21 + H22).
+
+**H31 – Post-game riport: Fő ok, fókusz-sorrend, eFG egy sorban (ASE–Alba után) ✓ (2026-11-15)** – a kód kész, a böngészős ellenőrzés nyitva
+
+Felhasználói hibalista az ASE–Alba Fehérvár 102–91 post-game exportjából. Mind a `lib/postgame-report.ts`
+(@core), a `lib/postgame-lineup-export.ts` és a `lib/export-to-md.ts` belső szabálya; új teszt:
+`tests/postgame-report-h31.test.ts` (a meccs valós box score-jával).
+
+- [x] **Fő ok ↔ Mi döntötte el ellentmondás (hiba):** a „Fő ok” a ratingek szezonátlagtól való eltéréséből jött, és
+  győztes meccsen, ha mindkét oldal romlott, a *kevésbé* romló támadást nevezte meg (`net >= 0` ág a Net-eltérés
+  helyett). Most a „Fő ok” a volumen / hatékonyság bontásból számol (`describeMainCause`): „az előnyt elsősorban a
+  volumen hozta (+20.1 pont), a hatékonyság -9.1 ponttal ellensúlyozta”. A „Mi döntötte el” sor ítélete ezért kikerült
+  (nem ismétel). Új sor a szezonátlaghoz mért eltérésre (`describeRatingDeviation`): „Net +30.1 → +14.0: a -16.1
+  pontos visszaeséséből -14.8 a védekezésből (…, az eltérés 92%-a), -1.3 a támadásból – elsősorban a védekezés
+  okozta”. A `primaryCause` iránya a Net *eltéréséből* jön.
+- [x] **„ellene szólt” → „ellensúlyozta”** a védekezési mondatban (a jó labdaszerzés / védőlepattanózás /
+  faultfegyelem nem hat rossznak).
+- [x] **Ratingek liga mediánja:** a `PostgameRatings` új opcionális mezői `leagueOrtg` / `leagueDrtg` / `leagueNet`;
+  a post-game benchmark új kulcsai `net_rtg` és `two_pct`. A Kulcs mutatók ORtg / DRtg / Net sora kitöltött
+  „Liga medián / vs liga” cellát kap; a DRtg-é ugyanaz, mint az összefoglalóé.
+- [x] **Gyenge páros:** a szerepcímke Impact-helyezéssel („legjobb Impact”, „2. legjobb Impact”); az „együtt 0:00”
+  helyett a mag idejének legfeljebb 25%-ában mellettük álló kulcsjátékosok nélküli idő („CHANDLER … és YOUNG …
+  nélkül 9:40 a 9:46-ból”; ha mind ritka: „mindhárom kulcsjátékos nélkül”).
+- [x] **Következő fókusz – sorrend a pontkülönbségre gyakorolt hatás szerint:** új `estimateFocusImpact`
+  (pontköltség: pp-eltérés × kísérlet × pontérték; TO / OREB a pont / birtoklás, pont / befejezés értékkel;
+  védekezés a liga mediánhoz), a riport új opcionális mezője `focusImpact`. A fókuszsor végén „Becsült pontköltség
+  ezen a meccsen: ~x”, az MD-ben lábjegyzet. Egységes téma-felismerés (`postgameFocusTopic`) a riport és a
+  megjelenített lista között. Becslés nélküli téma (labdajáratás) a becsültek után.
+- [x] **Második védekezési cél:** új döntő tényező „Belső védekezési probléma / kontroll” (ellenfél 2P% vs liga 2P%
+  medián, ≥ 16 kísérlet, +6 / −5 pp) és fókuszterv „Belső védekezés: Cél ellenfél 2P% ≤ x% (liga medián; most …)”;
+  a periméterre ugyanígy „Perimétervédekezés: Cél ellenfél 3P% ≤ …” (a korábbi cél nélküli „Ellenfél-specifikus
+  fókusz” helyett). A riport fókuszlistája 2 helyett 3 elemig tart (a megjelenítettel egyezően).
+- [x] **eFG egy sorban:** ha a saját eFG a liga / szezonátlag felett van, de a Kosarstat eFG-különbség hátrány (vagy
+  fordítva), a két sor ellentétes listából egy sorba vonva: „Dobáshatékonyság a liga felett (…), de az ellenfél még
+  jobban dobott (ellenfél eFG 71.4%, -10.3 pp)” (`foldKosarstatEfgAcross`).
+- [x] **Reflexió:** nem a kód tüntette el – a Reflexió és a pre-game realizáció csak akkor készül, ha a Pre-game fülön
+  ugyanez az ellenfél van kiválasztva (`alignedXFactorContext`); a pp-mértékegység javítása (H28) megvan benne.
+  Hiányakor mostantól adatmegjegyzés jelzi. Nyitott döntés: automatikusan számolja-e a post-game a meccs
+  ellenfelének pre-game kontextusát a Pre-game fül állapotától függetlenül.
+- [x] `node --import tsx --test tests/*.test.ts` 115/115, `tsc --noEmit` és `eslint` tiszta.
+- [ ] Böngészős ellenőrzés + új export az ASE–Alba meccsre.
+- Mobil jegyzet: `asestatmobile/docs/mobile-sync/2026-11-15-postgame-riport-h28.md` (bővítve: H31).
 
 **H30 – Játékosok nézet: alacsony kontrasztú kártyaszövegek ✓ (2026-11-15)** – a kód kész, a böngészős ellenőrzés nyitva
 

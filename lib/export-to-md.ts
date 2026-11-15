@@ -1654,10 +1654,18 @@ export function postgameReportToMd(
   }
 
   if (ratings) {
+    // A rating liga mediánja ugyanaz, amihez az összefoglaló a védekezést méri
+    // (régi riportobjektumban hiányzik → „–”).
+    const ratingLeague = (game: number, league: number | null | undefined, higherIsBetter: boolean, signedValue = false) => {
+      if (!showLeague) return '';
+      if (typeof league !== 'number') return noLeague;
+      const shown = signedValue ? signed1(league) : league.toFixed(1);
+      return ` ${shown} | ${deltaCell(game, league, higherIsBetter)} |`;
+    };
     lines.push(
-      `| ORtg | ${ratings.ortg.toFixed(1)} | ${refCell(ratings.refOrtg)} | ${deltaCell(ratings.ortg, ratings.refOrtg, true)} |${noLeague}`,
-      `| DRtg (alacsonyabb a jobb) | ${ratings.drtg.toFixed(1)} | ${refCell(ratings.refDrtg)} | ${deltaCell(ratings.drtg, ratings.refDrtg, false)} |${noLeague}`,
-      `| Net rating | ${signed1(ratings.net)} | ${ratings.refNet !== null ? signed1(ratings.refNet) : '–'} | ${deltaCell(ratings.net, ratings.refNet, true)} |${noLeague}`,
+      `| ORtg | ${ratings.ortg.toFixed(1)} | ${refCell(ratings.refOrtg)} | ${deltaCell(ratings.ortg, ratings.refOrtg, true)} |${ratingLeague(ratings.ortg, ratings.leagueOrtg, true)}`,
+      `| DRtg (alacsonyabb a jobb) | ${ratings.drtg.toFixed(1)} | ${refCell(ratings.refDrtg)} | ${deltaCell(ratings.drtg, ratings.refDrtg, false)} |${ratingLeague(ratings.drtg, ratings.leagueDrtg, false)}`,
+      `| Net rating | ${signed1(ratings.net)} | ${ratings.refNet !== null ? signed1(ratings.refNet) : '–'} | ${deltaCell(ratings.net, ratings.refNet, true)} |${ratingLeague(ratings.net, ratings.leagueNet, true, true)}`,
     );
   }
 
@@ -1851,6 +1859,12 @@ export function postgameReportToMd(
   if (focus.length > 0) {
     lines.push(``, `## Következő fókusz`, ``);
     for (const f of focus) lines.push(`- ${f}`);
+    if (report.focusImpact) {
+      lines.push(
+        ``,
+        `*Sorrend: a becsült pontköltség szerint – mennyi pontba került ezen a meccsen az elmaradás a referenciától (saját mutatónál a ${report.baseline?.noun ?? 'szezonátlag'}, védekezésnél a liga medián): a százalékpontos eltérés × kísérletszám × pontérték, labdavesztésnél és támadólepattanónál a pont / birtoklás, illetve pont / befejezés értékével. Becslés nélküli téma (pl. labdajáratás, aminek nincs közvetlen pontértéke) a becsültek után áll.*`
+      );
+    }
   }
 
   const { playerImpact } = report;

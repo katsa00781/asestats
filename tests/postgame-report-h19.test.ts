@@ -35,7 +35,7 @@ test('„Limitált hatás (magas usage)” csak megbízható mintán: 3 perc nem
   assert.doesNotMatch(result.summary, /Limitált hatás: NAGY Dániel/);
 });
 
-test('Védekezés: a DRtg dönt, a mondat megnevezi a hajtóerőt (védőlepattanózás) és ami ellene szólt (faultfegyelem)', () => {
+test('Védekezés: a DRtg dönt, a mondat megnevezi a hajtóerőt (védőlepattanózás) és ami ellensúlyozta (faultfegyelem)', () => {
   const result = report();
   const defense = result.context.defense;
   assert.ok(defense);
@@ -45,7 +45,7 @@ test('Védekezés: a DRtg dönt, a mondat megnevezi a hajtóerőt (védőlepatta
   assert.equal(result.context.defenseEfficiencyDelta, 'Higher');
   assert.match(
     result.summary,
-    /védekezésben a liga szintjénél jobb volt \(DRtg 102\.7 vs liga medián \d+\.\d; elsősorban: védőlepattanózás \(ellenfél OREB% 13\.8% vs liga medián \d+\.\d%, -\d+\.\d pp\); ellene szólt: faultfegyelem \(ellenfél FTM rate 32\.2%/
+    /védekezésben a liga szintjénél jobb volt \(DRtg 102\.7 vs liga medián \d+\.\d; elsősorban: védőlepattanózás \(ellenfél OREB% 13\.8% vs liga medián \d+\.\d%, -\d+\.\d pp\); ellensúlyozta: faultfegyelem \(ellenfél FTM rate 32\.2%/
   );
 });
 
@@ -54,7 +54,7 @@ test('Védekezés: medián feletti ellenfél-eFG mellett is a DRtg dönt (a szav
   const sharperOpponent = { ...HONVED_GAME, fgm2: 19, ftm: 13 };
   const result = analyzePostGameReport(ASE_GAME, sharperOpponent, ASE_SEASON, BENCHMARKS, PLAYERS);
   assert.equal(result.context.defenseEfficiencyDelta, 'Higher');
-  assert.match(result.summary, /ellene szólt: dobásvédekezés \(ellenfél eFG 57\.6%/);
+  assert.match(result.summary, /ellensúlyozta: dobásvédekezés \(ellenfél eFG 57\.6%/);
 });
 
 test('Gyűrű körüli befejezés: 12/28 (42,9%) vs szezon 60,6% probléma és fókusz, a gyűrű-arány változásától függetlenül', () => {
@@ -73,8 +73,11 @@ test('Büntetők: magas triplaaránynál nincs „kontaktkeresés” fókusz, a 
   const focus = buildPostgameAutoFocus(result);
   assert.ok(!focus.some(item => item.includes('kontaktkeresés')), focus.join('\n'));
   assert.ok(!result.nextFocus.some(item => item.includes('kontaktkeresés')));
-  assert.ok(focus[0].startsWith('Faultfegyelem: Cél ellenfél FTM rate 32.2% → 28.1%'), focus.join('\n'));
-  assert.ok(focus.some(item => item.startsWith('Befejezés a gyűrűnél')), focus.join('\n'));
+  // H31: a sorrendet a becsült pontköltség adja – a gyűrű körüli befejezés
+  // (12/28 vs szezon 60,6%) ~9.9 pont, a faultfegyelem ~2.4 pont.
+  assert.ok(focus[0].startsWith('Befejezés a gyűrűnél'), focus.join('\n'));
+  assert.ok(focus[0].endsWith('Becsült pontköltség ezen a meccsen: ~9.9.'), focus.join('\n'));
+  assert.ok(focus[1].startsWith('Faultfegyelem: Cél ellenfél FTM rate 32.2% → 28.1%'), focus.join('\n'));
   // A büntető-hátrány tippje nem foglal külön helyet a faultfegyelem mellett.
   assert.ok(!focus.some(item => item.startsWith('Ellenfél-specifikus fókusz: Büntető-hátrány')), focus.join('\n'));
 });
@@ -130,7 +133,9 @@ test('Mi döntötte el: a pontkülönbség volumen- és hatékonyság-bontása p
   assert.equal(breakdown.volume, 20.6);
   assert.equal(breakdown.efficiency, 10.4);
   assert.equal(round1(breakdown.volume + breakdown.efficiency), result.metrics.margin);
-  assert.match(result.summary, /• Mi döntötte el \(becslés\): volumen \+20\.6 pont \(87\.2 vs 69\.6 pontot hozó befejezés; OREB% 42\.5% vs 13\.8%, labdavesztés 11–11\); hatékonyság \+10\.4 pont \(1\.28 vs 1\.16 pont \/ befejezés\)\. Elsősorban a volumen döntött\./);
+  assert.match(result.summary, /• Mi döntötte el \(becslés\): volumen \+20\.6 pont \(87\.2 vs 69\.6 pontot hozó befejezés; OREB% 42\.5% vs 13\.8%, labdavesztés 11–11\); hatékonyság \+10\.4 pont \(1\.28 vs 1\.16 pont \/ befejezés\)\.$/m);
+  // H31: az ítéletet a „Fő ok” mondja ki, ugyanebből a bontásból.
+  assert.match(result.summary, /• Fő ok: az előnyt elsősorban a volumen hozta \(\+20\.6 pont\), a hatékonyság \+10\.4 ponttal hozzátett\./);
 
   const md = postgameReportToMd(result, SEASON);
   assert.match(md, /## Mi döntötte el\? \(becslés\)/);

@@ -40,6 +40,15 @@ Update this file after every meaningful implementation change.
 
 ## In Progress
 
+- **H31 – Post-game riport javítások (2026-11-15):** a „Fő ok” a pontkülönbség
+  volumen / hatékonyság bontásából (nem mond ellent a „Mi döntötte el”-nek), a
+  Net szezonátlagtól való eltérésének oka külön sorban; „ellensúlyozta”;
+  ORtg / DRtg / Net liga medián a Kulcs mutatókban; a gyenge páros mellett
+  Impact-helyezés és a kulcsjátékosok nélküli idő; a fókusz sorrendje a becsült
+  pontköltség szerint, új belső védekezési (ellenfél 2P%) céllal; eFG egy
+  sorban; a hiányzó Reflexiót adatmegjegyzés jelzi. Nyitva: böngészős
+  ellenőrzés; döntés, hogy a post-game a Pre-game fültől függetlenül számolja-e
+  a pre-game kontextust. Részletek: `BACKLOG.md` H31.
 - **H30 – Játékosok nézet kontraszt (2026-11-15):** a kártyák `text-muted`
   címkéi/alsorai `text-secondary`-re, a statisztikai értékek `text-ai` színe
   `text-primary`-re váltott (`PlayerDetails`, `PlayersList`, `PlayerComparison`);
