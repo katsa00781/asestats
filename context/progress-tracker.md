@@ -46,9 +46,9 @@ Update this file after every meaningful implementation change.
   ORtg / DRtg / Net liga medián a Kulcs mutatókban; a gyenge páros mellett
   Impact-helyezés és a kulcsjátékosok nélküli idő; a fókusz sorrendje a becsült
   pontköltség szerint, új belső védekezési (ellenfél 2P%) céllal; eFG egy
-  sorban; a hiányzó Reflexiót adatmegjegyzés jelzi. Nyitva: böngészős
-  ellenőrzés; döntés, hogy a post-game a Pre-game fültől függetlenül számolja-e
-  a pre-game kontextust. Részletek: `BACKLOG.md` H31.
+  sorban; a Reflexió és a pre-game realizáció a Pre-game fültől függetlenül, a
+  meccs előtti állapotból számolt pre-game kontextusból (felhasználói döntés).
+  Nyitva: böngészős ellenőrzés. Részletek: `BACKLOG.md` H31.
 - **H30 – Játékosok nézet kontraszt (2026-11-15):** a kártyák `text-muted`
   címkéi/alsorai `text-secondary`-re, a statisztikai értékek `text-ai` színe
   `text-primary`-re váltott (`PlayerDetails`, `PlayersList`, `PlayerComparison`);

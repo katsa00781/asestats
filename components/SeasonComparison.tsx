@@ -11,7 +11,7 @@ import { playerSeasonToMd, pregameReportToMd, postgameReportToMd } from '@/lib/e
 import { endsOnCourt, groupRotationByPlayer, parseKosarstatSubstitutions, rotationFromMinuteCodes, validateRotation } from '@/lib/kosarstat-substitutions';
 import { buildPostgameLineupSides, describeStarterSplit, describeWeakestLineupCore, isScoringLineupStint } from '@/lib/postgame-lineup-export';
 import { buildTeamSeasonMd } from '@/lib/team-season-export-data';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, Cell, LabelList, Legend, Line, LineChart, ResponsiveContainer, Scatter, ScatterChart, Tooltip, XAxis, YAxis, ZAxis } from 'recharts';
 import type { Props as RechartsLabelProps } from 'recharts/types/component/Label';
 import { CHART_COLORS, CHART_GRID, CHART_AXIS, RECHARTS_TOOLTIP_STYLE } from '@/lib/chart-theme';
@@ -7394,17 +7394,14 @@ export function SeasonComparison({
     useRecentFormPregame,
   ]);
 
-  // A teljes pregame keret (a hiányzókkal együtt): a pozíciós matchup és a
-  // hiányzó-hatás ebből számol; a többi nézet az elérhető listát kapja.
-  const pregameOpponentFullRoster = useMemo<PlayerSeasonStat[]>(() => {
-    if (!selectedOpponentTeamId) return [];
-
-    const excludeGameId = shouldUseHistoricalPregameSnapshot ? excludeOpponentPregameGameId : null;
-
-    const buildFromSeason = () =>
+  // Szezonalapú pregame keret: a csapat szezon-sorai, a megadott meccs
+  // kivonásával (meccs előtti állapot) és a minimális mintaszűréssel. A Pre-game
+  // fül és a post-game reflexió (a fültől független pre-game kontextus) közös alapja.
+  const buildSeasonPregameRoster = useCallback(
+    (teamId: string, excludeGameId: string | null | undefined): PlayerSeasonStat[] =>
       subtractGameFromPlayerAggregates(
         activeSeasonPlayers
-        .filter(player => player.teamId === selectedOpponentTeamId)
+        .filter(player => player.teamId === teamId)
         .filter(player => hasSampleForPregame(player.gamesPlayed || 0, MIN_PREGAME_GAMES, MIN_PREGAME_GAMES_FLOOR))
         .map(player => {
           const positionInfo = mapPositionInfo(player.position);
@@ -7435,11 +7432,22 @@ export function SeasonComparison({
             roles: rolesByPlayerId.get(player.id) ?? [],
           };
         }),
-        selectedOpponentTeamId,
+        teamId,
         excludeGameId,
         teamGamePlayerRows
       )
-        .filter(player => hasSampleForPregame(player.games || 0, MIN_PREGAME_GAMES, MIN_PREGAME_GAMES_FLOOR));
+        .filter(player => hasSampleForPregame(player.games || 0, MIN_PREGAME_GAMES, MIN_PREGAME_GAMES_FLOOR)),
+    [MIN_PREGAME_GAMES, MIN_PREGAME_GAMES_FLOOR, activeSeasonPlayers, rolesByPlayerId, teamGamePlayerRows]
+  );
+
+  // A teljes pregame keret (a hiányzókkal együtt): a pozíciós matchup és a
+  // hiányzó-hatás ebből számol; a többi nézet az elérhető listát kapja.
+  const pregameOpponentFullRoster = useMemo<PlayerSeasonStat[]>(() => {
+    if (!selectedOpponentTeamId) return [];
+
+    const excludeGameId = shouldUseHistoricalPregameSnapshot ? excludeOpponentPregameGameId : null;
+
+    const buildFromSeason = () => buildSeasonPregameRoster(selectedOpponentTeamId, excludeGameId);
 
     const seasonPlayers = buildFromSeason();
     if (!useRecentFormPregame) return seasonPlayers;
@@ -7522,7 +7530,7 @@ export function SeasonComparison({
     MIN_PREGAME_GAMES,
     MIN_PREGAME_GAMES_FLOOR,
     MIN_RECENT_GAMES_TEAM,
-    activeSeasonPlayers,
+    buildSeasonPregameRoster,
     excludeOpponentPregameGameId,
     playerGameStats,
     playerTeamMap,
@@ -7531,7 +7539,6 @@ export function SeasonComparison({
     seasonPlayerMap,
     selectedOpponentTeamId,
     shouldUseHistoricalPregameSnapshot,
-    teamGamePlayerRows,
     useRecentFormPregame,
   ]);
 
@@ -7552,45 +7559,7 @@ export function SeasonComparison({
 
     const excludeGameId = shouldUseHistoricalPregameSnapshot ? excludeOwnPregameGameId : null;
 
-    const buildFromSeason = () =>
-      subtractGameFromPlayerAggregates(
-        activeSeasonPlayers
-        .filter(player => player.teamId === resolvedTeamId)
-        .filter(player => hasSampleForPregame(player.gamesPlayed || 0, MIN_PREGAME_GAMES, MIN_PREGAME_GAMES_FLOOR))
-        .map(player => {
-          const positionInfo = mapPositionInfo(player.position);
-          return {
-            playerId: player.id,
-            name: player.name,
-            ...positionInfo,
-            heightCm: player.height || undefined,
-            games: player.gamesPlayed || 0,
-            minutes: player.minutes || 0,
-            points: player.points || 0,
-            fga2: (player.shooting?.close?.attempted || 0) + (player.shooting?.mid?.attempted || 0),
-            fgm2: (player.shooting?.close?.made || 0) + (player.shooting?.mid?.made || 0),
-            fga3: player.shooting?.three?.attempted || 0,
-            fgm3: player.shooting?.three?.made || 0,
-            fta: player.shooting?.freeThrow?.attempted || 0,
-            ftm: player.shooting?.freeThrow?.made || 0,
-            oreb: player.rebounds?.offensive || 0,
-            dreb: player.rebounds?.defensive || 0,
-            ast: player.assists || 0,
-            tov: player.turnovers || 0,
-            stl: player.steals || 0,
-            blk: player.blocks || 0,
-            val: (() => {
-              const totalValuation = (player.valuation || 0) * (player.gamesPlayed || 0);
-              return totalValuation > 0 ? totalValuation : computeTotalValuation(player);
-            })(),
-            roles: rolesByPlayerId.get(player.id) ?? [],
-          };
-        }),
-        resolvedTeamId,
-        excludeGameId,
-        teamGamePlayerRows
-      )
-        .filter(player => hasSampleForPregame(player.games || 0, MIN_PREGAME_GAMES, MIN_PREGAME_GAMES_FLOOR));
+    const buildFromSeason = () => buildSeasonPregameRoster(resolvedTeamId, excludeGameId);
 
     const seasonPlayers = buildFromSeason();
     if (!useRecentFormPregame) return seasonPlayers;
@@ -7673,7 +7642,7 @@ export function SeasonComparison({
     MIN_PREGAME_GAMES,
     MIN_PREGAME_GAMES_FLOOR,
     MIN_RECENT_GAMES_TEAM,
-    activeSeasonPlayers,
+    buildSeasonPregameRoster,
     excludeOwnPregameGameId,
     playerGameStats,
     playerTeamMap,
@@ -7682,7 +7651,6 @@ export function SeasonComparison({
     rolesByPlayerId,
     seasonPlayerMap,
     shouldUseHistoricalPregameSnapshot,
-    teamGamePlayerRows,
     useRecentFormPregame,
   ]);
 
@@ -7756,6 +7724,70 @@ export function SeasonComparison({
       teamGames
     );
   }, [seasonPlayers]);
+
+  // A post-game Reflexió és a pre-game fókusz realizációja a Pre-game fül
+  // állapotától függetlenül: a post-game meccs ellenfelének pre-game riportja a
+  // meccs előtti állapotból (mindkét csapat szezon-aggregátumából és keretéből
+  // kivonva ez a meccs), szezonalapon – a fül forma-súlyozása, hiányzói és
+  // választása nem hat rá. A post-game csak az X-faktor kulcsait, címkéit és a
+  // kockázati jelzőket használja, ezek csapatszintű adatból jönnek.
+  const postgamePregameXFactorContext = useMemo(() => {
+    if (!selectedGame || !selectedGameOpponentTeamId || !pregameBenchmarks) return undefined;
+    if (!resolvedTeamId || resolvedTeamId === 'all' || selectedGameOpponentTeamId === resolvedTeamId) return undefined;
+    const ownAggregate = teamSeasonStats.find(team => team.teamId === resolvedTeamId);
+    const opponentAggregate = teamSeasonStats.find(team => team.teamId === selectedGameOpponentTeamId);
+    if (!ownAggregate || !opponentAggregate) return undefined;
+
+    const toPregameTeam = (team: typeof ownAggregate): PregameTeamSeasonStat => ({
+      teamId: team.teamId,
+      teamName: team.teamName,
+      league: team.league,
+      season: team.season,
+      games: team.games,
+      pointsFor: team.pointsFor,
+      pointsAgainst: team.pointsAgainst,
+      fga2: team.fga2,
+      fgm2: team.fgm2,
+      fga3: team.fga3,
+      fgm3: team.fgm3,
+      fta: team.fta,
+      ftm: team.ftm,
+      oreb: team.oreb,
+      dreb: team.dreb,
+      ast: team.ast,
+      tov: team.tov,
+      stl: team.stl,
+      blk: team.blk,
+      fouls: team.fouls,
+      val: team.val,
+      opponent: team.opponent,
+    });
+    // Ugyanazok a meccs-azonosítók, mint a Pre-game fül történeti nézetében.
+    const ownGameId = selectedGame.id;
+    const opponentGameId = selectedGame.opponentGameId ?? selectedGame.id;
+    const beforeGame = (team: PregameTeamSeasonStat, teamId: string, gameId: string) =>
+      subtractGameFromTeamAggregate(team, teamId, gameId, teamGamePlayerRows, leagueGameScores.byGame, leagueOpponentBoxes.byGame);
+
+    const opponentPlayers = buildSeasonPregameRoster(selectedGameOpponentTeamId, opponentGameId);
+    if (opponentPlayers.length === 0) return undefined;
+    return analyzePreGameScouting(
+      beforeGame(toPregameTeam(opponentAggregate), selectedGameOpponentTeamId, opponentGameId),
+      opponentPlayers,
+      beforeGame(toPregameTeam(ownAggregate), resolvedTeamId, ownGameId),
+      pregameBenchmarks,
+      buildSeasonPregameRoster(resolvedTeamId, ownGameId)
+    ).xFactorContext;
+  }, [
+    buildSeasonPregameRoster,
+    leagueGameScores,
+    leagueOpponentBoxes,
+    pregameBenchmarks,
+    resolvedTeamId,
+    selectedGame,
+    selectedGameOpponentTeamId,
+    teamGamePlayerRows,
+    teamSeasonStats,
+  ]);
 
   const pregameReport = useMemo(() => {
     if (!pregameBenchmarks || !pregameOwnTeam || !pregameOpponentTeam) return null;
@@ -9435,19 +9467,13 @@ export function SeasonComparison({
       oppPossessions: postgameOpponentTotalsByTeam.get(selectedTeamStats.teamId)?.possessions,
     };
 
-    const normalizedOpponentName = selectedGame.opponent?.toLowerCase() ?? '';
-    const alignedXFactorContext =
-      pregameReport && pregameReport.opponentTeamName.toLowerCase() === normalizedOpponentName
-        ? pregameReport.xFactorContext
-        : undefined;
-
     const baseReport = analyzePostGameReport(
       teamGame,
       opponentGame,
       seasonStats,
       postgameBenchmarks,
       players,
-      alignedXFactorContext,
+      postgamePregameXFactorContext,
       postgameShotContext ?? undefined
     );
 
@@ -9566,7 +9592,7 @@ export function SeasonComparison({
         offDiff: row.offFor - row.offAgainst,
       })),
     });
-  }, [kosarstatLineupAnalysis, kosarstatPostgameContext, kosarstatPostgameNotes, league, playerGameStats, postgameBenchmarks, postgameOpponentTotalsByTeam, postgameShotContext, pregameReport, rolesByPlayerId, seasonPlayers, selectedGame, resolvedTeamId, selectedTeamStats]);
+  }, [kosarstatLineupAnalysis, kosarstatPostgameContext, kosarstatPostgameNotes, league, playerGameStats, postgameBenchmarks, postgameOpponentTotalsByTeam, postgamePregameXFactorContext, postgameShotContext, rolesByPlayerId, seasonPlayers, selectedGame, resolvedTeamId, selectedTeamStats]);
 
   const activeKosarstatTeamAnalysis = useMemo(() => {
     if (!kosarstatLineupAnalysis) return null;

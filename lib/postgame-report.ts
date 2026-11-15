@@ -3479,7 +3479,7 @@ export const analyzePostGameReport = (
     // riportjából számol; hiányában a két szakasz kimarad – ezt jelezni kell.
     ...(preGameContext
       ? []
-      : ['Pre-game reflexió és a pre-game fókusz realizációja nem készült: ehhez az ellenfélhez nem volt betöltve pre-game riport (a webes nézetben a Pre-game fülön ugyanezt az ellenfelet kell kiválasztani).']),
+      : ['Pre-game reflexió és a pre-game fókusz realizációja nem készült: ehhez a meccshez nem állt elő pre-game kontextus (a meccs előtti állapotból nincs elég adat – pl. hiányzó ellenfél-keret vagy liga benchmark).']),
   ];
 
   const context: PostGameReport['context'] = {
