@@ -1,6 +1,6 @@
 # BACKLOG.md – ASEStats Projekt
 
-_Utoljára frissítve: 2026-11-16 (H33 – post-game negyedenkénti bontás: csapat- és játékos-box score periódusonként a Kosarstat eseménylistából, periódusválasztó, MD export; előtte H32 – játékoselemzés: arányok összegből (közös `aggregatePlayerGames`), verdikt csak elég mintánál, lineup- és dobástérkép-lefedettség, AST/TO-limitáció, MD export VAL / meccstábla / indexek, posztfüggő szerepcímke, cirill betűk, percentilis + nyers érték; előtte H31 – post-game riport: a „Fő ok” a volumen / hatékonyság bontásból, a Net-eltérés oka külön sorban, „ellensúlyozta”, ratingek liga mediánja, a fókusz sorrendje a becsült pontköltség szerint belső védekezési céllal, eFG egy sorban, a Reflexió a Pre-game fültől függetlenül; előtte H30 – Játékosok nézet: alacsony kontrasztú kártyaszövegek (`text-muted` → `text-secondary`, stat-értékeken `text-ai` → `text-primary`); előtte H29 – a kapott pont minden elemzésben a `games.opp_score`-ból: csapatelemzés DRtg / Net, post-game DRtg referencia, pregame meccs-kivonás és projekció; előtte H28 – post-game riport adatminőség: második esély küszöb, Oliver-súlyozott védekezési verdikt, pp-mértékegység és egységes kerekítés, a leggyengébb páros mellett a kulcsjátékosok; lelet: a liga DRtg medián a kapott pont hibás összegzése miatt hiányzik; előtte H27 – az ütemezett import Playwright-telepítése elszállt az ubuntu-latest → 26.04 váltás miatt, a runner `ubuntu-24.04`-re rögzítve; előtte 2026-11-08: H22 – a 138 db 2024/25-ös dobástérkép átkötve a helyes szezonra, ellenőrizve; H21 – a dobástérkép zónái valós méretarányú FIBA-geometriával: a festék / tripla besorolás javítva; előtte H20 – a hunbasket menetrend-oldal átalakulása miatt leállt `hunbasket:fixtures` javítva, éles újrafuttatás nyitva; előtte 2026-11-01: idei vs. tavalyi csapat összehasonlítás: csapatstat és keretváltozás kész, böngészős ellenőrzés nyitva; előtte 2026-10-18: H19 – post-game riport harmadik hibalista, A–I egység kész)_
+_Utoljára frissítve: 2026-11-16 (H34 – `SeasonComparison.tsx` szétdarabolási terve felvéve, jóváhagyott döntésekkel, megvalósítás még nem indult; előtte H33 – post-game negyedenkénti bontás: csapat- és játékos-box score periódusonként a Kosarstat eseménylistából, periódusválasztó, MD export; előtte H32 – játékoselemzés: arányok összegből (közös `aggregatePlayerGames`), verdikt csak elég mintánál, lineup- és dobástérkép-lefedettség, AST/TO-limitáció, MD export VAL / meccstábla / indexek, posztfüggő szerepcímke, cirill betűk, percentilis + nyers érték; előtte H31 – post-game riport: a „Fő ok” a volumen / hatékonyság bontásból, a Net-eltérés oka külön sorban, „ellensúlyozta”, ratingek liga mediánja, a fókusz sorrendje a becsült pontköltség szerint belső védekezési céllal, eFG egy sorban, a Reflexió a Pre-game fültől függetlenül; előtte H30 – Játékosok nézet: alacsony kontrasztú kártyaszövegek (`text-muted` → `text-secondary`, stat-értékeken `text-ai` → `text-primary`); előtte H29 – a kapott pont minden elemzésben a `games.opp_score`-ból: csapatelemzés DRtg / Net, post-game DRtg referencia, pregame meccs-kivonás és projekció; előtte H28 – post-game riport adatminőség: második esély küszöb, Oliver-súlyozott védekezési verdikt, pp-mértékegység és egységes kerekítés, a leggyengébb páros mellett a kulcsjátékosok; lelet: a liga DRtg medián a kapott pont hibás összegzése miatt hiányzik; előtte H27 – az ütemezett import Playwright-telepítése elszállt az ubuntu-latest → 26.04 váltás miatt, a runner `ubuntu-24.04`-re rögzítve; előtte 2026-11-08: H22 – a 138 db 2024/25-ös dobástérkép átkötve a helyes szezonra, ellenőrizve; H21 – a dobástérkép zónái valós méretarányú FIBA-geometriával: a festék / tripla besorolás javítva; előtte H20 – a hunbasket menetrend-oldal átalakulása miatt leállt `hunbasket:fixtures` javítva, éles újrafuttatás nyitva; előtte 2026-11-01: idei vs. tavalyi csapat összehasonlítás: csapatstat és keretváltozás kész, böngészős ellenőrzés nyitva; előtte 2026-10-18: H19 – post-game riport harmadik hibalista, A–I egység kész)_
 
 ---
 
@@ -810,6 +810,55 @@ egymás elleni meccsek közt jelenik meg. A 2024/25-ös szezonnézetben nincs do
   Peringer Balázs, Randolph Brandon Kenneth, Davis-Mcmurrin Gage Andrew a `d96c…` és a `be99…`
   csapatnál) – keret-import csapat-hozzárendelési hiba gyanúja, döntés előtt nem nyúltunk hozzá.
 - Mobil jegyzet: `asestatmobile/docs/mobile-sync/2026-11-08-dobasterkep-zonak-h21.md` (összesítővé bővítve: H21 + H22).
+
+**H34 – `SeasonComparison.tsx` szétdarabolása (belső refaktor) – TERVEZETT (2026-11-16)** – a terv jóváhagyva, a megvalósítás még nem indult
+
+Kiinduló állapot (`9b052d3`): 18 451 sor / 907 KB. 1–2760: típusok és ~120 tiszta segédfüggvény
+(Kosarstat clutch/lineup parser ~1 100 sor, pregame/projekció/blend matek, dobás-helperek, nyers stat
+konverzió, incoming player típusok); 2762–11 885: egyetlen komponenstörzs (113 `useState`, 155 `useMemo`,
+33 `useEffect`, ~15 async handler); 11 909–18 451: egyetlen `return` 5 szekcióval (Játékos ~1 400,
+Csapat ~860, Előrejelzés ~450, Pre-game ~1 940, Post-game ~1 760 sor).
+
+Felhasználói döntések (2026-11-16):
+1. Mappaszerkezet: `components/season-comparison/` (szekciók, alkártyák, `types.ts`, `ui-helpers.tsx`) +
+   `hooks/season-comparison/` (adat- és modell-hookok) + tiszta logika új, nem `@core` `lib/` fájlokban.
+   A `components/SeasonComparison.tsx` útvonal marad (az `app/page.tsx` importja nem változik), cél ~400 sor.
+2. A hookok a **szülőben** futnak, feltétel nélkül – a viselkedés 1:1: minden tab számol, az állapot
+   tabváltáskor megmarad, a betöltések időzítése nem változik. (A csak-aktív-tab lazy számolás funkcionális
+   változás lenne, nem része ennek a tételnek.)
+3. A kiszervezett parserek / tiszta függvények unit tesztet kapnak a meglévő fixture-ökkel.
+
+Invariánsok: viselkedésváltozás nincs; a post-game Reflexió a pregame modellt használja
+(`postgamePregameXFactorContext`), az `enrichedTeamAnalysis` és a Játékos szekció a szezonos lineup /
+clutch adatot – ezek a függések a szülőben kötődnek össze. `@core` fájl (pl. `kosarstat-clutch-parse.ts`)
+nem módosul → mobil jegyzet nem kell. Ezen a fájlon a fázisok alatt nincs párhuzamos feature-munka.
+
+Ellenőrzés minden fázis után: `npx tsc --noEmit`, `npm run lint` (`exhaustive-deps`), meglévő tesztek,
+a 4 Export MD (játékos / csapat / pre-game / post-game) bájtra azonos egy rögzített meccsen,
+böngészős próba az 5 tabon. Fázisonként (al-fázisonként) külön commit.
+
+- [ ] **F0 – alapvonal:** a 4 Export MD kimenet mentése egy rögzített szezon / csapat / meccs mellett
+  (a WIP-feltétel teljesült: H33 commitolva, `9b052d3`).
+- [ ] **F1 – tiszta felső rész lib-be (puszta áthelyezés, ~2 600 sor ki):** 1a típusok + UI-helperek
+  (`getInsightToneClass`, confidence badge-ek, `renderThresholdTooltip` → `ThresholdTooltip`);
+  1b Kosarstat clutch / lineup parser (`lib/kosarstat-clutch-context.ts`, `lib/kosarstat-lineup-analysis.ts`);
+  1c pregame / projekció / blend matek (`lib/pregame-efficiency.ts`, `lib/playoff-projection.ts`,
+  `lib/pregame-blend.ts`); 1d dobás-helperek és nyers stat konverzió (`lib/shot-profile.ts`,
+  `lib/season-raw-stats.ts`). Unit tesztek a parserekhez.
+- [ ] **F2 – nagy `useMemo`-törzsek tiszta függvénnyé (~2 500 sor ki):** `pregameOptimalLineup` (642),
+  `playerAdvancedInsights` (640), `postgameReport` (333), `enrichedTeamAnalysis` (319),
+  `projectionStrengthByTeamKey` (211), `playoffProjection` (148) → `lib/` függvények; a komponensben
+  `useMemo(() => buildX(...), [azonos deps])` marad. Unit tesztek.
+- [ ] **F3 – betöltő effektek custom hookba (state + effect együtt):** `useKosarstatPostgame` (790 soros
+  effekt + 10 state), szezonos Kosarstat clutch / lineup, szezonos dobássorok, projekció inputok,
+  post-game dobáskontextus, narratíva-betöltők.
+- [ ] **F4 – szekció modell-hookok:** `useProjectionModel` (what-if state-tel), `usePregameModel`,
+  `usePostgameModel`, `usePlayerSeasonModel`, `useTextReports` (generálás, a 4 `handleSaveManual*`).
+  Névütközés figyelendő: a `hooks/useTeamSeasonModel.ts` már létezik; a lib aliasok (`buildTeamBenchmarks as …`).
+- [ ] **F5 – JSX szekciók komponensbe:** Előrejelzés → Csapat → Játékos → Pre-game → Post-game sorrendben,
+  props = modell-hook objektum + setterek; nagy szekciókon belül alkártyák (`PregameOptimalLineupCard`,
+  `PostgameLineupExplorer`, `IncomingPlayerCard`, `ManualReportEditor`). Cél: egy fájl se ~1 000 sor fölött.
+- Mobil jegyzet: nem kell (belső refaktor, `@core` változatlan).
 
 **H33 – Post-game: negyedenkénti statisztikai bontás ✓ (2026-11-16)** – a kód kész, a böngészős ellenőrzés nyitva
 
