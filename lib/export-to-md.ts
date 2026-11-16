@@ -7,6 +7,7 @@ import type {
   PostgameQuarterDiffRow,
 } from './postgame-report';
 import type { KosarstatGameClutch } from './kosarstat-clutch-parse';
+import type { KosarstatQuarterBox, QuarterSide } from './kosarstat-quarter-box';
 import type { PostgameLineupExport, PostgameLineupUnit } from './postgame-lineup-export';
 import type {
   TeamBoxLine,
@@ -16,6 +17,7 @@ import type {
   TeamExportQuarterLine,
   TeamSeasonExportInput,
 } from './team-season-export';
+import { buildQuarterMatchupMetrics } from './kosarstat-quarter-box';
 import { LINEUP_NET_MIN_SECONDS, LINEUP_SLOT_POSITIONS, MAX_TRIOS } from './postgame-lineup-export';
 import { MISCLASSIFIED_THREES_MIN, buildPostgameAutoFocus, composePostgameSummary } from './postgame-report';
 import { CONFIDENCE_LABELS, HELP_SOURCE_PPS, LOW_SLOT_MINUTES, POSITION_SLOT_MINUTES, PROXY_PER_DEFINITION, SHOT_COVERAGE_MIN_SHARE, describeShotCoverageWarning, PROXY_WIN_SHARE_DEFINITION, ZONE_SHRINK_PRIOR_ATTEMPTS } from './pregame-scouting';
@@ -1323,6 +1325,8 @@ export type PostgameExportExtras = {
     ownMetrics: KosarstatTeamMetricRow | null;
     oppMetrics: KosarstatTeamMetricRow | null;
   };
+  /** Negyedenkénti csapat-box score a Kosarstat eseménylistából (`parseKosarstatQuarterBox`). */
+  quarterBox?: { box: KosarstatQuarterBox; ownSide: QuarterSide };
   /** Rotáció a Kosarstat csere-eseményeiből, box score névírással. */
   rotation?: PostgameRotationRow[];
   /** A cserék forrása: az eseménylista (másodpercre pontos) vagy a percrács. */
@@ -1376,6 +1380,51 @@ function postgameQuartersToMd(rows: PostgameQuarterDiffRow[], teamName: string, 
       running += row.diff;
       // A forrás saját kumulált értéke az elsődleges; hiányában a negyedek összege.
       return `| Q${row.quarter} | ${row.ownPoints} | ${row.oppPoints} | ${signedInt(row.diff)} | ${signedInt(row.cumulativeDiff ?? running)} |`;
+    }),
+  ];
+}
+
+/**
+ * Negyedenkénti csapatmutatók és box score a Kosarstat eseménylistából –
+ * periódusonként és az egész meccsre. A játékosbontás csak a webes nézetben van.
+ */
+function postgameQuarterBoxToMd(
+  quarterBox: NonNullable<PostgameExportExtras['quarterBox']>,
+  teamName: string,
+  opponentName: string
+): string[] {
+  const { box, ownSide } = quarterBox;
+  const oppSide: QuarterSide = ownSide === 'home' ? 'away' : 'home';
+  const periods = [...box.periods, box.total];
+  if (box.periods.length === 0) return [];
+  const pct = (value: number | null) => (value === null ? '–' : `${value.toFixed(1)}%`);
+  const num = (value: number | null) => (value === null ? '–' : value.toFixed(1));
+  const pair = (own: string, opp: string) => `${own} / ${opp}`;
+  const label = (key: string, text: string) => (key === box.total.key ? `**${text}**` : text);
+
+  return [
+    ``,
+    `## Negyedenkénti bontás`,
+    ``,
+    `*Forrás: Kosarstat eseménylista (nem hivatalos box score). Az arányoknál „${teamName} / ${opponentName}”. Birtoklás: a két csapat becslésének átlaga (FGA + 0,44·FTA + LV − T-lep); TO rate: LV / (FGA + 0,44·FTA + LV).*`,
+    ``,
+    `| Periódus | Pont | Különbség | eFG% | TO rate | OREB% | FTM/FGA | Birtoklás | ORtg | DRtg | Net |`,
+    `|----------|------|-----------|------|---------|-------|---------|-----------|------|------|-----|`,
+    ...periods.map(period => {
+      const own = period.team[ownSide];
+      const opp = period.team[oppSide];
+      const m = buildQuarterMatchupMetrics(own, opp);
+      return `| ${label(period.key, period.label)} | ${own.points}–${opp.points} | ${signedInt(own.points - opp.points)} | ${pair(pct(m.own.efg), pct(m.opp.efg))} | ${pair(pct(m.own.turnoverRate), pct(m.opp.turnoverRate))} | ${pair(pct(m.own.orebPct), pct(m.opp.orebPct))} | ${pair(pct(m.own.ftRate), pct(m.opp.ftRate))} | ${m.possessions.toFixed(1)} | ${num(m.own.rating)} | ${num(m.opp.rating)} | ${m.net === null ? '–' : signed1(m.net)} |`;
+    }),
+    ``,
+    `| Periódus | 2P | 3P | Büntető | T-lep | V-lep | Gólpassz | Eladott labda | Labdaszerzés | Blokk | Fault |`,
+    `|----------|----|----|---------|-------|-------|----------|---------------|--------------|-------|-------|`,
+    ...periods.map(period => {
+      const own = period.team[ownSide];
+      const opp = period.team[oppSide];
+      const shots = (made: number, att: number, oppMade: number, oppAtt: number) => `${made}/${att} – ${oppMade}/${oppAtt}`;
+      const count = (a: number, b: number) => `${a} – ${b}`;
+      return `| ${label(period.key, period.label)} | ${shots(own.fgm2, own.fga2, opp.fgm2, opp.fga2)} | ${shots(own.fgm3, own.fga3, opp.fgm3, opp.fga3)} | ${shots(own.ftm, own.fta, opp.ftm, opp.fta)} | ${count(own.oreb, opp.oreb)} | ${count(own.dreb, opp.dreb)} | ${count(own.ast, opp.ast)} | ${count(own.tov, opp.tov)} | ${count(own.stl, opp.stl)} | ${count(own.blk, opp.blk)} | ${count(own.pf, opp.pf)} |`;
     }),
   ];
 }
@@ -1706,6 +1755,9 @@ export function postgameReportToMd(
 
   if (extras.kosarstat) {
     lines.push(...postgameQuartersToMd(extras.kosarstat.quarterDiffRows, report.teamName, report.opponentName));
+  }
+  if (extras.quarterBox) {
+    lines.push(...postgameQuarterBoxToMd(extras.quarterBox, report.teamName, report.opponentName));
   }
 
   const opp = report.metrics.opponent;

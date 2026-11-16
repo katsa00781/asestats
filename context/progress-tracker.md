@@ -40,6 +40,13 @@ Update this file after every meaningful implementation change.
 
 ## In Progress
 
+- **H33 – Post-game negyedenkénti bontás (2026-11-16):** új „Negyedenkénti
+  bontás” kártya a Post-game jelentésben – periódusonként (N1–N4, H1…) csapat-
+  és játékos-box score a Kosarstat eseménylistából (`lib/kosarstat-quarter-box.ts`,
+  `components/PostgameQuarterBreakdown.tsx`), periódusválasztó, MD export.
+  44 ASE meccsen összevetve a box score-ral (pont / dobások / blokk / fault
+  pontos). Sémaváltozás nincs. Nyitva: böngészős ellenőrzés. Részletek:
+  `BACKLOG.md` H33.
 - **H32 – Játékoselemzés javításai (2026-11-15):** a haladó blokkok arányai
   összegből (`lib/player-game-aggregate.ts`), verdikt csak elég mintánál
   (Clutch ≥ 3 meccs, szerepkör-csoport ≥ 3 meccs, lineup ≥ 80% lefedettség,

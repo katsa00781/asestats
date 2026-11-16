@@ -64,7 +64,7 @@ const tokensOf = (value: string) => value.split(/\s+/).map(normalizeToken).filte
  * végződik, a teljes név a vezetéknévvel kezdődik. A kezdőbetű egy további
  * névelem elején áll.
  */
-const matchesAbbreviation = (full: string, abbreviation: string) => {
+export const matchesAbbreviation = (full: string, abbreviation: string) => {
   const fullTokens = tokensOf(full);
   const abbrTokens = tokensOf(abbreviation);
   const written = abbrTokens.filter(item => item.length > 1);

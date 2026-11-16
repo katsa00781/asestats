@@ -1,6 +1,6 @@
 # BACKLOG.md – ASEStats Projekt
 
-_Utoljára frissítve: 2026-11-15 (H32 – játékoselemzés: arányok összegből (közös `aggregatePlayerGames`), verdikt csak elég mintánál, lineup- és dobástérkép-lefedettség, AST/TO-limitáció, MD export VAL / meccstábla / indexek, posztfüggő szerepcímke, cirill betűk, percentilis + nyers érték; előtte H31 – post-game riport: a „Fő ok” a volumen / hatékonyság bontásból, a Net-eltérés oka külön sorban, „ellensúlyozta”, ratingek liga mediánja, a fókusz sorrendje a becsült pontköltség szerint belső védekezési céllal, eFG egy sorban, a Reflexió a Pre-game fültől függetlenül; előtte H30 – Játékosok nézet: alacsony kontrasztú kártyaszövegek (`text-muted` → `text-secondary`, stat-értékeken `text-ai` → `text-primary`); előtte H29 – a kapott pont minden elemzésben a `games.opp_score`-ból: csapatelemzés DRtg / Net, post-game DRtg referencia, pregame meccs-kivonás és projekció; előtte H28 – post-game riport adatminőség: második esély küszöb, Oliver-súlyozott védekezési verdikt, pp-mértékegység és egységes kerekítés, a leggyengébb páros mellett a kulcsjátékosok; lelet: a liga DRtg medián a kapott pont hibás összegzése miatt hiányzik; előtte H27 – az ütemezett import Playwright-telepítése elszállt az ubuntu-latest → 26.04 váltás miatt, a runner `ubuntu-24.04`-re rögzítve; előtte 2026-11-08: H22 – a 138 db 2024/25-ös dobástérkép átkötve a helyes szezonra, ellenőrizve; H21 – a dobástérkép zónái valós méretarányú FIBA-geometriával: a festék / tripla besorolás javítva; előtte H20 – a hunbasket menetrend-oldal átalakulása miatt leállt `hunbasket:fixtures` javítva, éles újrafuttatás nyitva; előtte 2026-11-01: idei vs. tavalyi csapat összehasonlítás: csapatstat és keretváltozás kész, böngészős ellenőrzés nyitva; előtte 2026-10-18: H19 – post-game riport harmadik hibalista, A–I egység kész)_
+_Utoljára frissítve: 2026-11-16 (H33 – post-game negyedenkénti bontás: csapat- és játékos-box score periódusonként a Kosarstat eseménylistából, periódusválasztó, MD export; előtte H32 – játékoselemzés: arányok összegből (közös `aggregatePlayerGames`), verdikt csak elég mintánál, lineup- és dobástérkép-lefedettség, AST/TO-limitáció, MD export VAL / meccstábla / indexek, posztfüggő szerepcímke, cirill betűk, percentilis + nyers érték; előtte H31 – post-game riport: a „Fő ok” a volumen / hatékonyság bontásból, a Net-eltérés oka külön sorban, „ellensúlyozta”, ratingek liga mediánja, a fókusz sorrendje a becsült pontköltség szerint belső védekezési céllal, eFG egy sorban, a Reflexió a Pre-game fültől függetlenül; előtte H30 – Játékosok nézet: alacsony kontrasztú kártyaszövegek (`text-muted` → `text-secondary`, stat-értékeken `text-ai` → `text-primary`); előtte H29 – a kapott pont minden elemzésben a `games.opp_score`-ból: csapatelemzés DRtg / Net, post-game DRtg referencia, pregame meccs-kivonás és projekció; előtte H28 – post-game riport adatminőség: második esély küszöb, Oliver-súlyozott védekezési verdikt, pp-mértékegység és egységes kerekítés, a leggyengébb páros mellett a kulcsjátékosok; lelet: a liga DRtg medián a kapott pont hibás összegzése miatt hiányzik; előtte H27 – az ütemezett import Playwright-telepítése elszállt az ubuntu-latest → 26.04 váltás miatt, a runner `ubuntu-24.04`-re rögzítve; előtte 2026-11-08: H22 – a 138 db 2024/25-ös dobástérkép átkötve a helyes szezonra, ellenőrizve; H21 – a dobástérkép zónái valós méretarányú FIBA-geometriával: a festék / tripla besorolás javítva; előtte H20 – a hunbasket menetrend-oldal átalakulása miatt leállt `hunbasket:fixtures` javítva, éles újrafuttatás nyitva; előtte 2026-11-01: idei vs. tavalyi csapat összehasonlítás: csapatstat és keretváltozás kész, böngészős ellenőrzés nyitva; előtte 2026-10-18: H19 – post-game riport harmadik hibalista, A–I egység kész)_
 
 ---
 
@@ -810,6 +810,37 @@ egymás elleni meccsek közt jelenik meg. A 2024/25-ös szezonnézetben nincs do
   Peringer Balázs, Randolph Brandon Kenneth, Davis-Mcmurrin Gage Andrew a `d96c…` és a `be99…`
   csapatnál) – keret-import csapat-hozzárendelési hiba gyanúja, döntés előtt nem nyúltunk hozzá.
 - Mobil jegyzet: `asestatmobile/docs/mobile-sync/2026-11-08-dobasterkep-zonak-h21.md` (összesítővé bővítve: H21 + H22).
+
+**H33 – Post-game: negyedenkénti statisztikai bontás ✓ (2026-11-16)** – a kód kész, a böngészős ellenőrzés nyitva
+
+Felhasználói kérés: a post-game elemzésben a statisztikák negyedenkénti bontásban is nézhetők legyenek.
+Felhasználói döntések: csapat + játékos bontás (perc / ± nélkül), külön kártya periódusválasztóval (a jelentés többi
+része változatlan), az MD exportba csapatszintű táblázat. Sémaváltozás nincs.
+
+- [x] **Parser:** új tiszta modul `lib/kosarstat-quarter-box.ts` – `parseKosarstatQuarterBox` a Kosarstat
+  `game_events` eseménytáblájából periódusonként (N1–N4, H1…) és az egész meccsre csapat- és játékossort számol
+  (pont, 2P, 3P, FT, T-lep, V-lep, gólpassz, eladott labda, labdaszerzés, blokk, fault). A rövidített eseménynév
+  („Krnjajszki B.”) a sor játékosszűrő oszlopából teljes névre fordul; gólpassznál a két összefűzött nevet a
+  rövidítések választják szét (`matchesAbbreviation`, most exportálva a `kosarstat-substitutions`-ből).
+  `buildQuarterMatchupMetrics`: eFG%, TS%, Oliver TO rate, OREB%, FTM/FGA, közös birtoklás, ORtg / DRtg / Net (H12
+  definíciók; képletek a `stat-formulas`-ból).
+- [x] **Ellenőrzés valós adaton (44 ASE meccs, 2025/26 + 2026/27):** végeredmény 44/44; pont, 2P, 3P, FT, blokk,
+  fault 44/44 egyezik a Hunbasket box score-ral; lepattanó és labdaeladás játékosszinten pontos (a csapatsor a
+  csapat-lepattanót / -labdaeladást is tartalmazza); gólpassz – a büntetőhöz írt gólpasszal együtt, ahogy a box score
+  is számol – 39/44 (max. −2); labdaszerzés 33/44 (±1). A Kosarstat nevek mind a 44 meccsen egyértelműen
+  párosultak a box score-ral.
+- [x] **UI:** `components/PostgameQuarterBreakdown.tsx` a Post-game jelentésben a Kosarstat meccs-flow blokk után:
+  periódus-összesítő tábla, periódusválasztó, csapat-összevetés, játékostábla saját / ellenfél kapcsolóval (a saját
+  nevek box score írásmóddal). Ha az eseménylista pontösszege eltér a végeredménytől, figyelmeztetés.
+  A `SeasonComparison` a pontforrásokkal együtt, ugyanabból a letöltött eseménytáblából tölti (új lekérdezés nincs).
+- [x] **MD export:** új „Negyedenkénti bontás” szakasz (`PostgameExportExtras.quarterBox`) – mutató- és
+  box score-tábla periódusonként + összesítő, a saját csapat szemszögéből.
+- [x] Teszt: `tests/kosarstat-quarter-box.test.ts` (9 eset); `node --import tsx --test tests/*.test.ts` 135/135,
+  `tsc --noEmit` tiszta, `npm run build` sikeres, az érintett fájlokban új lint-jelzés nincs (a `SeasonComparison`
+  korábbi jelzései változatlanok).
+- [ ] Böngészős ellenőrzés (ASE – Alba Fehérvár 102–91: N1 18–24, N2 29–17, N3 30–29, N4 25–21; Teljes meccs ORtg
+  132,5, DRtg 118,2) + új MD export.
+- Mobil jegyzet: `asestatmobile/docs/mobile-sync/2026-11-16-postgame-negyedek-h33.md`.
 
 **H32 – Játékoselemzés: arányok összegből, verdikt-minta, export, szövegek (Chandler-lista) ✓ (2026-11-15)** – a kód kész, a böngészős ellenőrzés nyitva
 

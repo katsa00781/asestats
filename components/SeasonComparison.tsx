@@ -7,6 +7,7 @@ import { Loader2, Download, ClipboardList, Save } from 'lucide-react';
 import { toast } from 'sonner';
 import type { PostgameExportExtras, PostgameLineupsMd } from '@/lib/export-to-md';
 import type { KosarstatPlayerRotation, KosarstatRotationEvent, KosarstatSide } from '@/lib/kosarstat-substitutions';
+import type { KosarstatQuarterBox } from '@/lib/kosarstat-quarter-box';
 import type { PlayerGameLine } from '@/lib/player-game-aggregate';
 import { playerSeasonToMd, pregameReportToMd, postgameReportToMd } from '@/lib/export-to-md';
 import { endsOnCourt, groupRotationByPlayer, parseKosarstatSubstitutions, rotationFromMinuteCodes, validateRotation } from '@/lib/kosarstat-substitutions';
@@ -26,6 +27,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Tooltip as UiTooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { PostgameShotScatterChart } from '@/components/PostgameShotScatterChart';
 import { PostgameSummary } from '@/components/PostgameSummary';
+import { PostgameQuarterBreakdown } from '@/components/PostgameQuarterBreakdown';
 import { PostgameZoneHeatmapChart } from '@/components/PostgameZoneHeatmapChart';
 import { supabase, type Database } from '@/lib/supabase';
 import { fetchAllRows } from '@/lib/fetch-all-rows';
@@ -91,6 +93,7 @@ import {
   parsePostgameSummary,
 } from '@/lib/postgame-report';
 import { parseKosarstatPointSources } from '@/lib/kosarstat-pbp-parse';
+import { parseKosarstatQuarterBox } from '@/lib/kosarstat-quarter-box';
 import { computeUsgRate } from '@/lib/player-postgame';
 import { playerNamesMatch, resolvePlayerNames } from '@/lib/player-name-match';
 
@@ -2846,6 +2849,8 @@ export function SeasonComparison({
   const [kosarstatQuarterStats, setKosarstatQuarterStats] = useState<KosarstatQuarterStatRow[]>([]);
   const [kosarstatTeamMetrics, setKosarstatTeamMetrics] = useState<KosarstatTeamMetricRow[]>([]);
   const [kosarstatPointSources, setKosarstatPointSources] = useState<KosarstatPointSourceTotals | null>(null);
+  // Negyedenkénti csapat- és játékos-box score az eseménylistából.
+  const [kosarstatQuarterBox, setKosarstatQuarterBox] = useState<KosarstatQuarterBox | null>(null);
   const [kosarstatSubstitutions, setKosarstatSubstitutions] = useState<Record<KosarstatSide, KosarstatRotationEvent[]> | null>(null);
   const [postgamePbpContext, setPostgamePbpContext] = useState<PostgamePbpContext | null>(null);
   const [kosarstatClutchImportNote, setKosarstatClutchImportNote] = useState<string | null>(null);
@@ -3238,6 +3243,7 @@ export function SeasonComparison({
           setKosarstatQuarterStats([]);
           setKosarstatTeamMetrics([]);
           setKosarstatPointSources(null);
+          setKosarstatQuarterBox(null);
           setKosarstatSubstitutions(null);
           setIsLoadingKosarstatPostgame(false);
         }
@@ -3623,6 +3629,7 @@ export function SeasonComparison({
             setKosarstatQuarterStats([]);
             setKosarstatTeamMetrics([]);
             setKosarstatPointSources(null);
+            setKosarstatQuarterBox(null);
             setKosarstatSubstitutions(null);
           setKosarstatSubstitutions(null);
             setIsLoadingKosarstatPostgame(false);
@@ -3732,6 +3739,7 @@ export function SeasonComparison({
 
         // Pontforrások (második esély, labdaeladásból, gyors befejezés) az eseménylistából.
         let loadedPointSources: KosarstatPointSourceTotals | null = null;
+        let loadedQuarterBox: KosarstatQuarterBox | null = null;
         let loadedSubstitutions: Record<KosarstatSide, KosarstatRotationEvent[]> | null = null;
         const eventsRawId = Array.isArray(eventsRawResult.data)
           ? String((eventsRawResult.data as Array<{ id?: string }>)[0]?.id || '')
@@ -3748,6 +3756,7 @@ export function SeasonComparison({
             if (!headers.includes('home_event')) continue;
             const rows = Array.isArray(table.rows) ? table.rows.filter(Array.isArray).map(item => item as unknown[]) : [];
             loadedPointSources = parseKosarstatPointSources(headers, rows);
+            loadedQuarterBox = parseKosarstatQuarterBox(headers, rows);
             loadedSubstitutions = parseKosarstatSubstitutions(headers, rows);
             break;
           }
@@ -3757,6 +3766,7 @@ export function SeasonComparison({
           setKosarstatQuarterStats(loadedQuarterStats);
           setKosarstatTeamMetrics(loadedTeamMetrics);
           setKosarstatPointSources(loadedPointSources);
+          setKosarstatQuarterBox(loadedQuarterBox);
           setKosarstatSubstitutions(loadedSubstitutions);
           setPostgamePbpContext(loadedClutchContext);
           setKosarstatClutchImportNote(loadedClutchImportNote);
@@ -3987,6 +3997,7 @@ export function SeasonComparison({
           setKosarstatQuarterStats([]);
           setKosarstatTeamMetrics([]);
           setKosarstatPointSources(null);
+          setKosarstatQuarterBox(null);
           setKosarstatSubstitutions(null);
           setIsLoadingKosarstatPostgame(false);
         }
@@ -9990,6 +10001,9 @@ export function SeasonComparison({
         ownMetrics: kosarstatPostgameContext.ownMetrics,
         oppMetrics: kosarstatPostgameContext.oppMetrics,
       },
+      quarterBox: kosarstatQuarterBox
+        ? { box: kosarstatQuarterBox, ownSide: selectedGame?.homeAway === 'away' ? 'away' : 'home' }
+        : undefined,
       rotation: lineupUsable
         ? lineupTeam.playerTimelines.map(row => ({
             player: boxName(row.player),
@@ -10013,7 +10027,7 @@ export function SeasonComparison({
       officialPlusMinus,
       playerTrends,
     };
-  }, [activeKosarstatTeamAnalysis, kosarstatLineupAnalysis, kosarstatPostgameContext, nextGameAutoFocus, postgameReport, resolvedTeamId, selectedGame, teamGamePlayerRows]);
+  }, [activeKosarstatTeamAnalysis, kosarstatLineupAnalysis, kosarstatPostgameContext, kosarstatQuarterBox, nextGameAutoFocus, postgameReport, resolvedTeamId, selectedGame, teamGamePlayerRows]);
 
   const displayedPostgameStrengths = useMemo(() => {
     if (!postgameReport) return [] as string[];
@@ -16415,6 +16429,17 @@ export function SeasonComparison({
                     </div>
                   )}
                 </div>
+              )}
+
+              {kosarstatQuarterBox && (
+                <PostgameQuarterBreakdown
+                  box={kosarstatQuarterBox}
+                  ownSide={selectedGame?.homeAway === 'away' ? 'away' : 'home'}
+                  teamName={postgameReport.teamName}
+                  opponentName={postgameReport.opponentName}
+                  ownBoxNames={postgameReport.playerReport.players.map(player => player.name)}
+                  finalScore={{ own: postgameReport.metrics.pointsFor, opponent: postgameReport.metrics.pointsAgainst }}
+                />
               )}
 
               {activeKosarstatTeamAnalysis && (

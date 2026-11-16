@@ -119,6 +119,7 @@ asestats/
 │   ├── game-text-report-prompt.ts # Meccs AI-szöveg: prompt, adatkivonat, számok visszaellenőrzése
 │   ├── kosarstat-clutch-parse.ts
 │   ├── kosarstat-pbp-parse.ts  # Eseménylista → pontforrások (második esély, labdaeladásból, gyors befejezés)
+│   ├── kosarstat-quarter-box.ts # Eseménylista → negyedenkénti csapat- és játékos-box score + mutatók (post-game bontás)
 │   ├── kosarstat-substitutions.ts # Cserék játékosonként: eseménylista (elsődleges) / percrács (tartalék) + be/le párosítás-ellenőrzés
 │   ├── player-analysis.ts
 │   ├── player-postgame.ts
@@ -181,6 +182,7 @@ A komponensek **funkcionalitása változatlan**, csak a vizuális réteg (osztá
 | `PlayersManagement.tsx`, `PlayersImport.tsx`, `GameManagement.tsx` | Admin kezelés |
 | `PostgameShotScatterChart.tsx`, `PostgameZoneHeatmapChart.tsx` | Shot chart vizualizáció (Chart.js) |
 | `PostgameSummary.tsx` | A post-game összefoglaló olvasható nézete: szakaszonként kártya (`parsePostgameSummary` szakaszaiból) |
+| `PostgameQuarterBreakdown.tsx` | Post-game negyedenkénti bontás: periódus-összesítő, periódusválasztó, csapat-összevetés, játékostábla (a `kosarstat-quarter-box` adataiból) |
 | `SeasonSelector.tsx`, `TeamSelector.tsx` | Globális szűrők |
 | `LoginForm.tsx` | Bejelentkezési form (Dark Command Center stílus) |
 | `Updates.tsx` | Frissítések nézet |
