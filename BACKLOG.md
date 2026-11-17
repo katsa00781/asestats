@@ -1,6 +1,6 @@
 # BACKLOG.md – ASEStats Projekt
 
-_Utoljára frissítve: 2026-11-17 (H34/F1c kész – pregame hatékonyság, bajnoki / rájátszás-projekció és pregame keverés matek a `lib/`-be, unit tesztekkel; a H35 javítása a H34 lezárása után következik (felhasználói döntés); előtte H34/F1b kész – Kosarstat clutch / lineup parser és közös segédek a `lib/`-be, unit tesztekkel; új lelet: H35 – a clutch-parser a `CSAPAT` sort játékosként számolja; előtte H34/F1a – nézet-típusok és UI-segédek a `components/season-comparison/` alá; előtte 2026-11-16: H34 terve felvéve, jóváhagyott döntésekkel; előtte H33 – post-game negyedenkénti bontás: csapat- és játékos-box score periódusonként a Kosarstat eseménylistából, periódusválasztó, MD export; előtte H32 – játékoselemzés: arányok összegből (közös `aggregatePlayerGames`), verdikt csak elég mintánál, lineup- és dobástérkép-lefedettség, AST/TO-limitáció, MD export VAL / meccstábla / indexek, posztfüggő szerepcímke, cirill betűk, percentilis + nyers érték; előtte H31 – post-game riport: a „Fő ok” a volumen / hatékonyság bontásból, a Net-eltérés oka külön sorban, „ellensúlyozta”, ratingek liga mediánja, a fókusz sorrendje a becsült pontköltség szerint belső védekezési céllal, eFG egy sorban, a Reflexió a Pre-game fültől függetlenül; előtte H30 – Játékosok nézet: alacsony kontrasztú kártyaszövegek (`text-muted` → `text-secondary`, stat-értékeken `text-ai` → `text-primary`); előtte H29 – a kapott pont minden elemzésben a `games.opp_score`-ból: csapatelemzés DRtg / Net, post-game DRtg referencia, pregame meccs-kivonás és projekció; előtte H28 – post-game riport adatminőség: második esély küszöb, Oliver-súlyozott védekezési verdikt, pp-mértékegység és egységes kerekítés, a leggyengébb páros mellett a kulcsjátékosok; lelet: a liga DRtg medián a kapott pont hibás összegzése miatt hiányzik; előtte H27 – az ütemezett import Playwright-telepítése elszállt az ubuntu-latest → 26.04 váltás miatt, a runner `ubuntu-24.04`-re rögzítve; előtte 2026-11-08: H22 – a 138 db 2024/25-ös dobástérkép átkötve a helyes szezonra, ellenőrizve; H21 – a dobástérkép zónái valós méretarányú FIBA-geometriával: a festék / tripla besorolás javítva; előtte H20 – a hunbasket menetrend-oldal átalakulása miatt leállt `hunbasket:fixtures` javítva, éles újrafuttatás nyitva; előtte 2026-11-01: idei vs. tavalyi csapat összehasonlítás: csapatstat és keretváltozás kész, böngészős ellenőrzés nyitva; előtte 2026-10-18: H19 – post-game riport harmadik hibalista, A–I egység kész)_
+_Utoljára frissítve: 2026-11-17 (H34/F1d kész – dobásprofil és nyers szezon-stat konverzió a `lib/`-be, unit tesztekkel; az F1 fázis lezárva; előtte H34/F1c kész – pregame hatékonyság, bajnoki / rájátszás-projekció és pregame keverés matek a `lib/`-be, unit tesztekkel; a H35 javítása a H34 lezárása után következik (felhasználói döntés); előtte H34/F1b kész – Kosarstat clutch / lineup parser és közös segédek a `lib/`-be, unit tesztekkel; új lelet: H35 – a clutch-parser a `CSAPAT` sort játékosként számolja; előtte H34/F1a – nézet-típusok és UI-segédek a `components/season-comparison/` alá; előtte 2026-11-16: H34 terve felvéve, jóváhagyott döntésekkel; előtte H33 – post-game negyedenkénti bontás: csapat- és játékos-box score periódusonként a Kosarstat eseménylistából, periódusválasztó, MD export; előtte H32 – játékoselemzés: arányok összegből (közös `aggregatePlayerGames`), verdikt csak elég mintánál, lineup- és dobástérkép-lefedettség, AST/TO-limitáció, MD export VAL / meccstábla / indexek, posztfüggő szerepcímke, cirill betűk, percentilis + nyers érték; előtte H31 – post-game riport: a „Fő ok” a volumen / hatékonyság bontásból, a Net-eltérés oka külön sorban, „ellensúlyozta”, ratingek liga mediánja, a fókusz sorrendje a becsült pontköltség szerint belső védekezési céllal, eFG egy sorban, a Reflexió a Pre-game fültől függetlenül; előtte H30 – Játékosok nézet: alacsony kontrasztú kártyaszövegek (`text-muted` → `text-secondary`, stat-értékeken `text-ai` → `text-primary`); előtte H29 – a kapott pont minden elemzésben a `games.opp_score`-ból: csapatelemzés DRtg / Net, post-game DRtg referencia, pregame meccs-kivonás és projekció; előtte H28 – post-game riport adatminőség: második esély küszöb, Oliver-súlyozott védekezési verdikt, pp-mértékegység és egységes kerekítés, a leggyengébb páros mellett a kulcsjátékosok; lelet: a liga DRtg medián a kapott pont hibás összegzése miatt hiányzik; előtte H27 – az ütemezett import Playwright-telepítése elszállt az ubuntu-latest → 26.04 váltás miatt, a runner `ubuntu-24.04`-re rögzítve; előtte 2026-11-08: H22 – a 138 db 2024/25-ös dobástérkép átkötve a helyes szezonra, ellenőrizve; H21 – a dobástérkép zónái valós méretarányú FIBA-geometriával: a festék / tripla besorolás javítva; előtte H20 – a hunbasket menetrend-oldal átalakulása miatt leállt `hunbasket:fixtures` javítva, éles újrafuttatás nyitva; előtte 2026-11-01: idei vs. tavalyi csapat összehasonlítás: csapatstat és keretváltozás kész, böngészős ellenőrzés nyitva; előtte 2026-10-18: H19 – post-game riport harmadik hibalista, A–I egység kész)_
 
 ---
 
@@ -829,7 +829,7 @@ hiba (H35)” esetét a helyes értékekre kell átírni. Mobil: a mobil nem has
 ha a mobil clutch-nézete hasonló logikájú, ott is ellenőrizendő. A javítás felhasználói döntést igényel
 (funkcionális változás, a megjelenített számok módosulnak).
 
-**H34 – `SeasonComparison.tsx` szétdarabolása (belső refaktor) – FOLYAMATBAN (2026-11-17)** – a terv jóváhagyva (2026-11-16); F1a, F1b, F1c kész, következik F1d; utána a H35
+**H34 – `SeasonComparison.tsx` szétdarabolása (belső refaktor) – FOLYAMATBAN (2026-11-17)** – a terv jóváhagyva (2026-11-16); F1 (a–d) kész, következik F2; a H35 a H34 lezárása után
 
 Kiinduló állapot (`9b052d3`): 18 451 sor / 907 KB. 1–2760: típusok és ~120 tiszta segédfüggvény
 (Kosarstat clutch/lineup parser ~1 100 sor, pregame/projekció/blend matek, dobás-helperek, nyers stat
@@ -900,9 +900,22 @@ böngészős próba az 5 tabon. Fázisonként (al-fázisonként) külön commit.
   meccs-kivonás 0-ra korlátozva, egymeccses játékos kiesése); 170/170 teszt, `tsc` tiszta, build sikeres. Lint:
   a többi szabály fájlonként változatlan; a komponens 12 `react-hooks/preserve-manual-memoization` jelzése
   (React Compiler lint – a compiler a `next.config.ts`-ben nincs bekapcsolva, futásidejű hatás nincs) eltűnt
-  (52 → 40 jelzés).
-- [ ] **F1d – dobás-helperek és nyers stat konverzió (puszta áthelyezés):** `lib/shot-profile.ts`,
-  `lib/season-raw-stats.ts`. Unit tesztek.
+  (52 → 40 jelzés; az F1d után változatlan kódon visszajött, lásd ott).
+- [x] **F1d – dobás-helperek és nyers stat konverzió ✓ (2026-11-17):** szkripttel, bájtra azonosan (csak `export`
+  előtag) 348 sor ki, 16 476 → 16 134 sor (az új importokkal). Új modulok (egyik sem `@core`): `lib/shot-profile.ts`
+  (`ShotEventRow`, `ShotZoneKey`, `ShotPoint`, `ShotZoneStats`, `ShotProfileSummary`, `toShotPoints`, `withShotGames`,
+  `buildShotProfileSummary`) és `lib/season-raw-stats.ts` (`mapPositionInfo`, `computeTotalValuation`, `toRawStat`,
+  `toRawStatFromGameRows`, `buildTeamSeasonStats`). A komponensben maradt: `ShotRawRow` (a betöltő effekttel az F3-ban
+  költözik), `formatShotPct` / `formatShotDeltaPp` / `shotDeltaTone` (megjelenítés, Tailwind osztályt ad – az F5-ben a
+  JSX-szel), `mapPosition`. A komponens 3 feleslegessé vált importja (`buildPositionMetadata`, `emptyTeamOpponentBox`,
+  `classifyShotZone`) törölve. Megfigyelés (nem javítva, puszta áthelyezés): a `ShotZoneKey` / `ShotZoneStats` /
+  `ShotProfileSummary` szerkezetileg azonos típus a `lib/pregame-scouting.ts`-ben is létezik – összevonásuk az F2-ben
+  vizsgálandó. Tesztek: `tests/shot-profile.test.ts` (a H21 zónageometria-teszt valós koordinátáival: zónánkénti
+  kísérlet / találat / %, szűrés, lefedett meccsek), `tests/season-raw-stats.test.ts` (VAL meccsátlag × meccsszám és
+  PIR-fallback, meccssor-összeg különböző `game_id`-kkal, csapatösszeg + keretlista); 179/179 teszt, `tsc` tiszta, build
+  sikeres. Lint: 52 jelzés, szabályonként és kódsoronként azonos az F1b utáni (`e2510a8`) állapottal – a 12
+  `preserve-manual-memoization` (React Compiler lint, futásidejű hatás nincs) az F1c-ben eltűnt, itt visszajött: a
+  compiler a modulszerkezettől függően jelenti őket, a jelzett kód nem változott.
 - [ ] **F2 – nagy `useMemo`-törzsek tiszta függvénnyé (~2 500 sor ki):** `pregameOptimalLineup` (642),
   `playerAdvancedInsights` (640), `postgameReport` (333), `enrichedTeamAnalysis` (319),
   `projectionStrengthByTeamKey` (211), `playoffProjection` (148) → `lib/` függvények; a komponensben

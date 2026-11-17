@@ -136,7 +136,9 @@ asestats/
 │   ├── pregame-scouting.ts
 │   ├── run-script.ts           # Közös spawn wrapper a scraping route-okhoz
 │   ├── season-comparison-helpers.ts # A SeasonComparison és kiszervezett moduljai közös segédei (név-kulcs, kerekítés, MM:SS, clamp, `GamePlayerStatRow`)
+│   ├── season-raw-stats.ts     # PlayerStats / meccssorok → RawPlayerSeasonStat, csapat TeamSeasonStat keretlistával, VAL-fallback (H34)
 │   ├── season-tables.ts
+│   ├── shot-profile.ts         # Dobás-esemény sorok → pontok, zónánkénti dobásprofil, lefedett meccsek (H34)
 │   ├── situational-analysis.ts
 │   ├── stat-formulas.ts        # Kanonikus TS%/eFG%/valuation + formatPercent
 │   ├── style-vocabulary.ts
