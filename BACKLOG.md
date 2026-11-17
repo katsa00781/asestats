@@ -1,6 +1,6 @@
 # BACKLOG.md – ASEStats Projekt
 
-_Utoljára frissítve: 2026-11-17 (H34 – `SeasonComparison.tsx` szétdarabolása elindult: F1a kész – nézet-típusok és UI-segédek a `components/season-comparison/` alá; előtte 2026-11-16: H34 terve felvéve, jóváhagyott döntésekkel; előtte H33 – post-game negyedenkénti bontás: csapat- és játékos-box score periódusonként a Kosarstat eseménylistából, periódusválasztó, MD export; előtte H32 – játékoselemzés: arányok összegből (közös `aggregatePlayerGames`), verdikt csak elég mintánál, lineup- és dobástérkép-lefedettség, AST/TO-limitáció, MD export VAL / meccstábla / indexek, posztfüggő szerepcímke, cirill betűk, percentilis + nyers érték; előtte H31 – post-game riport: a „Fő ok” a volumen / hatékonyság bontásból, a Net-eltérés oka külön sorban, „ellensúlyozta”, ratingek liga mediánja, a fókusz sorrendje a becsült pontköltség szerint belső védekezési céllal, eFG egy sorban, a Reflexió a Pre-game fültől függetlenül; előtte H30 – Játékosok nézet: alacsony kontrasztú kártyaszövegek (`text-muted` → `text-secondary`, stat-értékeken `text-ai` → `text-primary`); előtte H29 – a kapott pont minden elemzésben a `games.opp_score`-ból: csapatelemzés DRtg / Net, post-game DRtg referencia, pregame meccs-kivonás és projekció; előtte H28 – post-game riport adatminőség: második esély küszöb, Oliver-súlyozott védekezési verdikt, pp-mértékegység és egységes kerekítés, a leggyengébb páros mellett a kulcsjátékosok; lelet: a liga DRtg medián a kapott pont hibás összegzése miatt hiányzik; előtte H27 – az ütemezett import Playwright-telepítése elszállt az ubuntu-latest → 26.04 váltás miatt, a runner `ubuntu-24.04`-re rögzítve; előtte 2026-11-08: H22 – a 138 db 2024/25-ös dobástérkép átkötve a helyes szezonra, ellenőrizve; H21 – a dobástérkép zónái valós méretarányú FIBA-geometriával: a festék / tripla besorolás javítva; előtte H20 – a hunbasket menetrend-oldal átalakulása miatt leállt `hunbasket:fixtures` javítva, éles újrafuttatás nyitva; előtte 2026-11-01: idei vs. tavalyi csapat összehasonlítás: csapatstat és keretváltozás kész, böngészős ellenőrzés nyitva; előtte 2026-10-18: H19 – post-game riport harmadik hibalista, A–I egység kész)_
+_Utoljára frissítve: 2026-11-17 (H34/F1b kész – Kosarstat clutch / lineup parser és közös segédek a `lib/`-be, unit tesztekkel; új lelet: H35 – a clutch-parser a `CSAPAT` sort játékosként számolja; előtte H34/F1a – nézet-típusok és UI-segédek a `components/season-comparison/` alá; előtte 2026-11-16: H34 terve felvéve, jóváhagyott döntésekkel; előtte H33 – post-game negyedenkénti bontás: csapat- és játékos-box score periódusonként a Kosarstat eseménylistából, periódusválasztó, MD export; előtte H32 – játékoselemzés: arányok összegből (közös `aggregatePlayerGames`), verdikt csak elég mintánál, lineup- és dobástérkép-lefedettség, AST/TO-limitáció, MD export VAL / meccstábla / indexek, posztfüggő szerepcímke, cirill betűk, percentilis + nyers érték; előtte H31 – post-game riport: a „Fő ok” a volumen / hatékonyság bontásból, a Net-eltérés oka külön sorban, „ellensúlyozta”, ratingek liga mediánja, a fókusz sorrendje a becsült pontköltség szerint belső védekezési céllal, eFG egy sorban, a Reflexió a Pre-game fültől függetlenül; előtte H30 – Játékosok nézet: alacsony kontrasztú kártyaszövegek (`text-muted` → `text-secondary`, stat-értékeken `text-ai` → `text-primary`); előtte H29 – a kapott pont minden elemzésben a `games.opp_score`-ból: csapatelemzés DRtg / Net, post-game DRtg referencia, pregame meccs-kivonás és projekció; előtte H28 – post-game riport adatminőség: második esély küszöb, Oliver-súlyozott védekezési verdikt, pp-mértékegység és egységes kerekítés, a leggyengébb páros mellett a kulcsjátékosok; lelet: a liga DRtg medián a kapott pont hibás összegzése miatt hiányzik; előtte H27 – az ütemezett import Playwright-telepítése elszállt az ubuntu-latest → 26.04 váltás miatt, a runner `ubuntu-24.04`-re rögzítve; előtte 2026-11-08: H22 – a 138 db 2024/25-ös dobástérkép átkötve a helyes szezonra, ellenőrizve; H21 – a dobástérkép zónái valós méretarányú FIBA-geometriával: a festék / tripla besorolás javítva; előtte H20 – a hunbasket menetrend-oldal átalakulása miatt leállt `hunbasket:fixtures` javítva, éles újrafuttatás nyitva; előtte 2026-11-01: idei vs. tavalyi csapat összehasonlítás: csapatstat és keretváltozás kész, böngészős ellenőrzés nyitva; előtte 2026-10-18: H19 – post-game riport harmadik hibalista, A–I egység kész)_
 
 ---
 
@@ -811,7 +811,25 @@ egymás elleni meccsek közt jelenik meg. A 2024/25-ös szezonnézetben nincs do
   csapatnál) – keret-import csapat-hozzárendelési hiba gyanúja, döntés előtt nem nyúltunk hozzá.
 - Mobil jegyzet: `asestatmobile/docs/mobile-sync/2026-11-08-dobasterkep-zonak-h21.md` (összesítővé bővítve: H21 + H22).
 
-**H34 – `SeasonComparison.tsx` szétdarabolása (belső refaktor) – FOLYAMATBAN (2026-11-17)** – a terv jóváhagyva (2026-11-16); F1a kész, következik F1b
+**H35 – Kosarstat clutch: a `CSAPAT` összesítő sor játékosként számít – NYITOTT (lelet, 2026-11-17)**
+
+A H34/F1b tesztírásakor derült ki (a refaktor előtti kódban is így van, a H34 nem javítja, mert az
+viselkedésváltozás nélküli). `parseKosarstatClutchTeamTable` (`lib/kosarstat-clutch-context.ts`) csak a
+`Játékos` fejlécsort és az `Össz…` sort szűri ki; a Kosarstat clutch táblája `CSAPAT` sorral zárul, ami így
+„játékosként” bekerül. Valós példa (DEAC – ASE, 2026-11-11, utolsó 5 perc: ASE 13 – DEAC 8):
+- a darabszámok duplázódnak: post-game clutch `ownPoints` 26, `oppPoints` 16, `diff` +10, labdaeladás 4;
+- a minta `25:00` a valós `05:00` helyett (`sampleSeconds` = a `CSAPAT` sor 25:00-ja);
+- a meccs top usage listáján első a „CSAPAT” 50%-kal (a szezonos listát az aktív keret szűri, ott nem jelenik meg);
+- a játékos clutch USG% a felére esik (a csapat usage-bázisa duplázódik: Benke 15% a valós 30% helyett);
+- az arányok (ORtg, DRtg, Net, TOV%, FT-ráta, AST/TO) helyesek, mert számláló és nevező együtt duplázódik.
+Érintett: post-game Kosarstat clutch blokk és MD export, szezonos csapat-clutch, Játékos szekció clutch blokkja
+(USG%, szerep-megjegyzés küszöbei: 15% / 24%). Javítás: a `CSAPAT` sor kiszűrése (+ esetleg ellenőrzés, hogy a
+játékosok összege egyezik a `CSAPAT` sorral); a `tests/kosarstat-clutch-context.test.ts` „Jellemző teszt – ismert
+hiba (H35)” esetét a helyes értékekre kell átírni. Mobil: a mobil nem használja ezt a parsert (nem `@core`), de
+ha a mobil clutch-nézete hasonló logikájú, ott is ellenőrizendő. A javítás felhasználói döntést igényel
+(funkcionális változás, a megjelenített számok módosulnak).
+
+**H34 – `SeasonComparison.tsx` szétdarabolása (belső refaktor) – FOLYAMATBAN (2026-11-17)** – a terv jóváhagyva (2026-11-16); F1a, F1b kész, következik F1c
 
 Kiinduló állapot (`9b052d3`): 18 451 sor / 907 KB. 1–2760: típusok és ~120 tiszta segédfüggvény
 (Kosarstat clutch/lineup parser ~1 100 sor, pregame/projekció/blend matek, dobás-helperek, nyers stat
@@ -851,8 +869,21 @@ böngészős próba az 5 tabon. Fázisonként (al-fázisonként) külön commit.
   együtt költözik, nem a `types.ts`-be (lib nem importál `components/`-ből). Ellenőrzés: `tsc` tiszta, tesztek 135/135,
   `npm run build` sikeres, lint (`NODE_OPTIONS=--max-old-space-size=8192` kell, különben az ESLint OOM-mel áll le)
   szabályonként azonos a kiinduló állapottal (34 jelzés, mind korábbi).
+- [x] **F1b – Kosarstat clutch / lineup parser ✓ (2026-11-17):** szkripttel, bájtra azonosan (csak `export`
+  előtag) 1 236 sor ki, 18 285 → 17 070 sor (az új importokkal). Új modulok (egyik sem `@core`):
+  `lib/kosarstat-clutch-context.ts` (clutch típusok, `parseKosarstatClutchGame`, szezonos csapat- és
+  játékos-aggregálás, `buildPostgamePbpContextFromKosarstatClutch`, `CLUTCH_MIN_GAMES_FOR_VERDICT`),
+  `lib/kosarstat-lineup-analysis.ts` (lineup típusok, `parseKosarstatLineupAnalysis`, `applyRotationSource`,
+  kombók, szezonos aggregálás) és a közös `lib/season-comparison-helpers.ts` (`normalizeTeamKey`, névprofil,
+  `roundValue`, MM:SS / előjeles szám / játékóra segédek – ezeket a komponens és a későbbi lib-modulok is
+  használják). A `ROLE_MIN_GAMES_FOR_VERDICT` / `IMPACT_*` küszöbök a komponensben maradtak (F2-ben a
+  `playerAdvancedInsights`-szel költöznek). Tesztek valós adaton, új fixture-ökkel (a meglévő fixture-ök
+  clutch- és lineup-táblát nem tartalmaztak): `tests/kosarstat-lineup-analysis.test.ts` (ASE – Sopron:
+  az ötösök 40 perce és +29-e, 200 játékosperc, párosok / hármasok, percrács vs. eseménylista rotáció),
+  `tests/kosarstat-clutch-context.test.ts` (DEAC – ASE, vendégoldal, ORtg / DRtg kézzel ellenőrizve),
+  `tests/season-comparison-helpers.test.ts`; 154/154 teszt, `tsc` tiszta, build sikeres, lint
+  szabályonként változatlan (a komponens 4 feleslegessé vált importja törölve).
 - [ ] **F1 – tiszta felső rész lib-be (puszta áthelyezés, ~2 600 sor ki):**
-  1b Kosarstat clutch / lineup parser (`lib/kosarstat-clutch-context.ts`, `lib/kosarstat-lineup-analysis.ts`);
   1c pregame / projekció / blend matek (`lib/pregame-efficiency.ts`, `lib/playoff-projection.ts`,
   `lib/pregame-blend.ts`); 1d dobás-helperek és nyers stat konverzió (`lib/shot-profile.ts`,
   `lib/season-raw-stats.ts`). Unit tesztek a parserekhez.

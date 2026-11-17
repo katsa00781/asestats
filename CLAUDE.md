@@ -99,6 +99,7 @@ asestats/
 │   │   ├── label.tsx, select.tsx, tabs.tsx, textarea.tsx, tooltip.tsx
 │   │   ├── stat-card.tsx       # Új: KPI / metrika kártya (Dark Command Center)
 │   │   └── data-table.tsx      # Új: generikus sortolható tábla (ColumnDef<T>)
+│   ├── season-comparison/      # A SeasonComparison darabjai (H34): types.ts, ui-helpers.tsx; később szekciók, alkártyák
 │   └── [Feature komponensek]   # Lásd lentebb
 ├── context/                    # Projekt spec és kontextus fájlok (nem kód)
 │   ├── ai-workflow-rules.md
@@ -117,7 +118,9 @@ asestats/
 │   ├── export-to-md.ts
 │   ├── fetch-all-rows.ts       # Lapozó helper a PostgREST 1000 soros limit ellen
 │   ├── game-text-report-prompt.ts # Meccs AI-szöveg: prompt, adatkivonat, számok visszaellenőrzése
+│   ├── kosarstat-clutch-context.ts # Kosarstat clutch-tábla parser + szezonos csapat- / játékos-aggregálás (H34-ben a SeasonComparison-ből)
 │   ├── kosarstat-clutch-parse.ts
+│   ├── kosarstat-lineup-analysis.ts # Kosarstat lineup oldal: játékosperc, rotáció, ötösök, párosok / hármasok (H34-ben a SeasonComparison-ből)
 │   ├── kosarstat-pbp-parse.ts  # Eseménylista → pontforrások (második esély, labdaeladásból, gyors befejezés)
 │   ├── kosarstat-quarter-box.ts # Eseménylista → negyedenkénti csapat- és játékos-box score + mutatók (post-game bontás)
 │   ├── kosarstat-substitutions.ts # Cserék játékosonként: eseménylista (elsődleges) / percrács (tartalék) + be/le párosítás-ellenőrzés
@@ -129,6 +132,7 @@ asestats/
 │   ├── postgame-report.ts
 │   ├── pregame-scouting.ts
 │   ├── run-script.ts           # Közös spawn wrapper a scraping route-okhoz
+│   ├── season-comparison-helpers.ts # A SeasonComparison és kiszervezett moduljai közös segédei (név-kulcs, kerekítés, MM:SS)
 │   ├── season-tables.ts
 │   ├── situational-analysis.ts
 │   ├── stat-formulas.ts        # Kanonikus TS%/eFG%/valuation + formatPercent
