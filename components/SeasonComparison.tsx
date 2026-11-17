@@ -96,6 +96,27 @@ import { parseKosarstatPointSources } from '@/lib/kosarstat-pbp-parse';
 import { parseKosarstatQuarterBox } from '@/lib/kosarstat-quarter-box';
 import { computeUsgRate } from '@/lib/player-postgame';
 import { playerNamesMatch, resolvePlayerNames } from '@/lib/player-name-match';
+import type {
+  GameTextReportRow,
+  IncomingEurobasketCandidate,
+  IncomingEurobasketPayload,
+  IncomingField,
+  IncomingPlayerInput,
+  PlayerNarrativeStatus,
+  TeamNarrativeStatus,
+  TeamTextReportRow,
+} from '@/components/season-comparison/types';
+import {
+  DEFAULT_INCOMING_PLAYER,
+  INCOMING_PLAYER_PLACEHOLDER,
+  ThresholdTooltip,
+  formatSampleConfidenceLabel,
+  getConfidenceTone,
+  getInsightToneClass,
+  getSampleConfidenceBadgeClass,
+  isUnavailableIncomingPhoto,
+  normalizeSampleConfidence,
+} from '@/components/season-comparison/ui-helpers';
 
 type SeasonComparisonProps = {
   allPlayers: PlayerStats[];
@@ -163,34 +184,6 @@ type StandingsSnapshotRow = {
   scored: number;
   conceded: number;
   points: number;
-};
-
-type PlayerNarrativeStatus = {
-  status: 'idle' | 'loading' | 'success' | 'error';
-  text?: string;
-  error?: string;
-  generatedAt?: string;
-  generatedBy?: string;
-};
-
-type TeamNarrativeStatus = {
-  status: 'idle' | 'loading' | 'success' | 'error';
-  text?: string;
-  error?: string;
-  generatedAt?: string;
-  generatedBy?: string;
-};
-
-type TeamTextReportRow = {
-  narrative?: string | null;
-  generated_at?: string | null;
-  generated_by?: string | null;
-};
-
-type GameTextReportRow = {
-  narrative?: string | null;
-  generated_at?: string | null;
-  generated_by?: string | null;
 };
 
 type KosarstatLineupTableRow = {
@@ -1740,30 +1733,6 @@ const formatNullableNumber = (value: number | null | undefined, digits = 1, suff
   return `${Number(value).toFixed(digits)}${suffix}`;
 };
 
-const getInsightToneClass = (tone: 'good' | 'neutral' | 'risk' | 'na') => {
-  if (tone === 'good') return 'text-positive';
-  if (tone === 'risk') return 'text-negative';
-  if (tone === 'neutral') return 'text-warning';
-  return 'text-secondary';
-};
-
-const getSampleConfidenceBadgeClass = (confidence: 'alacsony' | 'kozepes' | 'magas') => {
-  if (confidence === 'magas') return 'bg-positive/15 text-positive border border-positive/30';
-  if (confidence === 'kozepes') return 'bg-warning/15 text-warning border border-warning/30';
-  return 'bg-surface-2 text-primary border border-border-subtle';
-};
-
-const normalizeSampleConfidence = (confidence: string | undefined): 'alacsony' | 'kozepes' | 'magas' => {
-  if (confidence === 'magas' || confidence === 'kozepes' || confidence === 'alacsony') return confidence;
-  return 'alacsony';
-};
-
-const formatSampleConfidenceLabel = (confidence: 'alacsony' | 'kozepes' | 'magas') => {
-  if (confidence === 'magas') return 'Minta: magas';
-  if (confidence === 'kozepes') return 'Minta: közepes';
-  return 'Minta: alacsony';
-};
-
 const stdDev = (values: number[]) => {
   if (values.length < 2) return 0;
   const mean = values.reduce((sum, value) => sum + value, 0) / values.length;
@@ -2296,17 +2265,6 @@ const buildSimilarityReason = (base: PlayerAnalysis, other: PlayerAnalysis) => {
   return parts.join(', ');
 };
 
-const getConfidenceTone = (confidence: PlayerAnalysis['confidence']) => {
-  switch (confidence) {
-    case 'Magas':
-      return 'text-positive';
-    case 'Közepes':
-      return 'text-warning';
-    default:
-      return 'text-negative';
-  }
-};
-
 const round = (value: number, decimals = 1) => {
   if (!Number.isFinite(value)) return 0;
   const factor = 10 ** decimals;
@@ -2651,112 +2609,6 @@ const buildTeamSeasonStats = (
   });
 
   return Array.from(teams.values());
-};
-
-type IncomingPlayerInput = {
-  name: string;
-  position: Position;
-  games: number;
-  minutesPerGame: number;
-  pointsPerGame: number;
-  assistsPerGame: number;
-  orebPerGame: number;
-  drebPerGame: number;
-  valuationPerGame: number;
-  twoPct: number;
-  twoAttemptedPerGame: number;
-  threePct: number;
-  threeAttemptedPerGame: number;
-  ftPct: number;
-  ftAttemptedPerGame: number;
-  turnoversPerGame: number;
-  stealsPerGame: number;
-  blocksPerGame: number;
-  foulsCommittedPerGame: number;
-  foulsReceivedPerGame: number;
-};
-
-type IncomingField = keyof IncomingPlayerInput | 'rebTotal';
-
-type IncomingEurobasketPayload = {
-  name: string;
-  position?: string;
-  currentTeam?: string;
-  currentCountry?: string;
-  currentCountryFlagUrl?: string;
-  previousTeam?: string;
-  previousCountry?: string;
-  previousCountryFlagUrl?: string;
-  games: number;
-  minutesPerGame: number;
-  pointsPerGame: number;
-  assistsPerGame: number;
-  orebPerGame: number;
-  drebPerGame: number;
-  valuationPerGame: number;
-  twoPct: number;
-  twoAttemptedPerGame: number;
-  threePct: number;
-  threeAttemptedPerGame: number;
-  ftPct: number;
-  ftAttemptedPerGame: number;
-  turnoversPerGame: number;
-  stealsPerGame: number;
-  blocksPerGame: number;
-  foulsCommittedPerGame: number;
-  foulsReceivedPerGame: number;
-  sourceUrl: string;
-  seasonYearUsed: number;
-  usedFallbackSeason: boolean;
-  gamesSampled: number;
-};
-
-type IncomingEurobasketCandidate = {
-  name: string;
-  profileUrl: string;
-  height?: string;
-  position?: string;
-  born?: string;
-  nationality?: string;
-  team?: string;
-  currentTeam?: string;
-  currentCountry?: string;
-  currentCountryFlagUrl?: string;
-  previousTeam?: string;
-  previousCountry?: string;
-  previousCountryFlagUrl?: string;
-  flagUrl?: string;
-  photoUrl?: string;
-};
-
-const DEFAULT_INCOMING_PLAYER: IncomingPlayerInput = {
-  name: '',
-  position: 'SG',
-  games: 0,
-  minutesPerGame: 0,
-  pointsPerGame: 0,
-  assistsPerGame: 0,
-  orebPerGame: 0,
-  drebPerGame: 0,
-  valuationPerGame: 0,
-  twoPct: 0,
-  twoAttemptedPerGame: 0,
-  threePct: 0,
-  threeAttemptedPerGame: 0,
-  ftPct: 0,
-  ftAttemptedPerGame: 0,
-  turnoversPerGame: 0,
-  stealsPerGame: 0,
-  blocksPerGame: 0,
-  foulsCommittedPerGame: 0,
-  foulsReceivedPerGame: 0,
-};
-
-const INCOMING_PLAYER_PLACEHOLDER = '/player-placeholder.svg';
-
-const isUnavailableIncomingPhoto = (photoUrl?: string) => {
-  if (!photoUrl) return true;
-  return /Not_Available\.jpg|images\/logom1\.jpg/i.test(photoUrl);
 };
 
 export function SeasonComparison({
@@ -11888,24 +11740,6 @@ export function SeasonComparison({
   const showPostgameSection = activeSection === 'postgame';
   const showProjectionSection = activeSection === 'projection';
 
-  const renderThresholdTooltip = (content: string) => (
-    <UiTooltip>
-      <TooltipTrigger asChild>
-        <span
-          role="button"
-          tabIndex={0}
-          className="inline-flex h-4 w-4 cursor-help items-center justify-center rounded-full border border-border-subtle text-[10px] text-secondary hover:bg-surface-2"
-          aria-label="Küszöb információ"
-        >
-          i
-        </span>
-      </TooltipTrigger>
-      <TooltipContent side="top" className="max-w-xs whitespace-pre-line break-words text-xs leading-relaxed">
-        {content}
-      </TooltipContent>
-    </UiTooltip>
-  );
-
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center gap-3">
@@ -12446,7 +12280,7 @@ export function SeasonComparison({
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-1.5">
                           <div className="text-primary font-medium">1) Dobásminőség vs kivitelezés</div>
-                          {renderThresholdTooltip(playerAdvancedInsights.thresholdHints.shot)}
+                          <ThresholdTooltip content={playerAdvancedInsights.thresholdHints.shot} />
                         </div>
                         {'confidence' in playerAdvancedInsights.shotQualityVsMaking && (
                           <Badge className={getSampleConfidenceBadgeClass(normalizeSampleConfidence(playerAdvancedInsights.shotQualityVsMaking.confidence))}>{formatSampleConfidenceLabel(normalizeSampleConfidence(playerAdvancedInsights.shotQualityVsMaking.confidence))}</Badge>
@@ -12481,7 +12315,7 @@ export function SeasonComparison({
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-1.5">
                           <div className="text-primary font-medium">2) Clutch identitás</div>
-                          {renderThresholdTooltip(playerAdvancedInsights.thresholdHints.clutch)}
+                          <ThresholdTooltip content={playerAdvancedInsights.thresholdHints.clutch} />
                         </div>
                         {'confidence' in playerAdvancedInsights.clutchIdentity && (
                           <Badge className={getSampleConfidenceBadgeClass(normalizeSampleConfidence(playerAdvancedInsights.clutchIdentity.confidence))}>{formatSampleConfidenceLabel(normalizeSampleConfidence(playerAdvancedInsights.clutchIdentity.confidence))}</Badge>
@@ -12513,7 +12347,7 @@ export function SeasonComparison({
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-1.5">
                           <div className="text-primary font-medium">3) Kontextusos +/- (lineup)</div>
-                          {renderThresholdTooltip(playerAdvancedInsights.thresholdHints.impact)}
+                          <ThresholdTooltip content={playerAdvancedInsights.thresholdHints.impact} />
                         </div>
                         {'confidence' in playerAdvancedInsights.plusMinusContext && (
                           <Badge className={getSampleConfidenceBadgeClass(normalizeSampleConfidence(playerAdvancedInsights.plusMinusContext.confidence))}>{formatSampleConfidenceLabel(normalizeSampleConfidence(playerAdvancedInsights.plusMinusContext.confidence))}</Badge>
@@ -12542,7 +12376,7 @@ export function SeasonComparison({
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-1.5">
                           <div className="text-primary font-medium">4) Szerepkör-hatékonyság</div>
-                          {renderThresholdTooltip(playerAdvancedInsights.thresholdHints.role)}
+                          <ThresholdTooltip content={playerAdvancedInsights.thresholdHints.role} />
                         </div>
                         {'confidence' in playerAdvancedInsights.roleEfficiency && (
                           <Badge className={getSampleConfidenceBadgeClass(normalizeSampleConfidence(playerAdvancedInsights.roleEfficiency.confidence))}>{formatSampleConfidenceLabel(normalizeSampleConfidence(playerAdvancedInsights.roleEfficiency.confidence))}</Badge>
@@ -12567,7 +12401,7 @@ export function SeasonComparison({
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-1.5">
                           <div className="text-primary font-medium">5) Döntésminőség index</div>
-                          {renderThresholdTooltip(playerAdvancedInsights.thresholdHints.decision)}
+                          <ThresholdTooltip content={playerAdvancedInsights.thresholdHints.decision} />
                         </div>
                         {'confidence' in playerAdvancedInsights.decisionQuality && (
                           <Badge className={getSampleConfidenceBadgeClass(normalizeSampleConfidence(playerAdvancedInsights.decisionQuality.confidence))}>{formatSampleConfidenceLabel(normalizeSampleConfidence(playerAdvancedInsights.decisionQuality.confidence))}</Badge>
@@ -12589,7 +12423,7 @@ export function SeasonComparison({
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-1.5">
                           <div className="text-primary font-medium">6) Stabilitás és hullámzás</div>
-                          {renderThresholdTooltip(playerAdvancedInsights.thresholdHints.stability)}
+                          <ThresholdTooltip content={playerAdvancedInsights.thresholdHints.stability} />
                         </div>
                         {'confidence' in playerAdvancedInsights.stability && (
                           <Badge className={getSampleConfidenceBadgeClass(normalizeSampleConfidence(playerAdvancedInsights.stability.confidence))}>{formatSampleConfidenceLabel(normalizeSampleConfidence(playerAdvancedInsights.stability.confidence))}</Badge>
@@ -12617,7 +12451,7 @@ export function SeasonComparison({
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-1.5">
                           <div className="text-primary font-medium">7) Matchup érzékenység</div>
-                          {renderThresholdTooltip(playerAdvancedInsights.thresholdHints.matchup)}
+                          <ThresholdTooltip content={playerAdvancedInsights.thresholdHints.matchup} />
                         </div>
                         {'confidence' in playerAdvancedInsights.matchupSensitivity && (
                           <Badge className={getSampleConfidenceBadgeClass(normalizeSampleConfidence(playerAdvancedInsights.matchupSensitivity.confidence))}>{formatSampleConfidenceLabel(normalizeSampleConfidence(playerAdvancedInsights.matchupSensitivity.confidence))}</Badge>
@@ -12660,7 +12494,7 @@ export function SeasonComparison({
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-1.5">
                           <div className="text-primary font-medium">8) Fáradás és terhelés</div>
-                          {renderThresholdTooltip(playerAdvancedInsights.thresholdHints.fatigue)}
+                          <ThresholdTooltip content={playerAdvancedInsights.thresholdHints.fatigue} />
                         </div>
                         {'confidence' in playerAdvancedInsights.fatigueLoad && (
                           <Badge className={getSampleConfidenceBadgeClass(normalizeSampleConfidence(playerAdvancedInsights.fatigueLoad.confidence))}>{formatSampleConfidenceLabel(normalizeSampleConfidence(playerAdvancedInsights.fatigueLoad.confidence))}</Badge>

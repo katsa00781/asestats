@@ -40,6 +40,12 @@ Update this file after every meaningful implementation change.
 
 ## In Progress
 
+- **H34 – `SeasonComparison.tsx` szétdarabolása (2026-11-17, belső refaktor):**
+  jóváhagyott fázisterv (F0–F5) szerint, viselkedésváltozás nélkül. Kész: F1a –
+  nézet-típusok és UI-segédek a `components/season-comparison/` alá
+  (`types.ts`, `ui-helpers.tsx`, `ThresholdTooltip`). Nyitva: F0 Export MD
+  alapvonal (böngésző, a `d1f5080` commitból), F1b–F1d, F2–F5. Részletek:
+  `BACKLOG.md` H34.
 - **H33 – Post-game negyedenkénti bontás (2026-11-16):** új „Negyedenkénti
   bontás” kártya a Post-game jelentésben – periódusonként (N1–N4, H1…) csapat-
   és játékos-box score a Kosarstat eseménylistából (`lib/kosarstat-quarter-box.ts`,
