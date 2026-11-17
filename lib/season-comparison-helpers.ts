@@ -1,6 +1,7 @@
 // A SeasonComparison és a belőle kiszervezett lib-modulok közös, tiszta segédei:
 // Kosarstat cellaértékek (előjeles szám, MM:SS), játékidő-formázás, név-kulcs és
-// névprofil-illesztés, kerekítés. Nem @core modul (a mobil nem tükrözi).
+// névprofil-illesztés, kerekítés, 0–1 / százalék-korlát, valamint a játékos-meccs
+// statisztika sor típusa (`GamePlayerStatRow`). Nem @core modul (a mobil nem tükrözi).
 import { playerNamesMatch } from '@/lib/player-name-match';
 
 export const parseSignedNumber = (value: unknown) => {
@@ -74,3 +75,55 @@ export const roundValue = (value: number, digits = 1) => {
   const factor = Math.pow(10, digits);
   return Math.round(value * factor) / factor;
 };
+
+export type GamePlayerStatRow = {
+  id: string;
+  player_id: string;
+  game_id: string;
+  is_starter?: boolean | null;
+  points?: number | null;
+  minutes?: number | null;
+  close_made?: number | null;
+  close_attempted?: number | null;
+  mid_made?: number | null;
+  mid_attempted?: number | null;
+  three_made?: number | null;
+  three_attempted?: number | null;
+  free_throw_made?: number | null;
+  free_throw_attempted?: number | null;
+  offensive_rebounds?: number | null;
+  defensive_rebounds?: number | null;
+  total_rebounds?: number | null;
+  assists?: number | null;
+  steals?: number | null;
+  turnovers?: number | null;
+  blocks?: number | null;
+  valuation?: number | null;
+  fouls_committed?: number | null;
+  fouls_drawn?: number | null;
+  blocks_suffered?: number | null;
+  blocks_given?: number | null;
+  plus_minus?: number | null;
+  created_at?: string | null;
+  offensive_rating?: number | null;
+  defensive_rating?: number | null;
+  true_shooting_percentage?: number | null;
+  effective_field_goal_percentage?: number | null;
+  games?: {
+    date?: string | null;
+    opponent?: string | null;
+    season_id?: string | null;
+  } | null;
+  players?: {
+    name?: string | null;
+    position?: string | null;
+    team_id?: string | null;
+  } | null;
+  teams?: {
+    name?: string | null;
+  } | null;
+};
+
+export const clamp01 = (value: number) => Math.max(0, Math.min(1, value));
+
+export const clampPercent = (value: number, min = 0, max = 100) => Math.max(min, Math.min(max, value));

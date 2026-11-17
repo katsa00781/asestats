@@ -46,13 +46,16 @@ Update this file after every meaningful implementation change.
   (`types.ts`, `ui-helpers.tsx`, `ThresholdTooltip`); F1b – Kosarstat clutch /
   lineup parser a `lib/kosarstat-clutch-context.ts` és
   `lib/kosarstat-lineup-analysis.ts` fájlba, közös segédek a
-  `lib/season-comparison-helpers.ts`-be, unit tesztekkel (valós fixture-ök).
-  Nyitva: F0 Export MD alapvonal (böngésző, a `d1f5080` commitból), F1c–F1d,
-  F2–F5. Részletek: `BACKLOG.md` H34.
+  `lib/season-comparison-helpers.ts`-be, unit tesztekkel (valós fixture-ök);
+  F1c – pregame hatékonyság (`lib/pregame-efficiency.ts`), bajnoki /
+  rájátszás-projekció (`lib/playoff-projection.ts`) és pregame keverés /
+  meccs-kivonás (`lib/pregame-blend.ts`), unit tesztekkel. Nyitva: F0 Export MD
+  alapvonal (böngésző, a `d1f5080` commitból), F1d, F2–F5. Részletek:
+  `BACKLOG.md` H34.
 - **H35 – nyitott lelet (2026-11-17):** a Kosarstat clutch-parser a `CSAPAT`
   sort játékosként számolja (clutch pontok / minta duplán, „CSAPAT” a top
-  usage listán, játékos clutch USG% felezve). Javítás felhasználói döntésre
-  vár. Részletek: `BACKLOG.md` H35.
+  usage listán, játékos clutch USG% felezve). Ütemezés: a H34 lezárása után
+  (felhasználói döntés, 2026-11-17). Részletek: `BACKLOG.md` H35.
 - **H33 – Post-game negyedenkénti bontás (2026-11-16):** új „Negyedenkénti
   bontás” kártya a Post-game jelentésben – periódusonként (N1–N4, H1…) csapat-
   és játékos-box score a Kosarstat eseménylistából (`lib/kosarstat-quarter-box.ts`,

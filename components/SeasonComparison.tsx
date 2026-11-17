@@ -54,8 +54,6 @@ import {
   emptyTeamOpponentBox,
   normalizeTeamStats,
   type TeamAnalysis,
-  type TeamGameScore,
-  type TeamOpponentBox,
   type TeamSeasonStat,
 } from '@/lib/team-analysis';
 import { useLeagueTeamBoxTotals } from '@/hooks/useLeagueTeamBoxTotals';
@@ -96,12 +94,34 @@ import { parseKosarstatPointSources } from '@/lib/kosarstat-pbp-parse';
 import { parseKosarstatQuarterBox } from '@/lib/kosarstat-quarter-box';
 import { computeUsgRate } from '@/lib/player-postgame';
 import { resolvePlayerNames } from '@/lib/player-name-match';
+import type { GamePlayerStatRow } from '@/lib/season-comparison-helpers';
 import {
   buildNormalizedNameProfile,
+  clamp01,
+  clampPercent,
   matchesNormalizedNameProfile,
   normalizeTeamKey,
   roundValue,
 } from '@/lib/season-comparison-helpers';
+import type { PregameEfficiencyInputs } from '@/lib/pregame-efficiency';
+import { buildPregameEfficiencyBaseline, projectPregameEfficiency } from '@/lib/pregame-efficiency';
+import type {
+  PlayoffProjectionResult,
+  PlayoffSeriesProjection,
+  ProjectionRow,
+  ProjectionUpcomingGame,
+} from '@/lib/playoff-projection';
+import { bestOfSeriesOutcome, probabilityLabel } from '@/lib/playoff-projection';
+import {
+  blendPregamePlayers,
+  blendPregameTeamStats,
+  computeRecentBlendWeight,
+  hasSampleForPregame,
+  subtractGameFromPlayerAggregates,
+  subtractGameFromTeamAggregate,
+  sumOpponentBoxes,
+  sumPointsAgainst,
+} from '@/lib/pregame-blend';
 import type {
   KosarstatParsedClutchGame,
   PostgamePbpContext,
@@ -155,54 +175,6 @@ type SeasonComparisonProps = {
   currentTeamId: string | null;
   games: TeamGame[];
   playerGameStats: GamePlayerStatRow[];
-};
-
-type GamePlayerStatRow = {
-  id: string;
-  player_id: string;
-  game_id: string;
-  is_starter?: boolean | null;
-  points?: number | null;
-  minutes?: number | null;
-  close_made?: number | null;
-  close_attempted?: number | null;
-  mid_made?: number | null;
-  mid_attempted?: number | null;
-  three_made?: number | null;
-  three_attempted?: number | null;
-  free_throw_made?: number | null;
-  free_throw_attempted?: number | null;
-  offensive_rebounds?: number | null;
-  defensive_rebounds?: number | null;
-  total_rebounds?: number | null;
-  assists?: number | null;
-  steals?: number | null;
-  turnovers?: number | null;
-  blocks?: number | null;
-  valuation?: number | null;
-  fouls_committed?: number | null;
-  fouls_drawn?: number | null;
-  blocks_suffered?: number | null;
-  blocks_given?: number | null;
-  plus_minus?: number | null;
-  created_at?: string | null;
-  offensive_rating?: number | null;
-  defensive_rating?: number | null;
-  true_shooting_percentage?: number | null;
-  effective_field_goal_percentage?: number | null;
-  games?: {
-    date?: string | null;
-    opponent?: string | null;
-    season_id?: string | null;
-  } | null;
-  players?: {
-    name?: string | null;
-    position?: string | null;
-    team_id?: string | null;
-  } | null;
-  teams?: {
-    name?: string | null;
-  } | null;
 };
 
 type StandingsSnapshotRow = {
@@ -322,102 +294,6 @@ type ShotProfileSummary = {
   games?: number;
 };
 
-type PregameEfficiencyBaseline = {
-  teamId: string;
-  teamName: string;
-  games: number;
-  actualPointsPerGame: number;
-  possessions: number;
-  fga: number;
-  twoPA: number;
-  threePA: number;
-  fta: number;
-  tov: number;
-  oreb: number;
-  twoPct: number;
-  threePct: number;
-  ftPct: number;
-  threeSharePct: number;
-  ftRatePct: number;
-  tovRatePct: number;
-  orebBonusPct: number;
-  efg: number;
-  ppp: number;
-  expectedPoints: number;
-};
-
-type PregameEfficiencyInputs = {
-  ownPossessions: number;
-  ownThreeSharePct: number;
-  ownFtRatePct: number;
-  ownTovRatePct: number;
-  ownOrebBonusPct: number;
-  ownTwoPct: number;
-  ownThreePct: number;
-  ownFtPct: number;
-  opponentPossessions: number;
-  opponentThreeSharePct: number;
-  opponentFtRatePct: number;
-  opponentTovRatePct: number;
-  opponentOrebBonusPct: number;
-  opponentTwoPct: number;
-  opponentThreePct: number;
-  opponentFtPct: number;
-};
-
-type ProjectionRow = {
-  team: string;
-  currentWins: number;
-  currentLosses: number;
-  projectedWins: number;
-  projectedLosses: number;
-  expectedExtraWins: number;
-  expectedFinalPoints: number;
-  avgWinProbability: number;
-  certaintyLabel: 'Magas' | 'Közepes' | 'Alacsony';
-  certaintyScore: number;
-};
-
-type PlayoffSeriesProjection = {
-  seriesKey: string;
-  round: 'Negyeddöntő' | 'Elődöntő' | 'Döntő' | 'Bronz' | '5-8 helyosztó elődöntő' | '5. helyért' | '7. helyért';
-  homeSeed: number;
-  awaySeed: number;
-  homeTeam: string;
-  awayTeam: string;
-  homeWinProbability: number;
-  awayWinProbability: number;
-  winner: string;
-  loser: string;
-  mostLikelyScore: string;
-  certaintyLabel: 'Magas' | 'Közepes' | 'Alacsony';
-  manualOverride: boolean;
-};
-
-type ProjectionUpcomingGame = {
-  fixtureId: string;
-  gameDate: string;
-  homeTeam: string;
-  awayTeam: string;
-  homeTeamKey: string;
-  awayTeamKey: string;
-  homeWinProbabilityModel: number;
-  awayWinProbabilityModel: number;
-  homeWinProbabilityApplied: number;
-  awayWinProbabilityApplied: number;
-  certaintyApplied: number;
-  overrideWinnerSide: 'home' | 'away' | null;
-};
-
-type PlayoffProjectionResult = {
-  champion: string;
-  runnerUp: string;
-  third: string;
-  fourth: string;
-  finalRanking: Array<{ position: number; team: string; note?: string }>;
-  series: PlayoffSeriesProjection[];
-};
-
 const mapPositionInfo = (pos?: string | null) => buildPositionMetadata(pos, 'C');
 
 const mapPosition = (pos: string): Position => mapPositionInfo(pos).position;
@@ -525,169 +401,6 @@ const stdDev = (values: number[]) => {
   return Math.sqrt(variance);
 };
 
-const clamp01 = (value: number) => Math.max(0, Math.min(1, value));
-
-const clampPercent = (value: number, min = 0, max = 100) => Math.max(min, Math.min(max, value));
-
-const buildPregameEfficiencyBaseline = (team: PregameTeamSeasonStat): PregameEfficiencyBaseline => {
-  const games = Math.max(team.games || 1, 1);
-  const twoPA = (team.fga2 || 0) / games;
-  const threePA = (team.fga3 || 0) / games;
-  const fta = (team.fta || 0) / games;
-  const tov = (team.tov || 0) / games;
-  const oreb = (team.oreb || 0) / games;
-  const fga = twoPA + threePA;
-  const possessions = Math.max(fga + 0.44 * fta + tov - oreb, 0.1);
-  const twoPct = team.fga2 > 0 ? ((team.fgm2 || 0) / team.fga2) * 100 : 0;
-  const threePct = team.fga3 > 0 ? ((team.fgm3 || 0) / team.fga3) * 100 : 0;
-  const ftPct = team.fta > 0 ? ((team.ftm || 0) / team.fta) * 100 : 0;
-  const threeSharePct = fga > 0 ? (threePA / fga) * 100 : 0;
-  const ftRatePct = fga > 0 ? (fta / fga) * 100 : 0;
-  const tovRatePct = possessions > 0 ? (tov / possessions) * 100 : 0;
-  const orebBonusPct = possessions > 0 ? (oreb / possessions) * 100 : 0;
-  const made2 = twoPA * (twoPct / 100);
-  const made3 = threePA * (threePct / 100);
-  const expectedPoints = made2 * 2 + made3 * 3 + fta * (ftPct / 100);
-  const efg = fga > 0 ? ((made2 + 1.5 * made3) / fga) * 100 : 0;
-  const ppp = possessions > 0 ? expectedPoints / possessions : 0;
-
-  return {
-    teamId: team.teamId,
-    teamName: team.teamName,
-    games,
-    actualPointsPerGame: (team.pointsFor || 0) / games,
-    possessions: roundValue(possessions, 1),
-    fga: roundValue(fga, 1),
-    twoPA: roundValue(twoPA, 1),
-    threePA: roundValue(threePA, 1),
-    fta: roundValue(fta, 1),
-    tov: roundValue(tov, 1),
-    oreb: roundValue(oreb, 1),
-    twoPct: roundValue(twoPct, 1),
-    threePct: roundValue(threePct, 1),
-    ftPct: roundValue(ftPct, 1),
-    threeSharePct: roundValue(threeSharePct, 1),
-    ftRatePct: roundValue(ftRatePct, 1),
-    tovRatePct: roundValue(tovRatePct, 1),
-    orebBonusPct: roundValue(orebBonusPct, 1),
-    efg: roundValue(efg, 1),
-    ppp: roundValue(ppp, 3),
-    expectedPoints: roundValue(expectedPoints, 1),
-  };
-};
-
-const projectPregameEfficiency = (
-  baseline: PregameEfficiencyBaseline,
-  inputs: {
-    possessions: number;
-    threeSharePct: number;
-    ftRatePct: number;
-    tovRatePct: number;
-    orebBonusPct: number;
-    twoPct: number;
-    threePct: number;
-    ftPct: number;
-  }
-) => {
-  const possessions = Math.max(inputs.possessions, 1);
-  const threeSharePct = clampPercent(inputs.threeSharePct, 10, 70);
-  const ftRatePct = clampPercent(inputs.ftRatePct, 5, 80);
-  const tovRatePct = clampPercent(inputs.tovRatePct, 5, 30);
-  const orebBonusPct = clampPercent(inputs.orebBonusPct, 0, 20);
-  const twoPct = clampPercent(inputs.twoPct);
-  const threePct = clampPercent(inputs.threePct);
-  const ftPct = clampPercent(inputs.ftPct);
-  const ftRate = ftRatePct / 100;
-  const tov = possessions * (tovRatePct / 100);
-  const oreb = possessions * (orebBonusPct / 100);
-  const fga = Math.max((possessions - tov + oreb) / (1 + 0.44 * ftRate), 0);
-  const threePA = fga * (threeSharePct / 100);
-  const twoPA = Math.max(fga - threePA, 0);
-  const fta = fga * ftRate;
-  const made2 = twoPA * (twoPct / 100);
-  const made3 = threePA * (threePct / 100);
-  const expectedPoints = made2 * 2 + made3 * 3 + fta * (ftPct / 100);
-  const totalFga = twoPA + threePA;
-  const efg = totalFga > 0 ? ((made2 + 1.5 * made3) / totalFga) * 100 : 0;
-  const ppp = possessions > 0 ? expectedPoints / possessions : 0;
-
-  return {
-    possessions: roundValue(possessions, 1),
-    fga: roundValue(fga, 1),
-    twoPA: roundValue(twoPA, 1),
-    threePA: roundValue(threePA, 1),
-    fta: roundValue(fta, 1),
-    tov: roundValue(tov, 1),
-    oreb: roundValue(oreb, 1),
-    threeSharePct: roundValue(threeSharePct, 1),
-    ftRatePct: roundValue(ftRatePct, 1),
-    tovRatePct: roundValue(tovRatePct, 1),
-    orebBonusPct: roundValue(orebBonusPct, 1),
-    twoPct: roundValue(twoPct, 1),
-    threePct: roundValue(threePct, 1),
-    ftPct: roundValue(ftPct, 1),
-    expectedPoints: roundValue(expectedPoints, 1),
-    efg: roundValue(efg, 1),
-    ppp: roundValue(ppp, 3),
-    deltaPoints: roundValue(expectedPoints - baseline.expectedPoints, 1),
-    deltaEfg: roundValue(efg - baseline.efg, 1),
-  };
-};
-
-const probabilityLabel = (value: number): 'Magas' | 'Közepes' | 'Alacsony' => {
-  if (value >= 0.68 || value <= 0.32) return 'Magas';
-  if (value >= 0.58 || value <= 0.42) return 'Közepes';
-  return 'Alacsony';
-};
-
-const bestOfSeriesOutcome = (gameProbabilities: number[], winsNeeded: number) => {
-  const scoreProbabilities = new Map<string, number>();
-
-  const walk = (gameIndex: number, homeWins: number, awayWins: number, probability: number) => {
-    if (homeWins >= winsNeeded || awayWins >= winsNeeded || gameIndex >= gameProbabilities.length) {
-      if (homeWins >= winsNeeded || awayWins >= winsNeeded) {
-        const key = `${homeWins}-${awayWins}`;
-        scoreProbabilities.set(key, (scoreProbabilities.get(key) || 0) + probability);
-      }
-      return;
-    }
-
-    const pHome = clamp01(gameProbabilities[gameIndex] ?? 0.5);
-    walk(gameIndex + 1, homeWins + 1, awayWins, probability * pHome);
-    walk(gameIndex + 1, homeWins, awayWins + 1, probability * (1 - pHome));
-  };
-
-  walk(0, 0, 0, 1);
-
-  let homeSeriesWinProbability = 0;
-  let mostLikelyHomeWinScore: string | null = null;
-  let mostLikelyAwayWinScore: string | null = null;
-  let mostLikelyHomeWinProbability = -1;
-  let mostLikelyAwayWinProbability = -1;
-
-  scoreProbabilities.forEach((probability, score) => {
-    const [home, away] = score.split('-').map(value => Number(value));
-    if (home > away) {
-      homeSeriesWinProbability += probability;
-      if (probability > mostLikelyHomeWinProbability) {
-        mostLikelyHomeWinProbability = probability;
-        mostLikelyHomeWinScore = score;
-      }
-    } else {
-      if (probability > mostLikelyAwayWinProbability) {
-        mostLikelyAwayWinProbability = probability;
-        mostLikelyAwayWinScore = score;
-      }
-    }
-  });
-
-  return {
-    homeSeriesWinProbability: clamp01(homeSeriesWinProbability),
-    mostLikelyHomeWinScore,
-    mostLikelyAwayWinScore,
-  };
-};
-
 const average = (values: number[]) => {
   if (values.length === 0) return 0;
   return values.reduce((sum, value) => sum + value, 0) / values.length;
@@ -729,314 +442,7 @@ const buildTeamGameMetrics = (rows: GamePlayerStatRow[]) => {
   };
 };
 
-const clampStat = (value: number) => (value < 0 ? 0 : value);
-
-const aggregateTeamGameRows = (rows: GamePlayerStatRow[]) => {
-  return rows.reduce(
-    (acc, row) => {
-      acc.pointsFor += row.points || 0;
-      acc.fga2 += (row.close_attempted || 0) + (row.mid_attempted || 0);
-      acc.fgm2 += (row.close_made || 0) + (row.mid_made || 0);
-      acc.fga3 += row.three_attempted || 0;
-      acc.fgm3 += row.three_made || 0;
-      acc.fta += row.free_throw_attempted || 0;
-      acc.ftm += row.free_throw_made || 0;
-      acc.oreb += row.offensive_rebounds || 0;
-      acc.dreb += row.defensive_rebounds || 0;
-      acc.ast += row.assists || 0;
-      acc.tov += row.turnovers || 0;
-      acc.stl += row.steals || 0;
-      acc.blk += row.blocks || 0;
-      acc.fouls += row.fouls_committed || 0;
-      acc.val += row.valuation || 0;
-      return acc;
-    },
-    {
-      pointsFor: 0,
-      fga2: 0,
-      fgm2: 0,
-      fga3: 0,
-      fgm3: 0,
-      fta: 0,
-      ftm: 0,
-      oreb: 0,
-      dreb: 0,
-      ast: 0,
-      tov: 0,
-      stl: 0,
-      blk: 0,
-      fouls: 0,
-      val: 0,
-    }
-  );
-};
-
-// Az ellenfél-box levonása / keverése: a mezők azonos nevűek, ezért
-// mezőnként, egy listán megyünk végig.
-const OPPONENT_BOX_KEYS = ['fga2', 'fgm2', 'fga3', 'fgm3', 'fta', 'ftm', 'oreb', 'dreb', 'tov', 'games', 'ownOreb', 'ownDreb'] as const;
-
-const subtractOpponentBox = (total: TeamOpponentBox | undefined, game: TeamOpponentBox | undefined) => {
-  if (!total || !game) return total;
-  const result = { ...total };
-  OPPONENT_BOX_KEYS.forEach(key => {
-    result[key] = Math.max(0, total[key] - game[key]);
-  });
-  return result;
-};
-
-const sumOpponentBoxes = (boxes: Array<TeamOpponentBox | undefined>) => {
-  const result = emptyTeamOpponentBox();
-  boxes.forEach(box => {
-    if (!box) return;
-    OPPONENT_BOX_KEYS.forEach(key => {
-      result[key] += box[key];
-    });
-  });
-  return result;
-};
-
-const blendOpponentBox = (
-  season: TeamOpponentBox | undefined,
-  recent: TeamOpponentBox | undefined,
-  recentWeight: number
-) => {
-  // Ha bármelyik oldalon hiányzik a párosított minta, a meglévőt tartjuk meg
-  // (a keverés különben nullával hígítaná az OREB%-ot és a tempót).
-  if (!season?.games) return recent;
-  if (!recent?.games) return season;
-  const result = emptyTeamOpponentBox();
-  OPPONENT_BOX_KEYS.forEach(key => {
-    result[key] = season[key] * (1 - recentWeight) + recent[key] * recentWeight;
-  });
-  return result;
-};
-
-/**
- * A kapott pont a csapat saját meccsein, a `games` végeredményéből
- * (`buildTeamScoreTotals`). `countedGames`: az ismert eredményű meccsek száma.
- */
-const sumPointsAgainst = (
-  teamId: string,
-  gameIds: string[],
-  gameScores: Map<string, TeamGameScore>
-) => gameIds.reduce(
-  (acc, gameId) => {
-    const score = gameScores.get(gameId);
-    if (!score || score.ourTeamId !== teamId) return acc;
-    return { pointsAgainst: acc.pointsAgainst + score.oppScore, countedGames: acc.countedGames + 1 };
-  },
-  { pointsAgainst: 0, countedGames: 0 }
-);
-
-const subtractGameFromTeamAggregate = (
-  team: PregameTeamSeasonStat,
-  teamId: string | null | undefined,
-  gameId: string | null | undefined,
-  teamGamePlayerRows: Map<string, Map<string, GamePlayerStatRow[]>>,
-  gameScores: Map<string, TeamGameScore>,
-  opponentBoxByGame: Map<string, TeamOpponentBox>
-) => {
-  if (!teamId || !gameId) return team;
-  const rows = teamGamePlayerRows.get(teamId)?.get(gameId);
-  if (!rows || rows.length === 0) return team;
-  const totals = aggregateTeamGameRows(rows);
-  // A kapott pont ugyanabból a forrásból vonódik ki, amiből a szezonösszeg épül.
-  const { pointsAgainst: opponentPoints } = sumPointsAgainst(teamId, [gameId], gameScores);
-
-  return {
-    ...team,
-    games: Math.max(0, (team.games || 0) - 1),
-    pointsFor: clampStat(team.pointsFor - totals.pointsFor),
-    pointsAgainst: clampStat(team.pointsAgainst - opponentPoints),
-    fga2: clampStat(team.fga2 - totals.fga2),
-    fgm2: clampStat(team.fgm2 - totals.fgm2),
-    fga3: clampStat(team.fga3 - totals.fga3),
-    fgm3: clampStat(team.fgm3 - totals.fgm3),
-    fta: clampStat(team.fta - totals.fta),
-    ftm: clampStat(team.ftm - totals.ftm),
-    oreb: clampStat(team.oreb - totals.oreb),
-    dreb: clampStat(team.dreb - totals.dreb),
-    ast: clampStat(team.ast - totals.ast),
-    tov: clampStat(team.tov - totals.tov),
-    stl: clampStat(team.stl - totals.stl),
-    blk: clampStat(team.blk - totals.blk),
-    fouls: clampStat(team.fouls - totals.fouls),
-    val: clampStat(team.val - totals.val),
-    opponent: subtractOpponentBox(team.opponent, opponentBoxByGame.get(gameId)),
-  };
-};
-
-const subtractGameFromPlayerAggregates = (
-  players: PlayerSeasonStat[],
-  teamId: string | null | undefined,
-  gameId: string | null | undefined,
-  teamGamePlayerRows: Map<string, Map<string, GamePlayerStatRow[]>>
-) => {
-  if (!teamId || !gameId || players.length === 0) return players;
-  const rows = teamGamePlayerRows.get(teamId)?.get(gameId);
-  if (!rows || rows.length === 0) return players;
-  const rowsByPlayer = new Map<string, GamePlayerStatRow[]>();
-  rows.forEach(row => {
-    if (!rowsByPlayer.has(row.player_id)) rowsByPlayer.set(row.player_id, []);
-    rowsByPlayer.get(row.player_id)!.push(row);
-  });
-
-  return players
-    .map(player => {
-      const playerRows = rowsByPlayer.get(player.playerId);
-      if (!playerRows || playerRows.length === 0) return player;
-      const totals = playerRows.reduce(
-        (acc, row) => {
-          acc.games += 1;
-          acc.minutes += row.minutes || 0;
-          acc.points += row.points || 0;
-          acc.fga2 += (row.close_attempted || 0) + (row.mid_attempted || 0);
-          acc.fgm2 += (row.close_made || 0) + (row.mid_made || 0);
-          acc.fga3 += row.three_attempted || 0;
-          acc.fgm3 += row.three_made || 0;
-          acc.fta += row.free_throw_attempted || 0;
-          acc.ftm += row.free_throw_made || 0;
-          acc.oreb += row.offensive_rebounds || 0;
-          acc.dreb += row.defensive_rebounds || 0;
-          acc.ast += row.assists || 0;
-          acc.tov += row.turnovers || 0;
-          acc.stl += row.steals || 0;
-          acc.blk += row.blocks || 0;
-          acc.val += row.valuation || 0;
-          return acc;
-        },
-        {
-          games: 0,
-          minutes: 0,
-          points: 0,
-          fga2: 0,
-          fgm2: 0,
-          fga3: 0,
-          fgm3: 0,
-          fta: 0,
-          ftm: 0,
-          oreb: 0,
-          dreb: 0,
-          ast: 0,
-          tov: 0,
-          stl: 0,
-          blk: 0,
-          val: 0,
-        }
-      );
-
-      return {
-        ...player,
-        games: Math.max(0, (player.games || 0) - totals.games),
-        minutes: clampStat(player.minutes - totals.minutes),
-        points: clampStat(player.points - totals.points),
-        fga2: clampStat(player.fga2 - totals.fga2),
-        fgm2: clampStat(player.fgm2 - totals.fgm2),
-        fga3: clampStat(player.fga3 - totals.fga3),
-        fgm3: clampStat(player.fgm3 - totals.fgm3),
-        fta: clampStat(player.fta - totals.fta),
-        ftm: clampStat(player.ftm - totals.ftm),
-        oreb: clampStat(player.oreb - totals.oreb),
-        dreb: clampStat(player.dreb - totals.dreb),
-        ast: clampStat(player.ast - totals.ast),
-        tov: clampStat(player.tov - totals.tov),
-        stl: clampStat(player.stl - totals.stl),
-        blk: clampStat(player.blk - totals.blk),
-        val: clampStat(player.val - totals.val),
-      };
-    })
-    .filter(player => player.games > 0);
-};
-
-const computeRecentBlendWeight = (recentGames: number, seasonGames: number) => {
-  if (!Number.isFinite(recentGames) || recentGames < 3) return 0;
-  const season = Math.max(seasonGames || 1, 1);
-  const coverage = Math.min(recentGames / season, 1);
-  const baseWeight = 0.45 + coverage * 0.3;
-  return Math.min(Math.max(baseWeight, 0.45), 0.72);
-};
-
-const blendValue = (seasonValue: number, recentValue: number, recentWeight: number) =>
-  seasonValue * (1 - recentWeight) + recentValue * recentWeight;
-
-const blendPregameTeamStats = (
-  season: PregameTeamSeasonStat,
-  recent: PregameTeamSeasonStat,
-  recentWeight: number
-): PregameTeamSeasonStat => ({
-  ...season,
-  games: blendValue(season.games || 0, recent.games || 0, recentWeight),
-  pointsFor: blendValue(season.pointsFor || 0, recent.pointsFor || 0, recentWeight),
-  pointsAgainst: blendValue(season.pointsAgainst || 0, recent.pointsAgainst || 0, recentWeight),
-  fga2: blendValue(season.fga2 || 0, recent.fga2 || 0, recentWeight),
-  fgm2: blendValue(season.fgm2 || 0, recent.fgm2 || 0, recentWeight),
-  fga3: blendValue(season.fga3 || 0, recent.fga3 || 0, recentWeight),
-  fgm3: blendValue(season.fgm3 || 0, recent.fgm3 || 0, recentWeight),
-  fta: blendValue(season.fta || 0, recent.fta || 0, recentWeight),
-  ftm: blendValue(season.ftm || 0, recent.ftm || 0, recentWeight),
-  oreb: blendValue(season.oreb || 0, recent.oreb || 0, recentWeight),
-  dreb: blendValue(season.dreb || 0, recent.dreb || 0, recentWeight),
-  ast: blendValue(season.ast || 0, recent.ast || 0, recentWeight),
-  tov: blendValue(season.tov || 0, recent.tov || 0, recentWeight),
-  stl: blendValue(season.stl || 0, recent.stl || 0, recentWeight),
-  blk: blendValue(season.blk || 0, recent.blk || 0, recentWeight),
-  fouls: blendValue(season.fouls || 0, recent.fouls || 0, recentWeight),
-  val: blendValue(season.val || 0, recent.val || 0, recentWeight),
-  opponent: blendOpponentBox(season.opponent, recent.opponent, recentWeight),
-});
-
-const blendPregamePlayers = (
-  seasonPlayers: PlayerSeasonStat[],
-  recentPlayers: PlayerSeasonStat[],
-  recentWeight: number
-): PlayerSeasonStat[] => {
-  const seasonMap = new Map(seasonPlayers.map(player => [player.playerId, player]));
-  const recentMap = new Map(recentPlayers.map(player => [player.playerId, player]));
-  const playerIds = new Set<string>([...seasonMap.keys(), ...recentMap.keys()]);
-
-  return Array.from(playerIds)
-    .map(playerId => {
-      const season = seasonMap.get(playerId);
-      const recent = recentMap.get(playerId);
-      if (!season) return recent!;
-      if (!recent) return season;
-
-      return {
-        ...season,
-        name: season.name || recent.name,
-        position: season.position || recent.position,
-        positionLabel: season.positionLabel ?? recent.positionLabel,
-        positionBuckets: season.positionBuckets ?? recent.positionBuckets,
-        heightCm: season.heightCm ?? recent.heightCm,
-        roles: season.roles?.length ? season.roles : recent.roles,
-        games: blendValue(season.games || 0, recent.games || 0, recentWeight),
-        minutes: blendValue(season.minutes || 0, recent.minutes || 0, recentWeight),
-        points: blendValue(season.points || 0, recent.points || 0, recentWeight),
-        fga2: blendValue(season.fga2 || 0, recent.fga2 || 0, recentWeight),
-        fgm2: blendValue(season.fgm2 || 0, recent.fgm2 || 0, recentWeight),
-        fga3: blendValue(season.fga3 || 0, recent.fga3 || 0, recentWeight),
-        fgm3: blendValue(season.fgm3 || 0, recent.fgm3 || 0, recentWeight),
-        fta: blendValue(season.fta || 0, recent.fta || 0, recentWeight),
-        ftm: blendValue(season.ftm || 0, recent.ftm || 0, recentWeight),
-        oreb: blendValue(season.oreb || 0, recent.oreb || 0, recentWeight),
-        dreb: blendValue(season.dreb || 0, recent.dreb || 0, recentWeight),
-        ast: blendValue(season.ast || 0, recent.ast || 0, recentWeight),
-        tov: blendValue(season.tov || 0, recent.tov || 0, recentWeight),
-        stl: blendValue(season.stl || 0, recent.stl || 0, recentWeight),
-        blk: blendValue(season.blk || 0, recent.blk || 0, recentWeight),
-        val: blendValue(season.val || 0, recent.val || 0, recentWeight),
-      };
-    })
-    .filter(player => (player.games || 0) > 0);
-};
-
 const getPositionLabel = (position: Position) => POSITION_LABELS[position] ?? position;
-
-const hasSampleForPregame = (games: number, preferredMinimum: number, fallbackMinimum: number) => {
-  if (!Number.isFinite(games)) return false;
-  if (games >= preferredMinimum) return true;
-  return games >= fallbackMinimum;
-};
 
 const buildSimilarityReason = (base: PlayerAnalysis, other: PlayerAnalysis) => {
   const sharedRoles = base.roles.filter(role => other.roles.includes(role)).slice(0, 1);
