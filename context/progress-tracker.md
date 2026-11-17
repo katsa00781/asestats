@@ -51,9 +51,10 @@ Update this file after every meaningful implementation change.
   rájátszás-projekció (`lib/playoff-projection.ts`) és pregame keverés /
   meccs-kivonás (`lib/pregame-blend.ts`), unit tesztekkel; F1d – dobásprofil
   (`lib/shot-profile.ts`) és nyers szezon-stat konverzió
-  (`lib/season-raw-stats.ts`), unit tesztekkel – az F1 fázis lezárva. Nyitva: F0
-  Export MD alapvonal (böngésző, a `d1f5080` commitból; az F2 előtt kell), F2–F5.
-  Részletek: `BACKLOG.md` H34.
+  (`lib/season-raw-stats.ts`), unit tesztekkel – az F1 fázis lezárva; F0 – Export
+  MD alapvonal a `d1f5080`-ból: a 7 export (2 játékos, csapat, 2 pre-game, 2
+  post-game) bájtra azonos a `8a1e7ac`-vel; összevető eszköz:
+  `scripts/h34-export-snapshot.mjs`. Nyitva: F2–F5. Részletek: `BACKLOG.md` H34.
 - **H35 – nyitott lelet (2026-11-17):** a Kosarstat clutch-parser a `CSAPAT`
   sort játékosként számolja (clutch pontok / minta duplán, „CSAPAT” a top
   usage listán, játékos clutch USG% felezve). Ütemezés: a H34 lezárása után
