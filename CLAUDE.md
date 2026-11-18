@@ -130,6 +130,7 @@ asestats/
 │   ├── positions.ts
 │   ├── postgame-lineup-export.ts # Post-game export ötös-modellje (ötösök, on/off, párosok, hármasok a Kosarstat lineupból)
 │   ├── postgame-report.ts
+│   ├── postgame-report-builder.ts # Post-game riport összeállítása egy meccsre (box, játékosbontás, lineup-összefoglaló, Kosarstat-kontextus) – nem @core (H34)
 │   ├── playoff-projection.ts   # Bajnoki előrejelzés / rájátszás: projekció-típusok, bizonyossági címke, best-of párharc-eloszlás, csapat-erősség, rájátszás-szimuláció (H34)
 │   ├── pregame-blend.ts        # Pre-game aggregátumok: meccs-kivonás, ellenfél-box, kapott pont, szezon + forma keverés (H34)
 │   ├── pregame-efficiency.ts   # Pre-game hatékonysági baseline + what-if projekció (H34)

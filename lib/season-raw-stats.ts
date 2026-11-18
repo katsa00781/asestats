@@ -6,10 +6,12 @@
 import type { PlayerStats } from '@/lib/dashboard-types';
 import type { RawPlayerSeasonStat } from '@/lib/player-analysis';
 import type { GamePlayerStatRow } from '@/lib/season-comparison-helpers';
-import { buildPositionMetadata } from '@/lib/positions';
+import { buildPositionMetadata, type Position } from '@/lib/positions';
 import { emptyTeamOpponentBox, type TeamSeasonStat } from '@/lib/team-analysis';
 
 export const mapPositionInfo = (pos?: string | null) => buildPositionMetadata(pos, 'C');
+
+export const mapPosition = (pos: string): Position => mapPositionInfo(pos).position;
 
 // Egyszerűsített PIR-közelítés, KIZÁRÓLAG fallbackként, ha nincs DB-ben tárolt
 // valuation. A hivatalos hunbasket VAL tartalmazza a kiharcolt/elkövetett

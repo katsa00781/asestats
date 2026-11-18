@@ -60,7 +60,10 @@ Update this file after every meaningful implementation change.
   az exportok és az Előrejelzés tab azonosak a `d1f5080`-nal; F2b (2026-11-18) –
   a pre-game optimális kezdőötös a `lib/pregame-optimal-lineup.ts`-be
   (`buildPregameOptimalLineup`), unit tesztekkel; az exportok és a Pre-game tab
-  azonosak. Nyitva: F2c–F2e, F3–F5. Részletek: `BACKLOG.md` H34.
+  azonosak; F2c (2026-11-18) – a post-game riport összeállítása a
+  `lib/postgame-report-builder.ts`-be (`buildPostgameReport`), unit tesztekkel
+  (valós ASE – Sopron fixture); az exportok és a Post-game tab azonosak.
+  Nyitva: F2d–F2e, F3–F5. Részletek: `BACKLOG.md` H34.
 - **H35 – nyitott lelet (2026-11-17):** a Kosarstat clutch-parser a `CSAPAT`
   sort játékosként számolja (clutch pontok / minta duplán, „CSAPAT” a top
   usage listán, játékos clutch USG% felezve). Ütemezés: a H34 lezárása után
