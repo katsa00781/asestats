@@ -57,8 +57,10 @@ Update this file after every meaningful implementation change.
   `scripts/h34-export-snapshot.mjs`; F2a (2026-11-18) – a bajnoki előrejelzés
   csapat-erőssége és a rájátszás-szimuláció a `lib/playoff-projection.ts`-be
   (`buildProjectionStrengthByTeamKey`, `buildPlayoffProjection`), unit tesztekkel;
-  az exportok és az Előrejelzés tab azonosak a `d1f5080`-nal. Nyitva: F2b–F2e,
-  F3–F5. Részletek: `BACKLOG.md` H34.
+  az exportok és az Előrejelzés tab azonosak a `d1f5080`-nal; F2b (2026-11-18) –
+  a pre-game optimális kezdőötös a `lib/pregame-optimal-lineup.ts`-be
+  (`buildPregameOptimalLineup`), unit tesztekkel; az exportok és a Pre-game tab
+  azonosak. Nyitva: F2c–F2e, F3–F5. Részletek: `BACKLOG.md` H34.
 - **H35 – nyitott lelet (2026-11-17):** a Kosarstat clutch-parser a `CSAPAT`
   sort játékosként számolja (clutch pontok / minta duplán, „CSAPAT” a top
   usage listán, játékos clutch USG% felezve). Ütemezés: a H34 lezárása után
