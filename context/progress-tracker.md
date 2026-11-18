@@ -63,7 +63,11 @@ Update this file after every meaningful implementation change.
   azonosak; F2c (2026-11-18) – a post-game riport összeállítása a
   `lib/postgame-report-builder.ts`-be (`buildPostgameReport`), unit tesztekkel
   (valós ASE – Sopron fixture); az exportok és a Post-game tab azonosak.
-  Nyitva: F2d–F2e, F3–F5. Részletek: `BACKLOG.md` H34.
+  F2d (2026-11-18) – a Csapat nézet elemzés-kiegészítése a
+  `lib/team-analysis-enrichment.ts`-be (`buildEnrichedTeamAnalysis`), unit
+  tesztekkel; az exportok és a Csapat tab azonosak. Lelet: a szezonos rotációs
+  töréspont „perce” halmozott (pl. ~257.7.), a H34 után külön döntés.
+  Nyitva: F2e, F3–F5. Részletek: `BACKLOG.md` H34.
 - **H35 – nyitott lelet (2026-11-17):** a Kosarstat clutch-parser a `CSAPAT`
   sort játékosként számolja (clutch pontok / minta duplán, „CSAPAT” a top
   usage listán, játékos clutch USG% felezve). Ütemezés: a H34 lezárása után

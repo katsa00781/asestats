@@ -147,6 +147,7 @@ asestats/
 │   ├── supabase.ts
 │   ├── supabase-admin.ts       # getSupabaseAdmin() – service role kliens factory
 │   ├── team-analysis.ts
+│   ├── team-analysis-enrichment.ts # Csapat nézet kiegészítése: forma-, clutch-, dobástérkép-, lineup- és impact-profil, akció-fókusz – nem @core (H34)
 │   ├── team-season-export.ts   # Csapat szezon export adatmodellje (egységes meccshalmaz, adatminőség-szűrés)
 │   ├── team-season-export-data.ts # Az export gombnyomásra töltött adatai (negyedek, liga meccs-sorai) + buildTeamSeasonMd
 │   ├── terminology.ts
