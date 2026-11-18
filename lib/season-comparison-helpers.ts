@@ -1,6 +1,6 @@
 // A SeasonComparison és a belőle kiszervezett lib-modulok közös, tiszta segédei:
 // Kosarstat cellaértékek (előjeles szám, MM:SS), játékidő-formázás, név-kulcs és
-// névprofil-illesztés, kerekítés, 0–1 / százalék-korlát, átlag / szórás, valamint a játékos-meccs
+// névprofil-illesztés, kerekítés, 0–1 / százalék-korlát, átlag / szórás, „n/a”-s számformázás, valamint a játékos-meccs
 // statisztika sor típusa (`GamePlayerStatRow`). Nem @core modul (a mobil nem tükrözi).
 import { playerNamesMatch } from '@/lib/player-name-match';
 
@@ -138,4 +138,9 @@ export const stdDev = (values: number[]) => {
 export const average = (values: number[]) => {
   if (values.length === 0) return 0;
   return values.reduce((sum, value) => sum + value, 0) / values.length;
+};
+
+export const formatNullableNumber = (value: number | null | undefined, digits = 1, suffix = '') => {
+  if (value === null || value === undefined || !Number.isFinite(value)) return 'n/a';
+  return `${Number(value).toFixed(digits)}${suffix}`;
 };

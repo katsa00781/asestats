@@ -67,7 +67,10 @@ Update this file after every meaningful implementation change.
   `lib/team-analysis-enrichment.ts`-be (`buildEnrichedTeamAnalysis`), unit
   tesztekkel; az exportok és a Csapat tab azonosak. Lelet: a szezonos rotációs
   töréspont „perce” halmozott (pl. ~257.7.), a H34 után külön döntés.
-  Nyitva: F2e, F3–F5. Részletek: `BACKLOG.md` H34.
+  F2e (2026-11-18) – a játékos haladó blokkjai a
+  `lib/player-advanced-insights.ts`-be (`buildPlayerAdvancedInsights`), unit
+  tesztekkel; az exportok és a Játékos tab azonosak – az F2 fázis lezárva
+  (16 134 → 13 895 sor). Nyitva: F3–F5. Részletek: `BACKLOG.md` H34.
 - **H35 – nyitott lelet (2026-11-17):** a Kosarstat clutch-parser a `CSAPAT`
   sort játékosként számolja (clutch pontok / minta duplán, „CSAPAT” a top
   usage listán, játékos clutch USG% felezve). Ütemezés: a H34 lezárása után

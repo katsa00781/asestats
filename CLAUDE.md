@@ -124,6 +124,7 @@ asestats/
 │   ├── kosarstat-pbp-parse.ts  # Eseménylista → pontforrások (második esély, labdaeladásból, gyors befejezés)
 │   ├── kosarstat-quarter-box.ts # Eseménylista → negyedenkénti csapat- és játékos-box score + mutatók (post-game bontás)
 │   ├── kosarstat-substitutions.ts # Cserék játékosonként: eseménylista (elsődleges) / percrács (tartalék) + be/le párosítás-ellenőrzés
+│   ├── player-advanced-insights.ts # Játékos haladó blokkjai: dobásminőség, clutch, on/off, szerepkör, stabilitás, matchup, terhelés, verdiktek – nem @core (H34)
 │   ├── player-analysis.ts
 │   ├── player-postgame.ts
 │   ├── player-stat-mapping.ts  # SupabasePlayerStat típus + PlayerStats mapping (egyetlen példány)
@@ -137,7 +138,7 @@ asestats/
 │   ├── pregame-optimal-lineup.ts # Pre-game ajánlott kezdőötös: szerepkör-kiosztás, ötös-pontozás lineup-mintával és matchup-igénnyel (H34)
 │   ├── pregame-scouting.ts
 │   ├── run-script.ts           # Közös spawn wrapper a scraping route-okhoz
-│   ├── season-comparison-helpers.ts # A SeasonComparison és kiszervezett moduljai közös segédei (név-kulcs, kerekítés, MM:SS, clamp, átlag / szórás, `GamePlayerStatRow`)
+│   ├── season-comparison-helpers.ts # A SeasonComparison és kiszervezett moduljai közös segédei (név-kulcs, kerekítés, MM:SS, clamp, átlag / szórás, `formatNullableNumber`, `GamePlayerStatRow`)
 │   ├── season-raw-stats.ts     # PlayerStats / meccssorok → RawPlayerSeasonStat, csapat TeamSeasonStat keretlistával, VAL-fallback (H34)
 │   ├── season-tables.ts
 │   ├── shot-profile.ts         # Dobás-esemény sorok → pontok, zónánkénti dobásprofil, lefedett meccsek (H34)
