@@ -54,7 +54,11 @@ Update this file after every meaningful implementation change.
   (`lib/season-raw-stats.ts`), unit tesztekkel – az F1 fázis lezárva; F0 – Export
   MD alapvonal a `d1f5080`-ból: a 7 export (2 játékos, csapat, 2 pre-game, 2
   post-game) bájtra azonos a `8a1e7ac`-vel; összevető eszköz:
-  `scripts/h34-export-snapshot.mjs`. Nyitva: F2–F5. Részletek: `BACKLOG.md` H34.
+  `scripts/h34-export-snapshot.mjs`; F2a (2026-11-18) – a bajnoki előrejelzés
+  csapat-erőssége és a rájátszás-szimuláció a `lib/playoff-projection.ts`-be
+  (`buildProjectionStrengthByTeamKey`, `buildPlayoffProjection`), unit tesztekkel;
+  az exportok és az Előrejelzés tab azonosak a `d1f5080`-nal. Nyitva: F2b–F2e,
+  F3–F5. Részletek: `BACKLOG.md` H34.
 - **H35 – nyitott lelet (2026-11-17):** a Kosarstat clutch-parser a `CSAPAT`
   sort játékosként számolja (clutch pontok / minta duplán, „CSAPAT” a top
   usage listán, játékos clutch USG% felezve). Ütemezés: a H34 lezárása után

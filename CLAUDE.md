@@ -130,12 +130,12 @@ asestats/
 │   ├── positions.ts
 │   ├── postgame-lineup-export.ts # Post-game export ötös-modellje (ötösök, on/off, párosok, hármasok a Kosarstat lineupból)
 │   ├── postgame-report.ts
-│   ├── playoff-projection.ts   # Bajnoki előrejelzés / rájátszás: projekció-típusok, bizonyossági címke, best-of párharc-eloszlás (H34)
+│   ├── playoff-projection.ts   # Bajnoki előrejelzés / rájátszás: projekció-típusok, bizonyossági címke, best-of párharc-eloszlás, csapat-erősség, rájátszás-szimuláció (H34)
 │   ├── pregame-blend.ts        # Pre-game aggregátumok: meccs-kivonás, ellenfél-box, kapott pont, szezon + forma keverés (H34)
 │   ├── pregame-efficiency.ts   # Pre-game hatékonysági baseline + what-if projekció (H34)
 │   ├── pregame-scouting.ts
 │   ├── run-script.ts           # Közös spawn wrapper a scraping route-okhoz
-│   ├── season-comparison-helpers.ts # A SeasonComparison és kiszervezett moduljai közös segédei (név-kulcs, kerekítés, MM:SS, clamp, `GamePlayerStatRow`)
+│   ├── season-comparison-helpers.ts # A SeasonComparison és kiszervezett moduljai közös segédei (név-kulcs, kerekítés, MM:SS, clamp, átlag / szórás, `GamePlayerStatRow`)
 │   ├── season-raw-stats.ts     # PlayerStats / meccssorok → RawPlayerSeasonStat, csapat TeamSeasonStat keretlistával, VAL-fallback (H34)
 │   ├── season-tables.ts
 │   ├── shot-profile.ts         # Dobás-esemény sorok → pontok, zónánkénti dobásprofil, lefedett meccsek (H34)
